@@ -3852,12 +3852,14 @@ fn snv_in_first_codon(transcript: &Transcript, pos: u64) -> bool {
 }
 
 /// The coding SO terms Ensembl VEP assigns to an allele on `transcript`: every
-/// non-SNV allele, and an SNV whose position lies in the first codon.
+/// allele but a one-base pair over a one-base span, and such a pair whose
+/// position lies in the first codon.
 ///
-/// `None` when the allele is an SNV outside the first codon, the transcript
-/// has no coding model, or Perl's `coding` pre-predicate is false (the caller
-/// keeps its own terms). `Some` is the complete coding-term set, possibly
-/// empty, and replaces every term for which [`is_perl_coding_term`] holds.
+/// `None` when the allele is a one-base pair over a one-base span outside the
+/// first codon, the transcript has no coding model, or Perl's `coding`
+/// pre-predicate is false (the caller keeps its own terms). `Some` is the
+/// complete coding-term set, possibly empty, and replaces every term for which
+/// [`is_perl_coding_term`] holds.
 ///
 /// A start-codon SNV takes Perl's routes as written: `_inv_start_altered`
 /// reads `start_lost` from the edited codon not being `ATG` whenever the
@@ -3889,7 +3891,12 @@ pub fn perl_coding_terms(
     } else {
         alt.len()
     };
-    if ref_len == 1 && alt_len == 1 && !snv_in_first_codon(transcript, span_start) {
+    // Perl reads the frameshift and the stop-codon guard from the span's CDS
+    // coordinates (VariationEffect.pm:1554-1564), so a one-base pair over a span
+    // of another length, which `--dont_skip` keeps after the reference-length
+    // test, is evaluated here and not as the SNV the per-endpoint pass read.
+    let snv = ref_len == 1 && alt_len == 1 && span_start == span_end;
+    if snv && !snv_in_first_codon(transcript, span_start) {
         return None;
     }
     // A span the `coding` pre-predicate refuses yields `None` whether or not the

@@ -1083,6 +1083,36 @@ mod tests {
         assert_eq!(tc.distance, Some(3000));
     }
 
+    /// A mate 5,500 bp before the transcript under `--distance 6000` gets the
+    /// distance row, `upstream_gene_variant` with DISTANCE 5500, as a mate within
+    /// the default window does, and no row under the default 5,000. Ensembl VEP
+    /// writes no row for that mate at any `--distance` above 5,000: the flag
+    /// rewrites `$UPSTREAM_DISTANCE` and `$DOWNSTREAM_DISTANCE` (ensembl-vep
+    /// BaseRunner.pm:511-512), while `_close_to_feature` admits a bracket allele
+    /// through the compile-time `MAX_DISTANCE_FROM_TRANSCRIPT` of 5,000
+    /// (StructuralVariationOverlap.pm:157, Utils/VariationEffect.pm:60), so the
+    /// mate's overlap carries no allele, which also withholds the intergenic row
+    /// (StructuralVariationFeature.pm:679), and the record leaves the output. The
+    /// window here follows the flag.
+    #[test]
+    fn test_paired_mate_within_a_widened_distance_gets_the_distance_row() {
+        let tx = make_test_transcript(); // forward strand, 25_000_000-25_006_000
+        let v = make_cross_chromosome_bnd(25_000_000 - 5_500);
+        let widened = EffectsConfig {
+            upstream_distance: 6_000,
+            downstream_distance: 6_000,
+            ..Default::default()
+        };
+        let tc = calculate_paired_mate(&v, &tx, &widened).unwrap();
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![Consequence::UpstreamGeneVariant]
+        );
+        assert_eq!(tc.distance, Some(5_500));
+        assert_eq!(tc.impact, Impact::MODIFIER);
+        assert!(calculate_paired_mate(&v, &tx, &EffectsConfig::default()).is_none());
+    }
+
     #[test]
     fn test_paired_mate_beyond_window_has_no_row() {
         let tx = make_test_transcript();

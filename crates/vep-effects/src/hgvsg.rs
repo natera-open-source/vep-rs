@@ -60,27 +60,58 @@ pub fn annotate(variant: &mut InputVariant, config: &EffectsConfig) {
 /// multi-allelic record), alleles written on the reverse strand are read on the
 /// chromosome's, `reference_name` is printed before the numbering, and the
 /// numbering is `m.` on the mitochondrial chromosome (`MT` as the cache names it).
-/// `None` where Ensembl VEP writes no value: an allele outside `ACGT-`, an allele
-/// equal to the reference bases, or a variant outside the chromosome.
+/// An allele of a `--minimal` split is described from the record's string and
+/// span, which the rejoin restores before the row is built (:2291-2293), under
+/// the allele as the record writes it (:1386-1390), so it prints the notation
+/// it prints without the flag. `None` where Ensembl VEP writes no value: an
+/// allele outside `ACGT-`, an allele equal to the reference bases, or a variant
+/// outside the chromosome.
 pub fn for_variant(
     variant: &InputVariant,
     fasta: &vep_fasta::IndexedFasta,
     reference_name: &str,
     shift: bool,
 ) -> Option<String> {
+    let (allele_string, alt, start, end) = rejoined_record(variant)?;
     let record = Record {
         chr: &variant.chr,
-        allele_string: variant
-            .record_allele_string_multi
-            .as_deref()
-            .unwrap_or(&variant.allele_string),
-        alt: std::str::from_utf8(variant.alt_allele()).ok()?,
-        start: variant.start,
-        end: variant.end,
+        allele_string,
+        alt,
+        start,
+        end,
         reverse: variant.strand == Strand::Reverse,
     };
     let numbering = if variant.chr == "MT" { 'm' } else { 'g' };
     hgvs_genomic(fasta, &record, reference_name, numbering, shift)
+}
+
+/// The record's allele string and span and the row's allele as the output hash
+/// reads them: for an allele of a `--minimal` split, the record's working string
+/// and span ([`InputVariant::original_start`], `original_end`) and the written
+/// alternate allele whose trim over that span gives the feature's alleles, the
+/// allele `allele_number` indexes once the string is restored
+/// (InputBuffer.pm:665-685, OutputFactory.pm:1386-1390); for any other variant,
+/// its own string, allele and span. `None` for a split feature no written allele
+/// trims to (a reference allele's row).
+fn rejoined_record(variant: &InputVariant) -> Option<(&str, &str, u64, u64)> {
+    let record_string = variant.record_allele_string_multi.as_deref();
+    let (Some(start), Some(end), Some(working)) =
+        (variant.original_start, variant.original_end, record_string)
+    else {
+        let own = std::str::from_utf8(variant.alt_allele()).ok()?;
+        let allele_string = record_string.unwrap_or(&variant.allele_string);
+        return Some((allele_string, own, variant.start, variant.end));
+    };
+    let mut alleles = working.split('/');
+    let reference = alleles.next()?;
+    let written = alleles.find(|alt| {
+        let (trimmed_ref, trimmed_alt, trimmed_start, trimmed_end, _) =
+            vep_core::minimal::trim_sequences(reference.as_bytes(), alt.as_bytes(), start, end);
+        trimmed_ref == variant.ref_allele
+            && trimmed_alt == variant.alt_allele()
+            && (trimmed_start, trimmed_end) == (variant.start, variant.end)
+    })?;
+    Some((working, written, start, end))
 }
 
 /// One allele of a record as `hgvs_genomic` reads it: the record's allele string

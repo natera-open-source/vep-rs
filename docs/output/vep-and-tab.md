@@ -206,7 +206,7 @@ The JSON object files the row under `intergenic_consequences` as `{"consequence_
 
 ### NEAREST
 
-Under `--nearest transcript|gene|symbol` every row of a record, intergenic rows and the `--summary` row included, carries the identifier(s) of the protein-coding transcription start site(s) nearest the record, found as Ensembl VEP's `TranscriptTree::nearest` finds them. The start site of a protein-coding transcript is its start on the forward strand and its end on the reverse.
+Under `--nearest transcript|gene|symbol` every row of a record, intergenic rows and the `--summary` row included, carries the identifier(s) of the protein-coding transcription start site(s) nearest the record, found as Ensembl VEP's `TranscriptTree::nearest` finds them. The start site of a protein-coding transcript is its start on the forward strand and its end on the reverse. Under `--minimal` every row of a multi-allelic record prints the sites nearest the first alternate allele's trimmed span, the first split feature Ensembl VEP keeps at the rejoin, whether or not that allele writes a row.
 
 The two candidates are the highest site at or below the record's end and the lowest site at or above its start plus two. A site exactly one base above the start is the interval containing the start in Ensembl VEP's tree and is never a candidate. Each candidate is measured to the nearer end of the record, and both are reported when they tie, the site at or below the end first. A site on an end of the record is at distance zero.
 

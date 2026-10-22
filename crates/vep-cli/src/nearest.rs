@@ -22,6 +22,7 @@
 
 use std::str::FromStr;
 
+use vep_core::minimal::rowless_first_feature;
 use vep_core::variant::InputVariant;
 
 use crate::runner::structural_variant_bounds;
@@ -126,7 +127,13 @@ pub fn nearest_values(
 
 /// Sets [`InputVariant::nearest`] from the chromosome's transcription start
 /// sites when `--nearest` is on; a chromosome the cache lacks yields the empty
-/// list, as Ensembl VEP's empty tree does.
+/// list, as Ensembl VEP's empty tree does. An allele of a `--minimal` split
+/// record is measured on its own trimmed span, the span of the feature Ensembl
+/// VEP measures (AnnotationType/Transcript.pm:170-174), unless the record's
+/// first alternate allele writes no row, when the first feature's span is
+/// measured ([`rowless_first_feature`]); `runner::apply_record_rules` then gives
+/// every allele of the record the first feature's list, the one Ensembl VEP's
+/// rows print (OutputFactory.pm:2286-2296, :1017).
 pub(crate) fn annotate(
     variant: &mut InputVariant,
     transcripts: &LazyTranscriptIndexes,
@@ -139,7 +146,9 @@ pub(crate) fn annotate(
         .get(&variant.chr)
         .map(|index| index.tss_points())
         .unwrap_or(&[]);
-    variant.nearest = Some(nearest_values(points, variant, kind));
+    let first_feature = rowless_first_feature(variant);
+    let subject = first_feature.as_ref().unwrap_or(variant);
+    variant.nearest = Some(nearest_values(points, subject, kind));
 }
 
 #[cfg(test)]
@@ -363,6 +372,57 @@ mod tests {
         sv.sv_end = Some(5500);
         sv.is_structural = true;
         assert_eq!(nearest_values(&table, &sv, NearestType::Gene), ["ENSG_2"]);
+    }
+
+    /// The deletion `TC>T` trims to `C/-` at 1021, a span that ends one base
+    /// below the site at 1022 and so reaches the site at 996 alone. As the
+    /// first feature of `TC>T,AC` it is measured there; as the second feature of
+    /// `TC>TC,T`, whose first feature `-/-` at 1022-1021 writes no row, it is
+    /// measured at that feature's span, which the site at 1022 ends.
+    #[test]
+    fn a_rowless_first_feature_lends_its_span_to_the_record() {
+        use std::collections::HashMap;
+
+        use crate::runner::make_runner_test_transcript;
+        use crate::transcript_index::TranscriptIndex;
+        use crate::vcf_parser::{parse_vcf_line, split_minimal_record};
+
+        let coding = |id: &str, start: u64| {
+            let mut t = make_runner_test_transcript(id, "ENSG_X", "21", start);
+            t.biotype = Arc::from("protein_coding");
+            t
+        };
+        let mut by_chr = HashMap::new();
+        by_chr.insert(
+            "21".to_string(),
+            TranscriptIndex::new(
+                vec![coding("ENST_BELOW", 996), coding("ENST_AT", 1022)],
+                5000,
+                5000,
+            ),
+        );
+        let transcripts = LazyTranscriptIndexes::from_indexes(by_chr);
+        let kind = Some(NearestType::Transcript);
+
+        let line = "21\t1020\t.\tTC\tT,AC\t.\t.\t.";
+        let mut alleles = split_minimal_record(parse_vcf_line(line, true).unwrap());
+        assert_eq!(alleles[0].allele_string, "C/-");
+        annotate(&mut alleles[0], &transcripts, kind);
+        assert_eq!(alleles[0].nearest, Some(vec!["ENST_BELOW".to_string()]));
+
+        let line = "21\t1020\t.\tTC\tTC,T\t.\t.\t.";
+        let alleles = split_minimal_record(parse_vcf_line(line, true).unwrap());
+        let [mut deletion] = <[InputVariant; 1]>::try_from(alleles).unwrap();
+        assert_eq!(
+            (
+                deletion.start,
+                deletion.end,
+                deletion.allele_string.as_str()
+            ),
+            (1021, 1021, "C/-")
+        );
+        annotate(&mut deletion, &transcripts, kind);
+        assert_eq!(deletion.nearest, Some(vec!["ENST_AT".to_string()]));
     }
 
     #[test]

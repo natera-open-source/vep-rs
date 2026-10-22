@@ -1058,11 +1058,16 @@ impl InputVariant {
     /// `chromosome_breakpoint`. A sequence record prints the class its record
     /// carries ([`Self::record_so_term`], the one a variation database stores for
     /// a resolved identifier) or else [`so_variation_class`] of
-    /// [`Self::record_allele_string`] upper-cased, the allele string the whole
-    /// record works with after `validate_vf` (`Parser.pm:554`), so every allele of
-    /// a multi-allelic record prints the one class (`sequence_alteration` for
-    /// `TG/T/-`, `indel` for `T/A/TT`, `SNV` for `A/C/G`) and a record written in
-    /// lower case prints the class of its upper-cased alleles.
+    /// [`Self::working_allele_string`] upper-cased, the allele string the whole
+    /// record works with after `validate_vf` (`Parser.pm:554`) and after
+    /// `--check_frequency` dropped alleles (BaseCacheVariation.pm:333, :355 rewrite
+    /// the feature's string before any source reads its class, the filtering
+    /// source being sorted first at AnnotationSourceAdaptor.pm:98, and
+    /// VariationFeature.pm:1118 classes that string), so every allele of a
+    /// multi-allelic record prints the one class (`sequence_alteration` for
+    /// `TG/T/-`, `indel` for `T/A/TT`, `SNV` for `A/C/G`), a record whose `-`
+    /// allele the filter dropped prints the kept pair's class, and a record written
+    /// in lower case prints the class of its upper-cased alleles.
     pub fn class_so_term(&self) -> String {
         if self.is_structural || self.variant_class.is_structural() {
             return match &self.record_so_term {
@@ -1076,7 +1081,7 @@ impl InputVariant {
         match &self.record_so_term {
             Some(term) => term.clone(),
             None => {
-                so_variation_class(&self.record_allele_string().to_ascii_uppercase()).to_string()
+                so_variation_class(&self.working_allele_string().to_ascii_uppercase()).to_string()
             }
         }
     }
@@ -2093,13 +2098,18 @@ mod tests {
     }
 
     /// A record `--check_frequency` rewrote works with its kept alleles: the
-    /// JSON `allele_string`, `AMBIGUITY` and, where Ensembl VEP prints the
-    /// feature's string, `UPLOADED_ALLELE` read `T/A` for `21 7759128 T A,G`
-    /// after the `G` allele is dropped, while the names built before the
-    /// filter ran (`variation_name`, the line name) and the memoised
-    /// `class_SO_term` keep the uploaded one; `21 44195140 G A,GT` keeps its
-    /// uploaded `UPLOADED_ALLELE`, as a non-minimised indel does, and prints
-    /// `indel`. A record whose ID Perl reads as false is named by Parser.pm:462
+    /// JSON `allele_string`, `AMBIGUITY`, `VARIANT_CLASS` and, where Ensembl VEP
+    /// prints the feature's string, `UPLOADED_ALLELE` read `T/A` for
+    /// `21 7759128 T A,G` after the `G` allele is dropped, while the names built
+    /// before the filter ran (`variation_name`, the line name) keep the uploaded
+    /// one; `21 44195140 G A,GT` keeps its uploaded `UPLOADED_ALLELE`, as a
+    /// non-minimised indel does, and prints `indel`. The class is the rewritten
+    /// string's because the filtering source annotates first
+    /// (AnnotationSourceAdaptor.pm:98) and `class_SO_term` reads the feature's
+    /// string (VariationFeature.pm:1118): Ensembl VEP 116.2 prints
+    /// `VARIANT_CLASS=SNV` on every row of `21 31148973 GG G,GC` once the exclude
+    /// filter drops its common `-` allele, `sequence_alteration` without the
+    /// filter. A record whose ID Perl reads as false is named by Parser.pm:462
     /// before the filter, and `Uploaded_variation` prints that name once the
     /// rewrite makes the output's `chr_start_alleles` differ from it
     /// (OutputFactory.pm:887-900); an explicit ID equal to the output's name
@@ -2137,14 +2147,29 @@ mod tests {
         assert_eq!(indel.uploaded_allele(false).as_deref(), Some("G/A/GT"));
         assert_eq!(indel.class_so_term(), "indel");
 
-        // `21 100 T A,TT` with the `TT` allele dropped: the class is the
-        // uploaded string's `indel`, not the kept `T/A`'s `SNV`.
+        // `21 100 T A,TT` with the `TT` allele dropped: the class is the kept
+        // `T/A`'s `SNV`, not the uploaded string's `indel`.
         let mut mixed = InputVariant::new("21".into(), 100, 100, b"T".to_vec(), b"A".to_vec());
         mixed.uploaded_allele_string = Some("T/A/TT".into());
         mixed.record_allele_string_multi = Some("T/A/TT".into());
+        assert_eq!(mixed.class_so_term(), "indel");
         mixed.filtered_allele_string = Some("T/A".into());
         assert_eq!(mixed.uploaded_allele(false).as_deref(), Some("T/A/TT"));
-        assert_eq!(mixed.class_so_term(), "indel");
+        assert_eq!(mixed.class_so_term(), "SNV");
+
+        // `21 31148973 GG G,GC`, anchor-chopped to `G/-/C` at 31148974, after
+        // the common `-` allele is dropped.
+        let mut del_plus_snv = InputVariant::new(
+            "21".into(),
+            31148974,
+            31148974,
+            b"G".to_vec(),
+            b"C".to_vec(),
+        );
+        del_plus_snv.record_allele_string_multi = Some("G/-/C".into());
+        assert_eq!(del_plus_snv.class_so_term(), "sequence_alteration");
+        del_plus_snv.filtered_allele_string = Some("G/C".into());
+        assert_eq!(del_plus_snv.class_so_term(), "SNV");
 
         // `21 100 <ID> AT A,ATT`, anchor-chopped to `T/-/TT` at 101, after the
         // `TT` allele is dropped.

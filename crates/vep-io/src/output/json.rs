@@ -605,15 +605,18 @@ const FREQ_FIELDS: &[&str] = &[
 /// and `variation_name` as `id`
 /// (:98-112), `clin_sig` and `pubmed` as lists, `var_synonyms` as
 /// `{source: [ids]}` split on `--`, `::` and `,` (:449-471), `clinical_impact` as
-/// the raw string under `clinvar_somatic_classification`, and the frequency
-/// columns replaced by `frequencies`: for each alternate allele of the record's
-/// allele string the frequencies the text formats would print on that allele's
-/// rows under `groups` (JSON.pm:276-284 splits the record's `allele_string` and
-/// builds one frequency hash per allele through `add_colocated_frequency_data`,
-/// so an allele of a `--minimal` split record is read by its spelling in the
-/// record's string, not its trimmed one, and matches nothing), `AF` under `af`
-/// and each other column under its lower-cased name (:419-431). Every value is
-/// numberified except the identifiers (:288, `%NUMBERIFY_EXEMPT`).
+/// the raw string under `clinvar_somatic_classification`, every other column the
+/// cache declares (a pre-108 dump's `minor_allele` and `minor_allele_freq`)
+/// under its own name, a `0` kept only under a name containing `af` (:415,
+/// :433-435), and the frequency columns replaced by `frequencies`: for each
+/// alternate allele of the record's allele string the frequencies the text
+/// formats would print on that allele's rows under `groups` (JSON.pm:276-284
+/// splits the record's `allele_string` and builds one frequency hash per allele
+/// through `add_colocated_frequency_data`, so an allele of a `--minimal` split
+/// record is read by its spelling in the record's string, not its trimmed one,
+/// and matches nothing), `AF` under `af` and each other column under its
+/// lower-cased name (:419-431). Every value is numberified except the
+/// identifiers (:288, `%NUMBERIFY_EXEMPT`).
 ///
 /// `allele_string` is the record's, as the object's parent prints it.
 fn colocated_variant_object(
@@ -663,6 +666,18 @@ fn colocated_variant_object(
     }
     if let Some(synonyms) = cv.var_synonyms.as_deref().filter(|s| perl_true(s)) {
         obj.insert("var_synonyms".to_string(), var_synonyms_by_source(synonyms));
+    }
+    let mut other_columns: Vec<(&String, &String)> = cv
+        .frequency_strings
+        .iter()
+        .filter(|(column, value)| {
+            !FREQ_FIELDS.contains(&column.as_str())
+                && (value.as_str() != "0" || column.contains("af"))
+        })
+        .collect();
+    other_columns.sort();
+    for (column, value) in other_columns {
+        obj.insert(column.clone(), numberify(column, value.clone()));
     }
     let mut frequencies: IndexMap<String, Value> = IndexMap::new();
     for row_allele in allele_string.split('/').skip(1) {
@@ -1466,6 +1481,50 @@ mod tests {
             var_synonyms_by_source("A::1,2--B--A::3--"),
             json!({"A": [3], "B": []}),
             "a repeated source keeps its last group, a group without `::` holds no id, a trailing empty group is no group"
+        );
+    }
+
+    /// A cache column outside the fixed set and the frequency populations is
+    /// echoed under its own name, numberified: `add_colocated_variant_info_JSON`
+    /// copies the record's hash (OutputFactory/JSON.pm:415), prunes an empty
+    /// value and a `0` under a key without `af` in it (:433-435) and removes the
+    /// `@FREQ_FIELDS` populations it nested under `frequencies` (:439-441).
+    /// Ensembl VEP 116.2 writes `minor_allele` and `minor_allele_freq` in every
+    /// object on a cache declaring the two pre-108 columns; a release-116 cache
+    /// declares no such column.
+    #[test]
+    fn colocated_variant_echoes_the_other_cache_columns() {
+        let mut v = make_annotated_variant();
+        v.colocated_variants = vec![vep_core::variant::ColocatedVariant {
+            chr: Some("21".into()),
+            id: "rs1".into(),
+            start: 1_004,
+            end: 1_004,
+            allele_string: Some("C/A".into()),
+            strand: 1,
+            frequency_strings: [
+                ("minor_allele", "A"),
+                ("minor_allele_freq", "0.12"),
+                ("AF", "A:0.5"),
+                ("other_af", "0"),
+                ("some_count", "0"),
+                ("some_text", "x"),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+            ..Default::default()
+        }];
+        let parsed = fmt(FieldOptions::default()).format_variant_value(&v);
+        let entry = &parsed["colocated_variants"][0];
+        assert_eq!(entry["minor_allele"], "A");
+        assert_eq!(entry["minor_allele_freq"], 0.12);
+        assert_eq!(entry["other_af"], 0, "a `0` under a key with `af` stays");
+        assert_eq!(entry["some_text"], "x");
+        assert!(entry.get("some_count").is_none(), "a `0` is pruned");
+        assert!(
+            entry.get("AF").is_none(),
+            "a population is written under frequencies, never echoed"
         );
     }
 

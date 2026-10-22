@@ -4,10 +4,10 @@
 //! The record checks of Ensembl VEP's `validate_vf` through the `vep` binary:
 //! the skip warnings and their reasons, `--dont_skip`, `--chr`, `--check_ref`,
 //! `--lookup_ref`, `--allow_non_variant` in every output format, and the
-//! upper-casing of lower-case alleles. Every run but the frequency-filter check
-//! reads the identifiers corpus: its cache holds chromosome 21 and its reference
-//! carries the bases around its records (`A` at 10538885, `AA` at 10542415,
-//! `GC` at 10521699, `G` at 10592341).
+//! upper-casing of lower-case alleles. Every run but the frequency-filter and
+//! reference-length checks reads the identifiers corpus: its cache holds
+//! chromosome 21 and its reference carries the bases around its records (`A` at
+//! 10538885, `AA` at 10542415, `GC` at 10521699, `G` at 10592341).
 
 mod common;
 
@@ -1561,4 +1561,72 @@ fn region_input_reads_its_reference_from_the_fasta() {
     assert_eq!(alleles, [("A/C", 1), ("T/G", -1), ("AA/GG", 1), ("-/T", 1)]);
     assert_eq!(objects[2]["start"], 10542415);
     assert_eq!(objects[2]["end"], 10542416);
+}
+
+/// A record `--dont_skip` keeps after the reference-length test is annotated
+/// over its span, not as the one-base substitution its alleles spell: Ensembl
+/// VEP reads the frameshift from the span's CDS coordinates and withholds it
+/// when the reference peptide begins with a stop (VariationEffect.pm:1554-1564),
+/// so the Ensembl-format records `21 30282169 30282170 C/T +` and
+/// `21 30282168 30282170 C/T +` over the stop codon of ENST00000340345 print
+/// `stop_lost` alone, as the valid `CA/T` over the same span does. The rows are
+/// Ensembl VEP 116.2's under `--format ensembl --dont_skip` on a GRCh38 cache,
+/// the reference-length warnings included.
+#[test]
+fn dont_skip_reference_length_mismatch_is_annotated_over_its_span() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("reflen.txt");
+    std::fs::write(
+        &input,
+        "21\t30282169\t30282170\tC/T\t+\treflen_bad\n\
+         21\t30282168\t30282170\tC/T\t+\treflen_bad3b\n\
+         21\t30282169\t30282170\tCA/T\t+\tvalid_ctl\n",
+    )
+    .unwrap();
+    let out = dir.path().join("reflen.out");
+    let check_ref_corpus = corpora()
+        .into_iter()
+        .find(|c| c.name == "GRCh38-vcf-check-ref")
+        .expect("the check-ref corpus is committed");
+    let output = common::isolated_vep_anywhere()
+        .arg("-i")
+        .arg(&input)
+        .arg("-o")
+        .arg(&out)
+        .args(["--format", "ensembl", "--offline"])
+        .args(check_ref_corpus.cache_args())
+        .args(["--assembly", "GRCh38", "--dont_skip"])
+        .args(["--force_overwrite", "--no_stats", "--quiet"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let warnings =
+        std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap_or_default();
+    assert_eq!(
+        warning_lines(&warnings),
+        [
+            "WARNING: line 1 skipped (21 30282169 30282170 C/T + reflen_bad): Length of reference allele (C length 1) does not match coordinates 30282169-30282170",
+            "WARNING: line 2 skipped (21 30282168 30282170 C/T + reflen_bad3b): Length of reference allele (C length 1) does not match coordinates 30282168-30282170",
+        ]
+    );
+    let written = std::fs::read_to_string(&out).unwrap();
+    let row_against = |id: &str| -> String {
+        rows_of(&written, id)
+            .into_iter()
+            .find(|row| row.contains("\tENST00000340345\t"))
+            .unwrap_or_else(|| panic!("no ENST00000340345 row for {id}: {written}"))
+    };
+    assert_eq!(
+        row_against("reflen_bad"),
+        "21:30282169-30282170\tT\tENSG00000188694\tENST00000340345\tTranscript\tstop_lost\t781-782\t763-764\t255\t*/X\tTga/Aa\t-\tIMPACT=HIGH;STRAND=-1"
+    );
+    assert_eq!(
+        row_against("reflen_bad3b"),
+        "21:30282168-30282170\tT\tENSG00000188694\tENST00000340345\tTranscript\tstop_lost\t781-783\t763-765\t255\t*/X\tTga/A\t-\tIMPACT=HIGH;STRAND=-1"
+    );
+    assert_eq!(
+        row_against("valid_ctl"),
+        "21:30282169-30282170\tT\tENSG00000188694\tENST00000340345\tTranscript\tstop_lost\t781-782\t763-764\t255\t*/X\tTGa/Aa\t-\tIMPACT=HIGH;STRAND=-1"
+    );
 }

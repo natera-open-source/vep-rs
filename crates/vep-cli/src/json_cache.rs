@@ -2044,13 +2044,17 @@ mod tests {
         assert!(!rows_for(trailing, somatic).contains("CLINVAR_SOMATIC_CLASSIFICATION"));
     }
 
-    /// A variation record's `minor_allele` and `minor_allele_freq` columns change
-    /// nothing in the output under `--check_existing`: Ensembl VEP's
-    /// `BaseCacheVariation.pm` reads them from a pre-115 cache and no column prints
-    /// them, and no release-115 or later cache carries them. The reader keeps
-    /// them as it keeps every column outside the fixed set, under their names.
+    /// A variation record's `minor_allele` and `minor_allele_freq` columns, which
+    /// a pre-108 cache declares and no release-115 or later cache carries, print
+    /// in no text column under `--check_existing` (`get_frequency_data` reads
+    /// them for `--freq_pop 1KG_ALL` alone, BaseCacheVariation.pm:216-228) and
+    /// are echoed in every JSON `colocated_variants` object under their own
+    /// names, as `add_colocated_variant_info_JSON` copies the record's hash
+    /// (OutputFactory/JSON.pm:415, :473): Ensembl VEP 116.2 writes both keys in
+    /// every object on such a cache. The reader keeps the columns as it keeps
+    /// every column outside the fixed set.
     #[test]
-    fn minor_allele_columns_change_no_output() {
+    fn minor_allele_columns_print_in_json_alone() {
         let (_without_dir, without) = variations_from(&[], &[]);
         let (_with_dir, with) =
             variations_from(&["minor_allele", "minor_allele_freq"], &["A", "0.12"]);
@@ -2059,9 +2063,37 @@ mod tests {
             .frequencies
             .contains_key("minor_allele"));
         let transcript = coding_transcript_json("");
-        let rows = missense_rows(&transcript, Some(with));
+        let rows = missense_rows(&transcript, Some(Arc::clone(&with)));
         assert!(rows.contains("\trs1\t"), "{rows}");
-        assert_eq!(rows, missense_rows(&transcript, Some(without)));
+        assert_eq!(rows, missense_rows(&transcript, Some(Arc::clone(&without))));
+
+        let colocated = |source: &VariationSource| -> serde_json::Value {
+            let mut variant =
+                crate::vcf_parser::parse_vcf_line("21\t1004\tsnv\tC\tA\t.\t.\t.", true)
+                    .expect("parse test VCF line")
+                    .remove(0);
+            crate::variation_matcher::annotate_colocated(
+                &mut variant,
+                source,
+                &crate::variation_matcher::ColocationRules::default(),
+                &crate::variation_source::ReadFailure::default(),
+            );
+            let options = FieldOptions {
+                check_existing: true,
+                ..Default::default()
+            };
+            vep_io::output::json::JsonOutputFormatter::new(options, Vec::new(), None)
+                .format_variant_value(&variant)["colocated_variants"][0]
+                .clone()
+        };
+        let echoed = colocated(&with);
+        assert_eq!(echoed["id"], "rs1");
+        assert_eq!(echoed["minor_allele"], "A");
+        assert_eq!(echoed["minor_allele_freq"], 0.12);
+        let plain = colocated(&without);
+        assert_eq!(plain["id"], "rs1");
+        assert!(plain.get("minor_allele").is_none());
+        assert!(plain.get("minor_allele_freq").is_none());
     }
 
     /// A transcript's `source` names the set it came from; Ensembl VEP reads it

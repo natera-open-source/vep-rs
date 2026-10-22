@@ -6,6 +6,7 @@
 //! reference, for records of the corpus and for multi-allelic records built on
 //! it, in every output format.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 mod common;
@@ -133,9 +134,9 @@ fn expected_hgvsg(id: &str, allele: &str) -> &'static str {
         .unwrap_or_else(|| panic!("no expectation for {id} allele {allele}"))
 }
 
-/// Runs the binary on every record of the two tables in `format` and returns the
-/// output's lines, the `##` header lines included.
-fn annotate(dir: &Path, fasta: &Path, format: &str) -> Vec<String> {
+/// Runs the binary on every record of the two tables in `format` with `extra`
+/// flags and returns the output's lines, the `##` header lines included.
+fn annotate(dir: &Path, fasta: &Path, format: &str, extra: &[&str]) -> Vec<String> {
     let input = dir.join("in.vcf");
     let mut text =
         String::from("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n");
@@ -155,6 +156,7 @@ fn annotate(dir: &Path, fasta: &Path, format: &str) -> Vec<String> {
         .args(["--offline", "--assembly", "GRCh37", "--hgvsg"])
         .args(["--fasta", fasta.to_str().unwrap()])
         .args(["--force_overwrite", "--no_stats", "--quiet"])
+        .args(extra)
         .args(if format == "default" {
             vec![]
         } else {
@@ -189,7 +191,7 @@ fn hgvsg_matches_vep_on_grch37_corpus_records_in_every_format() {
     let fasta = corpus_fasta();
 
     for format in ["default", "tab"] {
-        let rows = annotate(dir.path(), &fasta, format);
+        let rows = annotate(dir.path(), &fasta, format, &[]);
         let tab_column = (format == "tab").then(|| {
             let header = rows
                 .iter()
@@ -221,7 +223,7 @@ fn hgvsg_matches_vep_on_grch37_corpus_records_in_every_format() {
         }
     }
 
-    let vcf_rows = annotate(dir.path(), &fasta, "vcf");
+    let vcf_rows = annotate(dir.path(), &fasta, "vcf", &[]);
     let csq_format = vcf_rows
         .iter()
         .find(|l| l.starts_with("##INFO=<ID=CSQ"))
@@ -261,7 +263,7 @@ fn hgvsg_matches_vep_on_grch37_corpus_records_in_every_format() {
         assert_every_allele_seen(id, &seen, "vcf");
     }
 
-    let json_rows = annotate(dir.path(), &fasta, "json");
+    let json_rows = annotate(dir.path(), &fasta, "json", &[]);
     for record in all_records() {
         let id = record_id(record);
         let object: serde_json::Value = json_rows
@@ -298,6 +300,123 @@ fn assert_every_allele_seen(id: &str, seen: &[&str], format: &str) {
             }
         }
         None => assert!(!seen.is_empty(), "--{format}: no row for {id}"),
+    }
+}
+
+/// Under `--minimal` each allele of a multi-allelic record is annotated on its
+/// trimmed span, but its HGVSg is the record's: the rejoin restores the record's
+/// allele string and span before the rows are built (OutputFactory.pm:2291-2293)
+/// and the notation is looked up under the allele as the record writes it, by
+/// its allele number (:1386-1390). Ensembl VEP 116.2 prints the strings of the
+/// table above with or without the flag: `21:g.34775850_34775851del` and
+/// `21:g.34775850delinsGT` for `ma1`, whose rows print the trimmed alleles `-`
+/// and `G`; `21:g.34775851delinsAG` and `21:g.34775850delinsGT` for `ma2`,
+/// whose two trimmed alleles both print `G`. Every row carries its allele's
+/// notation in the default, VCF and JSON formats, keyed by `ALLELE_NUM`.
+#[test]
+fn hgvsg_under_minimal_is_the_record_notation_of_each_written_allele() {
+    let dir = tempfile::tempdir().unwrap();
+    let fasta = corpus_fasta();
+    let flags = ["--minimal", "--allele_number"];
+    let expected_by_number = |id: &str, number: usize| -> &'static str {
+        MULTI_ALLELIC_RECORDS
+            .iter()
+            .find(|(record, _)| record_id(record) == id)
+            .map(|(_, alleles)| alleles[number - 1].1)
+            .unwrap_or_else(|| panic!("no multi-allelic record {id}"))
+    };
+    let multi_allelic_ids: Vec<&str> = MULTI_ALLELIC_RECORDS
+        .iter()
+        .map(|(record, _)| record_id(record))
+        .collect();
+
+    let rows = annotate(dir.path(), &fasta, "default", &flags);
+    for id in &multi_allelic_ids {
+        let row_prefix = format!("{id}\t");
+        let mut numbers_seen = BTreeSet::new();
+        for row in rows.iter().filter(|r| r.starts_with(&row_prefix)) {
+            let columns: Vec<&str> = row.split('\t').collect();
+            let extra = |key: &str| {
+                columns[13]
+                    .split(';')
+                    .find_map(|kv| kv.strip_prefix(key))
+                    .unwrap_or_else(|| panic!("--default {id}: no {key} on {row}"))
+            };
+            let number: usize = extra("ALLELE_NUM=").parse().unwrap();
+            assert_eq!(extra("HGVSg="), expected_by_number(id, number), "{row}");
+            assert_eq!(extra("MINIMISED="), "1", "{row}");
+            numbers_seen.insert(number);
+        }
+        assert_eq!(
+            numbers_seen,
+            BTreeSet::from([1, 2]),
+            "--default {id}: a row per allele"
+        );
+    }
+
+    let vcf_rows = annotate(dir.path(), &fasta, "vcf", &flags);
+    let csq_format = vcf_rows
+        .iter()
+        .find(|l| l.starts_with("##INFO=<ID=CSQ"))
+        .and_then(|l| l.split("Format: ").nth(1))
+        .map(|fields| fields.trim_end_matches("\">"))
+        .unwrap_or_default();
+    let csq_field = |name: &str| csq_format.split('|').position(|f| f == name).unwrap();
+    let (number_field, hgvsg_field) = (csq_field("ALLELE_NUM"), csq_field("HGVSg"));
+    for id in &multi_allelic_ids {
+        let line = vcf_rows
+            .iter()
+            .find(|r| !r.starts_with('#') && r.split('\t').nth(2) == Some(id))
+            .unwrap_or_else(|| panic!("--vcf: no line for {id}"));
+        let csq = line
+            .split('\t')
+            .nth(7)
+            .unwrap()
+            .split(';')
+            .find_map(|kv| kv.strip_prefix("CSQ="))
+            .unwrap();
+        let mut numbers_seen = BTreeSet::new();
+        for entry in csq.split(',') {
+            let fields: Vec<&str> = entry.split('|').collect();
+            let number: usize = fields[number_field].parse().unwrap();
+            assert_eq!(
+                fields[hgvsg_field],
+                expected_by_number(id, number),
+                "{entry}"
+            );
+            numbers_seen.insert(number);
+        }
+        assert_eq!(
+            numbers_seen,
+            BTreeSet::from([1, 2]),
+            "--vcf {id}: an entry per allele"
+        );
+    }
+
+    let json_rows = annotate(dir.path(), &fasta, "json", &flags);
+    for id in &multi_allelic_ids {
+        let object: serde_json::Value = json_rows
+            .iter()
+            .map(|r| serde_json::from_str(r).unwrap())
+            .find(|o: &serde_json::Value| o["id"] == *id)
+            .unwrap_or_else(|| panic!("--json: no object for {id}"));
+        let mut numbers_seen = BTreeSet::new();
+        for key in ["transcript_consequences", "intergenic_consequences"] {
+            for c in object[key].as_array().into_iter().flatten() {
+                let number = c["allele_num"].as_u64().unwrap() as usize;
+                assert_eq!(
+                    c["hgvsg"],
+                    expected_by_number(id, number),
+                    "--json {id}: {c}"
+                );
+                numbers_seen.insert(number);
+            }
+        }
+        assert_eq!(
+            numbers_seen,
+            BTreeSet::from([1, 2]),
+            "--json {id}: a consequence per allele"
+        );
     }
 }
 

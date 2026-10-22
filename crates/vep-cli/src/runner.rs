@@ -1186,14 +1186,15 @@ pub(crate) fn mark_oversize_sv(variant: &mut InputVariant, max_sv_size: Option<u
 /// print the union over the record's alleles, which differ only when a breakend
 /// allele's mate position reaches names its own position does not.
 ///
-/// A `--minimal` split record's rows print the co-located variants and the
-/// known structural variants of its first feature, the first alternate allele
-/// trimmed on its own span: the rejoin (OutputFactory.pm:2272-2353) moves the
-/// later features' consequences into the first and leaves `existing` and
-/// `overlapping_svs` where they are, and every row is built from the first
-/// feature (:342-349, :1046, :962). Each row keeps the names that apply to its
-/// own allele (:1081-1083). A record whose first alternate allele writes no
-/// row has every allele annotated on that feature already
+/// A `--minimal` split record's rows print the co-located variants, the
+/// known structural variants and the `NEAREST` list of its first feature, the
+/// first alternate allele trimmed on its own span: the rejoin
+/// (OutputFactory.pm:2272-2353) moves the later features' consequences into
+/// the first and leaves `existing`, `overlapping_svs` and `nearest` where they
+/// are, and every row is built from the first feature (:342-349, :1046, :962,
+/// :1017). Each row keeps the names that apply to its own allele (:1081-1083).
+/// A record whose first alternate allele writes no row has every allele
+/// annotated on that feature already
 /// (`vep_core::minimal::rowless_first_feature`).
 pub(crate) fn apply_record_rules(
     batch: &mut [InputVariant],
@@ -1235,6 +1236,7 @@ pub(crate) fn apply_record_rules(
         if let Some(first_feature) = first_feature {
             let colocated_variants = first_feature.colocated_variants.clone();
             let overlapping_svs = first_feature.overlapping_svs.clone();
+            let nearest = first_feature.nearest.clone();
             for v in alleles.iter_mut() {
                 v.existing_variation = variation_matcher::existing_variation_names(
                     &colocated_variants,
@@ -1242,6 +1244,7 @@ pub(crate) fn apply_record_rules(
                 );
                 v.colocated_variants.clone_from(&colocated_variants);
                 v.overlapping_svs.clone_from(&overlapping_svs);
+                v.nearest.clone_from(&nearest);
             }
         }
         // The reference row of a bi-allelic record prints the alternate allele's

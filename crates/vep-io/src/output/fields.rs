@@ -290,9 +290,13 @@ const FLAG_FIELD_GROUPS: &[FieldGroup] = &[
     group("overlaps", &["OverlapBP", "OverlapPC"]),
     group("shift_length", &["SHIFT_LENGTH"]),
     group("var_synonyms", &["VAR_SYNONYMS"]),
+    // BIOTYPE leads the regulatory group (Constants.pm:136), so `--regulatory`
+    // without `--biotype` adds the column; the value is written only under
+    // `--biotype` (OutputFactory.pm:1580), so the column prints `-`.
     group(
         "regulatory",
         &[
+            "BIOTYPE",
             "MOTIF_NAME",
             "MOTIF_POS",
             "HIGH_INF_POS",
@@ -1263,6 +1267,7 @@ fn write_row_field_value(
                 );
             }
         }
+        "BIOTYPE" if !options.biotype => {}
         "BIOTYPE" => push_opt(out, tc.and_then(|x| x.biotype.as_deref())),
         "EXON" => push_opt(out, tc.and_then(|x| x.exon.as_deref())),
         "INTRON" => push_opt(out, tc.and_then(|x| x.intron.as_deref())),
@@ -2556,6 +2561,7 @@ mod tests {
                     )
                 })
                 .unwrap_or_default(),
+            "BIOTYPE" if !options.biotype => String::new(),
             "BIOTYPE" => tc
                 .and_then(|x| x.biotype.as_deref())
                 .unwrap_or("")
@@ -4191,6 +4197,69 @@ mod tests {
         );
         assert!(flag_fields(&attribute_options()).contains(&"BIOTYPE"));
         assert!(!flag_fields(&FieldOptions::default()).contains(&"BIOTYPE"));
+    }
+
+    /// `BIOTYPE` leads the `regulatory` flag group (Constants.pm:136), so
+    /// `--tab --regulatory` without `--biotype` prints 23 columns, BIOTYPE the
+    /// 18th; its value is set only under `--biotype` (OutputFactory.pm:1580), so
+    /// a transcript row prints `-` there and the default format's Extra carries
+    /// no `BIOTYPE=`. Ensembl VEP 116.2 prints that header and `-` on every
+    /// transcript row of a record at 21:10541165. Under both flags the column
+    /// is listed once, at the `biotype` group's place, and filled.
+    #[test]
+    fn regulatory_group_lists_biotype_without_its_flag() {
+        let regulatory = FieldOptions {
+            regulatory: true,
+            ..Default::default()
+        };
+        let columns = tab_columns(&regulatory, &[], None);
+        assert_eq!(columns.len(), 23);
+        assert_eq!(columns[17], "BIOTYPE");
+        assert_eq!(
+            &columns[17..],
+            [
+                "BIOTYPE",
+                "MOTIF_NAME",
+                "MOTIF_POS",
+                "HIGH_INF_POS",
+                "MOTIF_SCORE_CHANGE",
+                "TRANSCRIPTION_FACTORS",
+            ]
+        );
+        let tc = ndufv3_consequence();
+        assert_eq!(value("BIOTYPE", &tc, &regulatory), "");
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        assert!(!empty_value_is_written(
+            "BIOTYPE",
+            &v,
+            Some(&tc),
+            &regulatory
+        ));
+        v.transcript_consequences = vec![tc];
+        let tab = crate::output::tab::TabOutputFormatter::new(
+            regulatory.clone(),
+            Vec::new(),
+            None,
+            Vec::new(),
+            true,
+        );
+        let row = crate::OutputFormatter::format_record(&tab, &[&v]).unwrap();
+        let cells: Vec<&str> = row[0].split('\t').collect();
+        assert_eq!(cells.len(), 23);
+        assert_eq!(cells[17], "-");
+
+        let both = FieldOptions {
+            biotype: true,
+            ..regulatory
+        };
+        let columns = tab_columns(&both, &[], None);
+        assert_eq!(columns.len(), 23);
+        assert_eq!(columns[17], "BIOTYPE");
+        assert_eq!(columns.iter().filter(|c| *c == "BIOTYPE").count(), 1);
+        let tab =
+            crate::output::tab::TabOutputFormatter::new(both, Vec::new(), None, Vec::new(), true);
+        let row = crate::OutputFormatter::format_record(&tab, &[&v]).unwrap();
+        assert_eq!(row[0].split('\t').nth(17), Some("protein_coding"));
     }
 
     /// The cache writes `-` where a transcript has no CCDS identifier; Ensembl

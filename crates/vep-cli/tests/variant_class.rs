@@ -1,26 +1,27 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! The `Allele` and `VARIANT_CLASS` columns of a structural record whose type
-//! the Sequence Ontology term table lacks, as the `vep` binary prints them.
+//! The `VARIANT_CLASS` column as the `vep` binary prints it: the `Allele` and
+//! class of a structural record whose type the Sequence Ontology term table
+//! lacks, and the class of a record `--check_frequency` rewrote.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Stdio;
 
 mod common;
 
-/// The GRCh37-output-flags corpus, whose cache covers 21:19744457-19744524.
-fn corpus_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh37-output-flags")
-}
-
-/// The rows of a default-format run on `input` against the corpus's cache with
-/// `extra` flags, each row's identifier, allele and Extra column.
-fn rows(dir: &Path, input: &Path, extra: &[&str]) -> Vec<(String, String, String)> {
+/// The rows of a default-format run on `input` against the named corpus's cache
+/// with `extra` flags, each row's identifier, allele and Extra column.
+fn rows(
+    corpus_name: &str,
+    dir: &Path,
+    input: &Path,
+    extra: &[&str],
+) -> Vec<(String, String, String)> {
     let corpus = common::corpora()
         .into_iter()
-        .find(|corpus| corpus.dir.canonicalize().ok() == corpus_dir().canonicalize().ok())
-        .expect("the GRCh37-output-flags corpus is committed");
+        .find(|corpus| corpus.name == corpus_name)
+        .unwrap_or_else(|| panic!("the {corpus_name} corpus is committed"));
     let out = dir.join("out.txt");
     let output = common::isolated_vep(dir)
         .arg("-i")
@@ -31,7 +32,7 @@ fn rows(dir: &Path, input: &Path, extra: &[&str]) -> Vec<(String, String, String
         .args(corpus.cache_args())
         .args([
             "--assembly",
-            "GRCh37",
+            &corpus.assembly,
             "--force_overwrite",
             "--no_stats",
             "--quiet",
@@ -80,9 +81,28 @@ fn typeless_symbolic_alt_prints_perls_type_string() {
          21\t19744457\tctx_bare\tN\t<CTX>\t.\t.\tEND=19744524\n",
     )
     .unwrap();
-    let rows = rows(dir.path(), &input, &["--dont_skip", "--variant_class"]);
+    let rows = rows(
+        "GRCh37-output-flags",
+        dir.path(),
+        &input,
+        &["--dont_skip", "--variant_class"],
+    );
     // One triple per record: vep-rs writes a kept record's row per overlapping
     // transcript, the coverage divergence docs/divergences/defect-c.md states.
+    assert_eq!(
+        classes(&rows),
+        [
+            ("cpx_bare", "<CPX>", "<CPX>"),
+            ("cpx_svtype", "CPX", "CPX"),
+            ("cpx_foo", "FOO", "FOO"),
+            ("ctx_bare", "<CTX>", "<CTX>"),
+        ]
+    );
+}
+
+/// The `(identifier, allele, VARIANT_CLASS)` triples of `rows`, consecutive
+/// duplicates collapsed, so a record's rows read as one triple.
+fn classes(rows: &[(String, String, String)]) -> Vec<(&str, &str, &str)> {
     let mut classes: Vec<(&str, &str, &str)> = rows
         .iter()
         .map(|(id, allele, extra)| {
@@ -94,13 +114,60 @@ fn typeless_symbolic_alt_prints_perls_type_string() {
         })
         .collect();
     classes.dedup();
+    classes
+}
+
+/// A record `--check_frequency` rewrote prints the class of its kept alleles:
+/// the filtering source annotates before the transcript source
+/// (AnnotationSourceAdaptor.pm:98 sorts `can_filter_vfs` first), rewrites the
+/// feature's allele string to the kept alleles (BaseCacheVariation.pm:355 under
+/// `exclude`) and `class_SO_term` reads that string (VariationFeature.pm:1118).
+/// Ensembl VEP 116.2 prints `VARIANT_CLASS=SNV` on all 16 rows of
+/// `21 31148973 del_plus_snv GG G,GC` under the GRCh38-freqfilter corpus's
+/// exclude set, whose common `-` allele (AF 0.6705) the filter drops, and
+/// `sequence_alteration` for the same record without the filter.
+#[test]
+fn frequency_filtered_record_prints_the_class_of_its_kept_alleles() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("freq.vcf");
+    std::fs::write(
+        &input,
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+         21\t31148973\tdel_plus_snv\tGG\tG,GC\t.\t.\t.\n",
+    )
+    .unwrap();
+    let exclude = [
+        "--check_frequency",
+        "--freq_pop",
+        "AF",
+        "--freq_freq",
+        "0.01",
+        "--freq_gt_lt",
+        "gt",
+        "--freq_filter",
+        "exclude",
+        "--variant_class",
+    ];
+    let filtered = rows("GRCh38-freqfilter", dir.path(), &input, &exclude);
+    assert_eq!(filtered.len(), 16);
+    assert_eq!(classes(&filtered), [("del_plus_snv", "C", "SNV")]);
+    assert!(filtered
+        .iter()
+        .all(|(_, _, extra)| extra.contains("FREQS=")));
+    let unfiltered_rows = rows(
+        "GRCh38-freqfilter",
+        dir.path(),
+        &input,
+        &["--variant_class"],
+    );
+    let mut unfiltered = classes(&unfiltered_rows);
+    unfiltered.sort_unstable();
+    unfiltered.dedup();
     assert_eq!(
-        classes,
+        unfiltered,
         [
-            ("cpx_bare", "<CPX>", "<CPX>"),
-            ("cpx_svtype", "CPX", "CPX"),
-            ("cpx_foo", "FOO", "FOO"),
-            ("ctx_bare", "<CTX>", "<CTX>"),
+            ("del_plus_snv", "-", "sequence_alteration"),
+            ("del_plus_snv", "C", "sequence_alteration"),
         ]
     );
 }

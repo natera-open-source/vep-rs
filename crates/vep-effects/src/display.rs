@@ -779,8 +779,9 @@ pub struct DisplayFields {
     /// another span's in the three position columns; `None` while the columns
     /// are the span's own.
     pub own_span_positions: Option<Box<OwnSpanPositions>>,
-    /// [`TranscriptConsequence::record_span_in_cds`]: the `coding` predicate
-    /// of the record's span once [`Self::record_span_positions`] has mapped it.
+    /// [`TranscriptConsequence::record_span_in_cds`]: whether the record's span
+    /// maps to a CDS coordinate once [`Self::record_span_positions`] has mapped
+    /// it.
     pub record_span_in_cds: bool,
     /// The span's `exon` predicate (`_bvfo_preds`,
     /// BaseVariationFeatureOverlapAllele.pm:511-516), which admits
@@ -789,6 +790,10 @@ pub struct DisplayFields {
     /// The span's `coding` predicate (:540-557), which admits `CDS_position`
     /// and `Protein_position`.
     coding: bool,
+    /// Whether the span's `cds_coords` hold a Coordinate, the test `within_cds`
+    /// makes (VariationEffect.pm:645-651); false for a span `coding` admits on
+    /// Gaps alone.
+    has_cds_coordinate: bool,
 }
 
 impl DisplayFields {
@@ -818,17 +823,18 @@ impl DisplayFields {
     /// 394), as its codons and consequences were; the allele's own positions
     /// move to `own_span_positions` for the VCF and JSON formats, which clear the
     /// cached positions before the rejoin (OutputFactory/VCF.pm:305-308,
-    /// OutputFactory/JSON.pm:217-220). The record span's `coding` predicate is
-    /// kept as [`Self::record_span_in_cds`], the `within_cds` the `--coding_only`
-    /// filter asks of the rejoined row (`Utils/VariationEffect.pm:642-652`). Any
-    /// other allele keeps the positions of its own span.
+    /// OutputFactory/JSON.pm:217-220). Whether the record span maps to a CDS
+    /// coordinate is kept as [`Self::record_span_in_cds`], the `within_cds` the
+    /// `--coding_only` filter asks of the rejoined row
+    /// (`Utils/VariationEffect.pm:642-652`). Any other allele keeps the
+    /// positions of its own span.
     pub fn record_span_positions(&mut self, variant: &InputVariant, transcript: &Transcript) {
         let (Some(start), Some(end)) = (variant.original_start, variant.original_end) else {
             return;
         };
         let (record, _) =
             span_positions(variant.is_structural, transcript, start as i64, end as i64);
-        self.record_span_in_cds = record.coding;
+        self.record_span_in_cds = record.has_cds_coordinate;
         let own = OwnSpanPositions {
             cdna: self.cdna_position.take(),
             cds: self.cds_position.take(),
@@ -907,14 +913,14 @@ fn span_positions(
         return (out, None);
     }
     let cds = cds_from_cdna(mapper, &cdna, vf_start, vf_end);
-    let coding = match cds.as_slice() {
-        [] => false,
-        [single] => !single.is_gap(),
-        _ => true,
-    };
-    if !coding {
+    // The `coding` predicate holds for any non-empty `cds_coords`, a lone Gap
+    // included (BaseVariationFeatureOverlapAllele.pm:543-557), so an insertion
+    // between a UTR and the CDS prints `-/<total>` in the CDS and protein
+    // columns; `within_cds` asks for a Coordinate (VariationEffect.pm:645-651).
+    if cds.is_empty() {
         return (out, None);
     }
+    out.has_cds_coordinate = cds.iter().any(|segment| !segment.is_gap());
     let phase_offset = transcript.facts().start_phase_offset as i64;
     let cds_start = first_start(&cds).map(|s| s + phase_offset);
     let cds_end = last_end(&cds).map(|e| e + phase_offset);
@@ -1340,6 +1346,43 @@ mod tests {
         // Without a cached peptide the protein position gets no total.
         let d = display_fields(&snv(1052, "G", "A"), &forward_transcript());
         assert_eq!((d.cds_total, d.protein_total), (Some(300), None));
+    }
+
+    /// An insertion between the 5' UTR and the first coding base maps to one
+    /// CDS Gap, which the `coding` predicate admits as "partly in coding region"
+    /// (BaseVariationFeatureOverlapAllele.pm:555-556), so the CDS and protein
+    /// columns carry their totals behind the `-` of their unmapped positions
+    /// (OutputFactory.pm:1737-1743) and no codon or peptide: Ensembl VEP 116.2
+    /// prints `26-27/1648 -/765 -/254` for `21 31655250 T TG` against
+    /// ENST00000340345 on GRCh37, a `5_prime_UTR_variant`. On the fixture the
+    /// insertion after 1049 maps to cDNA 50-51 and CDS Gap alone. The span holds
+    /// no CDS coordinate, so a `--minimal` split over it is not within the CDS
+    /// (`within_cds`, VariationEffect.pm:645-651).
+    #[test]
+    fn utr_to_cds_boundary_insertion_prints_totals_behind_the_dash() {
+        let mut tx = forward_transcript();
+        let mut vefc = tx.vefc.take().unwrap();
+        vefc.peptide = Some("M".to_string() + &"A".repeat(98));
+        tx.vefc = Some(vefc);
+        let boundary = insertion(1049, "G");
+        let d = display_fields(&boundary, &tx);
+        assert_eq!(d.cdna_position.as_deref(), Some("50-51"));
+        assert_eq!(d.cdna_total, Some(500));
+        assert_eq!((d.cds_position, d.cds_total), (None, Some(300)));
+        assert_eq!((d.protein_position, d.protein_total), (None, Some(99)));
+        assert_eq!((d.amino_acids, d.codons), (None, None));
+        assert_eq!(d.translation_span, None);
+        let mut split = boundary.clone();
+        split.original_start = Some(1050);
+        split.original_end = Some(1049);
+        let mut fields = display_fields(&split, &tx);
+        fields.record_span_positions(&split, &tx);
+        assert!(!fields.record_span_in_cds);
+        // An insertion wholly inside the UTR admits the cDNA column alone.
+        let d = display_fields(&insertion(1040, "G"), &tx);
+        assert_eq!(d.cdna_position.as_deref(), Some("41-42"));
+        assert_eq!((d.cds_position, d.cds_total), (None, None));
+        assert_eq!((d.protein_position, d.protein_total), (None, None));
     }
 
     #[test]

@@ -269,7 +269,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A VCF data line's leading blanks stay in its chromosome column, so the record is skipped as Ensembl VEP skips it, with its `Chromosome ... not found` warning. (#N)
   - `--delimiter` takes a regular expression and splits as Perl's `split` splits on it, capture groups included; a pattern that can match the empty string is refused. (#N)
   - A structural record whose SVLEN overflows the coordinate range is dropped after its oversize warning instead of being annotated to the chromosome's end. (#N)
-  - A symbolic ALT with no Sequence Ontology term prints Ensembl VEP's type string in `Allele` and `VARIANT_CLASS`: `<CPX>` as written, `CPX` under `SVTYPE=CPX`. (#N)
+  - A symbolic ALT whose letters name no class prints Ensembl VEP's type string in `Allele` and `VARIANT_CLASS`: `<CPX>` as written, `CPX` under `SVTYPE=CPX`. (#N)
   - A VCF whose `##fileformat` major version is not 4, or names no `<digits>.<digits>` version, is refused with Ensembl VEP's message before any output is written. (#N)
   - A VCF record with a `0` or empty ID and lower-case alleles, and each `--individual` copy, is named from its alleles as written, as Ensembl VEP does. (#N)
   - A record `--dont_skip` keeps after the `--chr` list or the chromosome test refused it is annotated with its alleles as written, as Ensembl VEP leaves them. (#N)
@@ -300,6 +300,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--spdi` expands a parenthesised tandem allele such as `(AC)3` before testing its characters, as Ensembl VEP does, so the row carries its notation. (#N)
   - SPDI input past the end of its sequence is skipped naming the span and the sequence's length, where Ensembl VEP annotates over `N` padding. (#N)
   - An HGVS `c.`, `n.` or `p.` input naming a transcript the cache cannot read is refused under the `cache` component, not `input`. (#N)
+  - `HGVSg` of a trimmed allele of a `--minimal` multi-allelic record is the record-level notation Ensembl VEP prints, where it printed nothing. (#N)
 - Caches, reference FASTA and the cache tools
   - A cache whose chromosome directories are symlinks loads; it was refused as holding no transcript shards. (#N)
   - `vep-cache-builder` writes a `TSA=indel` variation record with the export's alleles at its position, so a left-aligned input co-locates with a native cache as Ensembl VEP co-locates it. (#N)
@@ -316,14 +317,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A region file's empty `clin_sig_allele` or `clinical_impact` cell is a value, as Ensembl VEP reads it: `CLIN_SIG` is suppressed and `CLINVAR_SOMATIC_CLASSIFICATION` prints empty. (#N)
   - The JSON `frequencies` of a co-located variant are keyed by the record's own alleles, so a `--minimal` split allele's trimmed spelling finds none, as Ensembl VEP writes. (#N)
   - `CLIN_SIG` on a `--minimal` split row reads the ClinVar reference against the reference `REF_ALLELE` prints, not the allele's own trimmed one, as Ensembl VEP compares them. (#N)
+  - JSON `colocated_variants` objects echo `minor_allele` and `minor_allele_freq` from a cache declaring them, as Ensembl VEP's JSON factory copies the record. (#N)
 - Transcript attributes, predictions and consequences
   - `--mane_select` alone lists no MANE Plus Clinical transcript, UNIPARC and UNIPROT_ISOFORM carry the cache's accessions, and a VCF SYMBOL writes whitespace as `%20`. (#N)
   - `--distance` up to `18446744073709551615` annotates structural variants without overflowing; a debug build panicked and a release build wrapped the window past a transcript's end. (#N)
   - `OverlapPC` rounds a two-decimal tie as Ensembl VEP's `100 * (overlap / length)` rounds it: 14.37, not 14.38, for 23 of 160 bases. (#N)
+  - A reference-length-mismatch record `--dont_skip` keeps is evaluated over its span, so one over a stop codon prints `stop_lost` without `frameshift_variant`. (#N)
 - Output formats, columns and headers
   - The Parquet writer keeps its numeric casts out of DuckDB's CSV reader, so a malformed numeric token is NULL under DuckDB 2.0.0 as it was under 1.x. (#N)
   - An output file vep-rs cannot create, a Parquet intermediate or an empty name included, ends the run with Ensembl VEP's `ERROR: [output] Could not write to output file <file>`. (#N)
   - The tab header describes every `--fields` name in Ensembl VEP's description table; `ID`, `CELL_TYPE`, the ESP, ExAC and RefSeq keys and `BAM_EDIT` printed `?`. (#N)
+  - `--tab --regulatory` without `--biotype` prints the `BIOTYPE` column as `-`, the first field of Ensembl VEP's regulatory group. (#N)
+  - `--total_length` appends the CDS and peptide totals behind `-` for an insertion between a UTR and the CDS, as Ensembl VEP's coding predicate admits it. (#N)
+  - `VARIANT_CLASS` classes the alleles `--check_frequency` kept, so a record whose dropped allele was its `-` prints `SNV`, as Ensembl VEP does. (#N)
+  - `NEAREST` on a `--minimal` multi-allelic record is the first split allele's on every row of the default, tab and VCF formats, as in JSON and Ensembl VEP. (#N)
 - Picking, filtering and summaries
   - `--pick` on a `--minimal` split ranks the alleles in Ensembl VEP's rejoin key order, so a repeated trimmable alternate allele keeps the row Ensembl VEP keeps. (#N)
   - `--transcript_filter` reads `uniprot_isoform`, the cache's UniProt isoform ids, matching any id of a list as Ensembl VEP does. (#N)

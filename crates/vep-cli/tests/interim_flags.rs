@@ -37,17 +37,24 @@ const RECORDS: &str = "\
 22\t20061573\tpartial_codon_del3_fwd\tGAAG\tG\t.\t.\t.
 ";
 
-/// The motif columns `--regulatory` declares: the `regulatory` entry of
-/// `@FLAG_FIELDS` (`Constants.pm:136`) less its first field, `BIOTYPE`, which
-/// Ensembl VEP adds to the default and tab outputs under the flag alone and
-/// vep-rs declares only under `--biotype`, `--vcf` or `--everything`.
-const MOTIF_COLUMNS: [&str; 5] = [
+/// The columns `--regulatory` declares, the `regulatory` entry of `@FLAG_FIELDS`
+/// (`Constants.pm:136`): `BIOTYPE`, filled only under `--biotype`
+/// (`OutputFactory.pm:1580`), then the motif columns.
+const REGULATORY_COLUMNS: [&str; 6] = [
+    "BIOTYPE",
     "MOTIF_NAME",
     "MOTIF_POS",
     "HIGH_INF_POS",
     "MOTIF_SCORE_CHANGE",
     "TRANSCRIPTION_FACTORS",
 ];
+
+/// The columns that stay empty under `--regulatory` even when `--biotype`, which
+/// `--everything` and `--vcf` switch on, fills `BIOTYPE`.
+const MOTIF_COLUMNS: [&str; 5] = {
+    let [_biotype, motif_columns @ ..] = REGULATORY_COLUMNS;
+    motif_columns
+};
 
 const FORMATS: [&str; 4] = ["default", "tab", "vcf", "json"];
 
@@ -194,9 +201,11 @@ fn custom_is_accepted_and_changes_no_output() {
     }
 }
 
-/// `--regulatory`, given or implied by `--everything`, is accepted, warns once,
-/// declares the five motif columns empty on every row and annotates no
-/// regulatory feature.
+/// `--regulatory`, given or implied by `--everything`, is accepted, warns once
+/// and annotates no regulatory feature. The default and tab outputs declare
+/// [`REGULATORY_COLUMNS`]: [`MOTIF_COLUMNS`] empty on every row, `BIOTYPE` too
+/// unless `--biotype` fills it. The `--vcf` CSQ, which lists `BIOTYPE` already,
+/// gains [`MOTIF_COLUMNS`] alone, and the JSON output is unchanged.
 ///
 /// Documented: "`--regulatory`, alone or through `--everything`, is accepted and
 /// warns that regulatory-feature annotation is not implemented: the motif columns
@@ -257,7 +266,7 @@ fn regulatory_warns_and_writes_only_empty_motif_columns() {
         }
     }
 
-    let descriptions: Vec<String> = MOTIF_COLUMNS
+    let descriptions: Vec<String> = REGULATORY_COLUMNS
         .iter()
         .map(|column| format!("## {column} : "))
         .collect();
@@ -307,24 +316,24 @@ fn regulatory_warns_and_writes_only_empty_motif_columns() {
                     // are the whole difference.
                     assert_eq!(other_lines, without, "{format}: nothing else changes");
                 } else {
-                    let column_headers = MOTIF_COLUMNS
+                    let column_headers = REGULATORY_COLUMNS
                         .iter()
                         .map(|column| format!("\t{column}"))
                         .collect::<String>();
-                    let empty_cells = "\t-".repeat(MOTIF_COLUMNS.len());
+                    let empty_cells = "\t-".repeat(REGULATORY_COLUMNS.len());
                     let stripped: Vec<&str> = other_lines
                         .iter()
                         .map(|line| {
                             if line.starts_with("#Uploaded_variation") {
                                 line.strip_suffix(column_headers.as_str())
                                     .unwrap_or_else(|| {
-                                        panic!("{format}: five column names on {line}")
+                                        panic!("{format}: six column names on {line}")
                                     })
                             } else if line.starts_with('#') {
                                 line
                             } else {
                                 line.strip_suffix(empty_cells.as_str()).unwrap_or_else(|| {
-                                    panic!("{format}: five empty cells on {line}")
+                                    panic!("{format}: six empty cells on {line}")
                                 })
                             }
                         })
