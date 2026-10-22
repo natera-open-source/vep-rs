@@ -56,6 +56,7 @@ use vep_core::variant::InputVariant;
 use crate::error::IoError;
 
 use super::{is_perl_space, InputParser, ParserContext, ReferenceSequence, TranscriptSource};
+use components::ReadFlags;
 
 /// Parser for HGVS notation input.
 pub struct HgvsParser<R: BufRead> {
@@ -64,10 +65,9 @@ pub struct HgvsParser<R: BufRead> {
     /// The run's transcripts, which a `c.`, `n.` or `p.` notation is resolved
     /// against.
     transcripts: Option<Arc<dyn TranscriptSource>>,
-    /// `--lookup_ref`: the reference allele a notation writes is replaced by
-    /// the genome's instead of being checked against it (`-replace_ref`,
-    /// Parser/HGVS.pm:192).
-    lookup_ref: bool,
+    /// `--lookup_ref` (`-replace_ref`, Parser/HGVS.pm:192) and `--minimal`
+    /// ([`ParserContext::minimal`]), as the resolver reads them.
+    flags: ReadFlags,
     /// `--max_sv_size` as given, the span a genomic notation must stay under
     /// (`max_size`, `:169`): `None` is the flag's `-1`, kept and compared as
     /// written (`$end - $start < -1`), so only a span written end first by two
@@ -85,13 +85,17 @@ pub struct HgvsParser<R: BufRead> {
 impl<R: BufRead> HgvsParser<R> {
     /// A parser over `reader` resolving its notations against the context's
     /// reference and transcripts under its `--max_sv_size`, replacing each
-    /// written reference allele by the genome's when `lookup_ref` is set.
+    /// written reference allele by the genome's when `lookup_ref` is set and
+    /// trimming each record's alleles as written under its `--minimal`.
     pub fn new(reader: R, context: &ParserContext, lookup_ref: bool) -> Self {
         Self {
             reader,
             reference: context.fasta.clone(),
             transcripts: context.transcripts.clone(),
-            lookup_ref,
+            flags: ReadFlags {
+                lookup_ref,
+                minimal: context.minimal,
+            },
             max_sv_size: context.max_sv_size,
             line_buf: Vec::new(),
             empty_lines: 0,
@@ -117,7 +121,7 @@ impl<R: BufRead> HgvsParser<R> {
                     hgvs,
                     &notation,
                     reference.as_ref(),
-                    self.lookup_ref,
+                    self.flags,
                     self.max_sv_size,
                 )
             }
@@ -134,7 +138,7 @@ impl<R: BufRead> HgvsParser<R> {
                         &notation,
                         reference.as_ref(),
                         transcripts.as_ref(),
-                        self.lookup_ref,
+                        self.flags,
                     )?
                 } else {
                     transcript::variant(
@@ -142,7 +146,7 @@ impl<R: BufRead> HgvsParser<R> {
                         &notation,
                         reference.as_ref(),
                         transcripts.as_ref(),
-                        self.lookup_ref,
+                        self.flags,
                     )?
                 };
                 // Parser/HGVS.pm:219 warns before the base parser's `validate_vf`

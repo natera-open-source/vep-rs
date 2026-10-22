@@ -329,6 +329,11 @@ fn individual_carrying_the_allele_after_a_leading_dot_is_annotated() {
 /// Under `--individual_zyg S1` the record S1 is reference-homozygous for is the
 /// written reference twice, `21_30337048_c/c`, and the other keeps the record's
 /// own string, `21_30319404_ca/-/cg` (Ensembl VEP 116.2's ids on this input).
+/// The default and tab `Uploaded_variation` print the same names
+/// (OutputFactory.pm:899-902 prints the copy's `variation_name` where it differs
+/// from the upper-cased one built at output): `21_30337048_c/t` for S2's `0/1`
+/// copy, not the record's `21_30337048_c/t/g`; a reference-homozygous copy writes
+/// no row there without `--process_ref_homs`, and `21_30337048_c/c` with it.
 #[test]
 fn an_individuals_copy_with_a_perl_false_id_is_named_from_its_alleles_as_written() {
     let dir = tempfile::tempdir().unwrap();
@@ -389,12 +394,56 @@ fn an_individuals_copy_with_a_perl_false_id_is_named_from_its_alleles_as_written
             pair("21_30319404_ca/-/cg", "CA/-/CG"),
         ])
     );
+
+    let uploaded = |flags: &[&str]| -> BTreeSet<String> {
+        let (text, stderr, ok) = run_with_cache(dir.path(), &input, &cache, flags);
+        assert!(ok, "{stderr}");
+        body(&text)
+            .iter()
+            .map(|line| column(line, 0).to_string())
+            .collect()
+    };
+    let set =
+        |names: &[&str]| -> BTreeSet<String> { names.iter().map(|n| n.to_string()).collect() };
+    for format in [&[][..], &["--tab"][..]] {
+        assert_eq!(
+            uploaded(&[&["--individual", "all"][..], format].concat()),
+            set(&[
+                "21_30337048_c/t",
+                "21_30337048_c/t/g",
+                "21_30337048_c/g",
+                "21_30319404_ca/-",
+                "21_30319404_ca/cg",
+                "21_30319404_ca/-/cg",
+            ]),
+            "{format:?}"
+        );
+        assert_eq!(
+            uploaded(&[&["--individual", "all", "--process_ref_homs"][..], format].concat()),
+            set(&[
+                "21_30337048_c/c",
+                "21_30337048_c/t",
+                "21_30337048_c/t/g",
+                "21_30337048_c/g",
+                "21_30319404_ca/-",
+                "21_30319404_ca/ca",
+                "21_30319404_ca/cg",
+                "21_30319404_ca/-/cg",
+            ]),
+            "{format:?}"
+        );
+    }
 }
 
 /// An unknown sample in the list is the `die` of `Parser/VCF.pm:612-617`, both
-/// lists named, as the error contract's one line; a VCF without a `#CHROM` line
-/// names no sample (ensembl-io BaseVCF4.pm:785-793), so `all` reads nothing and a
-/// list is refused against an empty header.
+/// lists named, as the error contract's one line: the header's list is
+/// `get_samples` (`:616`), the names keyed by their last column in column order
+/// (ensembl-io BaseVCF4.pm:785-808 over the tab-split header, `:97`), so a header
+/// `S1 S1 S3` is named `(S1,S3)` and a header ending in a tab names no empty
+/// sample. A VCF without a `#CHROM` line stops Ensembl VEP with a Perl error
+/// (BaseVCF4.pm:808 reads the header it lacks); here it names no sample, so `all`
+/// reads nothing and a list is refused against an empty header, as the
+/// `--individual` help states.
 #[test]
 fn individual_list_unknown_sample_dies_with_vep_text() {
     let dir = tempfile::tempdir().unwrap();
@@ -406,6 +455,23 @@ fn individual_list_unknown_sample_dies_with_vep_text() {
         "ERROR: [input] Sample IDs given (S9,S1) do not match samples from VCF (S1,S2,S3,S4)"
     );
     assert!(body(&text).is_empty());
+
+    let record = "21\t30282169\tins4\tC\tCTATT\t.\t.\t.\tGT\t0/1\t1/1\t0/0\n";
+    for (name, samples) in [
+        ("repeated.vcf", "\tS1\tS1\tS3\n"),
+        ("trailing-tab.vcf", "\tS1\tS3\t\n"),
+    ] {
+        let header = HEADER.replace("\tS1\tS2\tS3\tS4\n", samples);
+        let input = write_input(dir.path(), name, &format!("{header}{record}"));
+        let (_, stderr, ok) = run(dir.path(), &input, &["--individual", "S9"]);
+        assert!(!ok, "{name}");
+        assert!(
+            stderr
+                .trim()
+                .ends_with(" given (S9) do not match samples from VCF (S1,S3)"),
+            "{name}: {stderr}"
+        );
+    }
 
     let headerless = write_input(dir.path(), "noheader.vcf", RECORDS);
     let (text, stderr, ok) = run(

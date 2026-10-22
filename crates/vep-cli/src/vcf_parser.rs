@@ -846,7 +846,8 @@ pub fn vcf_columns(line: &str) -> anyhow::Result<VcfColumns<'_>> {
 /// The sample columns of a `#CHROM` header line, the names Ensembl VEP matches
 /// `--individual` against (BaseVCF4.pm:97-98). ensembl-io splits the header on
 /// tabs whatever the run's `--delimiter`, which Parser/VCF.pm:129 hands to the
-/// data records alone, so the line is read as written.
+/// data records alone, so the line is read as written, Perl's `split` dropping
+/// the empty fields a trailing tab leaves.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SampleColumns {
     /// The sample names in column order: the columns after a ninth column
@@ -860,7 +861,7 @@ pub struct SampleColumns {
 
 /// The sample columns of a `#CHROM` header line ([`SampleColumns`]).
 pub fn sample_columns(header_line: &str) -> SampleColumns {
-    let columns: Vec<&str> = header_line.split('\t').collect();
+    let columns: Vec<&str> = perl_split(header_line, &['\t']).collect();
     let genotyped = columns.get(8) == Some(&"FORMAT");
     let first_sample = if genotyped { 9 } else { 8 };
     SampleColumns {
@@ -1071,7 +1072,9 @@ fn perl_minimises(ref_allele: &str, alt: &str) -> bool {
 
 /// The anchor chop of Parser/VCF.pm:294-335 over every written ALT, `*` and `.` included:
 /// the record is an indel when any ALT's length differs from REF's (a `*` of one base
-/// against a two-base REF counts, so `AG AC,*` is chopped where `AG AC` is not, :296-298),
+/// against a two-base REF counts, so `AG AC,*` is chopped where `AG AC` is not, :296-298)
+/// or when any ALT begins with `D` or `I`, the pileup spelling of a deletion or insertion
+/// (`/^[DI]/`, :297), so `DA DG` is chopped to `A/G` at POS + 1 like `DA DC,DG` to `A/C/G`;
 /// and the first base is chopped when REF and every ALT other than `*` share it (:306-308
 /// with several ALTs, :328 with one), `*` kept as written and an emptied allele reading
 /// `-` (:315-316). The comparison is Perl's `eq` on the first characters, case-sensitive
@@ -1086,7 +1089,9 @@ pub(crate) fn trim_multi_alleles(
     alt_alleles: &[&str],
 ) -> (String, Vec<String>, usize) {
     let ref_bytes = ref_allele.as_bytes();
-    let is_indel = alt_alleles.iter().any(|a| a.len() != ref_bytes.len());
+    let is_indel = alt_alleles
+        .iter()
+        .any(|a| a.len() != ref_bytes.len() || a.starts_with(['D', 'I']));
     let shares_first_base = |allele: &&str| allele.as_bytes().first() == ref_bytes.first();
     // With one ALT its own first base decides (`<*>` against `N` is not chopped); with
     // several, the alleles carrying a `*` are left out of the comparison.
@@ -1564,6 +1569,11 @@ mod tests {
             sample_columns("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2");
         assert_eq!(header.names, ["S1", "S2"]);
         assert!(header.genotyped);
+        // Perl's `split("\t")` (BaseVCF4.pm:97) drops the empty fields a trailing tab
+        // leaves, so a header ending in a tab names no empty sample.
+        let trailing_tab =
+            sample_columns("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\t\t");
+        assert_eq!(trailing_tab.names, ["S1", "S2"]);
         assert!(
             sample_columns("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO")
                 .names
@@ -1811,6 +1821,51 @@ mod tests {
             perl_allele_numbers("-", &["T".into(), "-".into(), "T".into()]),
             [Some(1), None, None]
         );
+    }
+
+    /// Parser/VCF.pm:297 reads an ALT beginning with `D` or `I` as an indel whatever its
+    /// length, so the anchor chop runs on same-length alleles behind that letter: Ensembl
+    /// VEP 116.2 annotates `21 30396602 x DA DG` as the SNV `A/G` at 30396603 (`:328-334`)
+    /// and `21 30289182 x DA DC,DG` as the SNVs `A/C/G` at 30289183 (`:306-308`), the
+    /// uploaded alleles kept as written; `DA DG` without the letter, `TA TG`, is not
+    /// chopped.
+    #[test]
+    fn an_alt_beginning_with_d_or_i_is_chopped_as_an_indel() {
+        assert_eq!(
+            trim_multi_alleles("DA", &["DG"]),
+            ("A".to_string(), vec!["G".to_string()], 1)
+        );
+        assert_eq!(
+            trim_multi_alleles("DA", &["DC", "DG"]),
+            ("A".to_string(), vec!["C".to_string(), "G".to_string()], 1)
+        );
+        assert_eq!(
+            trim_multi_alleles("TA", &["TG"]),
+            ("TA".to_string(), vec!["TG".to_string()], 0)
+        );
+
+        let single = parse_vcf_line("21\t30396602\tx\tDA\tDG\t.\t.\t.", true).unwrap();
+        assert_eq!(single.len(), 1);
+        assert_eq!((single[0].start, single[0].end), (30396603, 30396603));
+        assert_eq!(single[0].allele_string, "A/G");
+        assert_eq!(single[0].variant_class, VariantClass::Snv);
+        assert_eq!(single[0].uploaded_allele_string.as_deref(), Some("DA/DG"));
+
+        let multi = parse_vcf_line("21\t30289182\tx\tDA\tDC,DG\t.\t.\t.", true).unwrap();
+        assert_eq!(
+            multi
+                .iter()
+                .map(|v| (v.start, v.end, v.alt_allele(), v.variant_class))
+                .collect::<Vec<_>>(),
+            [
+                (30289183, 30289183, &b"C"[..], VariantClass::Snv),
+                (30289183, 30289183, &b"G"[..], VariantClass::Snv),
+            ]
+        );
+        assert!(multi.iter().all(|v| v.record_allele_string() == "A/C/G"));
+        assert!(multi
+            .iter()
+            .all(|v| v.uploaded_allele_string.as_deref() == Some("DA/DC/DG")));
     }
 
     /// Parser/VCF.pm:555-558 marks a deletion with neither END nor SVLEN `vep_skip`

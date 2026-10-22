@@ -57,21 +57,22 @@ use vep_core::variant::InputVariant;
 use crate::error::IoError;
 use crate::input::{ReferenceSequence, TranscriptSource};
 
-use super::components::{self, Placement};
+use super::components::{self, Placement, ReadFlags};
 use super::genomic::leading_digits;
 use super::{cache_unreadable, unable, Notation};
 
 /// The variant a transcript notation describes, read against `reference` on
 /// the first transcript `transcripts` resolves its reference to that yields
 /// one, its written reference allele replaced by the genome's under
-/// `lookup_ref`; refused with the first core group's message when every
-/// group refuses it or lacks the transcript.
+/// `flags.lookup_ref` and its alleles trimmed as written under `flags.minimal`;
+/// refused with the first core group's message when every group refuses it or
+/// lacks the transcript.
 pub(super) fn variant(
     hgvs: &str,
     notation: &Notation,
     reference: &dyn ReferenceSequence,
     transcripts: &dyn TranscriptSource,
-    lookup_ref: bool,
+    flags: ReadFlags,
 ) -> Result<InputVariant, IoError> {
     let not_found = || {
         let message = format!(
@@ -83,7 +84,7 @@ pub(super) fn variant(
     let mut first_refusal = None;
     for candidate in resolve(&notation.reference, transcripts)? {
         let attempt = match candidate {
-            Some(transcript) => on_transcript(hgvs, notation, reference, &transcript, lookup_ref),
+            Some(transcript) => on_transcript(hgvs, notation, reference, &transcript, flags),
             None => Err(not_found()),
         };
         match attempt {
@@ -103,7 +104,7 @@ fn on_transcript(
     notation: &Notation,
     reference: &dyn ReferenceSequence,
     transcript: &Transcript,
-    lookup_ref: bool,
+    flags: ReadFlags,
 ) -> Result<InputVariant, IoError> {
     let (start, end, strand) =
         genomic_position(&notation.description, &notation.cleaned, transcript)
@@ -114,7 +115,7 @@ fn on_transcript(
         end,
         strand,
     };
-    components::variant(hgvs, notation, reference, placement, lookup_ref)
+    components::variant(hgvs, notation, reference, placement, flags)
 }
 
 /// The transcripts `reference` names, in the order the parser tries them: the

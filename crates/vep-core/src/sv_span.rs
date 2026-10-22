@@ -17,6 +17,7 @@ use std::fmt;
 use crate::coordinate::{parse_coordinate, MAX_COORD};
 use crate::sv_routing::perl_split;
 use crate::variant::VariantClass;
+use crate::variation::perl_numeric;
 
 /// Perl's numeric reading of an INFO value, as `abs($svlen)` and `max(@svlen)` apply
 /// it: leading whitespace, an optional sign, digits with an optional fraction and
@@ -226,6 +227,15 @@ pub fn deletion_looks_incomplete(
         && (start > end || (svlen.is_none() && end_text.is_none()))
 }
 
+/// Parser/VCF.pm:555's `$start > $end` for a record whose INFO/END is no coordinate
+/// here ([`SpanError::EndNotACoordinate`]): Perl compares the END text as a number,
+/// so `30165900abc` and `3.01659e7` read as 30165900, `abc`, `.` and an empty value
+/// as 0, and `Inf` and `NaN` as values no start exceeds. The record at VCF position
+/// `pos` looks incomplete only when that number lies below its first base, `pos + 1`.
+pub fn end_text_before_start(pos: u64, end_text: &str) -> bool {
+    perl_numeric(end_text) < pos.saturating_add(1) as f64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -302,6 +312,29 @@ mod tests {
             None,
             None
         ));
+    }
+
+    /// `$start > $end` on an END text that is no coordinate here (Parser/VCF.pm:555):
+    /// Ensembl VEP 116.2 writes no `deletion looks incomplete` line for
+    /// `21 30165850 x N <DEL>` with `END=30165900abc`, `END=30165900.0`, `END=3.01659e7`,
+    /// `END=Inf` or `END=NaN` (their numbers are not below the start, 30165851), and
+    /// writes it for `END=abc`, `END=.`, `END=` and `END=-Inf`, which read as 0 or below.
+    #[test]
+    fn an_end_text_reads_as_perls_number_against_the_start() {
+        let pos = 30165850;
+        for text in [
+            "30165900abc",
+            "30165900.0",
+            "3.01659e7",
+            " 30165851",
+            "Inf",
+            "NaN",
+        ] {
+            assert!(!end_text_before_start(pos, text), "{text:?}");
+        }
+        for text in ["abc", ".", "", "-Inf", "30165850", "3.0165850e7"] {
+            assert!(end_text_before_start(pos, text), "{text:?}");
+        }
     }
 
     /// Perl's `abs()` numifies the string: Ensembl VEP 116.2 ends a `<DUP>` at POS 30425650

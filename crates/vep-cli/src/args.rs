@@ -93,14 +93,17 @@ pub struct Args {
 
     /// Annotate a VCF record once per individual, `all` for every sample column or a comma-separated list
     /// of sample names from the #CHROM header line; an unknown name exits with Ensembl VEP's error naming
-    /// both lists. Each row of the copy carries IND and ZYG (HET when the genotype holds more than one
+    /// both lists, checked before the first record, where Ensembl VEP checks it at its first
+    /// sequence record and so annotates a VCF of structural records alone. Each row of the copy
+    /// carries IND and ZYG (HET when the genotype holds more than one
     /// distinct allele, else HOM, with REF appended for a reference-homozygous individual); a copy carries
     /// the alleles its genotype names, so `./1` and a haploid `1` annotate the one allele as HOM, `1/2` both
     /// alleles as HET, `*` counts as no alternate allele, and `./.` writes nothing for that individual.
     /// A reference-homozygous individual's copy writes no row unless --process_ref_homs: the VCF output
     /// carries its line without consequences and the JSON output its object without them. Every output
     /// repeats the record once per individual, one VCF line and one JSON object each. A VCF without a
-    /// #CHROM line, or whose header names no sample, writes nothing under `all`. Implies
+    /// #CHROM line, or whose header names no sample, writes nothing under `all`, where a VCF without that
+    /// line stops Ensembl VEP with a Perl error. Implies
     /// --allow_non_variant; cannot be combined with --minimal or --individual_zyg
     #[arg(help_heading = "Input", long, value_name = "all|LIST")]
     pub individual: Option<String>,

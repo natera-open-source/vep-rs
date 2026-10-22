@@ -2118,6 +2118,7 @@ impl Runner {
             synonyms: Arc::clone(&self.cache.synonyms),
             chromosomes: Arc::new(transcripts.chromosomes().map(str::to_string).collect()),
             max_sv_size: config.max_sv_size,
+            minimal: config.minimal,
             transcripts: Some(Arc::new(TranscriptLookup::new(
                 Arc::clone(transcripts),
                 &self.cache.info.contig_order,

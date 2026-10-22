@@ -63,32 +63,33 @@ impl IndividualRequest {
     /// The individuals to read for a header's sample `columns`: every sample, or the
     /// named list in its order, a repeated name included (`Parser/VCF.pm:622`
     /// copies the record once per listed name). A named list with a name the
-    /// header lacks is Ensembl VEP's `die` (`:612-617`), both lists in the message.
-    /// ensembl-io keys the samples by name, so a name the header repeats is one
-    /// sample reading its last column, and `all` lists the names by that column
-    /// (BaseVCF4.pm:785-808).
+    /// header lacks is Ensembl VEP's `die` (`:612-617`), both lists in the message,
+    /// the header's as `get_samples` lists it. ensembl-io keys the samples by name,
+    /// so a name the header repeats is one sample reading its last column, and
+    /// `get_samples` lists the names by that column (BaseVCF4.pm:785-808): `all`
+    /// reads them so, and the message names `S1 S1 S3` as `S1,S3`.
     pub fn resolve(&self, columns: &SampleColumns) -> Result<Vec<(Arc<str>, usize)>, String> {
         let mut last_column: HashMap<&str, usize> = HashMap::new();
         for (column, name) in columns.names.iter().enumerate() {
             last_column.insert(name.as_str(), column);
         }
+        let mut samples: Vec<(Arc<str>, usize)> = last_column
+            .iter()
+            .map(|(name, column)| (Arc::from(*name), *column))
+            .collect();
+        samples.sort_by_key(|(_, column)| *column);
         match self {
-            IndividualRequest::All => {
-                let mut by_column: Vec<(Arc<str>, usize)> = last_column
-                    .iter()
-                    .map(|(name, column)| (Arc::from(*name), *column))
-                    .collect();
-                by_column.sort_by_key(|(_, column)| *column);
-                Ok(by_column)
-            }
+            IndividualRequest::All => Ok(samples),
             IndividualRequest::Named(names) => {
                 let mut individuals = Vec::with_capacity(names.len());
                 for name in names {
                     let Some(column) = last_column.get(name.as_str()).copied() else {
+                        let header: Vec<&str> =
+                            samples.iter().map(|(name, _)| name.as_ref()).collect();
                         return Err(format!(
                             "Sample IDs given ({}) do not match samples from VCF ({})",
                             names.join(","),
-                            columns.names.join(",")
+                            header.join(",")
                         ));
                     };
                     individuals.push((Arc::from(name.as_str()), column));
@@ -709,7 +710,9 @@ mod tests {
 
     /// BaseVCF4.pm:785-808: the samples are keyed by name, so a repeated header
     /// name is one sample reading its last column, `all` lists the names by that
-    /// column, and a list may repeat a name (`Parser/VCF.pm:622`).
+    /// column, a list may repeat a name (`Parser/VCF.pm:622`), and the refusal of
+    /// an unknown name lists the header's samples the same way (`:616` joins
+    /// `get_samples`): Ensembl VEP 116.2 names a header `S1 S3 S1` as `(S3,S1)`.
     #[test]
     fn a_repeated_sample_name_reads_its_last_column() {
         let columns = SampleColumns {
@@ -737,6 +740,12 @@ mod tests {
             ]
         );
         assert_eq!(split.len(), 3);
+        let unknown = IndividualRequest::Named(vec!["S9".into(), "S1".into()]);
+        let refusal = unknown.resolve(&columns).unwrap_err();
+        assert!(
+            refusal.ends_with(" given (S9,S1) do not match samples from VCF (S3,S1)"),
+            "{refusal}"
+        );
     }
 
     /// `Parser/VCF.pm:609`: the list's first element decides `all`, in any case.

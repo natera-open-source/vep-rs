@@ -408,6 +408,143 @@ fn unresolvable_notations_are_skipped_with_the_warning() {
     );
 }
 
+/// A notation whose alternate names no bases builds a feature with the reference
+/// alone: `21:g.30282172DUP` under `--lookup_ref` keeps `get_hgvs_alleles`'s `-`
+/// (`_hgvs_from_components` tests `/dup/` in lower case only,
+/// VariationFeatureAdaptor.pm:2071), which the genome's `T` replaces (`:2096-2097`)
+/// beside the empty alternate `dup([A-Z]*)$` captured, and `validate_vf`'s split
+/// drops that empty field (Parser.pm:575), so Ensembl VEP 116.2 annotates no allele
+/// and writes no row and no warning for it; `21:g.30282172_30282173ins` is the
+/// same shape (`-/`). The lower-case `dup` beside them annotates the same rows
+/// with and without `--lookup_ref`: its alleles are the `-` and the genome's
+/// base either way (`:2076-2077`). Without `--lookup_ref` the `-` fails the
+/// reference check and the notation is skipped.
+#[test]
+fn a_notation_naming_no_alternate_bases_writes_no_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write(
+        dir.path(),
+        "empty-alternate.hgvs",
+        "21:g.30282172DUP\n21:g.30282172Dup\n21:g.30282172_30282173ins\n21:g.30282172dup\n",
+    );
+    let out = dir.path().join("looked-up.txt");
+    let looked_up = annotate(
+        dir.path(),
+        &input,
+        &out,
+        &["--format", "hgvs", "--lookup_ref"],
+    );
+    assert!(!looked_up.is_empty());
+    assert!(
+        looked_up.iter().all(|row| name(row) == "21:g.30282172dup"),
+        "{looked_up:?}"
+    );
+    assert!(
+        !std::fs::exists(format!("{}_warnings.txt", out.display())).unwrap(),
+        "no warning is written"
+    );
+
+    let out = dir.path().join("checked.txt");
+    let rows = annotate(dir.path(), &input, &out, &["--format", "hgvs"]);
+    assert_eq!(rows, looked_up);
+    let warnings = std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap();
+    assert!(
+        warnings.starts_with(
+            "WARNING: line 1 skipped (21:g.30282172DUP): Unable to parse HGVS notation '21:g.30282172DUP': \
+             Reference allele extracted from 21:30282172-30282172 (T) does not match reference \
+             allele given by HGVS notation 21:g.30282172DUP (-)\n"
+        ),
+        "{warnings}"
+    );
+}
+
+/// Each row's `(Location, Allele, UPLOADED_ALLELE)` by its `Uploaded_variation`.
+fn placed_by_name(rows: &[String]) -> BTreeMap<&str, (&str, &str, &str)> {
+    rows.iter()
+        .map(|row| {
+            let columns: Vec<&str> = row.split('\t').collect();
+            let uploaded_allele = columns
+                .last()
+                .unwrap()
+                .split(';')
+                .find_map(|field| field.strip_prefix("UPLOADED_ALLELE="))
+                .unwrap_or_else(|| panic!("no UPLOADED_ALLELE in {row}"));
+            (columns[0], (columns[1], columns[2], uploaded_allele))
+        })
+        .collect()
+}
+
+/// Under `--minimal` a notation's alleles are trimmed as written before they are
+/// upper-cased (`post_process_vfs`, Parser.pm:852, then `validate_vf`, :554):
+/// `21:g.30282168_30282170TCA>TCG` annotates as `A/G` at `21:30282170`, and
+/// `21:g.30282168_30282170delinsGGa` keeps its `A`/`a` pair and annotates as `GGA`
+/// over `21:30282168-30282170`, as Ensembl VEP 116.2 does; a trim of the
+/// upper-cased pair would drop the shared `A` and annotate `GG` over two bases.
+/// `UPLOADED_ALLELE` prints the pair as the notation built it, `TCA/TCG`,
+/// `TCA/GGa` and `TCA/TCg`, the `original_allele_string` the trim records
+/// (:1008) before the upper-casing. Without `--minimal` the same-length
+/// `TCA>TCg` prints its upper-cased working pair, `TCA/TCG`, since no trim
+/// records the pair as built, and the indel `TCA>TC` prints `TCA/TC`, recorded
+/// by the trim every indel goes through (:862-881).
+#[test]
+fn minimal_trims_a_notation_in_its_written_case() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write(
+        dir.path(),
+        "minimal.hgvs",
+        "21:g.30282168_30282170TCA>TCG\n21:g.30282168_30282170delinsGGa\n\
+         21:g.30282168_30282170TCA>TCg\n",
+    );
+    let out = dir.path().join("minimal.txt");
+    let rows = annotate(
+        dir.path(),
+        &input,
+        &out,
+        &["--format", "hgvs", "--minimal", "--uploaded_allele"],
+    );
+    assert_eq!(
+        placed_by_name(&rows),
+        BTreeMap::from([
+            (
+                "21:g.30282168_30282170TCA>TCG",
+                ("21:30282170", "G", "TCA/TCG")
+            ),
+            (
+                "21:g.30282168_30282170delinsGGa",
+                ("21:30282168-30282170", "GGA", "TCA/GGa")
+            ),
+            (
+                "21:g.30282168_30282170TCA>TCg",
+                ("21:30282170", "G", "TCA/TCg")
+            ),
+        ])
+    );
+    let input = write(
+        dir.path(),
+        "plain.hgvs",
+        "21:g.30282168_30282170TCA>TCg\n21:g.30282168_30282170TCA>TC\n",
+    );
+    let rows = annotate(
+        dir.path(),
+        &input,
+        &out,
+        &["--format", "hgvs", "--uploaded_allele"],
+    );
+    assert_eq!(
+        placed_by_name(&rows),
+        BTreeMap::from([
+            (
+                "21:g.30282168_30282170TCA>TCg",
+                ("21:30282168-30282170", "TCG", "TCA/TCG")
+            ),
+            (
+                "21:g.30282168_30282170TCA>TC",
+                ("21:30282170", "-", "TCA/TC")
+            ),
+        ])
+    );
+}
+
 /// The span a genomic notation describes must be shorter than `--max_sv_size`
 /// (VariationFeatureAdaptor.pm:1886): a twenty-base deletion annotates under
 /// the default limit and is skipped under `--max_sv_size 10` with Ensembl

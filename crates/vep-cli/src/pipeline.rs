@@ -91,7 +91,7 @@ use vep_core::sv_record::StructuralRecordError;
 use vep_core::sv_routing::{
     joined, perl_true, sv_so_term_and_class, sv_type_abbreviation, sv_type_string, written_alts,
 };
-use vep_core::sv_span::{structural_end, SpanClass, SpanError};
+use vep_core::sv_span::{end_text_before_start, structural_end, SpanClass, SpanError};
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{classify_variant, InputVariant};
 use vep_core::vcf_info::{info_value, info_value_written};
@@ -1584,7 +1584,11 @@ fn read_parsed(
                 // `post_process_vfs` minimises a bi-allelic record before `validate_vf`
                 // reads it (Parser.pm:852), so the size test measures the trimmed span;
                 // the multi-allelic split comes after (InputBuffer.pm:638-718), below.
-                if cfg.minimal {
+                // A record its reader already minimised, on the alleles as written
+                // before upper-casing them, is left as it stands: `trim_sequences`
+                // compares bases with `eq`, so a pass over the upper-cased pair would
+                // trim a base the written-case comparison kept.
+                if cfg.minimal && !variant.minimised {
                     minimise_bi_allelic(&mut variant);
                 }
                 mark_oversize_sv(&mut variant, cfg.max_sv_size);
@@ -1742,8 +1746,10 @@ struct RefusedRecord {
 /// start), which runs on the refused type's feature too
 /// (Parser/VCF.pm:199). For a refused type the span tested is Perl's own: `POS + 1`
 /// to the end BaseVCF4.pm:297-317 reads from SVLEN or END, so `SVLEN=0`, an END at
-/// or before POS and an END that is no number each make a deletion incomplete, and
-/// an END before POS or no number is the refused span `validate_vf` reports last.
+/// or before POS and an END whose number to Perl lies below the start
+/// ([`end_text_before_start`]: `abc` reads as 0, `30165900abc` as 30165900) each
+/// make a deletion incomplete, and an END before POS or no number is the refused
+/// span `validate_vf` reports last.
 fn refused_record(error: &anyhow::Error, line: &str) -> RefusedRecord {
     let message = error.to_string();
     let column = |index: usize| line.split('\t').nth(index);
@@ -1793,6 +1799,9 @@ fn refused_record(error: &anyhow::Error, line: &str) -> RefusedRecord {
                 )
             });
             let empty = match &span {
+                Some((pos, Err(SpanError::EndNotACoordinate(text)))) => {
+                    end_text_before_start(*pos, text)
+                }
                 Some((_, Err(_))) => true,
                 Some((pos, Ok(end))) => end <= pos,
                 None => false,
@@ -1814,15 +1823,18 @@ fn refused_record(error: &anyhow::Error, line: &str) -> RefusedRecord {
                     "{abbrev} is not a supported structural variant type"
                 ));
             }
-            if deletion
-                && matches!(
-                    span,
-                    SpanError::StartPastEnd { .. } | SpanError::EndNotACoordinate(_)
-                )
-            {
+            let pos = parse_pos(pos_text);
+            let empty = match span {
+                SpanError::StartPastEnd { .. } => true,
+                SpanError::EndNotACoordinate(text) => {
+                    pos.is_none_or(|pos| end_text_before_start(pos, text))
+                }
+                SpanError::StartPastCeiling(_) => false,
+            };
+            if deletion && empty {
                 parsed.push(incomplete);
             }
-            let description = match parse_pos(pos_text) {
+            let description = match pos {
                 Some(pos) => refused_span_description(pos, span),
                 None => message,
             };
@@ -4619,8 +4631,12 @@ mod tests {
     /// Ensembl VEP 116.2 writes `Invalid start '101' or end 'abc' coordinate` for
     /// `21 100 . N <DEL> . . END=abc`, `... end '' coordinate` for `END=`, and
     /// `Invalid start '301' or end 'abc' coordinate` after the type and the
-    /// incomplete-deletion lines for `21 300 . N N . . SVTYPE=XDEL;END=abc`). An END
-    /// Perl numifies (`5e2`) is refused as vep-rs's own `Invalid END`.
+    /// incomplete-deletion lines for `21 300 . N N . . SVTYPE=XDEL;END=abc`). The
+    /// incomplete-deletion test compares the END text as Perl's number (`:555`), so
+    /// `END=30165900abc` at POS 30165850 (30165900, past the start) gets the
+    /// coordinate line alone, as 116.2 writes it, and `END=50abc` at POS 100 both
+    /// lines. An END Perl numifies (`5e2`) is refused as vep-rs's own `Invalid END`,
+    /// with no incomplete-deletion line when its number is not below the start.
     #[test]
     fn refused_record_descriptions_follow_perl_order() {
         let span = |start, end| {
@@ -4674,7 +4690,28 @@ mod tests {
         );
         assert_eq!(
             refused_record_descriptions(&end_text("5e2"), "21\t400\t.\tN\t<DEL>\t.\t.\tEND=5e2"),
-            ["deletion looks incomplete", "Invalid END: '5e2'"]
+            ["Invalid END: '5e2'"]
+        );
+        assert_eq!(
+            refused_record_descriptions(&end_text("5e1"), "21\t400\t.\tN\t<DEL>\t.\t.\tEND=5e1"),
+            ["deletion looks incomplete", "Invalid END: '5e1'"]
+        );
+        assert_eq!(
+            refused_record_descriptions(
+                &end_text("30165900abc"),
+                "21\t30165850\tdel_end_trailing\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=30165900abc"
+            ),
+            ["Invalid start '30165851' or end '30165900abc' coordinate"]
+        );
+        assert_eq!(
+            refused_record_descriptions(
+                &end_text("50abc"),
+                "21\t100\t.\tN\t<DEL>\t.\t.\tEND=50abc"
+            ),
+            [
+                "deletion looks incomplete",
+                "Invalid start '101' or end '50abc' coordinate"
+            ]
         );
         let refused_type = "XDEL is not a supported structural variant type";
         // POS in every spelling the parser reads (`parse_pos`): `100.0` is 100.
@@ -4717,6 +4754,16 @@ mod tests {
                 refused_type,
                 "deletion looks incomplete",
                 "Invalid start '301' or end 'abc' coordinate"
+            ]
+        );
+        assert_eq!(
+            refused_record_descriptions(
+                &unsupported("XDEL"),
+                "21\t300\t.\tN\tN\t.\t.\tSVTYPE=XDEL;END=350abc"
+            ),
+            [
+                refused_type,
+                "Invalid start '301' or end '350abc' coordinate"
             ]
         );
         let refused_foo = "FOO is not a supported structural variant type";

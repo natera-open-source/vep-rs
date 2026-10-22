@@ -37,6 +37,7 @@ use std::io::BufRead;
 use std::sync::Arc;
 
 use vep_core::coordinate::{parse_coordinate, Strand};
+use vep_core::minimal::minimise_bi_allelic;
 use vep_core::sv_routing::{perl_true, sv_so_term_and_class, sv_type_abbreviation};
 use vep_core::variant::{classify_variant, InputVariant, VariantClass};
 
@@ -48,6 +49,8 @@ use super::{is_perl_space, minimise_alleles, Delimiter, InputParser, ParserConte
 pub struct EnsemblParser<R: BufRead> {
     reader: R,
     delimiter: Delimiter,
+    /// `--minimal` ([`ParserContext::minimal`]).
+    minimal: bool,
     line_buf: Vec<u8>,
     /// Buffer for multi-allelic variants from a single line.
     buffer: Vec<InputVariant>,
@@ -60,6 +63,7 @@ impl<R: BufRead> EnsemblParser<R> {
         Self {
             reader,
             delimiter: context.delimiter.clone(),
+            minimal: context.minimal,
             line_buf: Vec::new(),
             buffer: Vec::new(),
             empty_lines: 0,
@@ -103,7 +107,7 @@ impl<R: BufRead> EnsemblParser<R> {
         let line_name: Arc<str> = format!("{}_{}_{}", record[0], start.min(end), record[3]).into();
 
         let mut variants = if allele_string.contains('/') {
-            sequence_variants(chr, start, end, allele_string, id)?
+            sequence_variants(chr, start, end, allele_string, id, self.minimal)?
         } else {
             let mut variant = structural_variant(chr, start, end, allele_string);
             variant.id = id;
@@ -135,8 +139,11 @@ fn strand_from_token(token: Option<&str>) -> Strand {
 /// alternate allele, each carrying the record's `id`. Ensembl VEP keeps the
 /// whole column as the record's allele string (Parser/VEP_input.pm:156),
 /// minimises a bi-allelic indel in `post_process_vfs` on the bases as written,
+/// and under `minimal` (`--minimal`) every bi-allelic record (Parser.pm:852),
 /// then upper-cases the string in `validate_vf` (Parser.pm:554), in that order
-/// here too. An empty allele (`A/`, `/G`) fails the line: Ensembl VEP builds a
+/// here too: `AAAG/AGGg` under the flag is `AAG/GGg` over the last three bases,
+/// the `G` and `g` left unmatched by the written-case comparison, and then
+/// `AAG/GGG`. An empty allele (`A/`, `/G`) fails the line: Ensembl VEP builds a
 /// feature with one allele from such a string and writes nothing for it.
 ///
 /// A record whose ID Perl reads as false is named `chr_start_alleles` at
@@ -158,6 +165,7 @@ pub(super) fn sequence_variants(
     end: u64,
     allele_string: &str,
     id: Option<String>,
+    minimal: bool,
 ) -> Result<Vec<InputVariant>, IoError> {
     if allele_string.split('/').any(str::is_empty) {
         return Err(IoError::VcfParse(format!(
@@ -199,6 +207,9 @@ pub(super) fn sequence_variants(
         variant.uploaded_allele_string = Some(uploaded_allele_string.clone());
         if !multi_allelic {
             minimise_alleles(&mut variant);
+            if minimal {
+                minimise_bi_allelic(&mut variant);
+            }
         }
         let (working, written) = if multi_allelic {
             (allele_string, written_column.clone())
@@ -406,7 +417,7 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert_eq!(error, "Invalid allele string: 'A/' (an allele is empty)");
-        let error = sequence_variants("21".into(), 100, 100, "/G", None)
+        let error = sequence_variants("21".into(), 100, 100, "/G", None, false)
             .unwrap_err()
             .to_string();
         assert_eq!(error, "Invalid allele string: '/G' (an allele is empty)");
@@ -548,6 +559,40 @@ mod tests {
             "the alleles of one record share the column"
         );
         assert_eq!(v[4].written_case_allele_string, None);
+    }
+
+    /// Under `--minimal` the bi-allelic trim runs on the column as written
+    /// (Parser.pm:852 before :554), so `AAAG/AGGg` loses its shared `A` and keeps
+    /// the `G`/`g` pair, is named from that pair at the trimmed start (:462) and
+    /// is upper-cased afterwards; the upper-case column trims on both sides. A
+    /// multi-allelic column is left to the split, as without the flag.
+    #[test]
+    fn minimal_trims_the_written_case_before_the_upper_casing() {
+        let context = ParserContext {
+            minimal: true,
+            ..ParserContext::default()
+        };
+        let data = "21\t10542414\t10542417\tAAAG/AGGg\t+\n\
+                    21\t10542414\t10542417\tAAAG/AGGG\t+\n\
+                    21\t100\t100\tA/g/T\t1\n";
+        let mut parser = EnsemblParser::new(Cursor::new(data.as_bytes().to_vec()), &context);
+        let written = parser.next_variant().unwrap().unwrap();
+        assert_eq!((written.start, written.end), (10542415, 10542417));
+        assert_eq!(written.allele_string, "AAG/GGG");
+        assert_eq!(written.id.as_deref(), Some("21_10542415_AAG/GGg"));
+        assert_eq!(
+            written.written_case_allele_string.as_deref(),
+            Some("AAG/GGg")
+        );
+        assert_eq!(written.uploaded_allele_string.as_deref(), Some("AAAG/AGGg"));
+        assert!(written.minimised);
+        let upper = parser.next_variant().unwrap().unwrap();
+        assert_eq!((upper.start, upper.end), (10542415, 10542416));
+        assert_eq!(upper.allele_string, "AA/GG");
+        assert_eq!(upper.id, None);
+        let multi = parser.next_variant().unwrap().unwrap();
+        assert_eq!(multi.allele_string, "A/G");
+        assert_eq!(multi.record_allele_string_multi.as_deref(), Some("A/G/T"));
     }
 
     /// The columns are split on the context's delimiter (Parser/VEP_input.pm:90

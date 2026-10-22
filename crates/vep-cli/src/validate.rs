@@ -415,12 +415,18 @@ impl SkipRules<'_> {
         let named_by_alleles =
             !self.checks.parser_names_records && !first.id.as_deref().is_some_and(perl_true);
         // The string as written covers every allele of the record, a parser's
-        // working copy of a multi-allelic string being upper-cased already.
+        // working copy of a multi-allelic string being upper-cased already; an
+        // individual's copy of a record carries its own alleles as written in
+        // `written_case_allele_string` alone, its uploaded string being the
+        // upper-cased copy (Parser/VCF.pm:639 builds the copy's string from the
+        // bits as written, which `:462` then names it by).
         let as_written = first.uploaded_allele_string.as_deref().unwrap_or("");
+        let written_case = first.written_case_allele_string.as_deref().unwrap_or("");
         let lower_case = working_allele_string(first)
             .bytes()
             .chain(first.allele_string.bytes())
             .chain(as_written.bytes())
+            .chain(written_case.bytes())
             .any(|b| b.is_ascii_lowercase());
         let checks_change_alleles =
             (self.checks.lookup_ref && !self.checks.check_ref) || lower_case;

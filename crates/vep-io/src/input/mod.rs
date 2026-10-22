@@ -192,6 +192,11 @@ pub struct ParserContext {
     /// `--max_sv_size`, the span `validate_vf` refuses a record beyond
     /// (Parser.pm:491-499); `None` for the flag's `-1`, no limit.
     pub max_sv_size: Option<u64>,
+    /// `--minimal`: `post_process_vfs` minimises every bi-allelic record
+    /// (Parser.pm:852) before `validate_vf` measures, names and upper-cases it,
+    /// so a parser that measures or names a record as written does so on the
+    /// trimmed alleles under the flag.
+    pub minimal: bool,
     /// The run's transcripts, for a parser that names a position on a
     /// transcript or its protein (HGVS `c.`, `n.` and `p.`); `None` when the run
     /// annotates without a transcript cache.

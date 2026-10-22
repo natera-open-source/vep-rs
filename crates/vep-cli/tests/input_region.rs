@@ -237,14 +237,18 @@ fn uploaded_allele_is_the_looked_up_string_except_for_an_unminimised_indel() {
 /// `21:10521700-10521700/-`, `NN/CA` for the reverse-strand
 /// `21:10542415-10542416:-1/CA`, `NNNNNNNNNNNNNNNNNNNNNNNN/-` for
 /// `21:13630972-13630995/-`, and the `NN/GTA` and `-/TCA` it prints without the
-/// flag, with `MINIMISED=1` on every row.
+/// flag, with `MINIMISED=1` on every row. `21:14221105-14221107/NA` prints its
+/// placeholder `NNN/NA` here; Ensembl VEP 116.2 prints `NN/A`, the string its
+/// second pass over the once-trimmed record leaves (`:862-881` hand `NN/A`, whose
+/// alleles differ in length, to `minimise_alleles` again, and `:1008` resets
+/// `original_allele_string` to it), which is not the allele uploaded.
 #[test]
 fn minimal_keeps_the_placeholder_as_the_uploaded_allele() {
     let dir = tempfile::tempdir().unwrap();
     let region = write(
         dir.path(),
         "minimal.region.txt",
-        "21:10552677-10552678/GTA\n21:13620284-13620283/TCA\n21:13630972-13630995/-\n21:14221107-14221107/A\n21:10521700-10521700/-\n21:10542415-10542416:-1/CA\n",
+        "21:10552677-10552678/GTA\n21:13620284-13620283/TCA\n21:13630972-13630995/-\n21:14221107-14221107/A\n21:10521700-10521700/-\n21:10542415-10542416:-1/CA\n21:14221105-14221107/NA\n",
     );
     let rows = annotate(
         dir.path(),
@@ -260,12 +264,52 @@ fn minimal_keeps_the_placeholder_as_the_uploaded_allele() {
             ("21:14221107-14221107/A", "N/A"),
             ("21:10521700-10521700/-", "N/-"),
             ("21:10542415-10542416:-1/CA", "NN/CA"),
+            ("21:14221105-14221107/NA", "NNN/NA"),
         ]
         .map(|(name, allele)| (name.to_string(), allele.to_string()))
     );
     assert!(
         rows.iter().all(|row| row.ends_with(";MINIMISED=1")),
         "{rows:?}"
+    );
+}
+
+/// `--max_sv_size` measures the span `post_process_vfs` leaves (Parser.pm:852
+/// before :492), and under `--minimal` every bi-allelic record is trimmed first,
+/// its length and `-` tests set aside: `21:14221104-14221107/NNAA` is `NN/AA` over
+/// 14221106-14221107, the span 1 that `--max_sv_size 2` admits, and Ensembl VEP
+/// 116.2 annotates it at `21:14221106-14221107` with Allele `AA` and
+/// `UPLOADED_ALLELE=NNNN/NNAA`. Without `--minimal` the same-length alleles are
+/// not trimmed and the span 3 is refused.
+#[test]
+fn minimal_trims_a_same_length_allele_before_the_size_test() {
+    let dir = tempfile::tempdir().unwrap();
+    let region = write(dir.path(), "same.region.txt", "21:14221104-14221107/NNAA\n");
+    let flags = [
+        "--format",
+        "region",
+        "--uploaded_allele",
+        "--max_sv_size",
+        "2",
+    ];
+    let (rows, warnings) =
+        annotate_with_warnings(dir.path(), &region, &[&flags[..], &["--minimal"]].concat());
+    assert!(!rows.is_empty(), "{warnings}");
+    assert!(warnings.is_empty(), "{warnings}");
+    for row in &rows {
+        let columns: Vec<&str> = row.split('\t').collect();
+        assert_eq!(columns[1], "21:14221106-14221107", "{row}");
+        assert_eq!(columns[2], "AA", "{row}");
+        assert!(columns[13].contains("UPLOADED_ALLELE=NNNN/NNAA;"), "{row}");
+    }
+
+    let (rows, warnings) = annotate_with_warnings(dir.path(), &region, &flags);
+    assert!(rows.is_empty(), "{rows:?}");
+    assert!(
+        warnings.contains(
+            "WARNING: line 1 skipped (21:14221104-14221107/NNAA): variant size (3) is bigger than --max_sv_size (2)"
+        ),
+        "{warnings}"
     );
 }
 

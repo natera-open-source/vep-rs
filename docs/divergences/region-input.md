@@ -8,6 +8,8 @@ A region record's reference is a placeholder of one `N` per base of the span (`P
 
 vep-rs keeps the string as parsed, so under `--minimal --uploaded_allele` it prints `UPLOADED_ALLELE=NNN/NA`, and every other column of the 17 rows agrees with Ensembl VEP's, `MINIMISED=1` included. Without `--minimal` both engines print `NNN/NA`. The placeholder is the record as uploaded, and `--minimal`'s trim is not an upload, so the string the input named is the one vep-rs prints.
 
+An Ensembl-format record behaves the same way. For `21 10542414 10542417 ATGC/AG +` under `--minimal --uploaded_allele`, Ensembl VEP prints `TGC/G` and vep-rs `ATGC/AG`. VCF input is immune in both engines: the VCF parser sets the untrimmed string first (`Parser/VCF.pm` line 343), which the second pass keeps.
+
 ## A `BND` word
 
 A region whose allele is a structural word (`DEL`, `DUP`, `INS:ME:ALU`, `BND`) is a structural variant over the span (`Parser/Region.pm` lines 208-216), built with no allele string. For `BND` Ensembl VEP then reads the record's breakends while collecting the cache regions, finds none to read, and dies as the buffer holding the record is annotated (`AnnotationSource.pm` line 251):

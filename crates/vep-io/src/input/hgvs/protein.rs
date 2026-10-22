@@ -66,20 +66,21 @@ use vep_core::variant::InputVariant;
 use crate::error::IoError;
 use crate::input::{ReferenceSequence, TranscriptSource};
 
-use super::components::{self, genome_on_strand, Placement};
+use super::components::{self, genome_on_strand, Placement, ReadFlags};
 use super::transcript::mapper_of;
 use super::{cache_unreadable, unable, Notation};
 
 /// The variant a protein notation describes, read against `reference` on the
 /// transcript `transcripts` resolves its reference to, or on the first
-/// transcript of the gene so named that yields one; refused with Ensembl
-/// VEP's message when none does.
+/// transcript of the gene so named that yields one, its alleles trimmed as
+/// written under `flags.minimal`; refused with Ensembl VEP's message when none
+/// does.
 pub(super) fn variant(
     hgvs: &str,
     notation: &Notation,
     reference: &dyn ReferenceSequence,
     transcripts: &dyn TranscriptSource,
-    lookup_ref: bool,
+    flags: ReadFlags,
 ) -> Result<InputVariant, IoError> {
     let refuse = |message: String| unable(hgvs, Some(&message));
     if is_frameshift(&notation.description) {
@@ -99,7 +100,7 @@ pub(super) fn variant(
             first_refusal.get_or_insert_with(not_found);
             continue;
         }
-        match on_transcripts(hgvs, notation, reference, &group, lookup_ref) {
+        match on_transcripts(hgvs, notation, reference, &group, flags) {
             Ok(variant) => return Ok(variant),
             Err(refusal) => {
                 first_refusal.get_or_insert(refusal);
@@ -161,7 +162,7 @@ fn on_transcripts(
     notation: &Notation,
     reference: &dyn ReferenceSequence,
     transcripts: &[Transcript],
-    lookup_ref: bool,
+    flags: ReadFlags,
 ) -> Result<InputVariant, String> {
     let mut refusals: Vec<String> = Vec::new();
     let mut refuse = |message: String| {
@@ -198,7 +199,7 @@ fn on_transcripts(
                 placement,
                 change.reference_allele,
                 change.alt_allele,
-                lookup_ref,
+                flags,
             ) {
                 Ok(variant) => return Ok(variant),
                 Err(message) => refuse(message),

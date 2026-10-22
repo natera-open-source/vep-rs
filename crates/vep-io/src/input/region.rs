@@ -58,6 +58,9 @@ pub struct RegionParser<R: BufRead> {
     /// `--max_sv_size`, the span a record is refused beyond; `None` for the
     /// flag's `-1`.
     max_sv_size: Option<u64>,
+    /// `--minimal` ([`ParserContext::minimal`]), under which the span is
+    /// measured on every sequence record's trimmed alleles.
+    minimal: bool,
     line_buf: Vec<u8>,
     /// Empty lines read since the last [`InputParser::take_empty_lines`].
     empty_lines: u64,
@@ -80,6 +83,7 @@ impl<R: BufRead> RegionParser<R> {
         Self {
             reader,
             max_sv_size: context.max_sv_size,
+            minimal: context.minimal,
             line_buf: Vec::new(),
             empty_lines: 0,
         }
@@ -117,7 +121,7 @@ impl<R: BufRead> RegionParser<R> {
         // `post_process_vfs` leaves, so the span is judged before the run of `N`
         // is built and a span over the limit costs nothing.
         let span = if sequence {
-            minimised_span(start, end, allele.as_bytes())
+            minimised_span(start, end, allele.as_bytes(), self.minimal)
         } else {
             end.saturating_sub(start)
         };
@@ -188,21 +192,22 @@ pub(crate) fn match_region(line: &str) -> Option<Region<'_>> {
 }
 
 /// The span `validate_vf` measures for a sequence record, `end - start`
-/// (Parser.pm:492), on the record `post_process_vfs` leaves (:862-881): a
-/// record whose alleles differ in length and carry no `-` goes through
-/// `minimise_alleles`, whose `trim_sequences` removes the bases the two
-/// alleles share from the left and then from the right, moving the start and
-/// the end in by as many bases. The reference is `N` per base, so the only
-/// bases it can share with the allele are the allele's own leading and
-/// trailing `N`s, and the span is computed from them without building the run.
-/// An insertion (start past end) has no run and no span to measure.
-fn minimised_span(start: u64, end: u64, allele: &[u8]) -> u64 {
+/// (Parser.pm:492), on the record `post_process_vfs` leaves: a record whose
+/// alleles differ in length and carry no `-` (:862-881), and under `minimal`
+/// (`--minimal`) every record (:852), goes through `minimise_alleles`, whose
+/// `trim_sequences` removes the bases the two alleles share from the left and
+/// then from the right, moving the start and the end in by as many bases. The
+/// reference is `N` per base, so the only bases it can share with the allele
+/// are the allele's own leading and trailing `N`s, and the span is computed
+/// from them without building the run. An insertion (start past end) has no
+/// run and no span to measure.
+fn minimised_span(start: u64, end: u64, allele: &[u8], minimal: bool) -> u64 {
     if start > end {
         return 0;
     }
     let span = end - start;
     let reference_len = span + 1;
-    if allele.len() as u64 == reference_len || allele.contains(&b'-') {
+    if !minimal && (allele.len() as u64 == reference_len || allele.contains(&b'-')) {
         return span;
     }
     let leading = allele.iter().take_while(|&&b| b == b'N').count();
@@ -598,17 +603,27 @@ mod tests {
 
     /// The span `minimise_alleles` leaves, computed from the allele alone: a
     /// shared leading or trailing `N` shortens it, an allele of the run's
-    /// length or with a `-` is not minimised, and an insertion has none.
+    /// length or with a `-` is not minimised, and an insertion has none. Under
+    /// `--minimal` every record is minimised (Parser.pm:852, no length or `-`
+    /// test), so `21:14221104-14221107/NNAA` leaves `NN/AA` over 14221106-14221107,
+    /// the span 1 that `--max_sv_size 2` admits in Ensembl VEP 116.2, and `N-A`
+    /// over three bases the span 1 of `NN/-A`.
     #[test]
     fn minimised_span_follows_trim_sequences() {
-        assert_eq!(minimised_span(1, 1002, b"N"), 1000);
-        assert_eq!(minimised_span(1, 1002, b"G"), 1001);
-        assert_eq!(minimised_span(1, 1003, b"NGN"), 1000);
-        assert_eq!(minimised_span(1, 3, b"NNN"), 2);
-        assert_eq!(minimised_span(1, 3, b"NN"), 0);
-        assert_eq!(minimised_span(1, 3, b"NNNNN"), 0);
-        assert_eq!(minimised_span(1, 3, b"-"), 2);
-        assert_eq!(minimised_span(5, 4, b"NNN"), 0);
+        assert_eq!(minimised_span(1, 1002, b"N", false), 1000);
+        assert_eq!(minimised_span(1, 1002, b"G", false), 1001);
+        assert_eq!(minimised_span(1, 1003, b"NGN", false), 1000);
+        assert_eq!(minimised_span(1, 3, b"NNN", false), 2);
+        assert_eq!(minimised_span(1, 3, b"NN", false), 0);
+        assert_eq!(minimised_span(1, 3, b"NNNNN", false), 0);
+        assert_eq!(minimised_span(1, 3, b"-", false), 2);
+        assert_eq!(minimised_span(5, 4, b"NNN", false), 0);
+        assert_eq!(minimised_span(14221104, 14221107, b"NNAA", false), 3);
+        assert_eq!(minimised_span(14221104, 14221107, b"NNAA", true), 1);
+        assert_eq!(minimised_span(1, 3, b"N-A", true), 1);
+        assert_eq!(minimised_span(1, 3, b"NNN", true), 0);
+        assert_eq!(minimised_span(1, 1002, b"G", true), 1001);
+        assert_eq!(minimised_span(5, 4, b"NNN", true), 0);
     }
 
     /// A line with no word character, blank or `-/-`, is an empty line counted

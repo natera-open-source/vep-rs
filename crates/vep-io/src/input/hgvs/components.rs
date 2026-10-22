@@ -34,15 +34,29 @@
 //! - otherwise the written reference allele is checked against the genome's
 //!   bases as written, or replaced by them under `--lookup_ref` (`:2096-2102`),
 //!   so an upper-case `DEL` or `DUP` keeps its written allele and fails that
-//!   check or the reader's length check, as it does in Ensembl VEP.
+//!   check or the reader's length check, as it does in Ensembl VEP, except
+//!   `DUP` under `--lookup_ref`, whose `-` the genome's bases replace.
 //!
 //! A reference allele equal to the alternate is refused (`:2104-2106`), as is
-//! a start more than one past the end (`Bio::EnsEMBL::Feature::new`). The
-//! record then goes through the minimisation and upper-casing every parsed
-//! record goes through ([`minimise_alleles`], Parser.pm:554).
+//! a start more than one past the end (`Bio::EnsEMBL::Feature::new`). An
+//! alternate the description names no bases for (`DUP` not in lower case, an
+//! `ins` with no letters: `dup([A-Z]*)$` and `ins([A-Z]*)$` capture the empty
+//! string) leaves Ensembl VEP's feature with the string `T/` or `-/`, whose
+//! empty field `validate_vf`'s split drops (Parser.pm:575), so the feature
+//! holds its reference alone and writes no row: here the record with no
+//! allele to annotate ([`InputVariant::without_allele`]). The record keeps the
+//! string as built as its uploaded allele string, the `original_allele_string`
+//! that `minimise_alleles` records (Parser.pm:1008) and `UPLOADED_ALLELE`
+//! prints (OutputFactory.pm:1360), and then goes through the minimisation
+//! every parsed record goes through ([`minimise_alleles`]), under `--minimal`
+//! the trim of every bi-allelic pair (Parser.pm:852), on its alleles as
+//! written, and then the upper-casing of `validate_vf` (Parser.pm:554), in
+//! that order: `delinsGGa` over `TCA` keeps its `A`/`a` pair where a trim after
+//! the upper-casing would drop it.
 
 use vep_core::codon::reverse_complement;
 use vep_core::coordinate::Strand;
+use vep_core::minimal::minimise_bi_allelic;
 use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
@@ -54,6 +68,19 @@ use super::{unable, Notation};
 /// An allele as `get_hgvs_alleles` captures it: `None` where the regular
 /// expression leaves the capture undefined.
 type Written = Option<Vec<u8>>;
+
+/// The run's settings the resolver reads.
+#[derive(Clone, Copy)]
+pub(super) struct ReadFlags {
+    /// `--lookup_ref`: the written reference allele is replaced by the
+    /// genome's instead of being checked against it (`-replace_ref`,
+    /// Parser/HGVS.pm:192).
+    pub lookup_ref: bool,
+    /// `--minimal`: `post_process_vfs` trims every bi-allelic pair on its
+    /// alleles as written (Parser.pm:852) before `validate_vf` upper-cases
+    /// them.
+    pub minimal: bool,
+}
 
 /// The span a branch of `fetch_by_hgvs_notation` resolved a notation to: the
 /// sequence it lies on, the positions as the branch computed them (a `dup` or
@@ -70,14 +97,14 @@ pub(super) struct Placement {
 /// The variant `_hgvs_from_components` builds for `hgvs` at `placement`,
 /// reading the genome bases from `reference` and the written alleles from the
 /// description, its written reference allele replaced by the genome's under
-/// `lookup_ref`; named by the notation, with the notation as its line,
-/// minimised and upper-cased.
+/// `flags.lookup_ref`; named by the notation, with the notation as its line,
+/// minimised (every bi-allelic pair under `flags.minimal`) and upper-cased.
 pub(super) fn variant(
     hgvs: &str,
     notation: &Notation,
     reference: &dyn ReferenceSequence,
     placement: Placement,
-    lookup_ref: bool,
+    flags: ReadFlags,
 ) -> Result<InputVariant, IoError> {
     let genome = genome_bases(reference, notation, &placement);
     let variant = genome.and_then(|genome| {
@@ -90,7 +117,7 @@ pub(super) fn variant(
             genome,
             reference_allele,
             alt_allele,
-            lookup_ref,
+            flags,
         )
     });
     variant.map_err(|message| unable(hgvs, Some(&message)))
@@ -107,7 +134,7 @@ pub(super) fn from_alleles(
     placement: Placement,
     reference_allele: Vec<u8>,
     alt_allele: Vec<u8>,
-    lookup_ref: bool,
+    flags: ReadFlags,
 ) -> Result<InputVariant, String> {
     let genome = genome_bases(reference, notation, &placement)?;
     build(
@@ -117,7 +144,7 @@ pub(super) fn from_alleles(
         genome,
         Some(reference_allele),
         Some(alt_allele),
-        lookup_ref,
+        flags,
     )
 }
 
@@ -165,7 +192,9 @@ pub(super) fn genome_on_strand(
 
 /// `_hgvs_from_components` from the point its alleles are known: the
 /// description's shape read in its order, the reference allele checked or
-/// replaced, and the record built.
+/// replaced, and the record built, then minimised as `post_process_vfs`
+/// minimises it on the alleles as written (an indel always, every bi-allelic
+/// pair under `flags.minimal`) and upper-cased.
 fn build(
     hgvs: &str,
     notation: &Notation,
@@ -173,7 +202,7 @@ fn build(
     genome: Vec<u8>,
     mut reference_allele: Written,
     mut alt_allele: Written,
-    lookup_ref: bool,
+    flags: ReadFlags,
 ) -> Result<InputVariant, String> {
     let Placement {
         chr,
@@ -215,12 +244,6 @@ fn build(
         reference_allele = Some(trimmed_reference);
         alt_allele = Some(trimmed_alt);
     } else if lower.contains("ins") {
-        if alt_allele.is_none() {
-            return Err(format!(
-                "The insertion in HGVS notation {} names no bases",
-                notation.cleaned
-            ));
-        }
         if end > start {
             std::mem::swap(&mut start, &mut end);
         }
@@ -228,7 +251,7 @@ fn build(
         reference_allele = Some(genome.clone());
         alt_allele = Some(reverse_complement(&genome));
     } else if let Some(written) = &reference_allele {
-        if lookup_ref {
+        if flags.lookup_ref {
             reference_allele = Some(genome.clone());
         } else if *written != genome {
             return Err(format!(
@@ -259,17 +282,27 @@ fn build(
             notation.cleaned
         ));
     };
-    let mut variant = InputVariant::new(
-        chr,
-        start,
-        end,
-        reference_allele.unwrap_or_default(),
-        alt_allele.unwrap_or_default(),
-    );
+    let reference_allele = reference_allele.unwrap_or_default();
+    let alt_allele = alt_allele.unwrap_or_default();
+    let mut variant = if alt_allele.is_empty() && !reference_allele.is_empty() {
+        // The feature `T/` or `-/`: the reference with an empty alternate, kept
+        // as the trailing field Ensembl VEP's string carries until `validate_vf`
+        // drops it (Parser.pm:575).
+        let reference_text = String::from_utf8_lossy(&reference_allele).into_owned();
+        let mut variant = InputVariant::without_allele(chr, start, &reference_text, [""]);
+        variant.end = end;
+        variant
+    } else {
+        InputVariant::new(chr, start, end, reference_allele, alt_allele)
+    };
     variant.strand = strand;
     variant.id = Some(hgvs.to_string());
     variant.raw_input = Some(hgvs.into());
+    variant.uploaded_allele_string = Some(variant.allele_string.as_str().into());
     minimise_alleles(&mut variant);
+    if flags.minimal {
+        minimise_bi_allelic(&mut variant);
+    }
     upper_case_alleles(&mut variant);
     Ok(variant)
 }
@@ -280,9 +313,10 @@ fn build(
 /// deleted and inserted bases of `del…ins` (`del(.*?)ins([A-Z]+)$`), the
 /// listed bases of `del` (alternate `-`), `-` and the listed bases of `dup`,
 /// the listed bases of `inv` and their reverse complement, `-` and the inserted
-/// bases of `ins`, the one allele of `=` twice. A capture the regular
-/// expression leaves undefined is `None`, and a deleted-bases capture with a
-/// digit in it is dropped (`:775`); an unknown shape is Ensembl VEP's error.
+/// bases of `ins` (`ins([A-Z]*)$`, so an `ins` with no letters names the empty
+/// alternate), the one allele of `=` twice. A capture the regular expression
+/// leaves undefined is `None`, and a deleted-bases capture with a digit in it
+/// is dropped (`:775`); an unknown shape is Ensembl VEP's error.
 fn written_alleles(description: &str, cleaned: &str) -> Result<(Written, Written), String> {
     let lower = description.to_ascii_lowercase();
     let bytes = |text: &str| text.as_bytes().to_vec();
@@ -318,7 +352,7 @@ fn written_alleles(description: &str, cleaned: &str) -> Result<(Written, Written
         let complemented = Some(reverse_complement(listed.as_deref().unwrap_or_default()));
         (listed, complemented)
     } else if lower.contains("ins") {
-        (dash, inserted_bases(description, 0).map(bytes))
+        (dash, letters_after(description, "ins"))
     } else if description.contains('=') {
         let listed = description
             .strip_suffix('=')

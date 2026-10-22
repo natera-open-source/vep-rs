@@ -32,8 +32,21 @@ const MULTI_THREE: &str = "21\t10542414\tmulti_three\tAAAG\tAGAG,AAGG,A\t.\t.\t.
 const MNP: &str = "21\t10542414\tmnp_two_sided\tAAAG\tAGGG\t.\t.\t.\n";
 
 fn vep(dir: &Path, records: &str, format: &[&str], extra: &[&str]) -> Output {
-    let input = dir.join("in.vcf");
-    std::fs::write(&input, format!("{VCF_HEADER}{records}")).unwrap();
+    vep_on(
+        dir,
+        "in.vcf",
+        &format!("{VCF_HEADER}{records}"),
+        format,
+        extra,
+    )
+}
+
+/// A run on the input file `name` holding `input_text` as it stands, `format` the
+/// output format flags and `extra` the run's other flags, `--format` among them
+/// for a non-VCF input.
+fn vep_on(dir: &Path, name: &str, input_text: &str, format: &[&str], extra: &[&str]) -> Output {
+    let input = dir.join(name);
+    std::fs::write(&input, input_text).unwrap();
     let out = dir.join("out");
     let output = common::isolated_vep(dir)
         .arg("-i")
@@ -132,6 +145,99 @@ fn minimal_implies_allele_number() {
     assert_eq!(plain[0][0], "21:10542414-10542417");
     assert_eq!(plain[0][1], "AGGG");
     assert!(!plain[0][6].contains("ALLELE_NUM"), "{}", plain[0][6]);
+}
+
+/// An Ensembl-format record is trimmed in the case it was written: `post_process_vfs`
+/// runs `minimise_alleles` on the column as written (Parser.pm:852), whose
+/// `trim_sequences` compares bases with `eq` (Sequence.pm:1006, :1019), then
+/// `validate_vf` names an ID-less record from the trimmed string (Parser.pm:462) and
+/// upper-cases it (:554). So `21 10542414 10542417 AAAG/AGGg +` loses its shared `A`
+/// and keeps the `G`/`g` pair, and Ensembl VEP 116.2 writes `21_10542415_AAG/GGg` at
+/// `21:10542415-10542417`, Allele `GGG`, positions `438-440`, `86-88` and `29-30`,
+/// `missense_variant`, `UPLOADED_ALLELE=AAAG/AGGg` and `MINIMISED=1` on
+/// ENST00000427445; the same column in upper case is `AA/GG` at 10542415-10542416.
+/// `UPLOADED_ALLELE` prints the column as written for every record here. Ensembl
+/// VEP prints it so for a record whose trimmed alleles are of one length or carry a
+/// `-`; for an indel that trims to two lengths, `21 10542414 10542417 ATGC/AG +`
+/// to `TGC/G`, its second pass over the trimmed record hands `TGC/G` to
+/// `minimise_alleles` again and resets the uploaded string to it (Parser.pm:862-881,
+/// :1008), printing `TGC/G` where vep-rs prints `ATGC/AG`.
+#[test]
+fn an_ensembl_format_record_is_trimmed_in_its_written_case() {
+    let dir = tempfile::tempdir().unwrap();
+    let flags = ["--format", "ensembl", "--minimal", "--uploaded_allele"];
+    let annotate = |record: &str| {
+        vep_on(dir.path(), "in.txt", record, &[], &flags);
+        data_lines(dir.path())
+    };
+    let lines = annotate("21\t10542414\t10542417\tAAAG/AGGg\t+\n");
+    let rows = rows_on(&lines, "ENST00000427445");
+    assert_eq!(rows.len(), 1, "{lines:?}");
+    assert_eq!(
+        &rows[0][..6],
+        [
+            "21:10542415-10542417",
+            "GGG",
+            "438-440",
+            "86-88",
+            "29-30",
+            "missense_variant",
+        ]
+    );
+    assert!(
+        rows[0][6].contains("UPLOADED_ALLELE=AAAG/AGGg;"),
+        "{}",
+        rows[0][6]
+    );
+    assert!(rows[0][6].contains("MINIMISED=1"), "{}", rows[0][6]);
+    for line in &lines {
+        assert!(line.starts_with("21_10542415_AAG/GGg\t"), "{line}");
+    }
+
+    let upper = rows_on(
+        &annotate("21\t10542414\t10542417\tAAAG/AGGG\t+\n"),
+        "ENST00000427445",
+    );
+    assert_eq!(&upper[0][..2], ["21:10542415-10542416", "GG"]);
+
+    let indel = rows_on(
+        &annotate("21\t10542414\t10542417\tATGC/AG\t+\n"),
+        "ENST00000427445",
+    );
+    assert_eq!(&indel[0][..2], ["21:10542415-10542417", "G"]);
+    assert!(
+        indel[0][6].contains("UPLOADED_ALLELE=ATGC/AG;"),
+        "{}",
+        indel[0][6]
+    );
+}
+
+/// A VCF record is trimmed in its written case under `--minimal` too, and a record
+/// whose ID Perl reads as false is named from the trimmed string before the
+/// upper-casing (Parser/VCF.pm:343 keeps the string as written, Parser.pm:852, :462,
+/// :554): Ensembl VEP 116.2 writes `21 10542414 0 AAAG AGGg` as `21_10542415_AAG/GGg`
+/// at `21:10542415-10542417`, Allele `GGG`, `UPLOADED_ALLELE=AAAG/AGGg`.
+#[test]
+fn a_vcf_record_is_trimmed_in_its_written_case() {
+    let dir = tempfile::tempdir().unwrap();
+    vep(
+        dir.path(),
+        "21\t10542414\t0\tAAAG\tAGGg\t.\t.\t.\n",
+        &[],
+        &["--minimal", "--uploaded_allele"],
+    );
+    let lines = data_lines(dir.path());
+    let rows = rows_on(&lines, "ENST00000427445");
+    assert_eq!(rows.len(), 1, "{lines:?}");
+    assert_eq!(&rows[0][..2], ["21:10542415-10542417", "GGG"]);
+    assert!(
+        rows[0][6].contains("UPLOADED_ALLELE=AAAG/AGGg;"),
+        "{}",
+        rows[0][6]
+    );
+    for line in &lines {
+        assert!(line.starts_with("21_10542415_AAG/GGg\t"), "{line}");
+    }
 }
 
 /// The rejoin of a split record (OutputFactory.pm:2272-2354): every row prints the

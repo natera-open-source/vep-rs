@@ -198,12 +198,16 @@ fn mapping_variants(name: &str, mapping: &NameMapping) -> Result<Vec<InputVarian
     let upper_allele_string = mapping.allele_string.to_ascii_uppercase();
     let stored_class = so_variation_class(&upper_allele_string);
     let mut variants = if mapping.allele_string.contains('/') {
+        // A mapping's alleles are stored upper-case and the record is named by
+        // the identifier, so the `--minimal` trim after the read leaves the
+        // record the written-case trim would.
         sequence_variants(
             mapping.chr.clone(),
             mapping.start,
             mapping.end,
             &mapping.allele_string,
             id,
+            false,
         )?
     } else {
         let mut variant = InputVariant::without_allele(

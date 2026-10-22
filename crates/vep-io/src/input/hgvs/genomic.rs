@@ -33,17 +33,21 @@
 //! - otherwise the written reference allele is checked against the genome's
 //!   bases as written, or replaced by them under `--lookup_ref` (`:2096-2102`),
 //!   so an upper-case `DEL` or `DUP` keeps its written allele and fails that
-//!   check or the length check below, as it does in Ensembl VEP.
+//!   check or the length check below, as it does in Ensembl VEP, except `DUP`
+//!   under `--lookup_ref`: its `-` is replaced by the genome's bases and its
+//!   alternate names no bases, so it is the record with no allele to annotate
+//!   (`T/`, whose empty field `validate_vf` drops, Parser.pm:575) and writes no
+//!   row, as an `ins` with no letters is (`-/`).
 //!
 //! A reference allele equal to the alternate is refused (`:2104-2106`), as is
 //! a start more than one past the end (`Bio::EnsEMBL::Feature::new`). The
-//! record then goes through the minimisation and upper-casing every parsed
-//! record goes through (`minimise_alleles`, Parser.pm:554) and is returned
-//! as built: the checks `validate_vf` makes on it afterwards (Parser.pm:483,
-//! 556-592) are the reader's, as they are for every parsed record, and
-//! `--dont_skip` keeps what the reader keeps (Parser.pm:189-191). Three
-//! refusals are this port's own: an insertion that names no bases, where Ensembl VEP
-//! builds a variant with an empty allele; a span reaching below the
+//! record then goes through the minimisation every parsed record goes through
+//! (`minimise_alleles`; under `--minimal` every bi-allelic pair, Parser.pm:852)
+//! on its alleles as written, then the upper-casing (Parser.pm:554), and is
+//! returned as built: the checks `validate_vf` makes on it afterwards
+//! (Parser.pm:483, 556-592) are the reader's, as they are for every parsed
+//! record, and `--dont_skip` keeps what the reader keeps (Parser.pm:189-191).
+//! Two refusals are this port's own: a span reaching below the
 //! sequence's first base (an end written `_-5` or `_*5`), which Ensembl VEP
 //! reads from its slice padded with `N` before its feature refuses the span;
 //! and a start written with a `-` or `*` sign (`21:g.-5A>G`), which
@@ -56,17 +60,18 @@ use vep_core::variant::InputVariant;
 use crate::error::IoError;
 use crate::input::ReferenceSequence;
 
-use super::components::{self, Placement};
+use super::components::{self, Placement, ReadFlags};
 use super::{unable, Notation};
 
 /// The variant a genomic notation describes, read against `reference`, its
-/// written reference allele replaced by the genome's under `lookup_ref` and its
-/// span bounded by `max_sv_size` (`None` for the flag's `-1`).
+/// written reference allele replaced by the genome's under `flags.lookup_ref`,
+/// its alleles trimmed as written under `flags.minimal` and its span bounded by
+/// `max_sv_size` (`None` for the flag's `-1`).
 pub(super) fn variant(
     hgvs: &str,
     notation: &Notation,
     reference: &dyn ReferenceSequence,
-    lookup_ref: bool,
+    flags: ReadFlags,
     max_sv_size: Option<u64>,
 ) -> Result<InputVariant, IoError> {
     let refuse = |message: String| unable(hgvs, Some(&message));
@@ -97,7 +102,7 @@ pub(super) fn variant(
         end,
         strand: Strand::Forward,
     };
-    components::variant(hgvs, notation, reference, placement, lookup_ref)
+    components::variant(hgvs, notation, reference, placement, flags)
 }
 
 /// `_parse_hgvs_genomic_position` (`:1595-1605`): the description's leading
@@ -156,7 +161,7 @@ mod tests {
     use super::super::tests::{context_with, parser};
     use super::super::HgvsParser;
     use super::*;
-    use crate::input::InputParser;
+    use crate::input::{InputParser, ParserContext};
     use std::io::Cursor;
     use vep_core::coordinate::{Strand, MAX_COORD};
 
@@ -277,7 +282,12 @@ mod tests {
     /// An insertion's start follows its end, the two positions swapped when
     /// written in ascending order (`:2083-2086`): Ensembl VEP 116.2 places
     /// `21:g.30289183_30289184insA` and `21:g.30289184_30289183insA` alike at
-    /// `21:30289183-30289184`. An insertion that names no bases is refused.
+    /// `21:30289183-30289184`. An insertion that names no bases is the
+    /// feature `-/` (`ins([A-Z]*)$` captures the empty alternate,
+    /// Utils/Sequence.pm:745), which `validate_vf` admits as an insertion whose
+    /// start follows its end (Parser.pm:564) and whose split drops the empty
+    /// field (`:575`): a record with no allele to annotate, which Ensembl VEP
+    /// 116.2 writes no row for.
     #[test]
     fn ins_start_is_end_plus_one() {
         for notation in ["21:g.30282172_30282173insG", "21:g.30282173_30282172insG"] {
@@ -289,10 +299,15 @@ mod tests {
             );
             assert_eq!(v.location(), "21:30282172-30282173");
         }
+        let no_bases = read("21:g.30282172_30282173ins").remove(0).unwrap();
+        assert!(no_bases.no_allele);
         assert_eq!(
-            refused("21:g.30282172_30282173ins"),
-            "Unable to parse HGVS notation '21:g.30282172_30282173ins': \
-             The insertion in HGVS notation 21:g.30282172_30282173ins names no bases"
+            (
+                no_bases.start,
+                no_bases.end,
+                no_bases.allele_string.as_str()
+            ),
+            (30282173, 30282172, "-/")
         );
     }
 
@@ -445,6 +460,49 @@ mod tests {
         assert!(v.minimised);
     }
 
+    /// Under `--minimal` every bi-allelic pair is trimmed on its alleles as
+    /// written (Parser.pm:852 before the upper-casing at :554): the
+    /// substitution `TCA>TCG` over 30282168-30282170 is `A/G` at 30282170, and
+    /// `delinsGGa` over the same `TCA` keeps its `A`/`a` pair, `TCA/GGA` over
+    /// three bases once upper-cased, as Ensembl VEP 116.2 annotates both; the
+    /// record is marked minimised either way, trimmed or not, and its uploaded
+    /// allele string is the pair as built, `TCA/TCG` and `TCA/GGa`, the
+    /// `original_allele_string` the trim records (:1008). Without the flag the
+    /// same-length pairs are left as written.
+    #[test]
+    fn minimal_trims_every_pair_as_written_before_the_upper_casing() {
+        let read_minimal = |data: &str| {
+            let context = ParserContext {
+                minimal: true,
+                ..context_with(Some(10_000_000))
+            };
+            let mut parser =
+                HgvsParser::new(Cursor::new(data.as_bytes().to_vec()), &context, false);
+            parser.next_variant().unwrap().unwrap()
+        };
+        let trimmed = read_minimal("21:g.30282168_30282170TCA>TCG");
+        assert_eq!(
+            (trimmed.start, trimmed.end, trimmed.allele_string.as_str()),
+            (30282170, 30282170, "A/G")
+        );
+        assert_eq!(trimmed.uploaded_allele_string.as_deref(), Some("TCA/TCG"));
+        assert!(trimmed.minimised);
+        let kept = read_minimal("21:g.30282168_30282170delinsGGa");
+        assert_eq!(
+            (kept.start, kept.end, kept.allele_string.as_str()),
+            (30282168, 30282170, "TCA/GGA")
+        );
+        assert_eq!(kept.uploaded_allele_string.as_deref(), Some("TCA/GGa"));
+        assert!(kept.minimised);
+        let plain = read("21:g.30282168_30282170TCA>TCG").remove(0).unwrap();
+        assert_eq!(
+            (plain.start, plain.end, plain.allele_string.as_str()),
+            (30282168, 30282170, "TCA/TCG")
+        );
+        assert_eq!(plain.uploaded_allele_string.as_deref(), Some("TCA/TCG"));
+        assert!(!plain.minimised);
+    }
+
     /// The span must be shorter than `--max_sv_size` (`:1886`), 10,000,000 by
     /// default: `0` reads as 5000 (`:1885`) and the flag's `-1` as the number
     /// itself, so only a span written end first by two or more bases passes
@@ -495,7 +553,11 @@ mod tests {
     /// record carries an empty reference allele over a one-base span, which the
     /// reader's `validate_vf` stage skips on its length; the right ones, and it
     /// annotates as the lower-case deletion does; wrong ones, and it is a
-    /// mismatch. `DUP` keeps `get_hgvs_alleles`'s `-` and is a mismatch. The
+    /// mismatch. `DUP` keeps `get_hgvs_alleles`'s `-` and is a mismatch; under
+    /// `--lookup_ref` the genome's `T` replaces that `-` (`:2096-2097`) beside
+    /// the empty alternate `dup([A-Z]*)$` captured, the feature `T/` whose
+    /// empty field `validate_vf` drops (Parser.pm:575): a record with no allele
+    /// to annotate, for which Ensembl VEP 116.2 writes no row (`Dup` alike). The
     /// type letter is read the same way (`g`, `c`, `n` or `m`), so `G.` with
     /// `del` is checked as a substitution is. A `del` followed by `>` is a
     /// substitution whose reference allele the genome supplies, and `delinv`
@@ -524,6 +586,22 @@ mod tests {
              Reference allele extracted from 21:30282172-30282172 (T) does not match \
              reference allele given by HGVS notation 21:g.30282172DUP (-)"
         );
+        for notation in ["21:g.30282172DUP", "21:g.30282172Dup"] {
+            let looked_up = read_with(notation, true, Some(10_000_000))
+                .remove(0)
+                .unwrap();
+            assert!(looked_up.no_allele, "{notation}");
+            assert_eq!(
+                (
+                    looked_up.start,
+                    looked_up.end,
+                    looked_up.allele_string.as_str()
+                ),
+                (30282172, 30282172, "T/"),
+                "{notation}"
+            );
+            assert_eq!(looked_up.ref_allele, b"T");
+        }
         assert_eq!(
             refused("21:G.30282172delA"),
             "Unable to parse HGVS notation '21:G.30282172delA': \
