@@ -1803,7 +1803,14 @@ impl Runner {
         let (format, delimiter) = match named_format {
             Some(format) => (format, config.delimiter.clone()),
             None => {
-                let detection = detect::detect_format(&mut reader).with_context(read_failed)?;
+                // A first data line past the length cap is the input's refusal,
+                // as the reader stage reports one later in the file.
+                let detection = detect::detect_format(&mut reader).map_err(|error| {
+                    match vep_io::input::LineTooLong::from_io_error(&error) {
+                        Some(too_long) => input_error(&too_long.to_string()),
+                        None => anyhow::Error::from(error).context(read_failed()),
+                    }
+                })?;
                 reader = Box::new(Cursor::new(detection.consumed).chain(reader));
                 let Some(format) = detection.format else {
                     return Err(input_error("Can't detect input format"));
@@ -1883,7 +1890,14 @@ impl Runner {
                 )
             }
             InputFormat::Id => {
-                let (parser, source) = self.open_id_input(reader).with_context(read_failed)?;
+                // The list reader refuses a line past the length cap as the
+                // input's own refusal; any other failure is the read's.
+                let (parser, source) = self.open_id_input(reader).map_err(|error| {
+                    match error.downcast_ref::<vep_io::IoError>() {
+                        Some(vep_io::IoError::Unsupported(message)) => input_error(message),
+                        _ => error.context(read_failed()),
+                    }
+                })?;
                 PendingInput::Identifiers {
                     parser,
                     source: Box::new(source),

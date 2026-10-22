@@ -29,6 +29,14 @@ use anyhow::{Context, Result};
 use flate2::read::GzDecoder;
 use tracing::{debug, info};
 
+use crate::core_dumps::BoundedLines;
+
+/// The longest GFF3 line read, 16 MiB. A feature line's widest column is its
+/// attributes, a few kilobytes even for a gene with every cross-reference
+/// listed, so the cap refuses a file with no line end in it long before the
+/// line buffer grows to its size.
+const MAX_LINE_BYTES: usize = 16 << 20;
+
 /// A parsed gene record with its child transcripts.
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -142,8 +150,8 @@ pub fn parse_gff3(path: &Path) -> Result<HashMap<String, GeneRecord>> {
     let mut cds_by_transcript: HashMap<String, Vec<CdsRecord>> = HashMap::new();
     let mut dropped = 0usize;
 
-    for line in reader.lines() {
-        let line = line.context("Failed to read GFF3 line")?;
+    for line in BoundedLines::new(reader, MAX_LINE_BYTES, path.display().to_string()) {
+        let line = String::from_utf8(line?).context("Failed to read GFF3 line")?;
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
@@ -467,6 +475,25 @@ mod tests {
             let err = try_parse(&lines).unwrap_err();
             assert!(format!("{err:#}").contains(message), "{err:#}");
         }
+    }
+
+    /// A line past the cap (the gene line with an attribute value of the cap's
+    /// length) stops the parse naming the file and its line, 2.
+    #[test]
+    fn line_past_the_cap_fails_the_parse() {
+        let padding: String = std::iter::repeat_n('x', MAX_LINE_BYTES).collect();
+        let lines = format!(
+            "{}{}",
+            TPTE_205,
+            TPTE_GENE.replace("Name=TPTE;", &format!("Name=TPTE;Note={padding};"))
+        );
+        let err = try_parse(&lines).unwrap_err();
+        assert!(
+            format!("{err:#}").ends_with(&format!(
+                "t.gff3 line 2 is longer than the {MAX_LINE_BYTES}-byte limit for one line"
+            )),
+            "{err:#}"
+        );
     }
 
     /// The GENCODE basic tag is `gencode_basic` on the GRCh38 file (the

@@ -199,11 +199,11 @@ fn block_offsets(path: &Path) -> Option<Vec<u64>> {
     let tbi = with_suffix(".tbi");
     let csi = with_suffix(".csi");
     if tbi.is_file() {
-        noodles::tabix::fs::read(&tbi)
+        vep_builtins::tabix::read_tabix_index(&tbi)
             .ok()
             .map(|index| index_block_offsets(&index))
     } else if csi.is_file() {
-        noodles::csi::fs::read(&csi)
+        vep_builtins::tabix::read_csi_index(&csi)
             .ok()
             .map(|index| index_block_offsets(&index))
     } else {
@@ -593,6 +593,22 @@ mod tests {
         );
         assert_eq!(
             damaged("empty_index.vcf.gz", &bytes, &[]),
+            InputShape::Unknown
+        );
+        // An index whose first reference claims more bins than the file holds
+        // is refused by the count check before anything is allocated for them.
+        let mut many_bins = b"TBI\x01".to_vec();
+        for value in [1i32, 0, 1, 2, 3, i32::from(b'#'), 0, 3] {
+            many_bins.extend_from_slice(&value.to_le_bytes());
+        }
+        many_bins.extend_from_slice(b"21\0");
+        many_bins.extend_from_slice(&i32::MAX.to_le_bytes());
+        many_bins.extend_from_slice(&[0; 4]);
+        let mut encoder = bgzf::io::Writer::new(Vec::new());
+        encoder.write_all(&many_bins).unwrap();
+        let many_bins = encoder.finish().unwrap();
+        assert_eq!(
+            damaged("many_bins_index.vcf.gz", &bytes, &many_bins),
             InputShape::Unknown
         );
     }

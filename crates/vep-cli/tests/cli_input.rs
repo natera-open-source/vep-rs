@@ -473,6 +473,57 @@ fn undetectable_input_is_refused() {
     }
 }
 
+/// A line longer than one line of input may hold is refused under the `input`
+/// component, naming its line, by every path that reads it: the VCF reader
+/// (the third line of a VCF, the line after its two header lines), format
+/// detection (the same file without `--format`, whose first data line is the
+/// long one), and the identifier list (`--format id`, line 2). The refusal
+/// prints once, and a line of exactly the cap is read.
+#[test]
+fn line_past_the_cap_is_refused_by_every_reader() {
+    let cap = vep_io::input::MAX_LINE_BYTES;
+    let refusal = |line: u64| {
+        format!(
+            "ERROR: [input] line {line} is longer than the {cap}-byte limit for one line of input"
+        )
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let out = output_path(dir.path());
+    let record_prefix = "21\t30282169\trs1\tC\tA\t.\t.\t";
+    let vcf_with_padded_record = |info_bytes: usize| {
+        let mut bytes = format!("{VCF_HEADER}{record_prefix}").into_bytes();
+        bytes.extend(std::iter::repeat_n(b'x', info_bytes));
+        bytes.push(b'\n');
+        bytes
+    };
+
+    let path = write(
+        dir.path(),
+        "long-third-line.vcf",
+        &vcf_with_padded_record(cap),
+    );
+    let output = vep(&["-i", path.to_str().unwrap()], &out, &["--format", "vcf"]);
+    assert_refused(&output, &refusal(3));
+    let output = vep(&["-i", path.to_str().unwrap()], &out, &[]);
+    assert_refused(&output, &refusal(3));
+
+    let mut long_id = b"rs1\n".to_vec();
+    long_id.extend(std::iter::repeat_n(b'x', cap + 1));
+    long_id.push(b'\n');
+    let path = write(dir.path(), "long-second-line.txt", &long_id);
+    let output = vep(&["-i", path.to_str().unwrap()], &out, &["--format", "id"]);
+    assert_refused(&output, &refusal(2));
+
+    // Exactly the cap: an INFO value of the cap less the record's other bytes.
+    let path = write(
+        dir.path(),
+        "line-at-the-cap.vcf",
+        &vcf_with_padded_record(cap - record_prefix.len()),
+    );
+    let output = vep(&["-i", path.to_str().unwrap()], &out, &["--format", "vcf"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+}
+
 /// `STDIN` names standard input in any case (Parser.pm:235, `uc($file) eq
 /// 'STDIN'`).
 #[test]

@@ -55,7 +55,6 @@ use std::time::Instant;
 
 use anyhow::{bail, Context};
 use bstr::ByteSlice;
-use noodles::csi::binning_index::BinningIndex;
 use rayon::prelude::*;
 use rayon::ThreadPool;
 use smallvec::SmallVec;
@@ -97,7 +96,9 @@ use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::InputVariant;
 use vep_core::vcf_info::{info_value, info_value_written};
 use vep_io::input::detect::InputFormat;
-use vep_io::input::{empty_lines_warning, Delimiter};
+use vep_io::input::{
+    empty_lines_warning, read_until_bounded, Delimiter, LineTooLong, MAX_LINE_BYTES,
+};
 use vep_io::output::fields::{ExtraFieldsPlan, Row};
 use vep_io::output::json::JsonOutputFormatter;
 use vep_io::output::parquet::ParquetOutputFormatter;
@@ -379,12 +380,17 @@ pub(crate) type LastLine = Arc<Mutex<Vec<u8>>>;
 /// a skip warning on a record of the Ensembl, HGVS, region or SPDI format quotes
 /// the record's line as Ensembl VEP quotes its parser's `current_block`
 /// (BaseVEP.pm:846-852), which the `vep-io` parsers, reading line by line
-/// through those two calls, do not expose.
+/// through those two calls, do not expose. Each line is read through
+/// [`read_until_bounded`], so a line past [`MAX_LINE_BYTES`] is the
+/// [`LineTooLong`] error, which the reader stage reports under the `input`
+/// component.
 pub(crate) struct LineCapture<R> {
     inner: R,
     last: LastLine,
     /// The bytes of the line being read, one buffer reused across lines.
     bytes: Vec<u8>,
+    /// Lines handed out so far.
+    lines: u64,
 }
 
 impl<R: BufRead> LineCapture<R> {
@@ -395,6 +401,7 @@ impl<R: BufRead> LineCapture<R> {
                 inner,
                 last: Arc::clone(&last),
                 bytes: Vec::new(),
+                lines: 0,
             },
             last,
         )
@@ -418,8 +425,9 @@ impl<R: BufRead> BufRead for LineCapture<R> {
 
     fn read_until(&mut self, byte: u8, buf: &mut Vec<u8>) -> std::io::Result<usize> {
         let start = buf.len();
-        let read = self.inner.read_until(byte, buf)?;
+        let read = read_until_bounded(&mut self.inner, byte, buf, self.lines + 1)?;
         if read > 0 {
+            self.lines += 1;
             let mut end = buf.len();
             while end > start && matches!(buf[end - 1], b'\n' | b'\r') {
                 end -= 1;
@@ -607,7 +615,7 @@ pub(crate) fn tabix_contig_order(
     if !Path::new(&index_path).is_file() {
         return Vec::new();
     }
-    let index = match noodles::tabix::fs::read(&index_path) {
+    let index = match vep_builtins::tabix::load_index(Path::new(&index_path)) {
         Ok(index) => index,
         Err(e) => {
             debug!("ignoring tabix index {index_path}: {e}");
@@ -934,11 +942,15 @@ fn read_stage(
 
 /// Reads lines by scanning the `BufRead` buffer in place. A line inside one
 /// buffer fill is handed out as a slice of that buffer, neither copied nor
-/// validated; only a line spanning fills is assembled in `carry`. Line ends
-/// are `BufRead::lines`'s: `\n`, and a `\r` before it.
+/// validated; only a line spanning fills is assembled in `carry`. A line past
+/// [`MAX_LINE_BYTES`], whether it spans fills or not, is the [`LineTooLong`]
+/// error under the `input` component. Line ends are `BufRead::lines`'s: `\n`,
+/// and a `\r` before it.
 struct LineScanner<R> {
     reader: R,
     carry: Vec<u8>,
+    /// Lines handed out so far.
+    lines: u64,
 }
 
 impl<R: BufRead> LineScanner<R> {
@@ -946,6 +958,7 @@ impl<R: BufRead> LineScanner<R> {
         Self {
             reader,
             carry: Vec::new(),
+            lines: 0,
         }
     }
 
@@ -964,12 +977,17 @@ impl<R: BufRead> LineScanner<R> {
                 if self.carry.is_empty() {
                     return Ok(false);
                 }
+                self.lines += 1;
                 // A final line without a line end keeps a trailing `\r`.
                 f(&self.carry)?;
                 return Ok(true);
             }
             match available.find_byte(b'\n') {
                 Some(end) => {
+                    if self.carry.len() + end > MAX_LINE_BYTES {
+                        return Err(self.too_long());
+                    }
+                    self.lines += 1;
                     if self.carry.is_empty() {
                         f(strip_cr(&available[..end]))?;
                     } else {
@@ -980,12 +998,23 @@ impl<R: BufRead> LineScanner<R> {
                     return Ok(true);
                 }
                 None => {
+                    if self.carry.len() + available.len() > MAX_LINE_BYTES {
+                        return Err(self.too_long());
+                    }
                     self.carry.extend_from_slice(available);
                     let len = available.len();
                     self.reader.consume(len);
                 }
             }
         }
+    }
+
+    /// The refusal of the line being assembled, the one after those handed out.
+    fn too_long(&self) -> anyhow::Error {
+        let error = LineTooLong {
+            line: self.lines + 1,
+        };
+        crate::config::CliError::new("input", error.to_string()).into()
     }
 }
 
@@ -1519,8 +1548,12 @@ fn read_parsed(
                 return Err(crate::config::CliError::new("input", message).into());
             }
             // A failure of the reader itself ends the run, as it ends a VCF read: the
-            // parser returns it again for every line it is asked for.
+            // parser returns it again for every line it is asked for. A line past
+            // the length cap is the input's refusal, not a read failure.
             Some(Err(vep_io::IoError::Io(error))) => {
+                if let Some(too_long) = LineTooLong::from_io_error(&error) {
+                    return Err(crate::config::CliError::new("input", too_long.to_string()).into());
+                }
                 return Err(anyhow::Error::from(error).context("Failed to read input line"));
             }
             Some(Err(e)) => {
@@ -2865,6 +2898,107 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Two header lines, a line of exactly the cap and a line one byte past it:
+    /// the first three are handed out, the fourth is the `input` refusal naming
+    /// line 4, whether the line arrives in one fill or is assembled across
+    /// fills.
+    #[test]
+    fn line_scanner_refuses_a_line_past_the_cap() {
+        let mut input = b"##fileformat=VCFv4.2\n#CHROM\tPOS\n".to_vec();
+        input.extend(std::iter::repeat_n(b'a', MAX_LINE_BYTES));
+        input.push(b'\n');
+        input.extend(std::iter::repeat_n(b'b', MAX_LINE_BYTES + 1));
+        input.push(b'\n');
+        for fill in [1 << 16, MAX_LINE_BYTES + 2] {
+            let mut scanner = LineScanner::new(BufReader::with_capacity(fill, Cursor::new(&input)));
+            let mut lengths = Vec::new();
+            for _ in 0..3 {
+                assert!(scanner
+                    .with_next_line(|line| {
+                        lengths.push(line.len());
+                        Ok(())
+                    })
+                    .unwrap());
+            }
+            assert_eq!(lengths, [20, 10, MAX_LINE_BYTES], "fill {fill}");
+            let error = scanner.with_next_line(|_| Ok(())).unwrap_err();
+            assert_eq!(
+                crate::config::CliError::from_run(&error),
+                format!(
+                    "ERROR: [input] line 4 is longer than the {MAX_LINE_BYTES}-byte limit for \
+                     one line of input"
+                ),
+                "fill {fill}"
+            );
+        }
+    }
+
+    /// The parser-side reader refuses the same way, as the I/O error the
+    /// parsers hand back, with the line it keeps for the warnings unchanged.
+    #[test]
+    fn line_capture_refuses_a_line_past_the_cap() {
+        let mut input = b"21 100 100 A/G + first\n".to_vec();
+        input.extend(std::iter::repeat_n(b'x', MAX_LINE_BYTES + 1));
+        input.push(b'\n');
+        let (mut reader, last) = LineCapture::new(Cursor::new(input));
+        let mut buf = String::new();
+        assert_eq!(reader.read_line(&mut buf).unwrap(), 23);
+        let error = reader.read_line(&mut buf).unwrap_err();
+        assert_eq!(
+            LineTooLong::from_io_error(&error),
+            Some(&LineTooLong { line: 2 })
+        );
+        assert_eq!(last_line_read(&last), b"21 100 100 A/G + first".to_vec());
+    }
+
+    /// The reader stage of a parser-fed format ends on a line past the cap with
+    /// the `input` refusal naming the line, as the VCF reader's does, where any
+    /// other failure of the reader is the run's.
+    #[test]
+    fn read_parsed_refuses_a_line_past_the_cap_under_the_input_component() {
+        let mut input = Vec::new();
+        input.extend(std::iter::repeat_n(b'x', MAX_LINE_BYTES + 1));
+        input.push(b'\n');
+        let transcripts = LazyTranscriptIndexes::from_loaded(
+            std::collections::HashMap::from([("21".to_string(), Vec::new())]),
+            0,
+            0,
+        );
+        let cfg = ReaderConfig {
+            batch_size: 8,
+            capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
+            allow_non_variant: false,
+            individuals: None,
+            process_ref_homs: false,
+            dont_skip: false,
+            max_sv_size: Some(10_000_000),
+            minimal: false,
+            output_format: "vep",
+            no_headers: false,
+            vcf_formatter: None,
+            transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
+            prewarm_order: &[],
+            checks: &crate::validate::NO_CHECKS,
+        };
+        let (tx, _rx) = mpsc::sync_channel(8);
+        let (reader, last_line) = LineCapture::new(Cursor::new(input));
+        let parser: Box<dyn vep_io::InputParser> =
+            Box::new(vep_io::input::ensembl::EnsemblParser::new(
+                reader,
+                &vep_io::input::ParserContext::default(),
+            ));
+        let error = read_parsed(parser, &last_line, InputFormat::Ensembl, &cfg, tx).unwrap_err();
+        assert_eq!(
+            crate::config::CliError::from_run(&error),
+            format!(
+                "ERROR: [input] line 1 is longer than the {MAX_LINE_BYTES}-byte limit for one \
+                 line of input"
+            )
+        );
     }
 
     #[test]
@@ -4306,6 +4440,34 @@ mod tests {
             ["1", "2", "21", "3", "4", "5"]
         );
         assert!(tabix_contig_order("/no/such/input.vcf.gz", &no_synonyms, &transcripts).is_empty());
+    }
+
+    /// A `.tbi` beside the input that cannot be read, a BGZF stream whose
+    /// reference count claims more entries than its bytes hold or a file that
+    /// is no BGZF stream, gives no order: the reader warms nothing ahead and
+    /// the run goes on.
+    #[test]
+    fn tabix_contig_order_is_empty_for_an_index_that_cannot_be_read() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/sv_validation/grch37");
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("09_breakends.vcf.gz");
+        std::fs::copy(root.join("09_breakends.vcf.gz"), &input).unwrap();
+        let index = dir.path().join("09_breakends.vcf.gz.tbi");
+        let no_synonyms = ChromosomeSynonyms::new();
+        let transcripts = LazyTranscriptIndexes::empty();
+
+        // The magic, `n_ref` of `i32::MAX`, the six header integers and `l_nm` 0.
+        let mut too_many_references = b"TBI\x01".to_vec();
+        too_many_references.extend_from_slice(&i32::MAX.to_le_bytes());
+        too_many_references.extend_from_slice(&[0; 28]);
+        let mut writer = noodles::bgzf::io::Writer::new(std::fs::File::create(&index).unwrap());
+        writer.write_all(&too_many_references).unwrap();
+        writer.try_finish().unwrap();
+        drop(writer);
+        assert!(tabix_contig_order(input.to_str().unwrap(), &no_synonyms, &transcripts).is_empty());
+
+        std::fs::write(&index, b"not an index\n").unwrap();
+        assert!(tabix_contig_order(input.to_str().unwrap(), &no_synonyms, &transcripts).is_empty());
     }
 
     /// An input chromosome reaches the cache's name through the synonym table

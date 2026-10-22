@@ -837,6 +837,28 @@ fn written_text(bytes: Vec<u8>) -> String {
     String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
 }
 
+/// Rewrites the ASCII control bytes (`0x00` to `0x1F`, the tab and line end
+/// among them, and `0x7F`) a writer appended to `out` from `start` on as
+/// `%XX`, the percent-encoding of the byte in upper-case hex. A value read
+/// from an input file, an identifier or a chromosome name among them, can
+/// carry a byte the default and tab formats use as a separator, a tab or a
+/// line end, or a byte no text format shows; written as is, it would split the
+/// row or the column, so every value of those formats passes through here as
+/// it is written. A value with no control byte is left untouched.
+pub fn percent_encode_control_bytes(out: &mut Vec<u8>, start: usize) {
+    if !out[start..].iter().any(u8::is_ascii_control) {
+        return;
+    }
+    let value = out.split_off(start);
+    for &b in &value {
+        if b.is_ascii_control() {
+            out.extend_from_slice(format!("%{b:02X}").as_bytes());
+        } else {
+            out.push(b);
+        }
+    }
+}
+
 /// The SPDI and GA4GH VRS allele the row prints: VEP keeps the record's
 /// notations by allele and reads them by the row's Allele
 /// (OutputFactory.pm:1396-1400), so a row prints its own allele's, a row whose
@@ -2803,6 +2825,34 @@ mod tests {
             }
         }
         populated
+    }
+
+    /// Every byte from `0x00` to `0x1F` and `0x7F` written from `start` on is
+    /// rewritten as its upper-case `%XX`; the bytes before `start`, a `%`
+    /// already there, a byte outside ASCII and a value with no control byte
+    /// stay as written.
+    #[test]
+    fn percent_encode_control_bytes_rewrites_the_value_alone() {
+        let mut out = b"kept\t".to_vec();
+        out.extend_from_slice("a\0b\tc\nd\x1Fe\x7F%20\u{E9}".as_bytes());
+        percent_encode_control_bytes(&mut out, 5);
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "kept\ta%00b%09c%0Ad%1Fe%7F%20\u{E9}"
+        );
+        let mut plain = b"a\tplain value".to_vec();
+        percent_encode_control_bytes(&mut plain, 2);
+        assert_eq!(plain, b"a\tplain value");
+        for byte in 0u8..=0xFF {
+            let mut alone = vec![byte];
+            percent_encode_control_bytes(&mut alone, 0);
+            let expected = if byte < 0x20 || byte == 0x7F {
+                format!("%{byte:02X}").into_bytes()
+            } else {
+                vec![byte]
+            };
+            assert_eq!(alone, expected, "{byte:#04x}");
+        }
     }
 
     /// The byte writer agrees with the string table on every column, with both

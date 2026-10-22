@@ -161,7 +161,15 @@ impl BinaryAnnotator {
             )));
         }
 
-        let chr_count = read_u32(&mut cursor)? as usize;
+        // Each count is checked against the bytes left before anything is
+        // allocated for it: a chromosome entry is at least its name length and
+        // its position count, a position entry exactly 20 bytes.
+        let chr_count = read_u32(&mut cursor)?;
+        let chr_count = entries_fit(&cursor, u64::from(chr_count), 2 + 8).map_err(|left| {
+            PluginError::Init(format!(
+                "index chromosome count {chr_count} exceeds what the {left} bytes left can hold"
+            ))
+        })?;
 
         let mut chromosomes = HashMap::with_capacity(chr_count);
         for _ in 0..chr_count {
@@ -171,7 +179,13 @@ impl BinaryAnnotator {
             let name = String::from_utf8(name_bytes)
                 .map_err(|e| PluginError::Init(format!("invalid chromosome name in index: {e}")))?;
 
-            let pos_count = read_u64(&mut cursor)? as usize;
+            let pos_count = read_u64(&mut cursor)?;
+            let pos_count = entries_fit(&cursor, pos_count, 8 + 8 + 4).map_err(|left| {
+                PluginError::Init(format!(
+                    "index position count {pos_count} for {name} exceeds what the {left} bytes \
+                     left can hold"
+                ))
+            })?;
 
             let mut positions = Vec::with_capacity(pos_count);
             for _ in 0..pos_count {
@@ -239,11 +253,12 @@ impl BinaryAnnotator {
     }
 
     /// Read a record at a given byte offset in the data file.
-    fn read_record_at(&self, offset: usize) -> Result<(TabixRecord, usize), PluginError> {
+    fn read_record_at(&self, offset: u64) -> Result<(TabixRecord, usize), PluginError> {
         let data = unsafe { std::slice::from_raw_parts(self.data, self.data_len) };
-        if offset + 18 > self.data_len {
-            return Err(PluginError::Run("record offset out of bounds".into()));
-        }
+        let offset = match usize::try_from(offset) {
+            Ok(offset) if offset.checked_add(18).is_some_and(|end| end <= data.len()) => offset,
+            _ => return Err(PluginError::Run("record offset out of bounds".into())),
+        };
 
         let mut pos = offset;
 
@@ -317,12 +332,12 @@ impl BinaryAnnotator {
 
         let mut records = Vec::new();
         for entry in &positions[lo..hi] {
-            let mut offset = entry.data_offset as usize;
+            let mut offset = entry.data_offset;
             for _ in 0..entry.record_count {
                 let (mut record, next_offset) = self.read_record_at(offset)?;
                 record.chr = chr_name.to_string();
                 records.push(record);
-                offset = next_offset;
+                offset = next_offset as u64;
             }
         }
 
@@ -580,6 +595,19 @@ fn merge_intervals(intervals: &[(u64, u64)]) -> Vec<(u64, u64)> {
     merged
 }
 
+/// `count` as a `usize` when that many entries of at least `entry_bytes` each
+/// fit in the bytes after `cursor`'s position; the bytes left otherwise.
+fn entries_fit(cursor: &io::Cursor<&[u8]>, count: u64, entry_bytes: usize) -> Result<usize, usize> {
+    let left = cursor.get_ref().len() - cursor.position() as usize;
+    let Ok(count) = usize::try_from(count) else {
+        return Err(left);
+    };
+    match count.checked_mul(entry_bytes) {
+        Some(needed) if needed <= left => Ok(count),
+        _ => Err(left),
+    }
+}
+
 fn read_u16(cursor: &mut io::Cursor<&[u8]>) -> Result<u16, PluginError> {
     let mut buf = [0u8; 2];
     cursor.read_exact(&mut buf).map_err(read_err)?;
@@ -689,6 +717,108 @@ mod tests {
         let hits = batch.lookup("1", 200, 200);
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].columns[4], "0.50");
+    }
+
+    /// An index whose position count or chromosome count claims more entries
+    /// than the bytes after it hold is refused when the store is opened,
+    /// before anything is allocated for it, and `open_best_store` then
+    /// answers from the tabix file beside it; a record offset past the data
+    /// file is refused by the query.
+    #[test]
+    fn index_counts_past_the_file_are_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        // Named as `open_best_store` looks for the store of `21.tsv.gz`.
+        let vpd_path = dir.path().join("21.tsv.vpd");
+        let vpdi_path = dir.path().join("21.tsv.vpdi");
+        let column_names: Vec<String> = ["chr", "pos", "ref", "alt", "score"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let records = vec![(
+            "21".to_string(),
+            vec![TabixRecord {
+                chr: "21".to_string(),
+                start: 100,
+                end: 100,
+                columns: vec![
+                    "21".into(),
+                    "100".into(),
+                    "A".into(),
+                    "G".into(),
+                    "0.95".into(),
+                ],
+                header: Some(Arc::new(column_names.clone())),
+            }],
+        )];
+        BinaryStoreWriter::new(vpd_path.clone())
+            .write(&column_names, &records)
+            .unwrap();
+        let index = std::fs::read(&vpdi_path).unwrap();
+        // Magic, version, chromosome count, the name's length and the name
+        // `21`, then the position count.
+        let pos_count_at = 4 + 4 + 4 + 2 + 2;
+        let open_error = |patched: &[u8]| {
+            std::fs::write(&vpdi_path, patched).unwrap();
+            BinaryAnnotator::open(&vpd_path)
+                .err()
+                .expect("a count past the file is refused")
+                .to_string()
+        };
+        let mut many_positions = index.clone();
+        many_positions[pos_count_at..pos_count_at + 8].copy_from_slice(&u64::MAX.to_le_bytes());
+        assert_eq!(
+            open_error(&many_positions),
+            format!(
+                "plugin initialization failed: index position count {} for 21 exceeds what the \
+                 {} bytes left can hold",
+                u64::MAX,
+                index.len() - pos_count_at - 8
+            )
+        );
+        let mut many_chromosomes = index.clone();
+        many_chromosomes[8..12].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert_eq!(
+            open_error(&many_chromosomes),
+            format!(
+                "plugin initialization failed: index chromosome count {} exceeds what the {} \
+                 bytes left can hold",
+                u32::MAX,
+                index.len() - 12
+            )
+        );
+
+        let tabix_path = crate::test_fixtures::write_tabix_fixture(
+            dir.path(),
+            "21.tsv.gz",
+            &["#chr\tpos\tref\talt\tscore", "21\t100\tA\tG\t0.25"],
+            crate::test_fixtures::IndexSpec::standard(),
+        );
+        let config = crate::tabix::TabixConfig {
+            file_path: tabix_path.clone(),
+            chr_col: 0,
+            start_col: 1,
+            end_col: None,
+            ref_col: Some(2),
+            alt_col: Some(3),
+            zero_based: false,
+        };
+        let store = crate::annotation_store::open_best_store(&tabix_path, config).unwrap();
+        let records = store.query("21", 100, 100).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(
+            records[0].columns[4], "0.25",
+            "answered from the tabix file"
+        );
+
+        let mut far_offset = index.clone();
+        far_offset[pos_count_at + 8 + 8..pos_count_at + 8 + 16]
+            .copy_from_slice(&u64::MAX.to_le_bytes());
+        std::fs::write(&vpdi_path, far_offset).unwrap();
+        let store = BinaryAnnotator::open(&vpd_path).unwrap();
+        assert_eq!(
+            store.query("21", 100, 100).unwrap_err().to_string(),
+            "plugin execution failed: record offset out of bounds"
+        );
     }
 
     #[test]

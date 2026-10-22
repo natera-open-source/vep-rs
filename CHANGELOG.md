@@ -268,6 +268,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A region file's empty `clin_sig_allele` or `clinical_impact` cell is a value, as Ensembl VEP reads it: `CLIN_SIG` is suppressed and `CLINVAR_SOMATIC_CLASSIFICATION` prints empty. (#N)
 - The JSON `frequencies` of a co-located variant are keyed by the record's own alleles, so a `--minimal` split allele's trimmed spelling finds none, as Ensembl VEP writes. (#N)
 - `CLIN_SIG` on a `--minimal` split row reads the ClinVar reference against the reference `REF_ALLELE` prints, not the allele's own trimmed one, as Ensembl VEP compares them. (#N)
+- Input files no longer drive unbounded allocations: line lengths, index sizes, cache sequence lengths and plugin-data counts are checked, and control bytes are escaped in tab and VCF output. (#N)
 
 ### Security
 

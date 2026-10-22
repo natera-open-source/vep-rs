@@ -13,7 +13,8 @@ use crate::variation_matcher;
 use vep_core::consequence::Consequence;
 use vep_core::variant::{push_decimal, InputVariant};
 use vep_io::output::fields::{
-    record_rows_into, write_field_value, write_terms, write_versioned_id, ExtraFieldsPlan, Row,
+    percent_encode_control_bytes, record_rows_into, write_field_value, write_terms,
+    write_versioned_id, ExtraFieldsPlan, Row,
 };
 use vep_io::output::tab::render_tab_record;
 use vep_io::OutputFormatter;
@@ -68,7 +69,10 @@ struct AlleleSpans {
 /// `write!`: a `write!` with only `{}` placeholders still builds
 /// `core::fmt::Arguments` and routes each `Display::fmt` through
 /// `Formatter::pad`, per (variant x transcript consequence). The bytes are
-/// identical for `&str` with no width, precision or fill.
+/// identical for `&str` with no width, precision or fill. Every value read from
+/// an input file or the cache goes out through [`write_encoded`], which
+/// percent-encodes its control bytes; the constant columns and the digits need
+/// no check.
 pub(crate) fn render_default_record<'a>(
     out: &mut Vec<u8>,
     record: &[&'a InputVariant],
@@ -95,9 +99,9 @@ pub(crate) fn render_default_record<'a>(
             // column is `-`, Existing_variation included, and the Extra column
             // holds the variant-level keys or `-` (VEP_output.pm:104). It is the
             // record's only row, so nothing is kept for a later one.
-            variant.write_uploaded_variation(out);
+            write_encoded(out, |out| variant.write_uploaded_variation(out));
             out.push(b'\t');
-            variant.write_location(out);
+            write_encoded(out, |out| variant.write_location(out));
             out.extend_from_slice(b"\t-\t-\t-\t-\t");
             write_field_value(out, "Consequence", variant, None, &plan.options, ",");
             out.extend_from_slice(b"\t-\t-\t-\t-\t-\t-\t");
@@ -119,16 +123,20 @@ pub(crate) fn render_default_record<'a>(
         match written_prefix {
             Some(range) => out.extend_from_within(range),
             None => {
-                variant.write_uploaded_variation(out);
+                write_encoded(out, |out| variant.write_uploaded_variation(out));
                 out.push(b'\t');
                 if own_prefix {
-                    write_field_value(out, "Location", variant, tc, &plan.options, ",");
+                    write_encoded(out, |out| {
+                        write_field_value(out, "Location", variant, tc, &plan.options, ",")
+                    });
                     out.push(b'\t');
-                    write_field_value(out, "Allele", variant, tc, &plan.options, ",");
+                    write_encoded(out, |out| {
+                        write_field_value(out, "Allele", variant, tc, &plan.options, ",")
+                    });
                 } else {
-                    variant.write_location(out);
+                    write_encoded(out, |out| variant.write_location(out));
                     out.push(b'\t');
-                    variant.write_display_allele(out);
+                    write_encoded(out, |out| variant.write_display_allele(out));
                 }
             }
         }
@@ -146,14 +154,18 @@ pub(crate) fn render_default_record<'a>(
             }
             Some(tc) => {
                 out.push(b'\t');
-                write_versioned_id(out, &tc.gene_id, tc.gene_version, plan.options.gene_version);
+                write_encoded(out, |out| {
+                    write_versioned_id(out, &tc.gene_id, tc.gene_version, plan.options.gene_version)
+                });
                 out.push(b'\t');
-                write_versioned_id(
-                    out,
-                    &tc.transcript_id,
-                    tc.transcript_version,
-                    plan.options.transcript_version,
-                );
+                write_encoded(out, |out| {
+                    write_versioned_id(
+                        out,
+                        &tc.transcript_id,
+                        tc.transcript_version,
+                        plan.options.transcript_version,
+                    )
+                });
                 out.push(b'\t');
                 out.extend_from_slice(tc.feature_type.as_str().as_bytes());
                 out.push(b'\t');
@@ -177,7 +189,7 @@ pub(crate) fn render_default_record<'a>(
                     tc.codons.as_deref().unwrap_or("-"),
                 ] {
                     out.push(b'\t');
-                    out.extend_from_slice(field.as_bytes());
+                    write_encoded(out, |out| out.extend_from_slice(field.as_bytes()));
                 }
                 out.push(b'\t');
             }
@@ -191,7 +203,7 @@ pub(crate) fn render_default_record<'a>(
                 }
             }
             None => {
-                write_existing_variation(out, variant);
+                write_encoded(out, |out| write_existing_variation(out, variant));
                 spans[allele] = Some(AlleleSpans {
                     prefix,
                     existing: existing_start..out.len(),
@@ -203,6 +215,14 @@ pub(crate) fn render_default_record<'a>(
         out.push(b'\n');
     }
     Ok(())
+}
+
+/// Appends what `write` writes to `out` with its control bytes percent-encoded
+/// ([`percent_encode_control_bytes`]).
+fn write_encoded(out: &mut Vec<u8>, write: impl FnOnce(&mut Vec<u8>)) {
+    let start = out.len();
+    write(out);
+    percent_encode_control_bytes(out, start);
 }
 
 /// The `Existing_variation` column: the co-located ids joined by `,`, or `-`.
@@ -958,6 +978,43 @@ mod tests {
         let (strings, bytes) = render_both(&[v], FieldOptions::default());
         assert_eq!(bytes, strings);
         assert!(bytes.is_empty());
+    }
+
+    /// An identifier carrying a NUL, a tab and a line end, and a chromosome
+    /// name carrying a control byte, are written with each such byte
+    /// percent-encoded in every row of the record, the `--most_severe` row
+    /// included, so each row keeps its fourteen columns and its one line; the
+    /// rows copying the first row's columns copy the encoded bytes.
+    #[test]
+    fn control_bytes_in_a_value_are_percent_encoded() {
+        let mut alleles = record();
+        for v in &mut alleles {
+            v.id = Some("rs\x001\tx\ny\x7F".to_string());
+            v.original_chr = "chr\x012".to_string();
+        }
+        let plan = ExtraFieldsPlan::new(FieldOptions::default());
+        let refs: Vec<&InputVariant> = alleles.iter().collect();
+        let mut out = Vec::new();
+        render_default_record(&mut out, &refs, &plan, &mut Vec::new()).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        let rows: Vec<&str> = text.strip_suffix('\n').unwrap().split('\n').collect();
+        assert!(rows.len() > 2, "{text}");
+        for row in &rows {
+            let columns: Vec<&str> = row.split('\t').collect();
+            assert_eq!(columns.len(), 14, "{row:?}");
+            assert_eq!(columns[0], "rs%001%09x%0Ay%7F");
+            assert_eq!(columns[1], "chr%012:10500");
+        }
+
+        let mut summary = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        summary.id = Some("rs\t1".to_string());
+        summary.summary_terms = Some(smallvec::smallvec![Consequence::IntergenicVariant]);
+        let mut out = Vec::new();
+        render_default_record(&mut out, &[&summary], &plan, &mut Vec::new()).unwrap();
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "rs%091\t21:100\t-\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\t-\n"
+        );
     }
 
     /// `NEAREST` prints in the Extra column of every row of the record, the

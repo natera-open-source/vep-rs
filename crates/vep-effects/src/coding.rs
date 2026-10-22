@@ -3717,10 +3717,12 @@ impl<'a> PerlCodingEval<'a> {
         };
         // A cache without UTR strings still has the UTR lengths: `N` placeholders
         // keep Perl's edit anchors (`cdna_start - 1` into 5'UTR + CDS) and window
-        // extents in place, translating to `X` where Perl reads real bases.
+        // extents in place, translating to `X` where Perl reads real bases. The
+        // lengths come from the cache, whose loader refuses a transcript whose
+        // mapper asks for more than the transcript can hold.
+        let padding = |bases: u64| vec![b'N'; bases as usize];
         let utr5 = compute_five_prime_utr_sequence(transcript, fasta).or_else(|| {
-            (mapper.cdna_coding_start > 1)
-                .then(|| vec![b'N'; (mapper.cdna_coding_start - 1) as usize])
+            (mapper.cdna_coding_start > 1).then(|| padding(mapper.cdna_coding_start - 1))
         });
         let utr3 = compute_three_prime_utr_sequence(transcript, fasta).or_else(|| {
             let cdna_len = mapper
@@ -3730,8 +3732,7 @@ impl<'a> PerlCodingEval<'a> {
                 .map(|p| p.from_end)
                 .max()
                 .unwrap_or(0);
-            (cdna_len > mapper.cdna_coding_end)
-                .then(|| vec![b'N'; (cdna_len - mapper.cdna_coding_end) as usize])
+            (cdna_len > mapper.cdna_coding_end).then(|| padding(cdna_len - mapper.cdna_coding_end))
         });
         Some(Self {
             cds,

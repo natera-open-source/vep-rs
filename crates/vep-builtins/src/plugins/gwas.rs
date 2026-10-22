@@ -69,20 +69,24 @@ impl GwasPlugin {
         None
     }
 
-    fn normalize_chr(raw: &str) -> String {
+    /// The chromosome a catalog row names, without a `chr` prefix and with
+    /// `M` as `MT`; `None` for an empty field or one that is not ASCII, which
+    /// names no chromosome the engine queries.
+    fn normalize_chr(raw: &str) -> Option<String> {
         let s = raw.trim();
-        if s.is_empty() {
-            return String::new();
+        if s.is_empty() || !s.is_ascii() {
+            return None;
         }
-        let without_chr = if s.len() >= 3 && s[..3].eq_ignore_ascii_case("chr") {
-            &s[3..]
-        } else {
-            s
+        let without_chr = match s.get(..3) {
+            Some(prefix) if prefix.eq_ignore_ascii_case("chr") => &s[3..],
+            _ => s,
         };
-        if without_chr.eq_ignore_ascii_case("m") {
-            "MT".to_string()
+        if without_chr.is_empty() {
+            None
+        } else if without_chr.eq_ignore_ascii_case("m") {
+            Some("MT".to_string())
         } else {
-            without_chr.to_string()
+            Some(without_chr.to_string())
         }
     }
 
@@ -269,8 +273,10 @@ impl GwasPlugin {
         let reader = Self::open_maybe_gzipped(path)?;
         let mut lines = reader.lines();
 
+        let mut line_number = 0usize;
         let mut header_line = None;
         for line in lines.by_ref() {
+            line_number += 1;
             let line =
                 line.map_err(|e| PluginError::Init(format!("GWAS: failed to read header: {e}")))?;
             if line.starts_with('#') || line.trim().is_empty() {
@@ -324,22 +330,37 @@ impl GwasPlugin {
         let snps_col = Self::find_column(&headers, &["SNPS", "SNP", "RSID"]);
 
         let mut by_pos: HashMap<(String, u64), Vec<GwasRecord>> = HashMap::new();
+        let mut rows_without_a_chromosome = 0u64;
         for line in lines {
+            line_number += 1;
             let line =
                 line.map_err(|e| PluginError::Init(format!("GWAS: failed to read row: {e}")))?;
             if line.trim().is_empty() || line.starts_with('#') {
                 continue;
             }
             let cols: Vec<&str> = line.split('\t').collect();
-            let chr = cols
-                .get(chr_col)
-                .map(|s| Self::normalize_chr(s))
-                .unwrap_or_default();
+            let raw_chr = cols.get(chr_col).copied().unwrap_or("");
+            let Some(chr) = Self::normalize_chr(raw_chr) else {
+                // The catalog leaves the column empty for an unmapped
+                // association; a value that names no chromosome (one that is
+                // not ASCII, or a bare `chr`) is skipped the same way, with
+                // the line named once.
+                if !raw_chr.trim().is_empty() {
+                    rows_without_a_chromosome += 1;
+                    if rows_without_a_chromosome == 1 {
+                        tracing::warn!(
+                            "GWAS: skipping line {line_number} of {path}: chromosome field \
+                             {raw_chr:?} names no chromosome"
+                        );
+                    }
+                }
+                continue;
+            };
             let pos = cols
                 .get(pos_col)
                 .and_then(|p| p.trim().parse::<u64>().ok())
                 .unwrap_or(0);
-            if chr.is_empty() || pos == 0 {
+            if pos == 0 {
                 continue;
             }
 
@@ -394,6 +415,12 @@ impl GwasPlugin {
             }
         }
 
+        if rows_without_a_chromosome > 1 {
+            tracing::warn!(
+                "GWAS: skipped {rows_without_a_chromosome} rows of {path} whose chromosome field \
+                 names no chromosome"
+            );
+        }
         Ok(by_pos)
     }
 }
@@ -642,6 +669,45 @@ mod tests {
 
         let records =
             GwasPlugin::load_records(path.to_str().unwrap()).expect("a plain catalog must load");
+        assert!(records.contains_key(&("21".to_string(), 33000100)));
+    }
+
+    /// A chromosome of two-byte characters (`éé`, whose third byte is inside a
+    /// character) names no chromosome instead of ending the load; a row with
+    /// such a chromosome, one with `chrÉ`, one with a bare `chr` and one with
+    /// an empty field are skipped and the rows around them load, in a catalog
+    /// that opens with a comment line and a blank line ahead of its header.
+    #[test]
+    fn rows_without_an_ascii_chromosome_are_skipped() {
+        for (raw, expected) in [
+            ("21", Some("21")),
+            (" chr21 ", Some("21")),
+            ("CHRM", Some("MT")),
+            ("chr", None),
+            ("", None),
+            ("éé", None),
+            ("chrÉ", None),
+            ("chr\u{E9}\u{E9}", None),
+        ] {
+            assert_eq!(
+                GwasPlugin::normalize_chr(raw).as_deref(),
+                expected,
+                "{raw:?}"
+            );
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("gwas_catalog.tsv");
+        let (header, row) = CATALOG.split_once('\n').unwrap();
+        let catalog = format!(
+            "# catalog\n\n{header}\n{}\n{}\n{}\n{}\n{row}\n",
+            row.replace("\t21\t", "\téé\t"),
+            row.replace("\t21\t", "\tchrÉ\t"),
+            row.replace("\t21\t", "\tchr\t"),
+            row.replace("\t21\t", "\t\t"),
+        );
+        std::fs::write(&path, catalog).unwrap();
+        let records = GwasPlugin::load_records(path.to_str().unwrap()).unwrap();
+        assert_eq!(records.len(), 1);
         assert!(records.contains_key(&("21".to_string(), 33000100)));
     }
 

@@ -27,6 +27,14 @@ Four pages describe the formats, the default and tab formats sharing one. A fift
 
 The flag applies to the default, `tab`, `vcf` and `json` formats and is refused with `parquet`, whose files carry their own compression. The golden corpus `GRCh38-writers` runs both encoders in every text format and compares the decompressed output with Ensembl VEP's.
 
+## Control bytes in values
+
+A value read from an input file can carry a control byte: an identifier or a chromosome name with a tab, a line end or a NUL in it, a plugin data field with one. Written as read, a tab or a line end would split the column or the row it sits in.
+
+The default and tab formats write every byte from `0x00` to `0x1F`, and `0x7F`, as its percent-encoding: `%09` for a tab, `%0A` for a line end, `%00` for a NUL. The `%3B` the Extra column writes for a `;` in a value is the same rule. Inside a VCF `CSQ` value the whitespace rule comes first, so a tab is `_`, and every other control byte is percent-encoded the same way. The JSON output escapes them as JSON does.
+
+The columns a VCF line copies from the input, the ID among them, stay the input's bytes, as every format's header lines do; the line built for a record of another input format has each column encoded like any value. Ensembl VEP writes the bytes as read.
+
 ## Parity with Ensembl VEP
 
 With the default flag set and `--tab`, `--vcf` or `--json`, the default, `tab`, `vcf` and `json` outputs match what Ensembl VEP 116.2 writes field for field. Every column of every row is compared as text and, for JSON, every key of every object. VEP writes JSON keys in Perl hash order, so the JSON is not byte-identical and key order is not compared. Header lines that carry a time, a cache path or the command line are compared by shape; VEP's Perl API component version lines have no counterpart.

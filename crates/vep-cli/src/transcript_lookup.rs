@@ -41,6 +41,8 @@ use tracing::info;
 use vep_core::transcript::Transcript;
 use vep_io::input::TranscriptSource;
 
+use crate::config::CliError;
+use crate::json_cache::load_transcripts_for_chr;
 use crate::transcript_index::LazyTranscriptIndexes;
 
 /// What the index keeps of a transcript: the identifiers a notation resolves
@@ -309,9 +311,13 @@ impl TranscriptLookup {
         let per_shard: Vec<Result<Vec<Entry>, String>> = shards
             .par_iter()
             .map(|shard| {
-                let transcripts =
-                    crate::json_cache::load_transcripts_for_chr(chr, std::slice::from_ref(shard))
-                        .map_err(|error| format!("{error:#}"))?;
+                // A refusal of the cache keeps its message alone: the caller
+                // prints it under its own component.
+                let transcripts = load_transcripts_for_chr(chr, std::slice::from_ref(shard))
+                    .map_err(|error| match error.downcast_ref::<CliError>() {
+                        Some(refusal) => refusal.message.clone(),
+                        None => format!("{error:#}"),
+                    })?;
                 Ok(transcripts
                     .iter()
                     .filter(|transcript| self.indexes.accepts(transcript))
@@ -469,6 +475,72 @@ mod tests {
             .iter()
             .all(|t| t.gene_symbol.as_deref() == Some("TFF3")));
         assert!(gene[1].is_empty());
+    }
+
+    /// A transcript the cache refuses when its chromosome loads (its mapper's
+    /// coding start lies a UTR longer than the span away) fails every lookup
+    /// through its tier with the refusal's message alone, no `ERROR: [cache]`
+    /// line inside it, so the HGVS parser's wrapping of that message prints
+    /// under the one `input` component.
+    #[test]
+    fn a_cache_refusal_fails_the_lookup_with_its_message_alone() {
+        use vep_io::input::hgvs::HgvsParser;
+        use vep_io::input::{InputParser, ParserContext, ReferenceSequence};
+
+        struct NoGenome;
+        impl ReferenceSequence for NoGenome {
+            fn sequence(&self, _chr: &str, _start: u64, _end: u64) -> Option<Vec<u8>> {
+                None
+            }
+            fn record_name(&self, _chr: &str) -> Option<String> {
+                None
+            }
+        }
+
+        let dir = tempfile::Builder::new()
+            .prefix("vep_tl_refusal_")
+            .tempdir()
+            .unwrap();
+        let chr_dir = dir.path().join("transcripts").join("21");
+        std::fs::create_dir_all(&chr_dir).unwrap();
+        let far = u64::MAX;
+        std::fs::write(
+            chr_dir.join("1-1000000.json"),
+            format!(
+                r#"[{{"stable_id":"ENST1","gene_stable_id":"ENSG1","chr":"21","start":1000,"end":1029,
+                "strand":1,"biotype":"protein_coding","source":"ensembl","is_canonical":1,
+                "exons":[{{"start":1000,"end":1029,"rank":1,"phase":0,"end_phase":0}}],
+                "translation":{{"stable_id":"ENSP1","start":1,"end":30}},
+                "variation_effect_feature_cache":{{"codon_table":1,
+                  "translateable_seq":"ATGGCTGCTGCTGCTGCTGCTGCTGCTTGA","peptide":"MAAAAAAAA",
+                  "mapper":{{"start_phase":0,"cdna_coding_start":{far},"cdna_coding_end":30,
+                    "pairs":[{{"from_start":1,"from_end":30,"to_start":1000,"to_end":1029,"ori":1}}]}}}}}}]"#
+            ),
+        )
+        .unwrap();
+        let indexes =
+            LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap();
+        let lookup = Arc::new(TranscriptLookup::new(Arc::new(indexes), &[], false));
+        let refusal = format!(
+            "transcript ENST1: the mapper's coding start {far} and end 30 on a cDNA of 30 bases \
+             leave a UTR longer than the transcript's 30-base span"
+        );
+        assert_eq!(lookup.by_stable_id("ENST1").unwrap_err(), refusal);
+        assert_eq!(lookup.by_translation_id("ENSP1").unwrap_err(), refusal);
+
+        let context = ParserContext {
+            fasta: Some(Arc::new(NoGenome)),
+            transcripts: Some(Arc::clone(&lookup) as Arc<dyn TranscriptSource>),
+            ..Default::default()
+        };
+        let mut parser = HgvsParser::new(std::io::Cursor::new("ENST1:c.1A>G\n"), &context, false);
+        let Some(Err(vep_io::IoError::Unsupported(message))) = parser.next_variant() else {
+            panic!("the notation must fail with the cache's refusal");
+        };
+        assert_eq!(
+            CliError::new("input", message).to_string(),
+            format!("ERROR: [input] Cannot read the transcript cache for HGVS input: {refusal}")
+        );
     }
 
     fn transcript(stable_id: &str, version: u32, db_id: u64, chr: &str, gene: &str) -> Transcript {

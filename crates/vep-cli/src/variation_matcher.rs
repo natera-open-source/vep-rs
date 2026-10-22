@@ -387,8 +387,9 @@ fn cached_to_colocated(
 
 /// Appends the `Extra` column of one default-format row: `KEY=VALUE` pairs
 /// joined by `;`, keys in VEP's order (IMPACT, DISTANCE, STRAND, FLAGS, then the
-/// active flag fields, then plugin keys alphabetically), values escaping only
-/// `;` as `%3B`, lists joined by `,`, and a lone `-` when no field applies. `tc`
+/// active flag fields, then plugin keys alphabetically), values with `;` escaped
+/// as `%3B` and their control bytes percent-encoded, lists joined by `,`, and a
+/// lone `-` when no field applies. `tc`
 /// is `None` for an intergenic row, which carries IMPACT and no STRAND, and for
 /// a summary row, which carries the variant-level keys alone.
 ///
@@ -435,8 +436,9 @@ pub fn write_extra_fields(
 }
 
 /// Appends `;KEY=VALUE` (`KEY=VALUE` for the first pair, clearing `first`) with
-/// `;` in the value escaped as `%3B`, or nothing when the row has no value and
-/// the empty value is not one the format writes
+/// `;` in the value escaped as `%3B` and its control bytes percent-encoded
+/// ([`vep_io::output::fields::percent_encode_control_bytes`]), or nothing when
+/// the row has no value and the empty value is not one the format writes
 /// ([`vep_io::output::fields::empty_value_is_written`]).
 fn write_extra_pair(
     out: &mut Vec<u8>,
@@ -471,6 +473,7 @@ fn write_extra_pair(
             }
         }
     }
+    vep_io::output::fields::percent_encode_control_bytes(out, value_start);
 }
 
 /// The four unconditional keys, written as bytes. IMPACT is always present;
@@ -489,11 +492,13 @@ fn write_user_group(tc: Option<&vep_core::consequence::TranscriptConsequence>, o
     out.extend_from_slice(b";STRAND=");
     out.extend_from_slice(if tc.strand < 0 { b"-1" } else { b"1" });
     let mut wrote_flags = false;
+    let flags_start = out.len();
     for flag in tc.flags.iter().filter(|f| f.starts_with("cds_")) {
         out.extend_from_slice(if wrote_flags { b"," } else { b";FLAGS=" });
         out.extend_from_slice(flag.as_bytes());
         wrote_flags = true;
     }
+    vep_io::output::fields::percent_encode_control_bytes(out, flags_start);
 }
 
 #[cfg(test)]
@@ -1420,6 +1425,34 @@ mod tests {
             extra(&variant, Some(&tc), &FieldOptions::default()),
             "IMPACT=MODIFIER;DISTANCE=2500;STRAND=1;FLAGS=cds_start_NF,cds_end_NF"
         );
+    }
+
+    /// A `cds_` flag carrying a tab or a line end prints it percent-encoded on
+    /// the fast path of the unconditional group as on the general path, so the
+    /// two paths write the same Extra column and the row keeps its columns.
+    #[test]
+    fn a_flag_with_a_control_byte_is_encoded_on_both_paths() {
+        let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let tc = TranscriptConsequence {
+            impact: Impact::MODIFIER,
+            strand: 1,
+            flags: std::sync::Arc::from(["cds_\tx".to_string(), "cds_end_NF\n".to_string()]),
+            ..Default::default()
+        };
+        let fast = extra(&variant, Some(&tc), &FieldOptions::default());
+        assert_eq!(
+            fast,
+            "IMPACT=MODIFIER;STRAND=1;FLAGS=cds_%09x,cds_end_NF%0A"
+        );
+        let general = extra(
+            &variant,
+            Some(&tc),
+            &FieldOptions {
+                symbol: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(general, fast);
     }
 
     #[test]

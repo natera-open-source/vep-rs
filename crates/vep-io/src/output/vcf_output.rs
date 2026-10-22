@@ -266,7 +266,9 @@ fn is_perl_whitespace(c: char) -> bool {
 
 /// Escape one CSQ subfield value the way VEP does (`OutputFactory/VCF.pm:401-404`):
 /// `,` and `|` become `&`, `;` becomes `%3B`, a run of ASCII whitespace becomes
-/// one `_`.
+/// one `_`. A control character that is not whitespace, which VEP writes as it
+/// is, becomes its `%XX` percent-encoding, as the default and tab formats write
+/// it ([`fields::percent_encode_control_bytes`]).
 fn vcf_encode(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     let mut in_whitespace = false;
@@ -280,6 +282,9 @@ fn vcf_encode(value: &str) -> String {
             match ch {
                 ';' => out.push_str("%3B"),
                 ',' | '|' => out.push('&'),
+                c if c.is_ascii_control() => {
+                    out.push_str(&format!("%{:02X}", c as u8));
+                }
                 c => out.push(c),
             }
         }
@@ -401,7 +406,8 @@ fn fixed_columns(
     alt: &[u8],
     info: &[u8],
 ) -> Vec<u8> {
-    [
+    let mut line = Vec::new();
+    for (i, column) in [
         chr.as_bytes(),
         pos.to_string().as_bytes(),
         id.as_bytes(),
@@ -411,7 +417,17 @@ fn fixed_columns(
         b".",
         info,
     ]
-    .join(&b"\t"[..])
+    .into_iter()
+    .enumerate()
+    {
+        if i > 0 {
+            line.push(b'\t');
+        }
+        let start = line.len();
+        line.extend_from_slice(column);
+        fields::percent_encode_control_bytes(&mut line, start);
+    }
+    line
 }
 
 /// The VCF line Ensembl VEP builds for a record that did not come from a VCF,
@@ -438,7 +454,10 @@ fn fixed_columns(
 /// An allele of bases or empty is written after the anchor, any other inside
 /// `<` and `>` (`:2409-2419`). The ID column is the record's name (`:2425`).
 /// The `COSMIC_MUTATION` and `HGMD_MUTATION` strings (`:2356-2373`) name
-/// database records and are not an input shape.
+/// database records and are not an input shape. Every column's control bytes
+/// are percent-encoded as the default and tab formats write them
+/// ([`fields::percent_encode_control_bytes`]), so a tab or line end inside a
+/// name or a chromosome cannot split the line.
 ///
 /// A structural variant's line is the base before its start and its position
 /// moved one base back, `<INS>`, `<DEL>`, `<TDUP>` or `<DUP>` for an
@@ -1090,6 +1109,35 @@ mod tests {
         assert_eq!(vcf_encode("a\x0B\x0Cb"), "a_b");
         assert_eq!(vcf_encode("a\u{A0}b"), "a\u{A0}b");
         assert_eq!(vcf_encode("normal"), "normal");
+        // A control character outside Perl's `\s` is percent-encoded; the
+        // whitespace rule keeps the tab as `_`.
+        assert_eq!(vcf_encode("rs\x001\tx\x1Fy\x7F"), "rs%001_x%1Fy%7F");
+        assert_eq!(vcf_encode("a\u{85}b"), "a\u{85}b");
+    }
+
+    /// A CSQ value carrying a NUL, a tab and another control character is
+    /// encoded: the NUL and the `0x01` as `%00` and `%01`, the tab by the
+    /// whitespace rule (`_`, or `%20` in a symbol); the record's own columns,
+    /// the ID among them, stay the input line's bytes.
+    #[test]
+    fn control_bytes_in_a_csq_value_are_percent_encoded() {
+        let mut v = annotated_variant();
+        v.transcript_consequences[0].gene_symbol = Some("GEN\0E\tX".into());
+        v.transcript_consequences[0]
+            .plugin_data
+            .insert("Note".to_string(), "a\0b\tc\x01".to_string());
+        let formatter = VcfOutputFormatter::new(
+            "CSQ".to_string(),
+            vcf_options(),
+            vec![("Note".to_string(), "a plugin field".to_string())],
+            None,
+        );
+        let line = formatter.format_record(&[&v]).unwrap().remove(0);
+        assert!(line.starts_with("21\t100\trs1\tA\tG\t"), "{line}");
+        let csq = info_of(&line).split("CSQ=").nth(1).unwrap();
+        let fields: Vec<&str> = csq.split('|').collect();
+        assert_eq!(fields[3], "GEN%00E%20X", "{csq}");
+        assert_eq!(*fields.last().unwrap(), "a%00b_c%01", "{csq}");
     }
 
     /// `OutputFactory.pm` encodes whitespace in a gene symbol as `%20` for VCF
@@ -1481,6 +1529,17 @@ mod tests {
             line_of(&deletion, Some(&genome)),
             "21\t30282170\t21:g.30282171_30282173del\tAATA\tA\t.\t.\t."
         );
+    }
+
+    /// A name and a chromosome carrying a tab, a NUL and a line end reach the
+    /// synthesised line percent-encoded, so the line keeps its eight columns.
+    #[test]
+    fn to_vcf_record_percent_encodes_control_bytes_in_its_columns() {
+        let mut record = text_record(100, 100, "C/A", Some("rs\x001\tx\ny"));
+        record.original_chr = "2\x7F1".to_string();
+        let line = line_of(&record, None);
+        assert_eq!(line, "2%7F1\t100\trs%001%09x%0Ay\tC\tA\t.\t.\t.");
+        assert_eq!(line.split('\t').count(), 8);
     }
 
     /// Lines 2399-2402: alleles that all open with the same base need no anchor

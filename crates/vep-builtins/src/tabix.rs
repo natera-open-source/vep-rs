@@ -11,7 +11,7 @@
 //! Perl citations name modules of Ensembl/VEP_plugins release/115.
 
 use std::collections::{BTreeMap, HashMap};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -22,6 +22,96 @@ use noodles::tabix;
 use tracing::debug;
 
 use crate::PluginError;
+
+/// The longest data line read from a tabix-indexed file, 64 MiB. A line of a
+/// population VCF with every INFO key runs to a few hundred kilobytes, so the
+/// cap sits far above any record; a file with no line end in it is refused at
+/// the cap instead of being read whole into one line buffer.
+const MAX_LINE_BYTES: usize = 64 << 20;
+
+/// The longest index (`.tbi` or `.csi`) read, 256 MiB decompressed. A
+/// whole-genome index decompresses to a few megabytes; the cap bounds what an
+/// index whose counts are then checked ([`check_index_counts`]) can make the
+/// reader hold.
+const MAX_INDEX_BYTES: usize = 256 << 20;
+
+/// `BufRead::read_until(b'\n', line)` with the line's length capped at
+/// [`MAX_LINE_BYTES`]: the bytes appended, 0 at the end of the input, or an
+/// error built with `kind` naming `path`, for a read failure or, with the
+/// line's place in the file, for a line still open past the cap.
+fn read_line_bounded<R: BufRead>(
+    reader: &mut R,
+    line: &mut Vec<u8>,
+    path: &Path,
+    kind: fn(String) -> PluginError,
+    place: impl FnOnce() -> String,
+) -> Result<usize, PluginError> {
+    // The cap plus the line end: a line of exactly the cap is read whole.
+    let limit = MAX_LINE_BYTES as u64 + 1;
+    let read = reader
+        .take(limit)
+        .read_until(b'\n', line)
+        .map_err(|e| kind(format!("failed to read {}: {e}", path.display())))?;
+    if read as u64 == limit && line.last() != Some(&b'\n') {
+        return Err(kind(format!(
+            "{}: {} is longer than the {MAX_LINE_BYTES}-byte limit for one line",
+            path.display(),
+            place()
+        )));
+    }
+    Ok(read)
+}
+
+/// The lines of a file's head as text, each without its trailing `\n`, read
+/// with the length of a line capped ([`read_line_bounded`]); a line that is
+/// not UTF-8 is an error, as `BufRead::lines` makes it. Every error is
+/// [`PluginError::Init`]: the head is read while a plugin opens its file.
+struct HeadLines<R> {
+    reader: R,
+    path: PathBuf,
+    line_number: u64,
+}
+
+impl<R: BufRead> HeadLines<R> {
+    fn new(reader: R, path: &Path) -> Self {
+        Self {
+            reader,
+            path: path.to_path_buf(),
+            line_number: 0,
+        }
+    }
+}
+
+impl<R: BufRead> Iterator for HeadLines<R> {
+    type Item = Result<String, PluginError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut line = Vec::new();
+        self.line_number += 1;
+        let number = self.line_number;
+        match read_line_bounded(
+            &mut self.reader,
+            &mut line,
+            &self.path,
+            PluginError::Init,
+            || format!("line {number}"),
+        ) {
+            Ok(0) => None,
+            Ok(_) => {
+                if line.last() == Some(&b'\n') {
+                    line.pop();
+                }
+                Some(String::from_utf8(line).map_err(|e| {
+                    PluginError::Init(format!(
+                        "failed to read header from {}: {e}",
+                        self.path.display()
+                    ))
+                }))
+            }
+            Err(e) => Some(Err(e)),
+        }
+    }
+}
 
 /// A parsed record from a tabix-indexed file.
 #[derive(Debug, Clone)]
@@ -171,7 +261,7 @@ pub struct TabixAnnotator {
 }
 
 /// A loaded `.tbi` or `.csi` index; the query path is the same for both.
-type Index = Box<dyn BinningIndex + Send + Sync>;
+pub type Index = Box<dyn BinningIndex + Send + Sync>;
 
 /// Where a line's start falls against the windows of one cluster of
 /// [`TabixAnnotator::query_windows`].
@@ -383,9 +473,7 @@ impl TabixAnnotator {
                 last_chunk_end = Some(chunk.end());
                 while bgzf_reader.virtual_position() < chunk.end() {
                     line.clear();
-                    let bytes_read = bgzf_reader
-                        .read_until(b'\n', &mut line)
-                        .map_err(|e| self.read_error(e))?;
+                    let bytes_read = self.read_line(&mut bgzf_reader, &mut line)?;
                     if bytes_read == 0 {
                         break;
                     }
@@ -476,9 +564,7 @@ impl TabixAnnotator {
 
             while bgzf_reader.virtual_position() < chunk.end() {
                 line.clear();
-                let bytes_read = bgzf_reader
-                    .read_until(b'\n', &mut line)
-                    .map_err(|e| self.read_error(e))?;
+                let bytes_read = self.read_line(&mut bgzf_reader, &mut line)?;
                 if bytes_read == 0 {
                     break;
                 }
@@ -563,6 +649,27 @@ impl TabixAnnotator {
             "failed to read {}: {e}",
             self.config.file_path.display()
         ))
+    }
+
+    /// Reads the next line of the data file into `line` with its length
+    /// capped ([`read_line_bounded`]); a refused line is named by the virtual
+    /// position it starts at.
+    fn read_line(
+        &self,
+        reader: &mut bgzf::io::Reader<std::fs::File>,
+        line: &mut Vec<u8>,
+    ) -> Result<usize, PluginError> {
+        let start = reader.virtual_position();
+        read_line_bounded(
+            reader,
+            line,
+            &self.config.file_path,
+            PluginError::Run,
+            || {
+                let (block, offset): (u64, u16) = start.into();
+                format!("the line at block offset {block} byte {offset}")
+            },
+        )
     }
 
     /// The 1-based start of a line, read from its start column alone; `None`
@@ -785,20 +892,172 @@ fn find_index_path(data_path: &Path) -> Result<PathBuf, PluginError> {
     )))
 }
 
-/// Load a tabix index from a `.tbi` or `.csi` file, by its extension.
-fn load_index(index_path: &Path) -> Result<Index, PluginError> {
-    let read_error = |e: std::io::Error| {
-        PluginError::Run(format!(
-            "failed to read tabix index {}: {e}",
+/// Load a tabix index from a `.tbi` or `.csi` file, by its extension, through
+/// [`read_tabix_index`] or [`read_csi_index`].
+pub fn load_index(index_path: &Path) -> Result<Index, PluginError> {
+    if index_path.extension().is_some_and(|ext| ext == "csi") {
+        Ok(Box::new(read_csi_index(index_path)?))
+    } else {
+        Ok(Box::new(read_tabix_index(index_path)?))
+    }
+}
+
+/// Reads a `.tbi` index with its counts checked ([`checked_index_stream`]).
+pub fn read_tabix_index(index_path: &Path) -> Result<tabix::Index, PluginError> {
+    let stream = checked_index_stream(index_path, false)?;
+    tabix::io::Reader::new(stream)
+        .read_index()
+        .map_err(|e| index_read_error(index_path, e))
+}
+
+/// Reads a `.csi` index with its counts checked ([`checked_index_stream`]).
+pub fn read_csi_index(index_path: &Path) -> Result<noodles::csi::Index, PluginError> {
+    let stream = checked_index_stream(index_path, true)?;
+    noodles::csi::io::Reader::new(stream)
+        .read_index()
+        .map_err(|e| index_read_error(index_path, e))
+}
+
+fn index_read_error(index_path: &Path, e: std::io::Error) -> PluginError {
+    PluginError::Run(format!(
+        "failed to read tabix index {}: {e}",
+        index_path.display()
+    ))
+}
+
+/// The bytes of the index at `index_path` as the BGZF stream the index readers
+/// take, decompressed first, to at most [`MAX_INDEX_BYTES`], with every count
+/// in them checked against the bytes that follow it ([`check_index_counts`])
+/// before a reader, which allocates for each count as it meets it, reads the
+/// same bytes.
+fn checked_index_stream(
+    index_path: &Path,
+    csi: bool,
+) -> Result<std::io::Cursor<Vec<u8>>, PluginError> {
+    let read_error = |e: std::io::Error| index_read_error(index_path, e);
+    let malformed = |why: String| {
+        PluginError::Init(format!(
+            "tabix index {} is malformed: {why}",
             index_path.display()
         ))
     };
-    if index_path.extension().is_some_and(|ext| ext == "csi") {
-        let index = noodles::csi::fs::read(index_path).map_err(read_error)?;
-        Ok(Box::new(index))
-    } else {
-        let index = tabix::fs::read(index_path).map_err(read_error)?;
-        Ok(Box::new(index))
+    let file = std::fs::File::open(index_path).map_err(read_error)?;
+    let mut bytes = Vec::new();
+    bgzf::io::Reader::new(file)
+        .take(MAX_INDEX_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(read_error)?;
+    if bytes.len() > MAX_INDEX_BYTES {
+        return Err(malformed(format!(
+            "it decompresses to more than {MAX_INDEX_BYTES} bytes"
+        )));
+    }
+    check_index_counts(&bytes, csi).map_err(malformed)?;
+    let mut encoder = bgzf::io::Writer::new(Vec::new());
+    encoder.write_all(&bytes).map_err(read_error)?;
+    Ok(std::io::Cursor::new(encoder.finish().map_err(read_error)?))
+}
+
+/// Checks every count of a decompressed `.tbi` (or, under `csi`, `.csi`)
+/// index against the bytes that follow it, in the layout the tabix and CSI
+/// index format specifications give: the reference count, a name block's
+/// length, each reference's bin count, each bin's chunk count and, in a
+/// `.tbi`, each reference's interval count.
+/// A count whose entries, at their smallest size, would run past the end of
+/// the index is the error, naming the count; the bytes themselves are left to
+/// the index reader.
+fn check_index_counts(bytes: &[u8], csi: bool) -> Result<(), String> {
+    const CHUNK_BYTES: usize = 16;
+    const INTERVAL_BYTES: usize = 8;
+    let mut cursor = IndexCursor { bytes, at: 0 };
+    cursor.skip(4, "magic")?;
+    if csi {
+        cursor.skip(8, "min_shift and depth")?;
+        let aux = cursor.count("l_aux")?;
+        cursor.skip(aux, "aux")?;
+    }
+    let references = cursor.count("n_ref")?;
+    if !csi {
+        // The tabix header: six integers, then the name block.
+        cursor.skip(24, "header")?;
+        let names = cursor.count("l_nm")?;
+        cursor.skip(names, "names")?;
+    }
+    // A reference is at least its bin count and, in a `.tbi`, its interval
+    // count; a bin at least its id, its chunk count and, in a `.csi`, its
+    // offset.
+    let (reference_bytes, bin_bytes) = if csi { (4, 16) } else { (8, 8) };
+    cursor.fits(references, reference_bytes, "n_ref")?;
+    for _ in 0..references {
+        let bins = cursor.count("n_bin")?;
+        cursor.fits(bins, bin_bytes, "n_bin")?;
+        for _ in 0..bins {
+            cursor.skip(if csi { 12 } else { 4 }, "bin")?;
+            let chunks = cursor.count("n_chunk")?;
+            cursor.skip_entries(chunks, CHUNK_BYTES, "n_chunk")?;
+        }
+        if !csi {
+            let intervals = cursor.count("n_intv")?;
+            cursor.skip_entries(intervals, INTERVAL_BYTES, "n_intv")?;
+        }
+    }
+    Ok(())
+}
+
+/// A position in the decompressed bytes of an index, for
+/// [`check_index_counts`].
+struct IndexCursor<'a> {
+    bytes: &'a [u8],
+    at: usize,
+}
+
+impl IndexCursor<'_> {
+    /// The bytes after the position.
+    fn left(&self) -> usize {
+        self.bytes.len() - self.at
+    }
+
+    /// Moves past `n` bytes of `what`, or reports that the index ends inside
+    /// them.
+    fn skip(&mut self, n: usize, what: &str) -> Result<(), String> {
+        if n > self.left() {
+            return Err(format!("the index ends inside its {what}"));
+        }
+        self.at += n;
+        Ok(())
+    }
+
+    /// Reads the little-endian `int32_t` count `name`, refusing a negative one.
+    fn count(&mut self, name: &str) -> Result<usize, String> {
+        let Some(raw) = self.bytes.get(self.at..self.at + 4) else {
+            return Err(format!("the index ends inside its {name}"));
+        };
+        self.at += 4;
+        let value = i32::from_le_bytes(raw.try_into().expect("four bytes"));
+        usize::try_from(value).map_err(|_| format!("{name} is {value}"))
+    }
+
+    /// Checks that `count` entries of at least `entry_bytes` each fit in the
+    /// bytes left.
+    fn fits(&self, count: usize, entry_bytes: usize, name: &str) -> Result<(), String> {
+        let needed = count
+            .checked_mul(entry_bytes)
+            .ok_or_else(|| format!("{name} is {count}, more entries than the index can hold"))?;
+        if needed > self.left() {
+            return Err(format!(
+                "{name} is {count}, more entries than the {} bytes left in the index can hold",
+                self.left()
+            ));
+        }
+        Ok(())
+    }
+
+    /// Moves past `count` entries of exactly `entry_bytes` each, once they
+    /// [`fit`](Self::fits).
+    fn skip_entries(&mut self, count: usize, entry_bytes: usize, name: &str) -> Result<(), String> {
+        self.fits(count, entry_bytes, name)?;
+        self.at += count * entry_bytes;
+        Ok(())
     }
 }
 
@@ -847,15 +1106,9 @@ pub fn detect_assembly_marker(
     let file = std::fs::File::open(path)
         .map_err(|e| PluginError::Init(format!("failed to open {}: {e}", path.display())))?;
     let reader = bgzf::io::Reader::new(BufReader::new(file));
-    let buf_reader = BufReader::new(reader);
 
-    for line_result in buf_reader.lines() {
-        let line = line_result.map_err(|e| {
-            PluginError::Init(format!(
-                "failed to read header from {}: {e}",
-                path.display()
-            ))
-        })?;
+    for line_result in HeadLines::new(reader, path) {
+        let line = line_result?;
         if !line.starts_with('#') {
             break;
         }
@@ -888,11 +1141,9 @@ pub fn first_data_row_field(path: &Path, col: usize) -> Result<Option<String>, P
     let file = std::fs::File::open(path)
         .map_err(|e| PluginError::Init(format!("failed to open {}: {e}", path.display())))?;
     let reader = bgzf::io::Reader::new(BufReader::new(file));
-    let buf_reader = BufReader::new(reader);
 
-    for line_result in buf_reader.lines() {
-        let line = line_result
-            .map_err(|e| PluginError::Init(format!("failed to read {}: {e}", path.display())))?;
+    for line_result in HeadLines::new(reader, path) {
+        let line = line_result?;
         let line = line.trim_end_matches(['\r', '\n']);
         if line.is_empty() || line.starts_with('#') {
             continue;
@@ -927,16 +1178,10 @@ pub fn parse_header(path: &Path, start_col: usize) -> Result<Option<Vec<String>>
     let file = std::fs::File::open(path)
         .map_err(|e| PluginError::Init(format!("failed to open {}: {e}", path.display())))?;
     let reader = bgzf::io::Reader::new(BufReader::new(file));
-    let buf_reader = BufReader::new(reader);
 
     let mut last_header_line = None;
-    for line_result in buf_reader.lines() {
-        let line = line_result.map_err(|e| {
-            PluginError::Init(format!(
-                "failed to read header from {}: {e}",
-                path.display()
-            ))
-        })?;
+    for line_result in HeadLines::new(reader, path) {
+        let line = line_result?;
         let line = line.trim_end_matches(['\r', '\n']);
         if line.is_empty() {
             continue;
@@ -1544,6 +1789,196 @@ mod tests {
             &[(0..2, 0), (0..2, past_the_end)],
         );
         refused(&second_chunk_past_the_end);
+    }
+
+    /// Writes `decompressed` as a BGZF stream at `path`.
+    fn write_bgzf(path: &Path, decompressed: &[u8]) {
+        let mut writer = bgzf::io::Writer::new(std::fs::File::create(path).unwrap());
+        writer.write_all(decompressed).unwrap();
+        writer.try_finish().unwrap();
+    }
+
+    /// The decompressed bytes of a `.tbi` up to its first reference's bin
+    /// count: the header of `spans.tsv.gz.tbi` (one reference, `21`), then
+    /// `n_bin`.
+    fn tbi_head(n_bin: i32) -> Vec<u8> {
+        let mut bytes = b"TBI\x01".to_vec();
+        for value in [1i32, 0, 1, 2, 3, i32::from(b'#'), 0, 3] {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        bytes.extend_from_slice(b"21\0");
+        bytes.extend_from_slice(&n_bin.to_le_bytes());
+        bytes
+    }
+
+    /// An index whose bin, interval, chunk or reference count claims more
+    /// entries than the bytes after it can hold is refused when the file is
+    /// opened, naming the count, before the index reader allocates for it; so
+    /// is a negative count, a name block running past the end, a `.csi` with
+    /// the same shape, and an index decompressing past the size cap. An index
+    /// whose counts fit opens and answers queries.
+    #[test]
+    fn index_counts_are_checked_against_its_size() {
+        let dir = tempfile::tempdir().unwrap();
+        let data = fixture_with_index(dir.path(), "spans.tsv.gz", "tbi");
+        let tbi_path = dir.path().join("spans.tsv.gz.tbi");
+        let refused = |index_path: &Path, decompressed: &[u8], why: &str| {
+            write_bgzf(index_path, decompressed);
+            let error = TabixAnnotator::open(config(data.clone(), Some(2)))
+                .err()
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| panic!("an index with {why} is refused"));
+            assert_eq!(
+                error,
+                format!(
+                    "plugin initialization failed: tabix index {} is malformed: {why}",
+                    index_path.display()
+                )
+            );
+        };
+        let mut many_bins = tbi_head(i32::MAX);
+        many_bins.extend_from_slice(&[0; 4]);
+        refused(
+            &tbi_path,
+            &many_bins,
+            "n_bin is 2147483647, more entries than the 4 bytes left in the index can hold",
+        );
+        let mut negative_bins = tbi_head(-1);
+        negative_bins.extend_from_slice(&[0; 4]);
+        refused(&tbi_path, &negative_bins, "n_bin is -1");
+        let mut many_chunks = tbi_head(1);
+        many_chunks.extend_from_slice(&4681u32.to_le_bytes());
+        many_chunks.extend_from_slice(&i32::MAX.to_le_bytes());
+        refused(
+            &tbi_path,
+            &many_chunks,
+            "n_chunk is 2147483647, more entries than the 0 bytes left in the index can hold",
+        );
+        let mut many_intervals = tbi_head(0);
+        many_intervals.extend_from_slice(&1_000_000i32.to_le_bytes());
+        many_intervals.extend_from_slice(&[0; 8]);
+        refused(
+            &tbi_path,
+            &many_intervals,
+            "n_intv is 1000000, more entries than the 8 bytes left in the index can hold",
+        );
+        let mut many_references = tbi_head(0);
+        many_references[4..8].copy_from_slice(&i32::MAX.to_le_bytes());
+        refused(
+            &tbi_path,
+            &many_references,
+            "n_ref is 2147483647, more entries than the 4 bytes left in the index can hold",
+        );
+        let mut long_names = tbi_head(0);
+        long_names[32..36].copy_from_slice(&1_000i32.to_le_bytes());
+        refused(&tbi_path, &long_names, "the index ends inside its names");
+        refused(
+            &tbi_path,
+            &tbi_head(0)[..39],
+            "n_ref is 1, more entries than the 0 bytes left in the index can hold",
+        );
+        let csi_path = dir.path().join("spans.tsv.gz.csi");
+        let mut csi = b"CSI\x01".to_vec();
+        for value in [14i32, 5, 0, 1, i32::MAX] {
+            csi.extend_from_slice(&value.to_le_bytes());
+        }
+        refused(
+            &csi_path,
+            &csi,
+            "n_bin is 2147483647, more entries than the 0 bytes left in the index can hold",
+        );
+        std::fs::remove_file(&csi_path).unwrap();
+        {
+            let mut writer = bgzf::io::Writer::new(std::fs::File::create(&tbi_path).unwrap());
+            let block = vec![0u8; 1 << 16];
+            for _ in 0..(MAX_INDEX_BYTES >> 16) + 1 {
+                writer.write_all(&block).unwrap();
+            }
+            writer.try_finish().unwrap();
+        }
+        let error = TabixAnnotator::open(config(data.clone(), Some(2)))
+            .err()
+            .map(|e| e.to_string())
+            .expect("an oversize index is refused");
+        assert_eq!(
+            error,
+            format!(
+                "plugin initialization failed: tabix index {} is malformed: it decompresses to \
+                 more than {MAX_INDEX_BYTES} bytes",
+                tbi_path.display()
+            )
+        );
+        std::fs::copy(fixture("spans.tsv.gz.tbi"), &tbi_path).unwrap();
+        let records = open(data, Some(2)).query("21", 100, 100).unwrap();
+        assert!(!records.is_empty());
+    }
+
+    /// A data line longer than the cap is refused where it is met: by the
+    /// header read when the file is opened, and by a query naming the line's
+    /// block offset when it sits past the header.
+    #[test]
+    fn data_line_past_the_cap_is_refused() {
+        use noodles::csi::binning_index::index::header;
+        use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+        use noodles::csi::binning_index::index::reference_sequence::index::LinearIndex;
+        use noodles::csi::binning_index::index::reference_sequence::Bin;
+        use noodles::csi::binning_index::index::ReferenceSequence;
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path().join("long.tsv.gz");
+        // The header read when the file is opened stops at the first data line,
+        // so the long line is the second one, 35 bytes in.
+        let mut body = b"#chrom\tstart\tend\tname\n21\t50\t50\tp50\n21\t100\t100\tp100\t".to_vec();
+        body.extend(std::iter::repeat_n(b'x', MAX_LINE_BYTES));
+        body.push(b'\n');
+        write_bgzf(&data, &body);
+        let position = |offset: u64| {
+            bgzf::VirtualPosition::try_from((0u64, u16::try_from(offset).unwrap())).unwrap()
+        };
+        let chunk = Chunk::new(position(35), position(60));
+        let mut bins = indexmap::IndexMap::new();
+        bins.insert(4681, Bin::new(vec![chunk]));
+        let reference = ReferenceSequence::<LinearIndex>::new(bins, vec![chunk.start()], None);
+        let header = header::Builder::default()
+            .set_reference_sequence_name_index(0)
+            .set_start_position_index(1)
+            .set_end_position_index(Some(2))
+            .set_reference_sequence_names(["21".as_bytes().into()].into_iter().collect())
+            .build();
+        let index = tabix::Index::builder()
+            .set_header(header)
+            .set_reference_sequences(vec![reference])
+            .build();
+        tabix::fs::write(format!("{}.tbi", data.display()), &index).unwrap();
+        let error = open(data.clone(), Some(2))
+            .query("21", 100, 100)
+            .err()
+            .map(|e| e.to_string())
+            .expect("the long line is refused");
+        assert_eq!(
+            error,
+            format!(
+                "plugin execution failed: {}: the line at block offset 0 byte 35 is longer than \
+                 the {MAX_LINE_BYTES}-byte limit for one line",
+                data.display()
+            )
+        );
+
+        let mut header_only = Vec::new();
+        header_only.extend(std::iter::repeat_n(b'#', MAX_LINE_BYTES + 1));
+        header_only.push(b'\n');
+        write_bgzf(&data, &header_only);
+        let error = TabixAnnotator::open(config(data.clone(), Some(2)))
+            .err()
+            .map(|e| e.to_string())
+            .expect("the long header line is refused");
+        assert_eq!(
+            error,
+            format!(
+                "plugin initialization failed: {}: line 1 is longer than the \
+                 {MAX_LINE_BYTES}-byte limit for one line",
+                data.display()
+            )
+        );
     }
 
     /// The one-pass sweep over a batch's windows answers exactly as the

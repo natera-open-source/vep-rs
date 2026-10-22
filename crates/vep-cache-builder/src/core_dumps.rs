@@ -28,12 +28,78 @@
 //! `prefetch_translation_ids` and `prefetch_translation_data`.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use flate2::read::GzDecoder;
 use tracing::{info, warn};
+
+/// The longest dump line read, 16 MiB. A row's widest values are an xref
+/// description and a protein feature's alignment string, each well under a
+/// megabyte, so the cap refuses a file with no line end in it long before the
+/// row buffer grows to its size.
+const MAX_LINE_BYTES: usize = 16 << 20;
+
+/// The lines of a text file, each without its `\n`, read one at a time with
+/// the length of a line capped: a line past `cap` bytes is an error naming
+/// `display` and the line number, as is a read failure, and either ends the
+/// iteration.
+pub(crate) struct BoundedLines<R> {
+    reader: R,
+    cap: usize,
+    display: String,
+    line_number: u64,
+    done: bool,
+}
+
+impl<R: BufRead> BoundedLines<R> {
+    pub(crate) fn new(reader: R, cap: usize, display: String) -> Self {
+        Self {
+            reader,
+            cap,
+            display,
+            line_number: 0,
+            done: false,
+        }
+    }
+}
+
+impl<R: BufRead> Iterator for BoundedLines<R> {
+    type Item = Result<Vec<u8>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.done {
+            return None;
+        }
+        // The cap plus the line end: a line of exactly the cap is read whole.
+        let limit = self.cap as u64 + 1;
+        let mut line = Vec::new();
+        self.line_number += 1;
+        let item = match (&mut self.reader).take(limit).read_until(b'\n', &mut line) {
+            Ok(0) => None,
+            Ok(read) if read as u64 == limit && line.last() != Some(&b'\n') => {
+                Some(Err(anyhow::anyhow!(
+                    "{} line {} is longer than the {}-byte limit for one line",
+                    self.display,
+                    self.line_number,
+                    self.cap
+                )))
+            }
+            Ok(_) => {
+                if line.last() == Some(&b'\n') {
+                    line.pop();
+                }
+                Some(Ok(line))
+            }
+            Err(e) => Some(Err(
+                anyhow::Error::from(e).context(format!("Failed to read {}", self.display))
+            )),
+        };
+        self.done = !matches!(item, Some(Ok(_)));
+        item
+    }
+}
 
 /// The core tables `load` reads, plus `seq_region_synonym`, which the
 /// chromosome synonyms file is written from (`info::write_chr_synonyms`).
@@ -666,10 +732,9 @@ pub fn read_table(
     } else {
         Box::new(BufReader::with_capacity(1 << 20, file))
     };
-    let display = path.display().to_string();
-    Ok(reader.split(b'\n').enumerate().map(move |(index, line)| {
-        let line = line.with_context(|| format!("Failed to read {display}"))?;
-        let fields = split_escaped(&String::from_utf8_lossy(&line));
+    let lines = BoundedLines::new(reader, MAX_LINE_BYTES, path.display().to_string());
+    Ok(lines.enumerate().map(move |(index, line)| {
+        let fields = split_escaped(&String::from_utf8_lossy(&line?));
         if fields.len() < columns {
             bail!(
                 "{table} line {} has {} columns, the schema has {columns}",
@@ -1343,6 +1408,45 @@ mod tests {
         assert_eq!(
             versions.keys().map(String::as_str).collect::<Vec<_>>(),
             ["assembly", "gencode", "genebuild"]
+        );
+    }
+
+    /// A dump whose third line runs past the cap stops the read at that line,
+    /// naming the file and the line; the rows before it are read, and a cap
+    /// read at a small limit shows a line of exactly the cap passes.
+    #[test]
+    fn dump_line_past_the_cap_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut text = b"1\ta\n2\tb\n3\t".to_vec();
+        text.extend(std::iter::repeat_n(b'x', MAX_LINE_BYTES));
+        text.extend_from_slice(b"\n4\td\n");
+        let path = dir.path().join("meta.txt");
+        std::fs::write(&path, text).unwrap();
+        let mut rows = read_table(dir.path(), "meta", 2).unwrap();
+        assert_eq!(rows.next().unwrap().unwrap().field(1), "a");
+        assert_eq!(rows.next().unwrap().unwrap().field(1), "b");
+        let Some(Err(error)) = rows.next() else {
+            panic!("line 3 is refused");
+        };
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "{} line 3 is longer than the {MAX_LINE_BYTES}-byte limit for one line",
+                path.display()
+            )
+        );
+        assert!(rows.next().is_none(), "the refused line ends the read");
+        let lines: Vec<Vec<u8>> = BoundedLines::new(&b"ab\ncd"[..], 2, "x".into())
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(lines, [b"ab".to_vec(), b"cd".to_vec()]);
+        let refused = BoundedLines::new(&b"abc\n"[..], 2, "x".into())
+            .next()
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(
+            refused.to_string(),
+            "x line 1 is longer than the 2-byte limit for one line"
         );
     }
 

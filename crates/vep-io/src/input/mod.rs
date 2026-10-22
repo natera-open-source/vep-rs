@@ -4,9 +4,10 @@
 //! Input parsers for variant formats, the detection of a format from the
 //! first data line ([`detect`]), and what the parsers share: the field
 //! delimiter of a column-based input ([`Delimiter`]), the run's reference
-//! sequence, chromosome synonyms and chromosome names ([`ParserContext`]), and
-//! the minimisation Ensembl VEP applies to every parsed record
-//! ([`minimise_alleles`]).
+//! sequence, chromosome synonyms and chromosome names ([`ParserContext`]), the
+//! minimisation Ensembl VEP applies to every parsed record
+//! ([`minimise_alleles`]), and the bound on one line's length every reader of
+//! an input file keeps ([`read_until_bounded`]).
 
 pub mod detect;
 pub mod ensembl;
@@ -16,6 +17,8 @@ pub mod region;
 pub mod spdi;
 
 use std::collections::HashSet;
+use std::fmt;
+use std::io::{self, BufRead, Read};
 use std::sync::Arc;
 
 use vep_core::synonyms::ChromosomeSynonyms;
@@ -23,6 +26,64 @@ use vep_core::transcript::Transcript;
 use vep_core::variant::{classify_variant, InputVariant};
 
 use crate::error::IoError;
+
+/// The longest line a reader of a variant input accepts, 64 MiB. A record of
+/// a few megabytes is legitimate (a long INFO column, thousands of sample
+/// columns, a structural variant written out base by base) and sits far below
+/// the cap; a file with no line end in it is refused at the cap instead of
+/// being read whole into one line buffer.
+pub const MAX_LINE_BYTES: usize = 64 << 20;
+
+/// The error a bounded line read returns for a line past [`MAX_LINE_BYTES`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LineTooLong {
+    /// The line's number in the input, counted from 1.
+    pub line: u64,
+}
+
+impl fmt::Display for LineTooLong {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "line {} is longer than the {MAX_LINE_BYTES}-byte limit for one line of input",
+            self.line
+        )
+    }
+}
+
+impl std::error::Error for LineTooLong {}
+
+impl LineTooLong {
+    /// `self` as the `InvalidData` I/O error a reader returns.
+    pub fn into_io_error(self) -> io::Error {
+        io::Error::new(io::ErrorKind::InvalidData, self)
+    }
+
+    /// The [`LineTooLong`] an I/O error carries, when it carries one.
+    pub fn from_io_error(error: &io::Error) -> Option<&LineTooLong> {
+        error.get_ref()?.downcast_ref()
+    }
+}
+
+/// `BufRead::read_until(delimiter, buf)` with the line's length capped at
+/// [`MAX_LINE_BYTES`]: appends line `line_number` through its delimiter, or to
+/// the end of the input, and returns the bytes appended (0 at the end of the
+/// input). A line still open past the cap is a [`LineTooLong`] I/O error, the
+/// reader left inside the line and the bytes read so far left in `buf`.
+pub fn read_until_bounded<R: BufRead + ?Sized>(
+    reader: &mut R,
+    delimiter: u8,
+    buf: &mut Vec<u8>,
+    line_number: u64,
+) -> io::Result<usize> {
+    // The cap plus the delimiter: a line of exactly the cap is read whole.
+    let limit = MAX_LINE_BYTES as u64 + 1;
+    let read = reader.take(limit).read_until(delimiter, buf)?;
+    if read as u64 == limit && buf.last() != Some(&delimiter) {
+        return Err(LineTooLong { line: line_number }.into_io_error());
+    }
+    Ok(read)
+}
 
 /// Trait for parsing input variants from various formats.
 pub trait InputParser: Send {
@@ -567,6 +628,60 @@ mod tests {
                 "{delimiter:?}"
             );
         }
+    }
+
+    /// A line of exactly the cap is read whole with its line end; one byte
+    /// longer is the `LineTooLong` error naming the line, with the reader left
+    /// inside the line, and the lines before and after it read as usual. The
+    /// last line of an input needs no line end.
+    #[test]
+    fn read_until_bounded_refuses_a_line_past_the_cap() {
+        let mut input = b"first\n".to_vec();
+        input.extend(std::iter::repeat_n(b'a', MAX_LINE_BYTES));
+        input.push(b'\n');
+        input.extend(std::iter::repeat_n(b'b', MAX_LINE_BYTES + 1));
+        input.extend_from_slice(b"\nlast");
+        let mut reader = std::io::Cursor::new(input);
+        let mut buf = Vec::new();
+        assert_eq!(
+            read_until_bounded(&mut reader, b'\n', &mut buf, 1).unwrap(),
+            6
+        );
+        assert_eq!(buf, b"first\n");
+        buf.clear();
+        assert_eq!(
+            read_until_bounded(&mut reader, b'\n', &mut buf, 2).unwrap(),
+            MAX_LINE_BYTES + 1
+        );
+        assert_eq!(buf.len(), MAX_LINE_BYTES + 1);
+        buf.clear();
+        let error = read_until_bounded(&mut reader, b'\n', &mut buf, 3).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert_eq!(
+            LineTooLong::from_io_error(&error),
+            Some(&LineTooLong { line: 3 })
+        );
+        assert_eq!(
+            error.to_string(),
+            format!("line 3 is longer than the {MAX_LINE_BYTES}-byte limit for one line of input")
+        );
+        assert_eq!(buf.len(), MAX_LINE_BYTES + 1);
+        // The rest of the refused line, then the last line without a line end.
+        buf.clear();
+        assert_eq!(
+            read_until_bounded(&mut reader, b'\n', &mut buf, 3).unwrap(),
+            1
+        );
+        buf.clear();
+        assert_eq!(
+            read_until_bounded(&mut reader, b'\n', &mut buf, 4).unwrap(),
+            4
+        );
+        assert_eq!(buf, b"last");
+        assert_eq!(
+            read_until_bounded(&mut reader, b'\n', &mut buf, 5).unwrap(),
+            0
+        );
     }
 
     /// `OutputFactory/JSON.pm:172` joins with a single space under any

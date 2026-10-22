@@ -41,7 +41,7 @@ use vep_core::coordinate::Strand;
 use vep_core::variant::{so_variation_class, InputVariant};
 
 use super::ensembl::sequence_variants;
-use super::{empty_lines_warning, is_perl_space, InputParser};
+use super::{empty_lines_warning, is_perl_space, read_until_bounded, InputParser, LineTooLong};
 use crate::error::IoError;
 
 /// One genomic mapping of a known variant, as a variation file records it:
@@ -102,7 +102,15 @@ impl IdParser {
         let mut line = Vec::new();
         loop {
             line.clear();
-            if reader.read_until(b'\n', &mut line)? == 0 {
+            // A line past the cap is the list's refusal, with the cap's own
+            // sentence as the whole message; any other failure stays an I/O error.
+            let read = read_until_bounded(&mut reader, b'\n', &mut line, line_number + 1).map_err(
+                |error| match LineTooLong::from_io_error(&error) {
+                    Some(too_long) => IoError::Unsupported(too_long.to_string()),
+                    None => IoError::Io(error),
+                },
+            )?;
+            if read == 0 {
                 break;
             }
             line_number += 1;
@@ -283,6 +291,7 @@ impl InputParser for IdParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::input::MAX_LINE_BYTES;
     use std::io::Cursor;
 
     fn mapping(chr: &str, start: u64, end: u64, alleles: &str) -> NameMapping {
@@ -336,6 +345,21 @@ mod tests {
         assert_eq!(variants[1].allele_index, 1);
         assert_eq!(first.strand, Strand::Forward);
         assert!(parser.take_warnings().is_empty());
+    }
+
+    /// A list whose second line runs past the cap is refused as a whole, with
+    /// the cap's sentence naming line 2 as the message, once.
+    #[test]
+    fn list_line_past_the_cap_is_refused() {
+        let mut list = b"rs1\n".to_vec();
+        list.extend(std::iter::repeat_n(b'x', MAX_LINE_BYTES + 1));
+        list.push(b'\n');
+        let error = IdParser::read(Cursor::new(list)).err().expect("refused");
+        assert_eq!(
+            error.to_string(),
+            format!("line 2 is longer than the {MAX_LINE_BYTES}-byte limit for one line of input")
+        );
+        assert!(matches!(error, IoError::Unsupported(_)));
     }
 
     /// A name with two mappings yields two records (Parser/ID.pm:185: one

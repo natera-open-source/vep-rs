@@ -64,9 +64,10 @@ impl TabOutputFormatter {
 /// through [`fields::write_field_value`], `-` where the configuration does not
 /// produce the column or the row has no value (Tab.pm:128 prints a defined empty
 /// list as an empty cell), rows in the order [`fields::record_rows_into`] leaves
-/// in `rows`. An empty `--fields` list writes nothing: VEP's output loop stops at
-/// the first empty line, so the run yields the header and no data line
-/// (Runner.pm `run`, Tab.pm `output_hash_to_line`).
+/// in `rows`, and every value's control bytes percent-encoded
+/// ([`fields::percent_encode_control_bytes`]). An empty `--fields` list writes
+/// nothing: VEP's output loop stops at the first empty line, so the run yields
+/// the header and no data line (Runner.pm `run`, Tab.pm `output_hash_to_line`).
 pub fn render_tab_record<'a>(
     out: &mut Vec<u8>,
     record: &[&'a InputVariant],
@@ -93,6 +94,7 @@ pub fn render_tab_record<'a>(
             {
                 out.push(b'-');
             }
+            fields::percent_encode_control_bytes(out, start);
         }
         out.push(b'\n');
     }
@@ -174,6 +176,24 @@ mod tests {
             lines,
             vec!["rs1\t21:100\tG\tENSG1\tENST1\tTranscript\tupstream_gene_variant\t-\t-\t-\t-\t-\t-\tMODIFIER\t42\t-1\tcds_end_NF"]
         );
+    }
+
+    /// An identifier carrying a NUL, a tab and a line end is written with each
+    /// control byte percent-encoded, so the row keeps its columns and its one
+    /// line; so is a chromosome name, which reaches Location.
+    #[test]
+    fn control_bytes_in_a_value_are_percent_encoded() {
+        let f = TabOutputFormatter::new(FieldOptions::default(), vec![], None, vec![], true);
+        let mut v = variant();
+        v.id = Some("rs\x001\tx\ny\x7F".into());
+        v.chr = "2\x011".into();
+        v.original_chr = v.chr.clone();
+        let lines = f.format_record(&[&v]).unwrap();
+        assert_eq!(lines.len(), 1);
+        let columns: Vec<&str> = lines[0].split('\t').collect();
+        assert_eq!(columns.len(), f.columns().len());
+        assert_eq!(columns[0], "rs%001%09x%0Ay%7F");
+        assert_eq!(columns[1], "2%011:100");
     }
 
     /// Under `--nearest` the NEAREST column prints the joined list, and a record

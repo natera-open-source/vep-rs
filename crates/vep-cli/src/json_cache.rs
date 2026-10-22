@@ -1124,6 +1124,10 @@ pub fn load_transcripts_for_chr(chr: &str, shards: &[PathBuf]) -> anyhow::Result
                 .into_iter()
                 .map(|jt| convert_transcript(jt, chr))
                 .collect();
+            for transcript in &transcripts {
+                check_mapper_bounds(transcript)
+                    .map_err(|message| CliError::new("cache", message))?;
+            }
             Ok(transcripts)
         })
         .collect();
@@ -1149,6 +1153,68 @@ pub fn load_transcripts_for_chr(chr: &str, shards: &[PathBuf]) -> anyhow::Result
     }
     assign_id_ranks(&mut out);
     Ok(out)
+}
+
+/// Refuses a coding transcript whose mapper places the coding sequence where
+/// the transcript's own span cannot hold it. A cache without UTR strings has
+/// each one padded with `N` to the mapper's `cdna_coding_start - 1` and to the
+/// cDNA length less `cdna_coding_end`, so each padding is bounded here by the
+/// transcript's genomic span plus the bases its RNA edits insert, the most
+/// bases its cDNA can hold, before any record is annotated against it.
+fn check_mapper_bounds(transcript: &Transcript) -> Result<(), String> {
+    let Some(vefc) = transcript.vefc.as_ref() else {
+        return Ok(());
+    };
+    // No padding is built for a transcript without a coding sequence.
+    if vefc.translateable_seq.as_deref().is_none_or(str::is_empty) {
+        return Ok(());
+    }
+    let Some(mapper) = vefc.mapper.as_ref() else {
+        return Ok(());
+    };
+    // An `_rna_edit` attribute (`<start> <end> <bases>` in cDNA coordinates)
+    // that inserts bases lengthens the cDNA the mapper measures past the
+    // exons' span; an insertion's end lies before its start and replaces
+    // nothing.
+    let inserted_bases: u64 = transcript
+        .attributes
+        .iter()
+        .filter(|attribute| attribute.code == "_rna_edit")
+        .filter_map(|attribute| {
+            let mut fields = attribute.value.split_whitespace();
+            let start: u64 = fields.next()?.parse().ok()?;
+            let end: u64 = fields.next()?.parse().ok()?;
+            let bases = fields.next().map_or(0, |bases| bases.len() as u64);
+            let replaced = if end >= start {
+                (end - start).saturating_add(1)
+            } else {
+                0
+            };
+            Some(bases.saturating_sub(replaced))
+        })
+        .sum();
+    let span = transcript
+        .end
+        .saturating_sub(transcript.start)
+        .saturating_add(1)
+        .saturating_add(inserted_bases);
+    let cdna_len = mapper
+        .exon_coord_mapper
+        .pairs
+        .iter()
+        .map(|p| p.from_end)
+        .max()
+        .unwrap_or(0);
+    let five_prime = mapper.cdna_coding_start.saturating_sub(1);
+    let three_prime = cdna_len.saturating_sub(mapper.cdna_coding_end);
+    if five_prime > span || three_prime > span {
+        return Err(format!(
+            "transcript {}: the mapper's coding start {} and end {} on a cDNA of {cdna_len} \
+             bases leave a UTR longer than the transcript's {span}-base span",
+            transcript.stable_id, mapper.cdna_coding_start, mapper.cdna_coding_end
+        ));
+    }
+    Ok(())
 }
 
 /// Sets every transcript's `id_rank` to its stable id's position in the byte
@@ -1509,6 +1575,82 @@ mod tests {
         assert!(msg.contains("1-1000000.json"), "{msg}");
         assert!(msg.contains("EOF"), "{msg}");
         assert!(!msg.contains("expected a sequence"), "{msg}");
+    }
+
+    /// A shard whose mapper places the coding start, or the coding end, a UTR
+    /// longer than the transcript's span away is refused under the `cache`
+    /// component, naming the transcript, when its chromosome loads; the
+    /// 30-base transcript with its coding sequence over the whole span loads,
+    /// as do a non-coding transcript whose mapper runs past its span (no
+    /// padding is built for it) and a coding one whose cDNA runs past its span
+    /// by the bases an RNA edit inserts; an edit whose replaced range fills the
+    /// cDNA numbering inserts nothing and is read without a failure.
+    #[test]
+    fn mapper_utr_longer_than_the_transcript_span_is_refused() {
+        let load = |replacements: &[(&str, &str)]| {
+            let mut json = coding_transcript_json("");
+            for (from, to) in replacements {
+                assert!(json.contains(from), "{from}");
+                json = json.replace(from, to);
+            }
+            let dir = cache_with_shards("vep_jc_mapper_", &[("21", &format!("[{json}]"))]);
+            let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
+            load_transcripts_for_chr("21", &shards["21"]).map(|txs| txs.len())
+        };
+        // The fixture's one mapper pair ends at cDNA 30, so its `from_end` is
+        // the cDNA length.
+        let cdna_far_past_span = (r#""from_end":30,"#, r#""from_end":4000000000,"#);
+        let cdna_five_bases_past_span = (r#""from_end":30,"#, r#""from_end":65,"#);
+        assert_eq!(load(&[]).unwrap(), 1);
+
+        let far_start = load(&[(
+            r#""cdna_coding_start":1,"#,
+            &format!(r#""cdna_coding_start":{},"#, u64::MAX),
+        )])
+        .unwrap_err();
+        assert_eq!(
+            CliError::from_run(&far_start),
+            format!(
+                "ERROR: [cache] transcript ENST1: the mapper's coding start {} and end 30 on a \
+                 cDNA of 30 bases leave a UTR longer than the transcript's 30-base span",
+                u64::MAX
+            )
+        );
+        let far_end = load(&[cdna_far_past_span]).unwrap_err();
+        assert_eq!(
+            CliError::from_run(&far_end),
+            "ERROR: [cache] transcript ENST1: the mapper's coding start 1 and end 30 on a cDNA \
+             of 4000000000 bases leave a UTR longer than the transcript's 30-base span"
+        );
+
+        // A five-base RNA edit insertion lets the cDNA run five bases past the span.
+        assert!(load(&[cdna_five_bases_past_span]).is_err());
+        let inserting_edit = (
+            r#""stable_id":"ENST1","#,
+            r#""stable_id":"ENST1","attributes":[{"code":"_rna_edit","value":"5 4 AAAAA"}],"#,
+        );
+        assert_eq!(
+            load(&[cdna_five_bases_past_span, inserting_edit]).unwrap(),
+            1
+        );
+        // An edit replacing cDNA 0 through `u64::MAX` with one base inserts
+        // nothing: the transcript loads with its cDNA inside the span and is
+        // refused, not abandoned, with the cDNA five bases past it.
+        let whole_range = format!(
+            r#""stable_id":"ENST1","attributes":[{{"code":"_rna_edit","value":"0 {} A"}}],"#,
+            u64::MAX
+        );
+        let whole_range_edit = (r#""stable_id":"ENST1","#, whole_range.as_str());
+        assert_eq!(load(&[whole_range_edit]).unwrap(), 1);
+        assert!(load(&[cdna_five_bases_past_span, whole_range_edit]).is_err());
+
+        // The mapper the far-end case refused loads on a transcript without a
+        // coding sequence: no padding is built for it, so the bound does not apply.
+        let non_coding = (
+            r#""translateable_seq":"ATGGCTGCTGCTGCTGCTGCTGCTGCTTGA","#,
+            r#""translateable_seq":"","#,
+        );
+        assert_eq!(load(&[cdna_far_past_span, non_coding]).unwrap(), 1);
     }
 
     /// The numeric helpers accept a JSON number, a float, a string holding a

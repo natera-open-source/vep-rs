@@ -21,7 +21,7 @@ use std::borrow::Cow;
 use std::fmt;
 use std::io::{self, BufRead};
 
-use super::Delimiter;
+use super::{read_until_bounded, Delimiter};
 
 /// The input formats Ensembl VEP's `%FORMAT_MAP` names (Parser.pm:88-96), in
 /// the lower-case spelling `--format` takes.
@@ -91,11 +91,13 @@ pub struct Detection {
 pub fn detect_format<R: BufRead>(reader: &mut R) -> io::Result<Detection> {
     let mut consumed = Vec::new();
     let mut line = Vec::new();
+    let mut line_number = 0;
     // Kept across lines, as Perl's `$delimiter` is (Parser.pm:387).
     let mut delimiter = Delimiter::Tab;
     loop {
         line.clear();
-        if reader.read_until(b'\n', &mut line)? == 0 {
+        line_number += 1;
+        if read_until_bounded(reader, b'\n', &mut line, line_number)? == 0 {
             return Ok(Detection {
                 format: None,
                 consumed,
