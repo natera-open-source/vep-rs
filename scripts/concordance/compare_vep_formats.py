@@ -10,7 +10,10 @@ Three modes, one JSON report with a ``verdict`` each, exit 0 on ``green`` and 1 
     comparable entry; every field of every entry is compared verbatim. A Parquet actual is
     read back through ``scripts/adapters/parquet_to_vep_tab.py`` and compared with a tab
     expected as a multiset. ``--input`` (the input VCF) keys the VCF and JSON entries by
-    input record, so a record one side skipped keeps every later record aligned.
+    input record (a line's CHROM, POS, ID, REF and ALT, which both engines write back
+    unchanged; a JSON object's ``input`` names its record the same way, since Ensembl VEP
+    writes a structural variant's empty or ``0`` QUAL, FILTER or INFO back as ``.``), so a
+    record one side skipped keeps every later record aligned.
 
 ``--self-parity --default F --tab F --vcf F --json F [--parquet P]``
     One engine's formats against each other, the default format as the pivot: every record,
@@ -76,8 +79,11 @@ Masks, floors and field pairs (comparison mode):
 
 A comparison is green when no expected entry is missing, no actual entry is unexpected
 (the two one-sided key counts), every compared field agrees after masks and field pairs,
-the shared entries come in the same order (not for Parquet, which is sorted by variant),
-no documented divergence is stale and every floor is met.
+the shared entries come in the same order (not for Parquet, which is sorted by variant, and
+not under ``--unordered``, for a run whose reference rows Ensembl VEP emits in hash order:
+the allele buckets of ``--pick_allele`` and ``--pick_allele_gene`` and the gene buckets of
+``--per_gene``, ``OutputFactory.pm:593``, ``:605`` and ``:855``; a golden corpus marks such
+a flag set ``unordered``), no documented divergence is stale and every floor is met.
 
 The parsers follow the comparators of ``crates/vep-cli/tests/common/mod.rs``. The output
 grammar they read is Ensembl VEP's at release/116.2: ``OutputFactory/VEP_output.pm:99-136``
@@ -574,9 +580,12 @@ def json_objects(text: str) -> list[tuple[int, dict]]:
 
 
 def json_record_label(index: InputIndex, n: int, obj: dict) -> tuple[int | None, str]:
-    """The input record ordinal of a JSON object and its label."""
+    """The input record ordinal of a JSON object and its label. An object names its record
+    by the first five columns of its ``input``, as a VCF line does: Ensembl VEP stores a
+    structural variant's line with an empty or ``0`` QUAL, FILTER or INFO written as ``.``
+    (``Parser/VCF.pm:464-466``), so the whole ``input`` may differ from the line as read."""
     inp = obj.get("input")
-    record = index.record(inp if isinstance(inp, str) else "")
+    record = index.record(vcf_line_key(inp) if isinstance(inp, str) else "")
     return record, (f"rec{record}" if record is not None else f"obj{n}")
 
 
@@ -586,7 +595,7 @@ def parse_json(text: str, inputs: list[str]) -> list[Entry]:
     element of each consequence list, keyed by the record, ``variant_allele``, the feature id
     and the list's feature type. An object whose ``input`` matches no record is keyed by its
     output ordinal."""
-    index = InputIndex(inputs, lambda s: s)
+    index = InputIndex(inputs, vcf_line_key)
     entries: list[Entry] = []
     set_aside = {name for name, _ in JSON_CONSEQUENCE_LISTS} | {"input", JSON_IDENTITY_KEY}
     for n, obj in json_objects(text):
@@ -1393,8 +1402,11 @@ def compare_files(
     field_pairs: dict[str, set[tuple[str, str]]],
     examples: int,
     nearest_sites: NearestSites | None = None,
+    unordered: bool = False,
 ) -> dict:
-    """The comparison-mode report for one format."""
+    """The comparison-mode report for one format. ``unordered`` compares the shared entries
+    without their order (a run whose reference rows Ensembl VEP emits in hash order); a
+    Parquet actual is compared without order in any case."""
     documented.masks |= masks
     expected_format = "tab" if fmt == "parquet" else fmt
     expected = parse_format(expected_format, expected_path, inputs)
@@ -1411,7 +1423,7 @@ def compare_files(
         documented,
         floors=floors,
         field_pairs=field_pairs,
-        check_order=fmt != "parquet",
+        check_order=fmt != "parquet" and not unordered,
         examples=examples,
         nearest_sites=nearest_sites,
         order_only=order_only_fields(fmt) if ORDER_ONLY in masks else None,
@@ -1431,6 +1443,7 @@ def compare_files(
             },
             "field_pairs": {name: sorted(pairs) for name, pairs in sorted(field_pairs.items())},
             "nearest_sites": None if nearest_sites is None else len(nearest_sites.sites),
+            "unordered": unordered,
         }
     )
     return report
@@ -1592,7 +1605,7 @@ class SelfParity:
         objects = json_objects(json_text)
         if inputs is None:
             inputs = [obj["input"] for _, obj in objects if isinstance(obj.get("input"), str)]
-        index = InputIndex(inputs, lambda s: s)
+        index = InputIndex(inputs, vcf_line_key)
         self.records: dict[str, dict] = {}
         self.objects_by_name: dict[tuple[str, str], list[dict]] = defaultdict(list)
         self.parts: dict[str, tuple[str, str, str]] = {}
@@ -2145,6 +2158,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--parquet", type=Path, help="self-parity: the Parquet output (file or directory)")
     ap.add_argument("--expected-skipped", type=Path, help="warnings: the expected --skipped_variants_file output")
     ap.add_argument("--actual-skipped", type=Path, help="warnings: the actual --skipped_variants_file output")
+    ap.add_argument(
+        "--unordered",
+        action="store_true",
+        help="compare the shared entries without their order (a run whose reference rows Ensembl VEP "
+        "emits in hash order: --pick_allele, --pick_allele_gene, --per_gene)",
+    )
     ap.add_argument("--report", type=Path, help="where the JSON report is written")
     ap.add_argument("--examples", type=int, default=EXAMPLES_PER_GROUP, help="examples kept per difference group")
     return ap
@@ -2194,6 +2213,7 @@ def run(args: argparse.Namespace) -> dict:
         field_pairs,
         args.examples,
         nearest_sites,
+        unordered=args.unordered,
     )
 
 

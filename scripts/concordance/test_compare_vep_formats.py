@@ -15,7 +15,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import compare_vep_formats as cvf  # noqa: E402
 
-CORPUS = HERE.parent.parent / "tests" / "golden" / "116" / "GRCh38-release116"
+GOLDEN = HERE.parent.parent / "tests" / "golden" / "116"
+CORPUS = GOLDEN / "GRCh38-release116"
 EXPECTED = CORPUS / "expected"
 RECORDS = 36
 ROWS = 977
@@ -152,6 +153,54 @@ def test_parse_json_sets_aside_the_engine_identity_key(texts, inputs):
     assert [e.key for e in skipped] == [f"obj{RECORDS}|record"]
     assert skipped[0].fields == {}
     assert cvf.compare_entries(reference, annotated, no_documented())["verdict"] == "green"
+
+
+def test_json_objects_name_their_record_by_the_first_five_columns(tmp_path):
+    """Parser/VCF.pm:464 stores a QUAL of ``0`` as ``.``, so the ``input`` of the committed
+    GRCh38-vcf-edge-cases JSON object for ``sv_qual0`` (record 40, QUAL ``0``) is not the
+    input line. The object still keys to its record, as a VCF line does, so a candidate
+    output carrying the input-only object of the reference-skipped record 26 (the manifest's
+    documented ``reference_skipped_record`` key) before it compares green under the class
+    and shifts no later object onto its ordinal."""
+    corpus = GOLDEN / "GRCh38-vcf-edge-cases"
+    inputs = cvf.input_records(corpus / "variants.vcf")
+    manifest = json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))
+    text = cvf.read_text(corpus / "expected" / "json.jsonl.gz")
+    objects = cvf.json_objects(text)
+    assert inputs[40].split("\t")[2:6] == ["sv_qual0", "N", "<DEL>", "0"]
+    echo = next(obj["input"] for _, obj in objects if obj["id"] == "sv_qual0")
+    assert echo == inputs[40].replace("\t0\tPASS\t", "\t.\tPASS\t") != inputs[40]
+    entries = cvf.parse_json(text, inputs)
+    assert [e.key for e in entries if e.record == 40] == ["rec40|record", "rec40|deletion|ENST00000286808|transcript"]
+    assert all(e.record is not None for e in entries)
+
+    (extra,) = manifest["vep_rs_only_tuples"]
+    assert extra["expected_divergence"] == "reference_skipped_record" and extra["record_indices"] == [26]
+    identity = {cvf.JSON_IDENTITY_KEY: "0.5.0"}
+    records = [e for e in entries if e.key.endswith("|record")]
+    position = next(n for (n, _), e in zip(objects, records) if e.record > 26)
+    lines = [json.dumps({**obj, **identity}) for _, obj in objects]
+    lines.insert(position, json.dumps({"input": inputs[26], **identity}))
+    expected_file, actual_file = tmp_path / "expected.jsonl", tmp_path / "actual.jsonl"
+    expected_file.write_text(text, encoding="utf-8")
+    actual_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    masked = {"reference_skipped_record"}
+    report = cvf.compare_files(
+        "json", expected_file, actual_file, inputs, cvf.Documented.from_manifest(manifest, masked), masked, {}, {}, 4
+    )
+    assert report["verdict"] == "green", report["reasons"]
+    assert report["counts"]["expected_entries"] == 98
+    assert report["counts"]["actual_entries"] == 99
+    assert report["counts"]["compared"] == 98
+    assert report["counts"]["record_entries_on_reference_skipped_records"] == 1
+    assert report["one_sided"] == {"expected_only": 0, "actual_only": 0}
+    unmasked = cvf.compare_files(
+        "json", expected_file, actual_file, inputs, cvf.Documented.from_manifest(manifest, set()), set(), {}, {}, 4
+    )
+    assert unmasked["verdict"] == "red"
+    assert unmasked["one_sided"] == {"expected_only": 0, "actual_only": 1}
+    assert [x for group in unmasked["unexpected"].values() for x in group["examples"]] == ["rec26|record"]
 
 
 def test_json_scalar_renders_like_the_rust_comparator():
@@ -489,6 +538,41 @@ def test_order_difference_is_red_except_for_parquet(texts):
     unordered = cvf.compare_entries(expected, actual, no_documented(), check_order=False)
     assert unordered["verdict"] == "green"
     assert unordered["order"] is None
+
+
+def test_unordered_compares_the_shared_entries_without_their_order(tmp_path, capsys):
+    """The GRCh38-pick-summary manifest marks the three flag sets whose rows Ensembl VEP
+    emits from a hash ``unordered`` (OutputFactory.pm:593 and :605 ``keys %by_allele``, :855
+    ``keys %by_gene``). A candidate --per_gene output with the first record's two gene rows
+    the other way round is red to the comparator and green under ``--unordered``, which
+    turns off the order check alone: a dropped row stays red."""
+    corpus = GOLDEN / "GRCh38-pick-summary"
+    manifest = json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))
+    unordered_sets = [f["name"] for f in manifest["flag_sets"] if f.get("unordered")]
+    assert unordered_sets == ["pick-allele", "per-gene", "pick-allele-gene"]
+    expected_file = corpus / "expected_per-gene" / "default.txt.gz"
+    text = cvf.read_text(expected_file)
+    rows = data_lines(text)
+    assert [r.split("\t")[4] for r in rows[:2]] == ["ENST00000815440", "ENST00000624291"]
+    swapped = tmp_path / "swapped.txt"
+    swapped.write_text(rebuild(text, [rows[1], rows[0]] + rows[2:]), encoding="utf-8")
+    report = tmp_path / "r.json"
+    args = ["--format", "default", "--expected", str(expected_file), "--actual", str(swapped), "--report", str(report)]
+    assert cvf.main(args) == 1
+    assert capsys.readouterr().out == "default: red\n  order differs at shared position 0\n"
+    written = json.loads(report.read_text(encoding="utf-8"))
+    assert written["unordered"] is False
+    assert written["order"]["expected"] == "21:8857289|C|ENST00000815440|Transcript"
+    assert cvf.main(args + ["--unordered"]) == 0
+    assert capsys.readouterr().out == "default: green\n"
+    written = json.loads(report.read_text(encoding="utf-8"))
+    assert written["unordered"] is True
+    assert written["order"] is None
+    assert written["counts"]["compared"] == len(rows) == 70
+    dropped = tmp_path / "dropped.txt"
+    dropped.write_text(rebuild(text, [rows[1]] + rows[2:]), encoding="utf-8")
+    assert cvf.main(["--format", "default", "--expected", str(expected_file), "--actual", str(dropped), "--unordered"]) == 1
+    assert capsys.readouterr().out == "default: red\n  missing in the candidate: 1 entries\n"
 
 
 def test_parquet_actual_goes_through_the_adapter(texts, monkeypatch, tmp_path):
@@ -1016,6 +1100,21 @@ def test_self_parity_keeps_the_dash_of_used_ref_and_given_ref_and_skips_an_input
     json_lines[0] = json.dumps(obj)
     report = cvf.SelfParity(default, tab, vcf, "\n".join(json_lines) + "\n").run()
     assert report["pairs"]["json"]["differing"]["GIVEN_REF"]["count"] == 1
+
+
+def test_self_parity_keys_json_objects_by_the_first_five_columns_of_the_input(texts, inputs):
+    """A structural variant whose QUAL is ``0`` is echoed with ``.`` in the JSON ``input`` and
+    written back with ``.`` in the VCF output (Parser/VCF.pm:464), so under ``--input`` the
+    object and the VCF line of record 11 name the same record only through their first five
+    columns; the committed formats, read with such an input, stay in parity."""
+    qual0 = list(inputs)
+    assert qual0[11].split("\t")[2:6] == ["multi_ins_ins", "N", "<INS>,<INS>", "."]
+    qual0[11] = qual0[11].replace("\t<INS>,<INS>\t.\t", "\t<INS>,<INS>\t0\t", 1)
+    echo = next(json.loads(line)["input"] for line in cvf.text_lines(texts["json"]) if '"multi_ins_ins"' in line)
+    assert echo == inputs[11] != qual0[11]
+    report = cvf.SelfParity(texts["default"], texts["tab"], texts["vcf"], texts["json"], inputs=qual0).run()
+    assert report["verdict"] == "green", report["reasons"]
+    assert report["records"] == RECORDS
 
 
 def test_floors_masks_and_field_pairs_parse():

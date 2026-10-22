@@ -360,6 +360,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The divergence index gains the one-column `--fields` list whose row is `0`, at which Ensembl VEP's output loop ends and vep-rs writes every row. (#N)
   - The compatibility page's prefix example is `--bi` is `--biotype`; `--sy`, which it named, is ambiguous between `--symbol` and `--synonyms` in both engines (exit 2). (#N)
   - `--no_progress` and `--debug` are listed among the flags vep-rs refuses as unknown arguments (exit 2) on the page of what vep-rs does not do. (#N)
+  - `compare_vep_formats.py` keys a JSON object by the first five columns of its `input`, so a structural variant whose QUAL `0` Ensembl VEP writes as `.` keeps its record. (#N)
+  - `compare_vep_formats.py --unordered` compares a flag set's entries without their order, as the test harness does for the three sets Ensembl VEP emits in hash order. (#N)
 - Security and robustness
   - The container image disables the two CA roots the eMudhra intermediates chain from (emSign ECC G3, Comodo AAA Services); cache downloads are checked against the rest. (#70)
   - Input files drive no unbounded allocation: line lengths, index sizes, cache sequence lengths and plugin-data counts are checked, and control bytes are escaped in tab and VCF output. (#N)
