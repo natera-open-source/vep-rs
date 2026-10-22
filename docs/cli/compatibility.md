@@ -107,7 +107,7 @@ A repeatable flag (`--plugin`, `--custom`, `--transcript_filter`) collects every
 ### The `--config` file and `vep.ini` (`Config.pm:1068-1110`)
 
 - One flag per line: the flag's long name without its dashes (one leading dash is allowed), a blank, then its value. A line starting with `#`, or blank, is skipped.
-- A switch is on with the value `1` and off with `0`. `cache` is on with `1`, a directory or an empty quoted value and off with `0`. A key alone on its line is dropped.
+- A switch is on with the value `1` and off with `0`, except `var_synonyms`, whose `0` switches `check_existing` on, with the notice `INFO: Colocated variants will be provided when using --var_synonyms`, and writes no synonyms, as Ensembl VEP tests that flag with `defined` (Runner.pm:117). `cache` is on with `1`, a directory or an empty quoted value and off with `0`. A key alone on its line is dropped.
 - A flag taking a value takes the first word after its name, or, for a repeatable flag, the rest of the line. Blanks inside double quotes are part of a value and the quotes are removed.
 - A key is the long name exactly. A prefix, another case or a name that is no option of Ensembl VEP's or of this version names nothing, and the line is dropped as Ensembl VEP drops it. So is an alias, unless the alias is an option of Ensembl VEP's own (`full_cache_dir` names `--json_cache`).
 - A key of an Ensembl VEP option this version lacks (`stats_html 1`) is refused as the flag on the command line is (exit 2). The exception is a switch of Ensembl VEP's set to `0`: off there, it adds nothing here.
@@ -141,7 +141,7 @@ Environment variables vep-rs reads outside this mechanism, which Ensembl VEP has
 - A prefix is resolved against this version's flags first. Where a flag vep-rs adds makes it ambiguous, it is resolved as Getopt::Long resolves it against Ensembl VEP's `VEP_PARAMS` list (`Config.pm:73-276`): `--js` is `--json` though `--json_cache` also starts with it, `--pa` `--password`, `--ve` `--verbose`.
 - An Ensembl VEP option this version lacks is refused by its full name in every spelling (`-stats_html` and `--stats_h` are refused as `--stats_html`, exit 2), never read as a cluster of shorts.
 - A prefix that names one flag of this version resolves to it even where Ensembl VEP's larger set leaves it ambiguous (`--bi` is `--biotype`). A prefix of several flags that Getopt::Long resolves no better (`--fo`), or a name no option has, is an argument syntax error (exit 2).
-- A single-letter short is clap's and is matched by case: `-v` is `--verbose`, `-V` the version, `-qv` the cluster `-q -v`, and `-ofile.txt` the value `file.txt` of `-o`, a spelling Getopt::Long refuses.
+- A single-letter short is clap's and is matched by case: `-v` is `--verbose`, `-h` the help and `-V` the version, `-qv` the cluster `-q -v`, and `-ofile.txt` the value `file.txt` of `-o`, a spelling Getopt::Long refuses. Ensembl VEP refuses `-h`, a prefix of eight of its options, and has no `--version`.
 
 Of the spellings Getopt::Long resolves to an option this version declares, these resolve differently here:
 
@@ -167,6 +167,6 @@ Of the spellings Getopt::Long resolves to an option this version declares, these
 | `config` | the `--config` file, or a `vep.ini` that is a file, cannot be read; or a configuration value the parser accepts but the run cannot use, such as a `--distance` part that is not an integer |
 | `run` | any other failure of the annotation run, with its cause chain |
 
-`--help` and `--version` win over a flag the error table refuses before parsing, wherever they stand on the command line. Over a flag the parser does not know they win only when they come first, since clap reads left to right. Ensembl VEP's Getopt::Long runs with `pass_through` (Config.pm:62), so there `--help` wins over an unknown flag wherever it stands (vep:29) and an unknown flag alone is refused (vep:30).
+`--help` and `--version` win over every other token of the command line, wherever they stand before a `--` (vep:29 before vep:30 under Getopt::Long's `pass_through`, Config.pm:62); `--help=1` and a `--help` behind `--` are refused. A `--help` or `--version` that is the token after a flag taking a string is that value (`-i --help` names the file) on both engines; after a flag taking a number it is the help or the version.
 
 A panic aborts the process with the panic's own status. Ensembl VEP's own exit codes (255 on `die`, 2 on a failed open) are not copied.

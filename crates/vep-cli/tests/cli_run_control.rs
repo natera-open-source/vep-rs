@@ -1503,6 +1503,37 @@ fn repeated_pick_order_keeps_the_last_list() {
     );
 }
 
+/// `--pick_order ""` is the empty order: Config.pm:761 splits the value to
+/// nothing, `_is_flag_active` reads the empty list as inactive (:902-906) so the
+/// value check never sees it, and `pick_worst_VariationFeatureOverlapAllele`
+/// compares no category and returns the first candidate (OutputFactory.pm:808).
+/// Ensembl VEP 116.2 picks `A ENST00000339775 synonymous_variant`, its first row,
+/// for the record `21 17604928 G A,C`; the default order picks another row.
+#[test]
+fn an_empty_pick_order_picks_the_first_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let empty = pick_summary(&["--pick", "--pick_order", ""], &out);
+    assert_eq!(empty.status.code(), Some(0), "{}", text(&empty.stderr));
+    assert!(
+        !text(&empty.stderr).contains("WARNING"),
+        "{}",
+        text(&empty.stderr)
+    );
+    let rows = record_rows(&std::fs::read_to_string(&out).unwrap(), "ps_17604928");
+    assert_eq!(
+        rows,
+        ["ps_17604928\t21:17604928\tA\tENSG00000154640\tENST00000339775\tTranscript\tsynonymous_variant"]
+    );
+    let default_order = pick_summary(&["--pick"], &out);
+    assert_eq!(default_order.status.code(), Some(0));
+    assert_ne!(
+        record_rows(&std::fs::read_to_string(&out).unwrap(), "ps_17604928"),
+        rows,
+        "the default order compares its criteria"
+    );
+}
+
 /// `--safe` skips the check that refuses `--summary` with `--most_severe`
 /// (Config.pm:961), and the pair then lists every term: `summary_only` routes on
 /// either flag (OutputFactory.pm:387) and tests `summary` first (`:436`), the
@@ -2090,6 +2121,97 @@ fn plugin_init_failure_warns_and_is_fatal_under_safe() {
     assert_eq!(errors.len(), 1, "{stderr}");
     assert!(
         errors[0].starts_with(&prefix.replacen("WARNING: ", "ERROR: [plugin] ", 1)),
+        "{}",
+        errors[0]
+    );
+    assert!(
+        !out.exists(),
+        "no output is written when --safe refuses a plugin"
+    );
+}
+
+/// A `--plugin` file that exists but does not open as a shared library is
+/// dropped with `Failed to compile plugin <Name>: <reason>`, as Ensembl VEP drops
+/// a module `use` cannot load (Runner.pm:929-939), and the run completes; under
+/// `--safe` it is the plugin component's error. The warnings follow the
+/// `--plugin` arguments' order, as Ensembl VEP's one loop over them writes
+/// them (`:925`): a failing library, then a failing built-in, then a name
+/// nothing resolves.
+#[test]
+fn plugin_load_failures_warn_in_argument_order_and_a_bad_library_is_fatal_under_safe() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let corpus = run_control_dir();
+    let not_a_library = corpus.join("manifest.json");
+    let not_a_library = not_a_library.to_str().unwrap();
+    let warned = run_control(
+        &[
+            "-o",
+            out.to_str().unwrap(),
+            "--dir_plugins",
+            corpus.to_str().unwrap(),
+            "--plugin",
+            not_a_library,
+            "--plugin",
+            "LoFtool,/no/such/scores.txt",
+            "--plugin",
+            "NoSuchPlugin",
+        ],
+        dir.path(),
+    );
+    assert_eq!(warned.status.code(), Some(0), "{}", text(&warned.stderr));
+    let warnings = std::fs::read_to_string(dir.path().join("out.txt_warnings.txt")).unwrap();
+    let plugin_lines: Vec<&str> = warnings
+        .lines()
+        .filter(|l| l.starts_with("WARNING: Failed to "))
+        .collect();
+    assert_eq!(plugin_lines.len(), 3, "{warnings}");
+    assert!(
+        plugin_lines[0].starts_with(&format!(
+            "WARNING: Failed to compile plugin {not_a_library}: {not_a_library}: "
+        )),
+        "{warnings}"
+    );
+    assert!(
+        plugin_lines[1].starts_with(
+            "WARNING: Failed to instantiate plugin LoFtool: LoFtool: failed to open /no/such/scores.txt:"
+        ),
+        "{warnings}"
+    );
+    assert_eq!(
+        plugin_lines[2],
+        format!(
+            "WARNING: Failed to load plugin NoSuchPlugin: NoSuchPlugin is not a built-in plugin and no libNoSuchPlugin.so or libNoSuchPlugin.dylib is under {}",
+            corpus.display()
+        ),
+        "{warnings}"
+    );
+    assert!(data_lines(&std::fs::read_to_string(&out).unwrap()).len() > 30);
+    std::fs::remove_file(&out).unwrap();
+
+    let fatal = run_control(
+        &[
+            "-o",
+            out.to_str().unwrap(),
+            "--dir_plugins",
+            corpus.to_str().unwrap(),
+            "--plugin",
+            not_a_library,
+            "--safe",
+        ],
+        dir.path(),
+    );
+    assert_eq!(fatal.status.code(), Some(1));
+    let stderr = text(&fatal.stderr);
+    let errors: Vec<&str> = stderr
+        .lines()
+        .filter(|l| l.starts_with("ERROR: "))
+        .collect();
+    assert_eq!(errors.len(), 1, "{stderr}");
+    assert!(
+        errors[0].starts_with(&format!(
+            "ERROR: [plugin] Failed to compile plugin {not_a_library}: {not_a_library}: "
+        )),
         "{}",
         errors[0]
     );

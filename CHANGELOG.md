@@ -325,6 +325,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The cache loader refuses a transcript whose mapper's coding end precedes its coding start. (#N)
 - A tabix data line or converter input whose zero-based start has no one-based form is skipped or refused instead of overflowing the shift. (#N)
 - An HGVS `c.`, `n.` or `p.` input naming a transcript the cache cannot read is refused under the `cache` component, not `input`. (#N)
+- `--pick_order ""` is the empty order, keeping the first candidate as Ensembl VEP does; it was refused as a syntax error. (#N)
+- An Ensembl-format record `--dont_skip` keeps after the `--chr` list or the chromosome test refused it prints its alleles as written, as Ensembl VEP does. (#N)
+- A `--plugin` library that does not open is dropped with Ensembl VEP's `Failed to compile plugin` warning, the plugin component's error under `--safe`; it ended the run. (#N)
+- Plugin-loading warnings follow the `--plugin` arguments' order, as Ensembl VEP's one loop writes them; built-in failures came first. (#N)
 
 ### Security
 

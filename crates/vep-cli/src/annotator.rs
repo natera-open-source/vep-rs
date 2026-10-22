@@ -522,9 +522,11 @@ pub(crate) struct LoadedPlugins {
 /// an error under `safe` (`:911-918`); each argument is `Name,param,param`
 /// (`:928`), loaded as a built-in when one claims the name, otherwise as a dylib
 /// resolved by path or under the directory ([`crate::dylib_plugins::load_unresolved`]);
-/// a name that resolves to neither is warned about and dropped, an error under
-/// `safe` (`:929-939`), as is a built-in or a dylib whose `init` fails
-/// (`Failed to instantiate plugin <Name>: <reason>`, `:946-954`).
+/// a name that resolves to neither, or a dylib that does not open, is warned
+/// about and dropped, an error under `safe` (`:929-939`), as is a built-in or a
+/// dylib whose `init` fails (`Failed to instantiate plugin <Name>: <reason>`,
+/// `:946-954`). The arguments load one at a time in their order, so the
+/// warnings follow it as Ensembl VEP's single loop writes them (`:925`).
 ///
 /// The assembly is load-bearing rather than advisory: REVEL picks which of its two
 /// coordinate columns tabix indexed from it, LoFTEE picks between a bigWig and a
@@ -539,40 +541,48 @@ pub(crate) fn load_plugins(
     assembly: Option<vep_core::assembly::Assembly>,
 ) -> anyhow::Result<LoadedPlugins> {
     let mut builtin = BuiltinRegistry::new();
+    let mut dylib = PluginRegistry::new();
     if plugin_args.is_empty() {
-        return Ok(LoadedPlugins {
-            builtin,
-            dylib: PluginRegistry::new(),
-        });
+        return Ok(LoadedPlugins { builtin, dylib });
     }
 
     if !std::path::Path::new(dir_plugins).is_dir() {
-        let message = format!("Plugins directory '{dir_plugins}' not found.");
-        if safe {
-            return Err(crate::config::CliError::new("plugin", message).into());
-        }
-        crate::warnings::global().warn(&message);
+        plugin_warning(
+            format!("Plugins directory '{dir_plugins}' not found."),
+            safe,
+        )?;
     }
 
-    let outcome = builtin.load_from_args_with_context(plugin_args, reference_fasta, assembly);
-    for (name, error) in &outcome.failed {
-        // `Init`'s `Display` adds a prefix Ensembl VEP's line does not carry, so
-        // its text alone is the reason.
-        let reason = match error {
-            vep_builtins::PluginError::Init(text) => text.clone(),
-            other => other.to_string(),
-        };
-        instantiation_failed(name, &reason, safe)?;
+    for arg in plugin_args {
+        let outcome = builtin.load_from_args_with_context(
+            std::slice::from_ref(arg),
+            reference_fasta.clone(),
+            assembly,
+        );
+        for (name, error) in &outcome.failed {
+            // `Init`'s `Display` adds a prefix Ensembl VEP's line does not carry, so
+            // its text alone is the reason.
+            let reason = match error {
+                vep_builtins::PluginError::Init(text) => text.clone(),
+                other => other.to_string(),
+            };
+            plugin_warning(
+                format!("Failed to instantiate plugin {name}: {reason}"),
+                safe,
+            )?;
+        }
+        for unresolved in &outcome.unresolved {
+            crate::dylib_plugins::load_unresolved(&mut dylib, unresolved, dir_plugins, safe)?;
+        }
     }
-    let dylib = crate::dylib_plugins::load_unresolved(&outcome.unresolved, dir_plugins, safe)?;
 
     Ok(LoadedPlugins { builtin, dylib })
 }
 
-/// A plugin whose constructor failed (Runner.pm:946-954): the plugin component's
-/// error under `safe`, else a warning, and the run goes on without the plugin.
-pub(crate) fn instantiation_failed(name: &str, reason: &str, safe: bool) -> anyhow::Result<()> {
-    let message = format!("Failed to instantiate plugin {name}: {reason}");
+/// A plugin-loading warning (Runner.pm:911-918, `:929-939`, `:946-954`): the
+/// plugin component's error carrying `message` under `safe`, else the warning,
+/// and the run goes on.
+pub(crate) fn plugin_warning(message: String, safe: bool) -> anyhow::Result<()> {
     if safe {
         return Err(crate::config::CliError::new("plugin", message).into());
     }

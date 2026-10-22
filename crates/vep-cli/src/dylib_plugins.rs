@@ -15,48 +15,39 @@ use vep_core::sv_routing::split_plugin_arg;
 use vep_core::variant::InputVariant;
 use vep_plugin::{PluginError, PluginRegistry};
 
-/// Loads every `--plugin` argument that matched no built-in as a dylib.
+/// Loads one `--plugin` argument that matched no built-in as a dylib into
+/// `registry`.
 ///
-/// A name that resolves to no file, neither as a path nor as `lib<name>.so` /
-/// `lib<name>.dylib` under `dir_plugins`, is written to the warnings file and
-/// dropped, or is an error under `safe`: Ensembl VEP continues without a plugin
-/// module that fails to compile unless `--safe` is given (Runner.pm:929-939); a
-/// file whose `init` returns non-zero is dropped the same way, as a constructor
-/// that dies is (`:946-954`). A file that exists but does not open or reports
-/// another ABI version is an error, because the user named a real plugin and it
-/// will not run.
+/// Every failure drops the plugin with a warning and the run goes on without
+/// it, or is the plugin component's error under `safe`, as Ensembl VEP treats
+/// a plugin module it cannot use (`throw($msg) if $self->param('safe')`, else
+/// `warning_msg` and `next`). A name that resolves to no file, neither as a
+/// path nor as `lib<name>.so` / `lib<name>.dylib` under `dir_plugins`, is
+/// `Failed to load plugin <name>`; a file that does not open as a shared
+/// library, lacks a symbol or reports another ABI version is `Failed to compile
+/// plugin <name>: <reason>`, the module that fails `use` (Runner.pm:929-939);
+/// a file whose `init` returns non-zero, or whose constructor returns no
+/// instance, is `Failed to instantiate plugin <name>: <reason>`, the
+/// constructor that dies (`:946-954`).
 pub fn load_unresolved(
-    unresolved: &[String],
+    registry: &mut PluginRegistry,
+    arg: &str,
     dir_plugins: &str,
     safe: bool,
-) -> anyhow::Result<PluginRegistry> {
-    let mut registry = PluginRegistry::new();
-    for arg in unresolved {
-        let name = split_plugin_arg(arg).0;
-        match registry.load_from_args(std::slice::from_ref(arg), Some(dir_plugins)) {
-            Ok(()) => {}
-            // The registry reports an unresolvable name with exactly this message;
-            // any other `Load` text comes from a file that exists.
-            Err(PluginError::Load(msg)) if msg == format!("plugin '{name}' not found") => {
-                let message = format!(
-                    "Failed to load plugin {name}: {name} is not a built-in plugin and no lib{name}.so or lib{name}.dylib is under {dir_plugins}"
-                );
-                if safe {
-                    return Err(crate::config::CliError::new("plugin", message).into());
-                }
-                crate::warnings::global().warn(&message);
-            }
-            Err(PluginError::Init(reason)) => {
-                crate::annotator::instantiation_failed(name, &reason, safe)?;
-            }
-            Err(e) => {
-                return Err(
-                    anyhow::Error::new(e).context(format!("plugin '{name}' failed to load"))
-                );
-            }
-        }
-    }
-    Ok(registry)
+) -> anyhow::Result<()> {
+    let name = split_plugin_arg(arg).0;
+    let message = match registry.load_from_args(&[arg.to_string()], Some(dir_plugins)) {
+        Ok(()) => return Ok(()),
+        // The registry reports an unresolvable name with exactly this message;
+        // any other `Load` text comes from a file that exists.
+        Err(PluginError::Load(msg)) if msg == format!("plugin '{name}' not found") => format!(
+            "Failed to load plugin {name}: {name} is not a built-in plugin and no lib{name}.so or lib{name}.dylib is under {dir_plugins}"
+        ),
+        Err(PluginError::Init(reason)) => format!("Failed to instantiate plugin {name}: {reason}"),
+        Err(PluginError::Load(reason)) => format!("Failed to compile plugin {name}: {reason}"),
+        Err(other) => format!("Failed to compile plugin {name}: {other}"),
+    };
+    crate::annotator::plugin_warning(message, safe)
 }
 
 /// Runs every loaded dylib plugin on every transcript consequence in `batch`.
@@ -171,23 +162,37 @@ mod tests {
     /// (Runner.pm:929-939: `Failed to compile plugin`, thrown under `--safe`).
     #[test]
     fn load_unresolved_skips_an_unknown_name_and_dies_under_safe() {
-        let registry =
-            load_unresolved(&["NoSuchPlugin,param".to_string()], "/no/such/dir", false).unwrap();
+        let mut registry = PluginRegistry::new();
+        load_unresolved(&mut registry, "NoSuchPlugin,param", "/no/such/dir", false).unwrap();
         assert!(registry.is_empty());
-        let err = load_unresolved(&["NoSuchPlugin".to_string()], "/no/such/dir", true).unwrap_err();
+        let err = load_unresolved(&mut registry, "NoSuchPlugin", "/no/such/dir", true).unwrap_err();
         assert_eq!(
             err.downcast_ref::<crate::config::CliError>().unwrap().to_string(),
             "ERROR: [plugin] Failed to load plugin NoSuchPlugin: NoSuchPlugin is not a built-in plugin and no libNoSuchPlugin.so or libNoSuchPlugin.dylib is under /no/such/dir"
         );
     }
 
+    /// A file that exists but is no shared library is dropped as a module that
+    /// fails to compile is (Runner.pm:929-939: `Failed to compile plugin
+    /// <Name>: <reason>`, a warning and `next`, thrown under `--safe`), the
+    /// reason the loader's own text naming the file.
     #[test]
-    fn load_unresolved_fails_on_a_file_that_is_not_a_plugin() {
+    fn load_unresolved_drops_a_file_that_is_not_a_plugin_and_dies_under_safe() {
         let not_a_dylib = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
-        let err = load_unresolved(&[not_a_dylib.to_string()], "/no/such/dir", false).unwrap_err();
-        let msg = format!("{err:#}");
-        assert!(msg.contains(not_a_dylib), "{msg}");
-        assert!(msg.contains("failed to load"), "{msg}");
+        let mut registry = PluginRegistry::new();
+        load_unresolved(&mut registry, not_a_dylib, "/no/such/dir", false).unwrap();
+        assert!(registry.is_empty());
+        let err = load_unresolved(&mut registry, not_a_dylib, "/no/such/dir", true).unwrap_err();
+        let message = err
+            .downcast_ref::<crate::config::CliError>()
+            .unwrap()
+            .to_string();
+        assert!(
+            message.starts_with(&format!(
+                "ERROR: [plugin] Failed to compile plugin {not_a_dylib}: {not_a_dylib}: "
+            )),
+            "{message}"
+        );
     }
 
     /// The consequence document a plugin receives carries these keys and no

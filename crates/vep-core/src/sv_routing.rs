@@ -453,13 +453,13 @@ mod tests {
     /// bracket makes it one) under a type `%SO_TERMS` lacks, so it reaches the
     /// per-ALT classifier: it is a copy-number variation of no stated count, and a
     /// multi-byte character at its end is read as a character, never split. A
-    /// signed count (`<CN+0>`, `<CN-0>`, `<CN=+2>`), a count of two digits
+    /// signed count (`<CN+0>`, `<CN=+2>`, `<CN=-0>`), a count of two digits
     /// (`<CN00>`, `<CN02>`, `<CN=02>`) and a lower-case `<cn0>` or `<cn2>` state no
     /// count either, as Parser.pm's single-digit, case-sensitive regexes read them.
     #[test]
     fn an_unterminated_copy_number_token_is_a_copy_number_variation() {
         for alt in [
-            "<CN]É", "<CNÉ>", "<CN=É", "<CN2]", "<CN", "<CN+0>", "<CN-0>", "<CN=+2>", "<CN00>",
+            "<CN]É", "<CNÉ>", "<CN=É", "<CN2]", "<CN", "<CN+0>", "<CN=+2>", "<CN=-0>", "<CN00>",
             "<CN02>", "<CN=02>", "<cn0>", "<cn2>",
         ] {
             assert_eq!(

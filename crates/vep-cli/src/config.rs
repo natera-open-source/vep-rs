@@ -492,7 +492,6 @@ where
     let usage = |error: clap::Error| ParseFailure::Usage(Box::new(error));
     let mut command = Args::command_with_error_table();
     command.build();
-    drop_trailing_empty_list_fields(&mut options, &command);
     let matches = command
         .clone()
         .try_get_matches_from(program.into_iter().chain(options))
@@ -504,45 +503,6 @@ where
         state,
         command_line,
     })
-}
-
-/// Rewrites the value of every option clap splits on a `value_delimiter`
-/// (`--pick_order`) as Perl's `split(',', ...)` reads it (`Config.pm:761`): a
-/// trailing empty field is no field, so `canonical,` is the one criterion where
-/// clap's value parser would refuse the empty piece. A middle empty field stays,
-/// as Perl keeps it and `%VALID` refuses it (`:946`). The value is the token
-/// after the flag or the part after `=`; a token that is not UTF-8, and
-/// everything after a `--` separator, is left as it is.
-fn drop_trailing_empty_list_fields(options: &mut [OsString], command: &clap::Command) {
-    let delimited: Vec<String> = command
-        .get_arguments()
-        .filter(|arg| arg.get_value_delimiter().is_some())
-        .filter_map(|arg| arg.get_long().map(|long| format!("--{long}")))
-        .collect();
-    let is_delimited = |flag: &str| delimited.iter().any(|name| name == flag);
-    let rejoined = |value: &str| split_list_flag(value).join(",");
-    let mut tokens = options.iter_mut();
-    while let Some(token) = tokens.next() {
-        let Some(text) = token.to_str() else {
-            continue;
-        };
-        // Clap stops reading options at `--`, as Getopt::Long does.
-        if text == "--" {
-            break;
-        }
-        if is_delimited(text) {
-            let Some(value) = tokens.next() else {
-                break;
-            };
-            if let Some(value_text) = value.to_str() {
-                *value = OsString::from(rejoined(value_text));
-            }
-        } else if let Some((flag, inline_value)) = text.split_once('=') {
-            if is_delimited(flag) {
-                *token = OsString::from(format!("{flag}={}", rejoined(inline_value)));
-            }
-        }
-    }
 }
 
 /// Fully resolved configuration for a VEP run.
@@ -772,6 +732,8 @@ pub struct Config {
     pub flag_pick: bool,
     pub flag_pick_allele: bool,
     pub flag_pick_allele_gene: bool,
+    /// The `--pick_order` criteria as given, `None` for the default order and an
+    /// empty list for an empty value (`Config.pm:761` splits it to nothing).
     pub pick_order: Option<Vec<String>>,
     /// The `--transcript_filter` strings in command-line order, then the one
     /// `--exclude_predicted` appends (`Config.pm:566-571`); empty when neither
@@ -1183,7 +1145,7 @@ impl Config {
             flag_pick: args.flag_pick,
             flag_pick_allele: args.flag_pick_allele,
             flag_pick_allele_gene: args.flag_pick_allele_gene,
-            pick_order: args.pick_order,
+            pick_order: args.pick_order.map(|order| order.0),
             transcript_filter: state.list("transcript_filter"),
             allele_number: on("allele_number"),
             show_ref_allele: args.show_ref_allele,
@@ -2488,8 +2450,10 @@ mod tests {
 
     /// `--pick_order` is a `@LIST_FLAGS` entry read with Perl's `split`
     /// (`Config.pm:331`, `:761`), so a trailing comma names no criterion, with
-    /// the value attached by `=` or given as the next token; a middle empty
-    /// field is a value `%VALID` lacks (`:946`) and stays refused.
+    /// the value attached by `=` or given as the next token, and an empty value
+    /// is the empty order, which `_is_flag_active` reads as inactive (`:902-906`)
+    /// so the value check never meets it; a middle empty field is a value
+    /// `%VALID` lacks (`:946`) and stays refused.
     #[test]
     fn pick_order_drops_a_trailing_empty_field_as_perl_does() {
         let canonical = Some(&["canonical".to_string()][..]);
@@ -2505,25 +2469,25 @@ mod tests {
                 .as_deref(),
             canonical
         );
-        assert!(matches!(
-            Config::from_argv(["vep", "--pick_order", "canonical,,rank"]).unwrap_err(),
-            ParseFailure::Usage(_)
-        ));
-    }
-
-    /// The list-field rewrite stops at `--`, where clap and Getopt::Long stop
-    /// reading options: a list value before the separator loses its trailing
-    /// empty field and every token after it stays as written.
-    #[test]
-    fn list_field_rewrite_stops_at_the_separator() {
-        let mut command = Args::command_with_error_table();
-        command.build();
-        let tokens = |line: &[&str]| line.iter().map(OsString::from).collect::<Vec<_>>();
-        let mut options = tokens(&["--pick_order", "canonical,", "--", "--pick_order", "rank,"]);
-        drop_trailing_empty_list_fields(&mut options, &command);
         assert_eq!(
-            options,
-            tokens(&["--pick_order", "canonical", "--", "--pick_order", "rank,"])
+            config(&["vep", "--pick_order", ""]).pick_order.as_deref(),
+            Some(&[][..])
+        );
+        assert_eq!(
+            config(&["vep", "--pick_order", ","]).pick_order.as_deref(),
+            Some(&[][..])
+        );
+        let ParseFailure::Usage(error) =
+            Config::from_argv(["vep", "--pick_order", "canonical,,rank"]).unwrap_err()
+        else {
+            panic!("a middle empty field is refused by the parser");
+        };
+        assert_eq!(error.kind(), clap::error::ErrorKind::InvalidValue);
+        assert!(
+            error.to_string().starts_with(
+                "error: a value is required for '--pick_order <PICK_ORDER>' but none was supplied"
+            ),
+            "{error}"
         );
     }
 

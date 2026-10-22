@@ -245,6 +245,14 @@ pub const VALID: &[(&str, &[&str])] = &[
     ("compress_output", &["gzip", "bgzip"]),
 ];
 
+/// The values [`VALID`] lists for `flag`; empty for a flag outside the table.
+pub fn valid_values(flag: &str) -> &'static [&'static str] {
+    VALID
+        .iter()
+        .find(|(name, _)| *name == flag)
+        .map_or(&[], |(_, values)| values)
+}
+
 /// Flags that need another flag set (`Config.pm:607-612`).
 pub const REQUIRES: &[(&str, &[&str])] = &[
     ("original", &["filters"]),

@@ -245,7 +245,8 @@ pub struct Args {
     /// File the warnings of the run are written to, created at the first warning;
     /// default <output_file>_warnings.txt beside the output (STDOUT_warnings.txt in the
     /// working directory for -o STDOUT). STDERR, in any case, keeps them on standard
-    /// error alone. A warning is also echoed on standard error unless --quiet
+    /// error, each written twice unless --quiet, as Ensembl VEP writes it. A warning
+    /// is also echoed on standard error unless --quiet
     #[arg(help_heading = "Output", long = "warning_file", value_name = "FILE")]
     pub warning_file: Option<String>,
 
@@ -975,31 +976,13 @@ pub struct Args {
 
     /// The criteria the pick family compares, in order, as a comma-separated list; a
     /// shorter list compares its criteria and then keeps the first transcript in
-    /// stable-id order. Default: mane_select,mane_plus_clinical,canonical,appris,tsl,biotype,ccds,rank,length,ensembl,refseq
-    // The comma-split list is a `Vec`, whose action is `Append`, which
-    // `args_override_self` does not reach, so the flag overrides itself: a repeat
-    // keeps the last value, as a scalar Getopt::Long option does (`pick_order=s`,
-    // Config.pm:117).
+    /// stable-id order, and an empty value keeps it at once. Default: mane_select,mane_plus_clinical,canonical,appris,tsl,biotype,ccds,rank,length,ensembl,refseq
     #[arg(
         help_heading = "Filtering / Picking",
         long = "pick_order",
-        value_delimiter = ',',
-        overrides_with = "pick_order",
-        value_parser = [
-            "mane_select",
-            "mane_plus_clinical",
-            "canonical",
-            "appris",
-            "tsl",
-            "biotype",
-            "ccds",
-            "rank",
-            "length",
-            "ensembl",
-            "refseq",
-        ]
+        value_parser = PickOrderParser
     )]
-    pub pick_order: Option<Vec<String>>,
+    pub pick_order: Option<PickOrder>,
 
     /// Annotate only the transcripts that pass a filter, in Ensembl VEP's filter
     /// grammar: units of `field operator value` joined by `and` and `or`, grouped
@@ -1210,6 +1193,63 @@ fn real_number(text: &str) -> Result<f64, String> {
         .map_err(|_| "real number expected".to_string())
 }
 
+/// The `--pick_order` criteria as Ensembl VEP reads the option: the fields of
+/// Perl's `split(',', ...)` (`Config.pm:761`), so a trailing comma names no
+/// criterion and an empty value is the empty order, under which the pick family
+/// keeps the first row (`OutputFactory.pm:808`). The list is one clap value (a
+/// `Vec` field would be appended to on a repeat), so a repeat keeps the last
+/// list, as the scalar `pick_order=s` does (`Config.pm:117`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PickOrder(pub Vec<String>);
+
+impl std::ops::Deref for PickOrder {
+    type Target = [String];
+
+    fn deref(&self) -> &[String] {
+        &self.0
+    }
+}
+
+/// The value parser of `--pick_order`: every field must be one of Ensembl VEP's
+/// `%VALID` tokens (`Config.pm:601`, checked at `:946`), each checked by clap's
+/// own enumeration parser, so an unknown token or a middle empty field is the
+/// invalid-value error an enumerated flag gives, its suggestion included.
+#[derive(Clone)]
+struct PickOrderParser;
+
+impl clap::builder::TypedValueParser for PickOrderParser {
+    type Value = PickOrder;
+
+    fn parse_ref(
+        &self,
+        cmd: &clap::Command,
+        arg: Option<&clap::Arg>,
+        value: &std::ffi::OsStr,
+    ) -> Result<PickOrder, clap::Error> {
+        let Some(text) = value.to_str() else {
+            return Err(clap::Error::new(clap::error::ErrorKind::InvalidUtf8).with_cmd(cmd));
+        };
+        let field_parser = clap::builder::PossibleValuesParser::new(
+            crate::option_rules::valid_values("pick_order"),
+        );
+        let order = crate::option_rules::split_list_flag(text);
+        for field in &order {
+            field_parser.parse_ref(cmd, arg, std::ffi::OsStr::new(field))?;
+        }
+        Ok(PickOrder(order))
+    }
+
+    fn possible_values(
+        &self,
+    ) -> Option<Box<dyn Iterator<Item = clap::builder::PossibleValue> + '_>> {
+        Some(Box::new(
+            crate::option_rules::valid_values("pick_order")
+                .iter()
+                .map(clap::builder::PossibleValue::new),
+        ))
+    }
+}
+
 impl Args {
     /// The command with the error table's help text applied to every flag the
     /// table governs; the parser `main` runs and the source of `--help` and the
@@ -1315,6 +1355,56 @@ mod tests {
         assert_eq!(
             args.pick_order.as_deref(),
             Some(&["rank".to_string(), "tsl".to_string()][..])
+        );
+    }
+
+    /// `--pick_order` is read with Perl's `split` (`Config.pm:761`): a trailing
+    /// comma names no criterion, an empty value is the empty order (given, and a
+    /// list of nothing), and a middle empty field or an unknown token is clap's
+    /// invalid-value error, in clap's words for the piece, listing Ensembl VEP's
+    /// `%VALID` tokens (`:601`).
+    #[test]
+    fn pick_order_splits_as_perl_does() {
+        let parse = |value: &str| Args::try_parse_from(["vep", "--pick_order", value]);
+        assert_eq!(
+            parse("canonical,").unwrap().pick_order.as_deref(),
+            Some(&["canonical".to_string()][..])
+        );
+        assert_eq!(parse("").unwrap().pick_order.as_deref(), Some(&[][..]));
+        assert_eq!(parse(",,").unwrap().pick_order.as_deref(), Some(&[][..]));
+        for (value, message) in [
+            (
+                "canonical,,rank",
+                "a value is required for '--pick_order <PICK_ORDER>' but none was supplied",
+            ),
+            (
+                "canonical,x",
+                "invalid value 'x' for '--pick_order <PICK_ORDER>'",
+            ),
+        ] {
+            let error = parse(value).unwrap_err();
+            assert_eq!(
+                error.kind(),
+                clap::error::ErrorKind::InvalidValue,
+                "{value}"
+            );
+            let text = error.to_string();
+            assert!(
+                text.starts_with(&format!("error: {message}")),
+                "{value}: {text}"
+            );
+            assert!(
+                text.contains(
+                    "[possible values: mane_select, mane_plus_clinical, canonical, appris, \
+                     tsl, biotype, ccds, rank, length, ensembl, refseq]"
+                ),
+                "{value}: {text}"
+            );
+        }
+        let near_miss = parse("canonica").unwrap_err().to_string();
+        assert!(
+            near_miss.contains("tip: a similar value exists: 'canonical'"),
+            "{near_miss}"
         );
     }
 

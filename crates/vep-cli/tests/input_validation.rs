@@ -1118,6 +1118,74 @@ fn dont_skip_keeps_the_written_case_of_a_record_the_chr_list_refuses() {
     );
 }
 
+/// An Ensembl-format record the `--chr` list refuses and `--dont_skip` keeps is
+/// annotated with its alleles as written too: Parser/VEP_input.pm:156 keeps the
+/// column as the feature's allele string and the refusal (Parser.pm:470-472)
+/// returns before the upper-casing of `:554`. Ensembl VEP 116.2 under `--chr 22
+/// --dont_skip` prints Allele `t` for `21 30337048 30337048 c/t + lower_snv`,
+/// `-` for `21 30319404 30319405 ca/- + lower_del`, `t` under the name
+/// `21_30337048_c/t` for the same record with no ID, `t` and `g` for the
+/// multi-allelic `c/t/g`, and `T` for a record written `C/T`; the JSON
+/// `allele_string` is the column as written. No warning is written.
+#[test]
+fn dont_skip_keeps_the_written_case_of_an_ensembl_record_the_chr_list_refuses() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("lower.txt");
+    std::fs::write(
+        &input,
+        "21\t30337048\t30337048\tc/t\t+\tlower_snv\n\
+         21\t30319404\t30319405\tca/-\t+\tlower_del\n\
+         21\t30337048\t30337048\tc/t\t+\n\
+         21\t30337048\t30337048\tc/t/g\t+\tlower_multi\n\
+         21\t30337048\t30337048\tC/T\t+\tupper_snv\n",
+    )
+    .unwrap();
+    let flags = ["--format", "ensembl", "--chr", "22", "--dont_skip"];
+    let (output, written, warnings) = run_input(dir.path(), "ensembl_written", &input, &flags);
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert!(warnings.is_empty(), "{warnings}");
+    for (name, alleles) in [
+        ("lower_snv", &["t"][..]),
+        ("lower_del", &["-"]),
+        ("21_30337048_c/t", &["t"]),
+        ("lower_multi", &["g", "t"]),
+        ("upper_snv", &["T"]),
+    ] {
+        let record = rows_of(&written, name);
+        assert!(!record.is_empty(), "{name}: {written}");
+        let printed: BTreeSet<&str> = record
+            .iter()
+            .map(|row| row.split('\t').nth(1).unwrap())
+            .collect();
+        assert_eq!(
+            printed,
+            alleles.iter().copied().collect(),
+            "{name}: {written}"
+        );
+    }
+
+    let mut json_flags = flags.to_vec();
+    json_flags.push("--json");
+    let (_, written, _) = run_input(dir.path(), "ensembl_written_json", &input, &json_flags);
+    let objects = json_objects(&written);
+    let ids: Vec<&str> = objects.iter().map(|o| o["id"].as_str().unwrap()).collect();
+    assert_eq!(
+        ids,
+        [
+            "lower_snv",
+            "lower_del",
+            "21_30337048_c/t",
+            "lower_multi",
+            "upper_snv"
+        ]
+    );
+    let strings: Vec<&str> = objects
+        .iter()
+        .map(|o| o["allele_string"].as_str().unwrap())
+        .collect();
+    assert_eq!(strings, ["c/t", "ca/-", "c/t", "c/t/g", "C/T"]);
+}
+
 /// `--chr` admits the records whose chromosome, as the input spells it, is in the
 /// list (Parser.pm:470-472): `21` keeps chromosome 21 and drops `chr21` and `22`
 /// without a warning, `1-21` expands to every chromosome between, and

@@ -147,7 +147,11 @@ fn strand_from_token(token: Option<&str>) -> Strand {
 /// record's id. A record written in upper case takes the generated name through
 /// [`InputVariant::variation_name`] as Ensembl VEP builds it. The identifier
 /// parser builds a mapping's alleles through this too, since `post_process_vfs`
-/// runs on its features alike (Parser/ID.pm:196).
+/// runs on its features alike (Parser/ID.pm:196). The string as written is kept
+/// beside the upper-cased alleles ([`InputVariant::written_case_allele_string`])
+/// for a record `--dont_skip` keeps after a check that returns before the
+/// upper-casing refused it (Parser.pm:470-472, `:542-546`), which Ensembl VEP
+/// then annotates in the written case.
 pub(super) fn sequence_variants(
     chr: String,
     start: u64,
@@ -171,6 +175,14 @@ pub(super) fn sequence_variants(
     let uploaded_allele_string: Arc<str> = allele_string.into();
     let named_from_lower_case_alleles =
         upper != allele_string && !id.as_deref().is_some_and(perl_true);
+    // The string Parser.pm:462 reads and `:554` upper-cases is the whole column
+    // for a multi-allelic record, shared by its alleles; a bi-allelic record's
+    // is its one minimised pair, built in the loop.
+    let written_column = if multi_allelic {
+        written_case(allele_string)
+    } else {
+        None
+    };
 
     let mut variants = Vec::with_capacity(alts.len());
     for (i, alt) in alts.iter().enumerate() {
@@ -188,22 +200,30 @@ pub(super) fn sequence_variants(
         if !multi_allelic {
             minimise_alleles(&mut variant);
         }
+        let (working, written) = if multi_allelic {
+            (allele_string, written_column.clone())
+        } else {
+            let pair = variant.allele_string.as_str();
+            (pair, written_case(pair))
+        };
         variant.id = if named_from_lower_case_alleles {
-            // The whole column for a multi-allelic record, the minimised pair for
-            // a bi-allelic one: the string Parser.pm:462 reads.
-            let alleles = if multi_allelic {
-                allele_string
-            } else {
-                &variant.allele_string
-            };
-            Some(format!("{chr}_{}_{alleles}", variant.start))
+            Some(format!("{chr}_{}_{working}", variant.start))
         } else {
             id.clone()
         };
+        variant.written_case_allele_string = written;
         upper_case_alleles(&mut variant);
         variants.push(variant);
     }
     Ok(variants)
+}
+
+/// `text` as its own `Arc` when a base is lower case, the case the input wrote
+/// ([`InputVariant::written_case_allele_string`]); `None` for upper-case text.
+fn written_case(text: &str) -> Option<Arc<str>> {
+    text.bytes()
+        .any(|b| b.is_ascii_lowercase())
+        .then(|| text.into())
 }
 
 /// `validate_vf`'s `tr/[a-z]/[A-Z]/` on the allele string (Parser.pm:554),
@@ -504,6 +524,30 @@ mod tests {
         assert_eq!(mixed[0].allele_string, "AC/A");
         assert_eq!((mixed[0].start, mixed[0].end), (100, 101));
         assert!(!mixed[0].minimised);
+    }
+
+    /// The string Parser.pm:554 upper-cases is kept as written beside the
+    /// upper-cased alleles when a base is lower case, the minimised pair of a
+    /// bi-allelic record and the whole column of a multi-allelic one, so a
+    /// record a check ahead of that line refused and `--dont_skip` kept can be
+    /// annotated as written; an upper-case record carries none.
+    #[test]
+    fn lower_case_alleles_keep_their_written_string() {
+        let v = all("21\t20006769\t20006769\ta/t\t1\n\
+             21\t30348409\t30348411\tcta/c\t-\n\
+             21\t100\t100\tA/g/T\t1\t0\n\
+             21\t100\t100\tA/G\t1\tupper\n");
+        assert_eq!(v[0].written_case_allele_string.as_deref(), Some("a/t"));
+        assert_eq!(v[1].written_case_allele_string.as_deref(), Some("ta/-"));
+        assert_eq!(v[2].written_case_allele_string.as_deref(), Some("A/g/T"));
+        assert!(
+            Arc::ptr_eq(
+                v[2].written_case_allele_string.as_ref().unwrap(),
+                v[3].written_case_allele_string.as_ref().unwrap()
+            ),
+            "the alleles of one record share the column"
+        );
+        assert_eq!(v[4].written_case_allele_string, None);
     }
 
     /// The columns are split on the context's delimiter (Parser/VEP_input.pm:90

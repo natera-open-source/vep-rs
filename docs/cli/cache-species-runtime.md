@@ -45,5 +45,5 @@ These flags name the annotation cache and the reference FASTA, the species and a
 | `--writer_strategy` (hidden) | `buffered`, `direct`, `vectored` | `buffered` | How rendered output reaches the file or standard output. `buffered` collects it in a buffer of `--output_buffer_size` bytes; `direct` writes each rendered chunk with one call; `vectored` writes the chunks that are ready together with one vectored call. Every strategy writes the same uncompressed bytes |
 | `--output_buffer_size` (hidden) | u64 | 0 | Bytes of the `buffered` writer strategy's buffer, at most 1073741824 (1 GiB); 0 is the built-in size. The other strategies ignore it |
 | `--resolved_config` (hidden) | bool | false | Print the resolved runtime knobs and the input's shape as name\<TAB\>value lines and exit without annotating |
-| `--distance` | String | 5000 | Upstream and downstream distance in bp: one integer, or the pair "up,down" (a downstream part written 0 reads as the upstream value) |
+| `--distance` | String (comma-separated) | 5000 | Upstream and downstream distance in bp: one integer, or the pair "up,down" (a downstream part written 0 reads as the upstream value) |
 

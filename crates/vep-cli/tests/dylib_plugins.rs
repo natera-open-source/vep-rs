@@ -2,9 +2,10 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! The dylib plugin path through the `vep` binary on the pruned golden corpus: an
-//! unresolvable `--plugin` name is warned about and skipped, a file that is not a
-//! plugin is a hard error, and the `echo_plugin` example resolved under
-//! `--dir_plugins` lands its fields in the Extra column of every transcript row.
+//! unresolvable `--plugin` name and a file that is not a plugin are each warned
+//! about and skipped, the file an error under `--safe`, and the `echo_plugin`
+//! example resolved under `--dir_plugins` lands its fields in the Extra column of
+//! every transcript row.
 
 use std::path::{Path, PathBuf};
 use std::process::Output;
@@ -79,19 +80,57 @@ fn unresolvable_plugin_name_is_skipped_with_a_plugin_dir_too() {
     assert!(stderr.contains(SKIPPED_WARNING), "{stderr}");
 }
 
+/// A file that is not a shared library is dropped with Ensembl VEP's warning for
+/// a plugin module that fails to compile (Runner.pm:929-939) and the run goes on;
+/// under `--safe` it is the plugin component's error and no output is written.
 #[test]
-fn a_file_that_is_not_a_plugin_is_a_hard_error() {
+fn a_file_that_is_not_a_plugin_is_dropped_and_fatal_under_safe() {
     let tmp = tempfile::tempdir().unwrap();
     let out = tmp.path().join("default.txt");
     let not_a_plugin = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
-    let output = vep_on_corpus(&out, &["--plugin", not_a_plugin.to_str().unwrap()]);
+    let not_a_plugin = not_a_plugin.to_str().unwrap();
+    let plugins_dir = corpus_dir();
+    let plugins_dir = plugins_dir.to_str().unwrap();
+    let output = vep_on_corpus(
+        &out,
+        &["--plugin", not_a_plugin, "--dir_plugins", plugins_dir],
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "{stderr}");
-    assert!(stderr.contains("failed to load"), "{stderr}");
-    assert!(stderr.contains("Cargo.toml"), "{stderr}");
+    assert!(
+        output.status.success(),
+        "exit {:?}\n{stderr}",
+        output.status.code()
+    );
+    assert!(
+        stderr.contains(&format!(
+            "WARNING: Failed to compile plugin {not_a_plugin}: {not_a_plugin}: "
+        )),
+        "{stderr}"
+    );
+    assert!(!data_lines(&out).is_empty(), "the run still annotates");
+    std::fs::remove_file(&out).unwrap();
+
+    let output = vep_on_corpus(
+        &out,
+        &[
+            "--plugin",
+            not_a_plugin,
+            "--dir_plugins",
+            plugins_dir,
+            "--safe",
+        ],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains(&format!(
+            "ERROR: [plugin] Failed to compile plugin {not_a_plugin}: {not_a_plugin}: "
+        )),
+        "{stderr}"
+    );
     assert!(
         !out.exists(),
-        "no output is written when a named plugin fails"
+        "no output is written when --safe refuses a plugin"
     );
 }
 

@@ -54,7 +54,7 @@ use vep_builtins::BuiltinRegistry;
 use vep_core::cache_info::CacheInfo;
 use vep_core::cache_manifest::CacheManifest;
 use vep_core::consequence::{Consequence, Impact};
-use vep_core::sv_routing::perl_true;
+use vep_core::sv_routing::{perl_true, split_plugin_arg};
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{InputVariant, VariantClass};
 use vep_io::input::detect::{self, InputFormat};
@@ -1537,11 +1537,11 @@ impl Runner {
             info!("Using {} threads for annotation", num_threads);
         }
 
-        let needs_loftee_context = self.config.plugin.iter().any(|arg| {
-            arg.split(',')
-                .next()
-                .is_some_and(|name| name.eq_ignore_ascii_case("LoFTEE"))
-        });
+        let needs_loftee_context = self
+            .config
+            .plugin
+            .iter()
+            .any(|arg| split_plugin_arg(arg).0.eq_ignore_ascii_case("LoFTEE"));
 
         // Sequence-aware plugins (LoFTEE) share the FASTA Arc, so the FASTA is
         // not opened twice.

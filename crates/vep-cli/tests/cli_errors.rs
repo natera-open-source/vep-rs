@@ -53,8 +53,10 @@ fn ambiguous_hgvs_is_refused() {
 /// `@ARGV`, and vep dies on what is left (vep:30, `ERROR: Unexpected extra
 /// command-line parameter(s): --`, the tokens joined by `, `), unless `--help`
 /// was read ahead of the `--` (vep:29); a `--help` behind it is one more extra
-/// parameter. An empty value, `--pick_order ''`, is not an extra parameter but
-/// clap's refusal of an empty criterion, exit 2.
+/// parameter. An empty value, `--pick_order ''`, is not an extra parameter
+/// either: it is the empty order (Config.pm:761 splits it to nothing) and the
+/// run goes on to its input, while a middle empty field, `canonical,,rank`, is
+/// a value `%VALID` lacks (:946), clap's syntax error here, exit 2.
 #[test]
 fn a_bare_double_dash_is_an_extra_parameter() {
     let run = |argv: &[&str]| {
@@ -84,8 +86,19 @@ fn a_bare_double_dash_is_an_extra_parameter() {
     let (code, stderr) = run(&["--help", "--"]);
     assert_eq!(code, Some(0), "{stderr}");
     let (code, stderr) = refusal(&["--pick_order", ""]);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert!(
+        stderr.starts_with("ERROR: [") && !stderr.contains("pick_order"),
+        "the run passes the parser and fails on its inputs: {stderr}"
+    );
+    let (code, stderr) = refusal(&["--pick_order", "canonical,,rank"]);
     assert_eq!(code, Some(2), "{stderr}");
-    assert!(stderr.starts_with("error:"), "{stderr}");
+    assert!(
+        stderr.starts_with(
+            "error: a value is required for '--pick_order <PICK_ORDER>' but none was supplied"
+        ),
+        "{stderr}"
+    );
 }
 
 /// `--convert` is refused with Ensembl VEP's deprecation text (Config.pm:977-985:

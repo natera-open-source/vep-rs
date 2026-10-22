@@ -48,8 +48,10 @@ which is Ensembl VEP's default. Under `--safe` it is an error, as Ensembl VEP's
 is.
 
 A file that exists but does not open as a shared library, lacks one of the eight
-symbols or reports an ABI version other than 1 aborts the run before annotation
-starts, with or without `--safe`.
+symbols or reports an ABI version other than 1 is dropped with a warning. The warnings
+file records it as `Failed to compile plugin Name: <reason>` and the run continues
+without it, as Ensembl VEP's does when a plugin module fails to compile. Under
+`--safe` it is an error, as Ensembl VEP's is.
 
 A plugin whose `vep_plugin_create` returns NULL or whose `vep_plugin_init`
 returns non-zero is written to the warnings file as `Failed to instantiate

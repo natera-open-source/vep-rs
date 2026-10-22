@@ -364,7 +364,8 @@ fn flag_names(arg: &Arg) -> String {
 
 /// The value type as the reference names it: `bool` for a switch, the possible
 /// values when the flag is an enumeration, the Rust type otherwise, with
-/// `repeatable` for a flag that accumulates and `comma-separated` for a list.
+/// `repeatable` for a flag that accumulates and `comma-separated` for a
+/// `LIST_FLAGS` entry, whose one value is split on commas.
 fn flag_type(arg: &Arg) -> String {
     if matches!(arg.get_action(), ArgAction::SetTrue) {
         return "bool".to_string();
@@ -398,7 +399,10 @@ fn flag_type(arg: &Arg) -> String {
         };
         name.to_string()
     };
-    let qualifier = if arg.get_value_delimiter().is_some() {
+    let is_list_flag = arg
+        .get_long()
+        .is_some_and(|long| LIST_FLAGS.contains(&long));
+    let qualifier = if is_list_flag {
         Some("comma-separated")
     } else if matches!(arg.get_action(), ArgAction::Append) {
         Some("repeatable")
@@ -896,7 +900,10 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
         out,
         "- One flag per line: the flag's long name without its dashes (one leading dash is \
          allowed), a blank, then its value. A line starting with `#`, or blank, is skipped.\n\
-         - A switch is on with the value `1` and off with `0`. `cache` is on with `1`, a \
+         - A switch is on with the value `1` and off with `0`, except `var_synonyms`, whose \
+         `0` switches `check_existing` on, with the notice `INFO: Colocated variants \
+         will be provided when using --var_synonyms`, and writes no synonyms, as Ensembl VEP \
+         tests that flag with `defined` (Runner.pm:117). `cache` is on with `1`, a \
          directory or an empty quoted value and off with `0`. A key alone on its line is \
          dropped.\n\
          - A flag taking a value takes the first word after its name, or, for a repeatable \
@@ -955,9 +962,10 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          larger set leaves it ambiguous (`--bi` is `--biotype`). A prefix of several flags that \
          Getopt::Long resolves no better (`--fo`), or a name no option has, is an argument \
          syntax error (exit 2).\n\
-         - A single-letter short is clap's and is matched by case: `-v` is `--verbose`, `-V` \
-         the version, `-qv` the cluster `-q -v`, and `-ofile.txt` the value `file.txt` of `-o`, \
-         a spelling Getopt::Long refuses.\n\n",
+         - A single-letter short is clap's and is matched by case: `-v` is `--verbose`, `-h` \
+         the help and `-V` the version, `-qv` the cluster `-q -v`, and `-ofile.txt` the value \
+         `file.txt` of `-o`, a spelling Getopt::Long refuses. Ensembl VEP refuses `-h`, a \
+         prefix of eight of its options, and has no `--version`.\n\n",
     );
     out.push_str(
         "Of the spellings Getopt::Long resolves to an option this version declares, these \
@@ -1010,11 +1018,12 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
         .collect();
     table(&mut out, &["Component", "Meaning"], &rows);
     out.push_str(
-        "`--help` and `--version` win over a flag the error table refuses before parsing, \
-         wherever they stand on the command line. Over a flag the parser does not know they win \
-         only when they come first, since clap reads left to right. Ensembl VEP's Getopt::Long \
-         runs with `pass_through` (Config.pm:62), so there `--help` wins over an unknown flag \
-         wherever it stands (vep:29) and an unknown flag alone is refused (vep:30).\n\n",
+        "`--help` and `--version` win over every other token of the command line, wherever they \
+         stand before a `--` (vep:29 before vep:30 under Getopt::Long's `pass_through`, \
+         Config.pm:62); `--help=1` and a `--help` behind `--` are refused. A `--help` or \
+         `--version` that is the token after a flag taking a string is that value (`-i \
+         --help` names the file) on both engines; after a flag taking a number it is the \
+         help or the version.\n\n",
     );
     out.push_str(
         "A panic aborts the process with the panic's own status. Ensembl VEP's own exit codes \
