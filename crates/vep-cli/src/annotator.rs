@@ -523,8 +523,8 @@ pub(crate) struct LoadedPlugins {
 /// (`:928`), loaded as a built-in when one claims the name, otherwise as a dylib
 /// resolved by path or under the directory ([`crate::dylib_plugins::load_unresolved`]);
 /// a name that resolves to neither is warned about and dropped, an error under
-/// `safe` (`:929-939`). A built-in or a dylib that fails to initialise is an error
-/// with or without `safe`, where Ensembl VEP warns and drops the plugin (`:943-951`).
+/// `safe` (`:929-939`), as is a built-in or a dylib whose `init` fails
+/// (`Failed to instantiate plugin <Name>: <reason>`, `:946-954`).
 ///
 /// The assembly is load-bearing rather than advisory: REVEL picks which of its two
 /// coordinate columns tabix indexed from it, LoFTEE picks between a bigWig and a
@@ -554,12 +554,30 @@ pub(crate) fn load_plugins(
         crate::warnings::global().warn(&message);
     }
 
-    let unresolved = builtin
-        .load_from_args_with_context(plugin_args, reference_fasta, assembly)
-        .map_err(|e| anyhow::anyhow!("plugin loading failed: {}", e))?;
-    let dylib = crate::dylib_plugins::load_unresolved(&unresolved, dir_plugins, safe)?;
+    let outcome = builtin.load_from_args_with_context(plugin_args, reference_fasta, assembly);
+    for (name, error) in &outcome.failed {
+        // `Init`'s `Display` adds a prefix Ensembl VEP's line does not carry, so
+        // its text alone is the reason.
+        let reason = match error {
+            vep_builtins::PluginError::Init(text) => text.clone(),
+            other => other.to_string(),
+        };
+        instantiation_failed(name, &reason, safe)?;
+    }
+    let dylib = crate::dylib_plugins::load_unresolved(&outcome.unresolved, dir_plugins, safe)?;
 
     Ok(LoadedPlugins { builtin, dylib })
+}
+
+/// A plugin whose constructor failed (Runner.pm:946-954): the plugin component's
+/// error under `safe`, else a warning, and the run goes on without the plugin.
+pub(crate) fn instantiation_failed(name: &str, reason: &str, safe: bool) -> anyhow::Result<()> {
+    let message = format!("Failed to instantiate plugin {name}: {reason}");
+    if safe {
+        return Err(crate::config::CliError::new("plugin", message).into());
+    }
+    crate::warnings::global().warn(&message);
+    Ok(())
 }
 
 /// The effects configuration of an embedding caller, without HGVSg; `hgvs`
@@ -2015,7 +2033,10 @@ mod tests {
     /// `Name,param,param` splits on every comma (Runner.pm:928: `split /,/`), the
     /// first part the plugin, the rest its parameters in order: LoFtool reads its
     /// scores file from the first parameter, so the file it fails to open names
-    /// the parameter the split gave it.
+    /// the parameter the split gave it. The failure is fatal under `--safe` alone
+    /// (`:946-954`: `throw($msg) if $self->param('safe')`, else a warning and
+    /// `next`), the plugin component carrying Ensembl VEP's text; without it the
+    /// run goes on with no plugin loaded.
     #[test]
     fn plugin_name_and_params_split_as_perl_does() {
         let dir = tempfile::tempdir().unwrap();
@@ -2024,21 +2045,25 @@ mod tests {
             ("LoFtool,/no/such/scores.txt", "/no/such/scores.txt"),
             ("LoFtool,/no/such/first,second,third", "/no/such/first"),
         ] {
-            let err = load_plugins(&[arg.to_string()], dir_path, false, None, None)
+            let err = load_plugins(&[arg.to_string()], dir_path, true, None, None)
                 .err()
-                .expect("a scores file that does not exist fails init");
-            let message = format!("{err:#}");
+                .expect("a scores file that does not exist fails init under --safe");
+            let message = CliError::from_run(&err);
             assert!(
-                message.contains(&format!("LoFtool: failed to open {first_param}:")),
+                message.starts_with(&format!(
+                    "ERROR: [plugin] Failed to instantiate plugin LoFtool: LoFtool: failed to open {first_param}:"
+                )),
                 "{arg}: {message}"
             );
+            let loaded = load_plugins(&[arg.to_string()], dir_path, false, None, None).unwrap();
+            assert_eq!(loaded.builtin.plugin_count(), 0);
         }
-        let err = load_plugins(&["LoFtool".to_string()], dir_path, false, None, None)
+        let err = load_plugins(&["LoFtool".to_string()], dir_path, true, None, None)
             .err()
-            .expect("LoFtool without a parameter fails init");
-        assert!(
-            format!("{err:#}").contains("LoFtool requires a path to the scores file"),
-            "{err:#}"
+            .expect("LoFtool without a parameter fails init under --safe");
+        assert_eq!(
+            CliError::from_run(&err),
+            "ERROR: [plugin] Failed to instantiate plugin LoFtool: LoFtool requires a path to the scores file"
         );
     }
 }

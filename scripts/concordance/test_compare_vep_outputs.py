@@ -2256,6 +2256,16 @@ class SvTranscriptSelectionTests(unittest.TestCase):
             ("18:200-200", "CPX"): (set(), {"C1"}),
         }, "the giant record and the unsupported type are in scope, the 10 kb deletion and the SNV are not; the matched T1 counts on both sides")
 
+    def test_a_typeless_symbolic_alt_is_in_scope_under_either_spelling(self) -> None:
+        """A bare `<CPX>` or `<CTX>` prints its ALT as written and the same ALT under
+        `SVTYPE=CPX` prints `CPX` (Parser/VCF.pm:469-481); every spelling is the
+        `vep_skip` route, a `<DEL>` below the size limit is not."""
+        from compare_vep_outputs import _batch_dependent_annotation_scope
+
+        for allele in ("CPX", "CTX", "<CPX>", "<CTX>"):
+            self.assertTrue(_batch_dependent_annotation_scope("21:800-900", allele), allele)
+        self.assertFalse(_batch_dependent_annotation_scope("21:800-900", "deletion"))
+
 
 # The reference release selector (Ensembl VEP 115.2 or 116.2)
 

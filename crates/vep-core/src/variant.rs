@@ -8,7 +8,7 @@ use std::sync::{Arc, OnceLock};
 
 use crate::consequence::{Consequence, ConsequenceList, TranscriptConsequence};
 use crate::coordinate::{normalize_chromosome, Strand};
-use crate::sv_routing::{perl_true, sv_so_term_and_class, sv_type_abbreviation};
+use crate::sv_routing::{perl_true, sv_so_term_and_class, sv_type_abbreviation, sv_type_string};
 
 /// Classification of variant types based on Sequence Ontology (SO) variant classes.
 ///
@@ -969,7 +969,9 @@ impl InputVariant {
     /// or `.A`, and a translocation allele without a breakend string, a single
     /// breakend on its own or a bare `<BND>`, the class term `chromosome_breakpoint`:
     /// Perl VEP's `$vfoa->{breakend}->{string} || $svf->class_SO_term`
-    /// (`OutputFactory.pm:2029`).
+    /// (`OutputFactory.pm:2029`). A type the term table lacks prints the type
+    /// string Perl VEP keeps as the `class_SO_term` ([`Self::structural_type_string`]:
+    /// `<CPX>` for a bare `<CPX>`, `CPX` under `SVTYPE=CPX`).
     /// For `<NON_REF>` alleles, returns the raw allele string since Perl VEP outputs
     /// the literal `<NON_REF>` (it has no SO term mapping).
     /// For small variants, returns the actual allele bases.
@@ -979,10 +981,25 @@ impl InputVariant {
         written_text(out)
     }
 
+    /// Perl VEP's type string for a structural record (Parser/VCF.pm:469-475): the
+    /// ALTs joined by `/`, or INFO/SVTYPE when that is true and the joined string
+    /// opens outside the VCF 4.4 forms ([`sv_type_string`]). A type `%SO_TERMS`
+    /// lacks keeps it as the record's `class_SO_term` (`:477-481`), so `<CPX>` prints
+    /// `<CPX>`, `<CPX>` with `SVTYPE=CPX` prints `CPX` and with `SVTYPE=FOO` `FOO`.
+    fn structural_type_string(&self) -> String {
+        let joined = match &self.uploaded_allele_string {
+            Some(alts) => alts.to_string(),
+            None => String::from_utf8_lossy(self.alt_allele()).into_owned(),
+        };
+        sv_type_string(&joined, self.sv_type.as_deref())
+    }
+
     /// Appends [`Self::display_allele`] to `out` without an intermediate
     /// `String`.
     pub fn write_display_allele(&self, out: &mut Vec<u8>) {
         let raw = String::from_utf8_lossy(self.alt_allele());
+        let type_string = (self.variant_class == VariantClass::ComplexStructural)
+            .then(|| self.structural_type_string());
         let allele: &str = if self.is_structural || self.variant_class.is_structural() {
             if self.variant_class == VariantClass::Translocation {
                 if self.mate_id.is_some() {
@@ -995,14 +1012,8 @@ impl InputVariant {
             } else if self.variant_class == VariantClass::ReferenceBlock {
                 // Perl VEP outputs the allele as written (no SO term mapping).
                 &raw
-            } else if self.variant_class == VariantClass::ComplexStructural {
-                // <CPX>: Perl VEP strips angle brackets to get "CPX" as class_SO_term,
-                // then outputs that as the allele string.
-                raw.trim_start_matches('<')
-                    .trim_end_matches('>')
-                    .split(':')
-                    .next()
-                    .unwrap_or("CPX")
+            } else if let Some(type_string) = &type_string {
+                type_string
             } else if self.variant_class == VariantClass::MobileElementInsertion
                 || self.variant_class == VariantClass::MobileElementDeletion
             {
@@ -1025,8 +1036,9 @@ impl InputVariant {
     /// The `VARIANT_CLASS` value of the record, Ensembl VEP's `class_SO_term`: a
     /// structural record's own term ([`Self::record_so_term`], `Alu_insertion` for
     /// `<INS:ME:ALU>`) or, for a type the term table lacks, the string its `Allele`
-    /// column prints ([`Self::display_allele`], `CPX` for `<CPX>`), since Ensembl
-    /// VEP prints the one `class_SO_term` in both columns of a structural row; a
+    /// column prints ([`Self::display_allele`], `<CPX>` for a bare `<CPX>` and `CPX`
+    /// under `SVTYPE=CPX`), since Ensembl VEP prints the one `class_SO_term` in both
+    /// columns of a structural row; a
     /// breakend row, whose `Allele` is its breakend string, prints the class term
     /// `chromosome_breakpoint`. A sequence record prints the class its record
     /// carries ([`Self::record_so_term`], the one a variation database stores for
@@ -1991,14 +2003,26 @@ mod tests {
         alu.variant_class = VariantClass::MobileElementInsertion;
         alu.record_so_term = Some("Alu_insertion".into());
         assert_eq!(alu.class_so_term(), "Alu_insertion");
-        // A type the term table lacks has no record term; its row prints the one
-        // string in the Allele and VARIANT_CLASS columns, as Ensembl VEP does.
+        // A type the term table lacks has no record term; its row prints Perl's
+        // type string in the Allele and VARIANT_CLASS columns (Parser/VCF.pm:469-481):
+        // the ALT as written, or INFO/SVTYPE when that names the type.
         let mut cpx = InputVariant::new("21".into(), 101, 300, b"N".to_vec(), b"<CPX>".to_vec());
         cpx.is_structural = true;
         cpx.variant_class = VariantClass::ComplexStructural;
         cpx.vep_skip = true;
-        assert_eq!(cpx.class_so_term(), "CPX");
+        cpx.uploaded_allele_string = Some("<CPX>".into());
+        assert_eq!(cpx.class_so_term(), "<CPX>");
         assert_eq!(cpx.class_so_term(), cpx.display_allele());
+        cpx.sv_type = Some("CPX".into());
+        assert_eq!(cpx.class_so_term(), "CPX");
+        assert_eq!(cpx.display_allele(), "CPX");
+        cpx.sv_type = Some("FOO".into());
+        assert_eq!(cpx.class_so_term(), "FOO");
+        let mut ctx = cpx.clone();
+        ctx.alt_alleles = vec![b"<CTX>".to_vec()];
+        ctx.uploaded_allele_string = Some("<CTX>".into());
+        ctx.sv_type = None;
+        assert_eq!(ctx.class_so_term(), "<CTX>");
         // A breakend row's Allele is its breakend string; its class is the term.
         let mut bnd =
             InputVariant::new("21".into(), 100, 100, b"N".to_vec(), b"N[21:200[".to_vec());
@@ -2192,7 +2216,7 @@ mod tests {
             (&del, "21_25000100_ACGTAC/-", "21:25000100-25000105", "-"),
             (&ins, "21_25000100_A/ATT", "21:25000100-25000101", "TT"),
             (&multi, "21_100_TAG/TA/T", "21:100-102", "A"),
-            (&cpx, "21_100_N/<CPX:X>", "21:100-300", "CPX"),
+            (&cpx, "21_100_N/<CPX:X>", "21:100-300", "<CPX:X>"),
             (&alu, "1_100_N/<INS:ME:ALU>", "1:100-200", "Alu_insertion"),
             (
                 &bare_me,

@@ -801,6 +801,28 @@ mod tests {
         );
     }
 
+    /// OverlapPC is `100 * ($overlap_length / $feature_length)` (OutputFactory.pm:2091)
+    /// printed with `%.2f` (`:2094`): a 23-bp and a 49-bp deletion inside a 160-bp
+    /// transcript print `14.37` and `30.63`, the quotient-first roundings of the
+    /// ties 14.375 and 30.625.
+    #[test]
+    fn test_overlap_pc_rounds_a_two_decimal_tie_as_perl_does() {
+        let cds = format!("ATG{}TAA", "GCT".repeat(31));
+        let tx = crate::test_helpers::make_single_exon_transcript(
+            Strand::Forward,
+            &cds,
+            &"A".repeat(31),
+        );
+        assert_eq!(tx.end - tx.start + 1, 160);
+        for (deleted, expected) in [(23, "14.37"), (49, "30.63")] {
+            let v = make_del("21", 40_000_050, 40_000_050 + deleted - 1);
+            let result = calculate(&v, &tx, 5000, 5000).unwrap();
+            let (bp, pc) = result.feature_overlap(v.start, v.end).unwrap();
+            assert_eq!(bp, deleted);
+            assert_eq!(format!("{pc:.2}"), expected);
+        }
+    }
+
     #[test]
     fn test_multiple_consequences_sorted_by_rank() {
         // Del: 25_000_030 - 25_004_500 (covers 5'UTR + CDS + introns + 3'UTR)

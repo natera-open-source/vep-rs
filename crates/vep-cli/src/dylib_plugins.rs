@@ -11,6 +11,7 @@ use anyhow::{bail, Context};
 use serde_json::Value;
 
 use vep_core::consequence::TranscriptConsequence;
+use vep_core::sv_routing::split_plugin_arg;
 use vep_core::variant::InputVariant;
 use vep_plugin::{PluginError, PluginRegistry};
 
@@ -19,9 +20,11 @@ use vep_plugin::{PluginError, PluginRegistry};
 /// A name that resolves to no file, neither as a path nor as `lib<name>.so` /
 /// `lib<name>.dylib` under `dir_plugins`, is written to the warnings file and
 /// dropped, or is an error under `safe`: Ensembl VEP continues without a plugin
-/// module that fails to compile unless `--safe` is given (Runner.pm:929-939). A
-/// file that exists but does not open, reports another ABI version, or fails
-/// `init` is an error, because the user named a real plugin and it will not run.
+/// module that fails to compile unless `--safe` is given (Runner.pm:929-939); a
+/// file whose `init` returns non-zero is dropped the same way, as a constructor
+/// that dies is (`:946-954`). A file that exists but does not open or reports
+/// another ABI version is an error, because the user named a real plugin and it
+/// will not run.
 pub fn load_unresolved(
     unresolved: &[String],
     dir_plugins: &str,
@@ -29,7 +32,7 @@ pub fn load_unresolved(
 ) -> anyhow::Result<PluginRegistry> {
     let mut registry = PluginRegistry::new();
     for arg in unresolved {
-        let name = arg.split(',').next().unwrap_or(arg);
+        let name = split_plugin_arg(arg).0;
         match registry.load_from_args(std::slice::from_ref(arg), Some(dir_plugins)) {
             Ok(()) => {}
             // The registry reports an unresolvable name with exactly this message;
@@ -42,6 +45,9 @@ pub fn load_unresolved(
                     return Err(crate::config::CliError::new("plugin", message).into());
                 }
                 crate::warnings::global().warn(&message);
+            }
+            Err(PluginError::Init(reason)) => {
+                crate::annotator::instantiation_failed(name, &reason, safe)?;
             }
             Err(e) => {
                 return Err(

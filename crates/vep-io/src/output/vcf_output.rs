@@ -587,10 +587,12 @@ impl OutputFormatter for VcfOutputFormatter {
         while cols.len() < 8 {
             cols.push(&b"."[..]);
         }
-        // An earlier annotation's first entry under the field's name is removed
-        // whether or not new consequences follow, as OutputFactory/VCF.pm:323-331
-        // clears the field (one substitution, one entry) before it looks for
-        // anything to append; --keep_csq keeps it beside the new one.
+        // Exactly the first entry under the field's name, whatever its value, is
+        // removed, whether or not new consequences follow; --keep_csq keeps it
+        // beside the new one. OutputFactory/VCF.pm:327-331 removes it by one
+        // substitution, `s/(^|\;)$fieldname\=\S+?(\;\S|$)/$2/`, whose `\S+?` must
+        // take one character, so on an empty-valued entry (`ANN=;`) it also removes
+        // the field that follows; that accident is not followed here.
         let csq_key = format!("{}=", self.info_field_name);
         let mut info: Vec<u8> = if cols[7] == b"." {
             Vec::new()
@@ -1224,7 +1226,9 @@ mod tests {
 
     /// A record carried through without consequences loses a stale `CSQ=` as an
     /// annotated one does (OutputFactory/VCF.pm:327-331 strips the field before
-    /// it looks for chunks): the rest of INFO survives, and `.` stands in when the
+    /// it looks for chunks): exactly the first entry under the name goes, whatever
+    /// its value (Ensembl VEP's substitution takes the next field too when the
+    /// value is empty), the rest of INFO survives, and `.` stands in when the
     /// stale field was all of it. A `vep_skip` mark reaches the same line even
     /// with a consequence attached.
     #[test]

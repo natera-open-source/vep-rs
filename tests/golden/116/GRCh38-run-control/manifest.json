@@ -1120,6 +1120,40 @@
    }
   },
   {
+   "name": "plugin-init-fails",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "LoFtool,/no/such/scores.txt"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "warnings_file": "plugin_init_fails_warnings.txt"
+   }
+  },
+  {
+   "name": "plugin-init-fails-safe",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "LoFtool,/no/such/scores.txt",
+    "--safe"
+   ],
+   "expect": {
+    "exit": 1,
+    "stderr_contains": "ERROR: [plugin] Failed to instantiate plugin LoFtool: LoFtool: failed to open /no/such/scores.txt: "
+   }
+  },
+  {
    "name": "plugins-two-unknown",
    "argv": [
     "{golden}",

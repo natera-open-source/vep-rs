@@ -974,10 +974,15 @@ pub struct Args {
     /// The criteria the pick family compares, in order, as a comma-separated list; a
     /// shorter list compares its criteria and then keeps the first transcript in
     /// stable-id order. Default: mane_select,mane_plus_clinical,canonical,appris,tsl,biotype,ccds,rank,length,ensembl,refseq
+    // The comma-split list is a `Vec`, whose action is `Append`, which
+    // `args_override_self` does not reach, so the flag overrides itself: a repeat
+    // keeps the last value, as a scalar Getopt::Long option does (`pick_order=s`,
+    // Config.pm:117).
     #[arg(
         help_heading = "Filtering / Picking",
         long = "pick_order",
         value_delimiter = ',',
+        overrides_with = "pick_order",
         value_parser = [
             "mane_select",
             "mane_plus_clinical",
@@ -1285,6 +1290,8 @@ mod tests {
 
     /// A repeated single-value flag keeps its last value, as Getopt::Long does;
     /// `-o` accumulates (`output_file|o=s@`) so the duplicate can be reported.
+    /// `--pick_order` is a scalar option too (`pick_order=s`, Config.pm:117, not
+    /// in `@ALLOW_MULTIPLE`, :340-346): its last occurrence is the whole list.
     #[test]
     fn repeated_flags_keep_the_last_value() {
         let args = Args::parse_from(["vep", "-i", "a.vcf", "-i", "b.vcf", "-o", "x", "-o", "y"]);
@@ -1295,6 +1302,18 @@ mod tests {
         ]);
         assert_eq!(args.fork, 3);
         assert_eq!(args.sift.as_deref(), Some("b"));
+        let args = Args::parse_from(["vep", "--pick_order", "length", "--pick_order", "rank"]);
+        assert_eq!(args.pick_order.as_deref(), Some(&["rank".to_string()][..]));
+        let args = Args::parse_from([
+            "vep",
+            "--pick_order",
+            "length,canonical",
+            "--pick_order=rank,tsl",
+        ]);
+        assert_eq!(
+            args.pick_order.as_deref(),
+            Some(&["rank".to_string(), "tsl".to_string()][..])
+        );
     }
 
     #[test]

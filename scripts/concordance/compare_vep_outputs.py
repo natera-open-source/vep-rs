@@ -433,9 +433,12 @@ def _is_covered_splice_region_swap(perl_csq: str, rust_csq: str) -> bool:
 # against whatever regions its batch loaded, so the transcripts Perl names for it are a
 # property of the neighbouring records, while vep-rs names every overlapping transcript.
 # `<NON_REF>` takes the same route but is not listed: vep-rs writes no transcript tuple
-# for a gVCF reference block, so the arms below have nothing to reach there.
+# for a gVCF reference block, so the arms below have nothing to reach there. The Allele
+# of a record whose type has no term is Perl's type string (Parser/VCF.pm:469-475):
+# the ALT as written (`<CPX>`), or INFO/SVTYPE when that names the type (`CPX`, the
+# gnomAD-SV spelling).
 _MAX_SV_SIZE = 10_000_000
-_VEP_SKIP_UNSUPPORTED_ALLELES = frozenset({"CPX", "CTX"})
+_VEP_SKIP_UNSUPPORTED_ALLELES = frozenset({"CPX", "CTX", "<CPX>", "<CTX>"})
 SV_TRANSCRIPT_SELECTION_BUCKET = "sv_transcript_selection"
 
 

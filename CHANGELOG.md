@@ -288,6 +288,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--no_progress` and `--debug` are listed among the flags vep-rs refuses as unknown arguments (exit 2) on the page of what vep-rs does not do. (#N)
 - Inputs that crashed the tools or escaped the output directory are refused or read: unterminated symbolic ALTs, oversized BGZF blocks, mixed exon ranks, path-escaping chromosome names, overlong FASTA indexes. (#N)
 - A structural record whose SVLEN overflows the coordinate range is dropped after its oversize warning instead of being annotated to the chromosome's end. (#N)
+- A repeated `--pick_order` keeps its last list, as Getopt::Long keeps the last value of a scalar option; the lists were concatenated. (#N)
+- `--summary` beside `--most_severe` under `--safe` lists every term, as Ensembl VEP's summary branch does; the most severe term alone was printed. (#N)
+- The tab header describes every `--fields` name in Ensembl VEP's description table; `ID`, `CELL_TYPE`, the ESP, ExAC and RefSeq keys and `BAM_EDIT` printed `?`. (#N)
+- `OverlapPC` rounds a two-decimal tie as Ensembl VEP's `100 * (overlap / length)` rounds it: 14.37, not 14.38, for 23 of 160 bases. (#N)
+- A plugin whose constructor fails is dropped with Ensembl VEP's `Failed to instantiate plugin` warning and the run completes; `--safe` makes it the plugin component's error. (#N)
+- A `--plugin` argument's trailing comma passes no parameter, as Perl's `split` passes none; a middle empty field stays. (#N)
+- `--transcript_filter` admits an `is_child` value outside the Sequence Ontology and matches it as a regular expression first, as Ensembl VEP does; it was refused. (#N)
+- `--spdi` expands a parenthesised tandem allele such as `(AC)3` before testing its characters, as Ensembl VEP does, so the row carries its notation. (#N)
+- A symbolic ALT with no Sequence Ontology term prints Ensembl VEP's type string in `Allele` and `VARIANT_CLASS`: `<CPX>` as written, `CPX` under `SVTYPE=CPX`. (#N)
 
 ### Security
 

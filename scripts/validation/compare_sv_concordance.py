@@ -183,7 +183,7 @@ def fastvep_symbolic_allele_to_so_class(allele: str) -> str:
     The rules below are vep-rs's own typing (`vep_core::sv_routing`: `sv_so_term_and_class`
     over `sv_type_abbreviation` for a type with a Sequence Ontology term,
     `classify_symbolic_alt` for one without) followed by its display rule, so the
-    mapping is identical to what the scored vep-rs arm already writes:
+    mapping is what the scored vep-rs arm writes, the `<CPX>` row excepted:
 
         token (case-insensitive)   vep-rs VariantClass       Allele written
         -------------------------  ------------------------  --------------------------
@@ -204,7 +204,9 @@ def fastvep_symbolic_allele_to_so_class(allele: str) -> str:
         <CN2> / <CN=2>             Duplication               duplication
         <CNn> (any other n)        CopyNumberVariation       copy_number_variation
         <CNV...>, <CN...>          CopyNumberVariation       copy_number_variation
-        <CPX[:x]>                  ComplexStructural         CPX
+        <CPX[:x]>                  ComplexStructural         CPX (<CPX[:x]> as written
+                                                             without INFO/SVTYPE; both
+                                                             spellings are set aside)
 
     Left UNCHANGED, deliberately:
 
@@ -269,8 +271,10 @@ def fastvep_symbolic_allele_to_so_class(allele: str) -> str:
     if upper.startswith("<CNV") or upper.startswith("<CN"):
         return "copy_number_variation"
     if upper.startswith("<CPX"):
-        # Perl strips the angle brackets and any `:subtype`; vep-rs's
-        # ComplexStructural display rule does the same.
+        # A type with no Sequence Ontology term prints Ensembl VEP's type string: the ALT
+        # as written (`<CPX>`) or INFO/SVTYPE (`CPX`, Parser/VCF.pm:469-481). Ensembl VEP
+        # skips such a record and `record_alleles` lists both spellings to set its rows
+        # aside, so the fastVEP token maps to the bare abbreviation.
         return "CPX"
     return allele
 
@@ -1772,32 +1776,38 @@ def vep_rs_unsupported_alt_allele(alt: str, svtype: str | None) -> str:
     (`classify_symbolic_alt` with `display_allele`): the class term of the ALT's own prefix
     read without regard to case (`<del>`, `<DEL:>` and `<DEL >` are `deletion`, `<CN=X>` and
     `<CN>` `copy_number_variation`, `<Bnd>` `chromosome_breakpoint`), else the class
-    INFO/SVTYPE names, else the text inside the brackets up to the first colon with every
-    bracket removed (`<<DEL>>` is `DEL`, `<:DEL>` the empty string, `<DÉL>` `DÉL`)."""
+    INFO/SVTYPE names, else the type string Ensembl VEP keeps for the record
+    (Parser/VCF.pm:469-481): INFO/SVTYPE as written when it is set and the ALT does not open
+    with a VCF 4.4 form, else the ALT as written (`<<DEL>>`, `<:DEL>`, `<CPX:X>`)."""
     upper = alt.upper()
     for prefix, term in _VEP_RS_ALT_PREFIX_TERMS:
         if upper.startswith(prefix):
             return term
     if svtype is not None and svtype.upper() in _VEP_RS_SVTYPE_TERMS:
         return _VEP_RS_SVTYPE_TERMS[svtype.upper()]
-    return alt.strip("<>").split(":", 1)[0]
+    if perl_true(svtype) and not _VCF44_SYMBOLIC.match(alt):
+        return svtype
+    return alt
 
 
 def record_alleles(v: VcfVariant) -> set[str]:
     """Every Allele string either engine writes for a VCF record, normalised as the
     comparator normalises them: the Sequence Ontology class of each symbolic ALT and of the
     whole ALT list (`copy_number_variation` for a DEL beside a DUP), the raw abbreviation of
-    a type with no term as both engines spell it (`CPX`, `<NON_REF>`) and the class term
-    vep-rs prints for it (`vep_rs_unsupported_alt_allele`: `deletion` for `<del>`), each
-    bracket breakend string with `chr` stripped inside the brackets, the own-end strings of
-    a breakend record (`N.`, `.N`, `chromosome_breakpoint`, the REF base with the dot), the
-    mate string a `<BND>` record's CHR2/END2 give, and a sequence ALT as written."""
+    a type with no term and its bracketed spelling (`CPX`, `<CPX>`, `<NON_REF>`) and the
+    string vep-rs prints for it (`vep_rs_unsupported_alt_allele`: `deletion` for `<del>`,
+    else INFO/SVTYPE or the ALT as written), each bracket breakend string with `chr`
+    stripped inside the brackets, the own-end strings of a breakend record (`N.`, `.N`,
+    `chromosome_breakpoint`, the REF base with the dot), the mate string a `<BND>` record's
+    CHR2/END2 give, and a sequence ALT as written."""
     alleles: set[str] = set()
     info = _info_fields(v.info)
     alts = perl_split(v.alt, ",")
     svtype = info.get("SVTYPE")
     sv_type = "/".join(alts)
     whole = perl_so_abbrev(svtype if svtype and not _VCF44_SYMBOLIC.match(sv_type) else sv_type)
+    # The type string Ensembl VEP keeps for the record (Parser/VCF.pm:469-475).
+    record_type = svtype if perl_true(svtype) and not _VCF44_SYMBOLIC.match(sv_type) else sv_type
     # Under a type the table lacks, vep-rs keeps each symbolic ALT's own class, INFO/SVTYPE
     # naming the class of a mixed list (a symbolic ALT beside a sequence allele).
     mixed = any(alt.startswith("<") for alt in alts) and any(
@@ -1812,7 +1822,12 @@ def record_alleles(v: VcfVariant) -> set[str]:
                 raw = re.sub(r":.+", "", alt[1:-1])
                 alleles.update({raw, f"<{raw}>", alt})
             if whole is None:
-                alleles.add(vep_rs_unsupported_alt_allele(f"<{svtype}>" if mixed and svtype else alt, svtype))
+                own = f"<{svtype}>" if mixed and svtype else alt
+                written = vep_rs_unsupported_alt_allele(own, svtype)
+                alleles.add(written)
+                if written in (own, svtype):
+                    # An ALT with no class term prints the record's type string.
+                    alleles.add(record_type)
         elif _BRACKET_MATE_RE.search(alt):
             alleles.add(normalize_allele(alt))
             alleles |= _OWN_END_ALLELES | {f"{v.ref}.", f".{v.ref}"}

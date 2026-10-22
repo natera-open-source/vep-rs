@@ -10,7 +10,8 @@
 //! by `/`, INFO/SVTYPE standing in for a string outside the VCF 4.4 forms, through
 //! `get_SO_term` (`Parser.pm` lines 663-727), whose abbreviation is looked up in
 //! `%SO_TERMS` (ensembl-variation `Utils/Config.pm`); a type with no entry is dropped
-//! as unsupported.
+//! as unsupported. [`perl_split`] reads any comma-separated value as Perl's `split`
+//! returns it, for the ALT list here and the `--plugin` argument ([`split_plugin_arg`]).
 
 use crate::variant::VariantClass;
 
@@ -31,6 +32,15 @@ pub fn perl_split<'a>(text: &'a str, separators: &'a [char]) -> impl Iterator<It
         .then(|| kept.split(separators))
         .into_iter()
         .flatten()
+}
+
+/// The plugin name or path and its parameters in a `--plugin` argument, split on every
+/// comma as Perl's `split /,/` splits it (ensembl-vep Runner.pm:928): a trailing empty
+/// field is no parameter, a middle one is kept, so `Name,` has none and `Name,a,,b` three.
+pub fn split_plugin_arg(arg: &str) -> (&str, Vec<String>) {
+    let mut fields = perl_split(arg, &[',']);
+    let name = fields.next().unwrap_or("");
+    (name, fields.map(String::from).collect())
 }
 
 /// The ALT column's fields with their written positions, read as Perl reads the list.
@@ -561,6 +571,19 @@ mod tests {
         assert_eq!(sv_type_abbreviation("DEL/", None), "DEL");
         assert_eq!(term("<DEL>/", Some("DEL")), Some("deletion"));
         assert_eq!(sv_type_abbreviation("/", None), "/");
+    }
+
+    /// `split /,/` (Runner.pm:928) reads a `--plugin` argument: the name first, a
+    /// trailing empty field no parameter, a middle one kept.
+    #[test]
+    fn plugin_arg_splits_as_perl_does() {
+        let params = |arg: &str| split_plugin_arg(arg).1;
+        assert_eq!(split_plugin_arg("Foo,").0, "Foo");
+        assert_eq!(params("Foo,"), Vec::<String>::new());
+        assert_eq!(params("Foo,a,"), ["a"]);
+        assert_eq!(params("Foo,a,,b"), ["a", "", "b"]);
+        assert_eq!(params("Foo"), Vec::<String>::new());
+        assert_eq!(split_plugin_arg(""), ("", Vec::new()));
     }
 
     /// Perl's string truth: the empty string and `0` are false, every other string is

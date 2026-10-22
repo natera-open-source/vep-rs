@@ -1502,7 +1502,8 @@ fn test_unknown_plugin_warns_but_does_not_fail() {
 
 /// A built-in plugin name resolves without the unknown-plugin warning, on
 /// standard error or in the warnings file beside the output; with no data-file
-/// parameter the run fails at the plugin's init instead.
+/// parameter its init fails, and the run goes on without it under the warning
+/// Ensembl VEP writes for a constructor that dies (Runner.pm:946-954).
 #[test]
 fn test_builtin_plugin_names_are_recognized() {
     let dir = tempfile::tempdir().unwrap();
@@ -1525,10 +1526,11 @@ fn test_builtin_plugin_names_are_recognized() {
         !stderr.contains(unknown) && !warnings.contains(unknown),
         "CADD should be recognized as a builtin plugin:\n{stderr}\n{warnings}"
     );
+    let dropped =
+        "Failed to instantiate plugin CADD: CADD requires at least one file path parameter";
     assert!(
-        !result.status.success()
-            && stderr.contains("CADD requires at least one file path parameter"),
-        "CADD without a data file should fail at init:\n{stderr}"
+        result.status.success() && stderr.contains(dropped) && warnings.contains(dropped),
+        "CADD without a data file is dropped with a warning:\n{stderr}\n{warnings}"
     );
 }
 

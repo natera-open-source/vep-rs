@@ -1147,8 +1147,9 @@ class FastvepSymbolicAlleleTests(unittest.TestCase):
         self._assert_maps("<DEL:ME:SVA>", "SVA_deletion")
 
     def test_maps_cpx_to_the_bracket_stripped_abbreviation(self):
-        """Perl has no SO term for CPX and writes the stripped type; vep-rs's
-        ComplexStructural display rule does the same, dropping any `:subtype`."""
+        """Perl has no SO term for CPX and keeps the type string, `<CPX>` as written or
+        `CPX` from INFO/SVTYPE; `record_alleles` lists both spellings, so the fastVEP token
+        maps to the bare abbreviation whatever its `:subtype`."""
         self._assert_maps("<CPX>", "CPX")
         self._assert_maps("<CPX:DEL>", "CPX")
 
@@ -3456,17 +3457,25 @@ class UnsupportedAltAlleleTests(unittest.TestCase):
                           ("<Ins>", "insertion"), ("<INS:>", "insertion"), ("<Bnd>", "chromosome_breakpoint"),
                           ("<CN=X>", "copy_number_variation"), ("<CNX>", "copy_number_variation"),
                           ("<CN>", "copy_number_variation"), ("<Dup>", "duplication"), ("<Inv>", "inversion"),
-                          ("<<DEL>>", "DEL"), ("<:DEL>", ""), ("<CPX>", "CPX"), ("<CPX:X>", "CPX"),
-                          ("<DÉL>", "DÉL"), ("<ＤＥＬ>", "ＤＥＬ"), ("< DEL >", " DEL ")):
+                          ("<<DEL>>", "<<DEL>>"), ("<:DEL>", "<:DEL>"), ("<CPX>", "<CPX>"), ("<CPX:X>", "<CPX:X>"),
+                          ("<DÉL>", "<DÉL>"), ("<ＤＥＬ>", "<ＤＥＬ>"), ("< DEL >", "< DEL >")):
             self.assertEqual(C.vep_rs_unsupported_alt_allele(alt, None), term, alt)
         self.assertEqual(C.vep_rs_unsupported_alt_allele("<FOO>", "DEL"), "deletion", "INFO/SVTYPE names the class of a type the ALT does not")
-        self.assertEqual(C.vep_rs_unsupported_alt_allele("<FOO>", "foo"), "FOO")
+        self.assertEqual(C.vep_rs_unsupported_alt_allele("<FOO>", "foo"), "foo", "INFO/SVTYPE is the type string when it names no class")
+        self.assertEqual(C.vep_rs_unsupported_alt_allele("<CPX>", "CPX"), "CPX")
+        self.assertEqual(C.vep_rs_unsupported_alt_allele("<FOO>", "0"), "<FOO>", "a false SVTYPE names nothing, as Perl reads `0`")
+        self.assertEqual(C.vep_rs_unsupported_alt_allele("<DEL:X>", "CPX"), "deletion", "a VCF 4.4 form keeps its own class")
         self.assertEqual(C.record_alleles(REC(30425650, "N", "<Del>", "END=30425949")), {"Del", "<Del>", "deletion"})
         self.assertEqual(C.record_alleles(REC(30425650, "N", "<CN=X>", "END=30425949")), {"CN=X", "<CN=X>", "copy_number_variation"})
         self.assertEqual(C.record_alleles(REC(30425650, "N", "<:DEL>", "END=30425949")), {"", "<>", "<:DEL>", "-"},
                          "the tab format writes the empty Allele as `-`")
-        self.assertEqual(C.record_alleles(REC(30425650, "N", "<<DEL>>,<DEL>", "END=30425949")), {"deletion", "DEL"},
-                         "`<<DEL>>` alone is a DEL to the reference, the list `DEL/DEL` has no term, and vep-rs spells the doubled ALT `DEL`")
+        self.assertEqual(C.record_alleles(REC(30425650, "N", "<DEL>,<FOO>", "END=30425949")), {"deletion", "FOO", "<FOO>", "<DEL>/<FOO>"},
+                         "the typeless ALT's rows print the list as written, the DEL's its class")
+        self.assertEqual(C.record_alleles(REC(30425650, "N", "<FOO>,<BAR>", "SVTYPE=baz;END=30425949")), {"FOO", "<FOO>", "BAR", "<BAR>", "baz"},
+                         "INFO/SVTYPE names a list that opens outside the VCF 4.4 forms")
+        self.assertEqual(C.record_alleles(REC(30425650, "N", "<<DEL>>,<DEL>", "END=30425949")),
+                         {"deletion", "<<DEL>>", "<<DEL>>/<DEL>"},
+                         "`<<DEL>>` alone is a DEL to the reference, the list `DEL/DEL` has no term, and vep-rs prints the list as written on the doubled ALT's rows")
         self.assertEqual(C.record_alleles(REC(30425650, "N", "<DEL>,T", "SVTYPE=INS;END=30425949")), {"deletion", "insertion", "T"},
                          "a mixed list under a type the table lacks takes INFO/SVTYPE's class in vep-rs")
         self.assertEqual(C.record_alleles(REC(1000, "N", "<CPX>", "END=2000;SVTYPE=CPX")), {"CPX", "<CPX>"}, "the raw spelling stays")
@@ -3478,18 +3487,16 @@ class UnsupportedAltAlleleTests(unittest.TestCase):
         feature_truncation,coding_sequence_variant,5_prime_UTR_variant`, `<CN=X>` the same rows
         under `copy_number_variation` (`coding_sequence_variant,5_prime_UTR_variant` on the
         coding transcript), `<Bnd>` `21:30425651 chromosome_breakpoint` rows, `<<DEL>>,<DEL>`
-        a `DEL` row beside a `deletion` row per transcript, and `21 30425650 x N <:DEL> . .
-        END=30425949` an empty Allele in the default format and `-` in the tab format
-        (`21:30425651-30425949 - ENST00000390690 5_prime_UTR_variant,coding_sequence_variant`);
-        every row is set aside and the cross-check holds."""
+        a `<<DEL>>/<DEL>` row (the list as written) beside a `deletion` row per transcript, and
+        `21 30425650 x N <:DEL> . . END=30425949` the ALT as written in the default and tab
+        formats (`21:30425651-30425949 <:DEL> ENST00000390690
+        5_prime_UTR_variant,coding_sequence_variant`); every row is set aside and the
+        cross-check holds."""
         span = "21:30425651-30425949"
         cases = [
-            (REC(30425650, "N", "<:DEL>", "END=30425949", "colon_default"),
-             {T(span, "", "ENST00000334068", "upstream_gene_variant"),
-              T(span, "", "ENST00000390690", "coding_sequence_variant,5_prime_UTR_variant")}),
-            (REC(30425650, "N", "<:DEL>", "END=30425949", "colon_tab"),
-             {T(span, "-", "ENST00000334068", "upstream_gene_variant"),
-              T(span, "-", "ENST00000390690", "5_prime_UTR_variant,coding_sequence_variant")}),
+            (REC(30425650, "N", "<:DEL>", "END=30425949", "colon"),
+             {T(span, "<:DEL>", "ENST00000334068", "upstream_gene_variant"),
+              T(span, "<:DEL>", "ENST00000390690", "coding_sequence_variant,5_prime_UTR_variant")}),
             (REC(30425650, "N", "<Del>", "END=30425949", "lower"),
              {T(span, "deletion", "ENST00000334068", "upstream_gene_variant"),
               T(span, "deletion", "ENST00000390690", "feature_truncation,coding_sequence_variant,5_prime_UTR_variant")}),
@@ -3503,9 +3510,9 @@ class UnsupportedAltAlleleTests(unittest.TestCase):
              {T("21:30425651", "chromosome_breakpoint", "ENST00000334068", "upstream_gene_variant"),
               T("21:30425651", "chromosome_breakpoint", "ENST00000390690", "coding_sequence_variant")}),
             (REC(30425650, "N", "<<DEL>>,<DEL>", "END=30425949", "doubled"),
-             {T(span, "DEL", "ENST00000334068", "upstream_gene_variant"),
+             {T(span, "<<DEL>>/<DEL>", "ENST00000334068", "upstream_gene_variant"),
               T(span, "deletion", "ENST00000334068", "upstream_gene_variant"),
-              T(span, "DEL", "ENST00000390690", "coding_sequence_variant,5_prime_UTR_variant"),
+              T(span, "<<DEL>>/<DEL>", "ENST00000390690", "coding_sequence_variant,5_prime_UTR_variant"),
               T(span, "deletion", "ENST00000390690", "feature_truncation,coding_sequence_variant,5_prime_UTR_variant")}),
         ]
         for record, rust in cases:

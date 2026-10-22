@@ -1079,6 +1079,92 @@ fn safe_skips_incompatible_check() {
     assert!(data_lines(&std::fs::read_to_string(&out).unwrap()).len() > 30);
 }
 
+/// The pick-summary corpus: multi-allelic records over several transcripts, the
+/// fixture of the pick family's flag sets.
+fn pick_summary_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38-pick-summary")
+}
+
+/// Runs the binary on the pick-summary corpus with `extra` after the corpus
+/// arguments, writing `out`.
+fn pick_summary(extra: &[&str], out: &Path) -> Output {
+    run_with(&args_for(&pick_summary_dir()), extra, out)
+}
+
+/// The rows of a default-format output for one record, each as its first seven
+/// columns (the identifier through the consequence).
+fn record_rows(output: &str, id: &str) -> Vec<String> {
+    let prefix = format!("{id}\t");
+    data_lines(output)
+        .into_iter()
+        .filter(|l| l.starts_with(&prefix))
+        .map(|l| l.split('\t').take(7).collect::<Vec<_>>().join("\t"))
+        .collect()
+}
+
+/// A repeated `--pick_order` keeps its last value, as Getopt::Long keeps the last
+/// value of the scalar `pick_order=s` (Config.pm:117, not in `@ALLOW_MULTIPLE`,
+/// :340-346): under `--pick --pick_order length --pick_order rank` Ensembl VEP
+/// 116.2 picks `C ENST00000339775`, the row `rank` alone picks, for the record
+/// `21 17604928 G A,C`; `length` alone would pick another transcript.
+#[test]
+fn repeated_pick_order_keeps_the_last_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let repeated = pick_summary(
+        &["--pick", "--pick_order", "length", "--pick_order", "rank"],
+        &out,
+    );
+    assert_eq!(
+        repeated.status.code(),
+        Some(0),
+        "{}",
+        text(&repeated.stderr)
+    );
+    let rows = record_rows(&std::fs::read_to_string(&out).unwrap(), "ps_17604928");
+    assert_eq!(
+        rows,
+        ["ps_17604928\t21:17604928\tC\tENSG00000154640\tENST00000339775\tTranscript\tmissense_variant"]
+    );
+    let length_alone = pick_summary(&["--pick", "--pick_order", "length"], &out);
+    assert_eq!(length_alone.status.code(), Some(0));
+    assert_ne!(
+        record_rows(&std::fs::read_to_string(&out).unwrap(), "ps_17604928"),
+        rows,
+        "the last value decides the pick"
+    );
+}
+
+/// `--safe` skips the check that refuses `--summary` with `--most_severe`
+/// (Config.pm:961), and the pair then lists every term: `summary_only` routes on
+/// either flag (OutputFactory.pm:387) and tests `summary` first (`:436`), the
+/// most-severe term alone being its `else` (`:446-447`). The data rows are the
+/// `--summary` run's.
+#[test]
+fn safe_lets_summary_win_over_most_severe() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let written_rows = || -> Vec<String> {
+        data_lines(&std::fs::read_to_string(&out).unwrap())
+            .into_iter()
+            .map(str::to_string)
+            .collect()
+    };
+    let pair = pick_summary(&["--safe", "--summary", "--most_severe"], &out);
+    assert_eq!(pair.status.code(), Some(0), "{}", text(&pair.stderr));
+    let pair_rows = written_rows();
+    let summary = pick_summary(&["--summary"], &out);
+    assert_eq!(summary.status.code(), Some(0));
+    let summary_rows = written_rows();
+    assert_eq!(pair_rows, summary_rows);
+    assert!(
+        pair_rows
+            .iter()
+            .any(|row| row.split('\t').nth(6).is_some_and(|c| c.contains(','))),
+        "a summary lists several terms on some record"
+    );
+}
+
 /// `--verbose` prints the status lines of the run, the detected input format
 /// among them in Ensembl VEP's words (Parser.pm:147); without it the format is
 /// not reported.
@@ -1435,6 +1521,78 @@ fn safe_makes_unknown_plugin_fatal() {
         text(&fatal.stderr).lines().any(|l| l == error),
         "{}",
         text(&fatal.stderr)
+    );
+    assert!(
+        !out.exists(),
+        "no output is written when --safe refuses a plugin"
+    );
+}
+
+/// A plugin whose constructor fails is dropped with the warning `Failed to
+/// instantiate plugin <Name>: <reason>` and the run completes, or is the plugin
+/// component's error under `--safe` (Runner.pm:946-954: `throw($msg) if
+/// $self->param('safe'); $self->warning_msg($msg); next;`), with no output
+/// written.
+#[test]
+fn plugin_init_failure_warns_and_is_fatal_under_safe() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let corpus = run_control_dir();
+    let warned = run_control(
+        &[
+            "-o",
+            out.to_str().unwrap(),
+            "--dir_plugins",
+            corpus.to_str().unwrap(),
+            "--plugin",
+            "LoFtool,/no/such/scores.txt",
+        ],
+        dir.path(),
+    );
+    assert_eq!(warned.status.code(), Some(0), "{}", text(&warned.stderr));
+    let prefix = "WARNING: Failed to instantiate plugin LoFtool: LoFtool: failed to open /no/such/scores.txt:";
+    assert!(
+        text(&warned.stderr).lines().any(|l| l.starts_with(prefix)),
+        "{}",
+        text(&warned.stderr)
+    );
+    let warnings = std::fs::read_to_string(dir.path().join("out.txt_warnings.txt")).unwrap();
+    assert!(
+        warnings.lines().any(|l| l.starts_with(prefix)),
+        "{warnings}"
+    );
+    let output = std::fs::read_to_string(&out).unwrap();
+    let rows = data_lines(&output);
+    assert!(rows.len() > 30);
+    assert!(
+        rows.iter().all(|row| !row.contains("LoFtool")),
+        "the plugin is dropped"
+    );
+    std::fs::remove_file(&out).unwrap();
+
+    let fatal = run_control(
+        &[
+            "-o",
+            out.to_str().unwrap(),
+            "--dir_plugins",
+            corpus.to_str().unwrap(),
+            "--plugin",
+            "LoFtool,/no/such/scores.txt",
+            "--safe",
+        ],
+        dir.path(),
+    );
+    assert_eq!(fatal.status.code(), Some(1));
+    let stderr = text(&fatal.stderr);
+    let errors: Vec<&str> = stderr
+        .lines()
+        .filter(|l| l.starts_with("ERROR: "))
+        .collect();
+    assert_eq!(errors.len(), 1, "{stderr}");
+    assert!(
+        errors[0].starts_with(&prefix.replacen("WARNING: ", "ERROR: [plugin] ", 1)),
+        "{}",
+        errors[0]
     );
     assert!(
         !out.exists(),

@@ -196,7 +196,9 @@ pub fn apply_to_record(record: &mut [InputVariant], config: &FilterConfig) {
     row_filter::apply_to_record(record, config.row_filters);
     pick_family(record, config);
     if config.most_severe || config.summary {
-        summarise(record, config.most_severe);
+        // `summary_only` tests `summary` before `most_severe` (`:436`, `:446`), so
+        // the pair `--safe` lets through lists every term.
+        summarise(record, config.most_severe && !config.summary);
     }
 }
 
@@ -1098,6 +1100,33 @@ mod tests {
     fn summary_lists_unique_terms_of_the_record_in_rank_order() {
         let mut record = two_gene_record();
         apply_to_record(&mut record, &config(|c| c.summary = true));
+        assert_eq!(kept(&record), vec![(0, "-".to_string())]);
+        assert_eq!(
+            record[0].summary_terms.as_deref(),
+            Some(
+                &[
+                    Consequence::MissenseVariant,
+                    Consequence::SynonymousVariant,
+                    Consequence::IntronVariant
+                ][..]
+            )
+        );
+    }
+
+    /// `--summary` beside `--most_severe`, a pair `--safe` lets through
+    /// (`Config.pm:961`), lists every term: `summary_only` routes on either flag
+    /// (`:387`) and tests `summary` first (`:436`), `most_severe` in its `else`
+    /// (`:446`).
+    #[test]
+    fn summary_wins_over_most_severe() {
+        let mut record = two_gene_record();
+        apply_to_record(
+            &mut record,
+            &config(|c| {
+                c.summary = true;
+                c.most_severe = true;
+            }),
+        );
         assert_eq!(kept(&record), vec![(0, "-".to_string())]);
         assert_eq!(
             record[0].summary_terms.as_deref(),

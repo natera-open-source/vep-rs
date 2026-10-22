@@ -48,9 +48,15 @@ which is Ensembl VEP's default. Under `--safe` it is an error, as Ensembl VEP's
 is.
 
 A file that exists but does not open as a shared library, lacks one of the eight
-symbols, reports an ABI version other than 1, or returns non-zero from
-`vep_plugin_init` aborts the run before annotation starts, with or without
-`--safe`.
+symbols or reports an ABI version other than 1 aborts the run before annotation
+starts, with or without `--safe`.
+
+A plugin whose `vep_plugin_create` returns NULL or whose `vep_plugin_init`
+returns non-zero is written to the warnings file as `Failed to instantiate
+plugin Name: <reason>` and the run continues without it, as Ensembl VEP's does
+when a plugin's constructor dies. A built-in plugin whose parameters it cannot
+use (a scores file that does not open) is dropped the same way. Under `--safe`
+either is an error, as Ensembl VEP's is.
 
 ### The C ABI (version 1)
 
@@ -71,7 +77,7 @@ Returns `1`; any other value is a load error.
 extern "C" fn() -> *mut c_void
 ```
 
-Returns an opaque instance pointer; NULL is a load error.
+Returns an opaque instance pointer; NULL is a failed instantiation (above).
 
 #### `vep_plugin_destroy`
 

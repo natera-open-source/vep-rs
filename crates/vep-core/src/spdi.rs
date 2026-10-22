@@ -8,22 +8,85 @@
 //! Perl citations name modules of ensembl-variation release/116
 //! (`Bio/EnsEMBL/Variation/...`).
 
+use std::borrow::Cow;
+
 use crate::codon::reverse_complement;
+
+/// The longest allele a tandem notation expands to; a count asking for more
+/// leaves the notation as written, so the allele gets no SPDI.
+const MAX_EXPANDED_ALLELE_BYTES: usize = 64 << 20;
+
+/// `expand` (ensembl core Utils/Sequence.pm:116-119 at release/116,
+/// `s/(\w*)\((\w+)\)(\d+)/$1.$2 x $3/eg`): every `(unit)count` group of a
+/// tandem-notation allele written out, `(AC)3` as `ACACAC`, the text around a
+/// group kept; an allele without `(`, and a group whose unit or count is not
+/// word characters then digits, come back as they are.
+fn expand_tandem(allele: &[u8]) -> Cow<'_, [u8]> {
+    if !allele.contains(&b'(') {
+        return Cow::Borrowed(allele);
+    }
+    let word = |b: &u8| b.is_ascii_alphanumeric() || *b == b'_';
+    let mut out = Vec::with_capacity(allele.len());
+    let mut rest = allele;
+    while let Some(open) = rest.iter().position(|b| *b == b'(') {
+        out.extend_from_slice(&rest[..open]);
+        let after_open = &rest[open + 1..];
+        let unit_len = after_open.iter().take_while(|b| word(b)).count();
+        let count_start = unit_len + 1;
+        let count_len = after_open.get(count_start..).map_or(0, |tail| {
+            tail.iter().take_while(|b| b.is_ascii_digit()).count()
+        });
+        let is_group = unit_len > 0 && after_open.get(unit_len) == Some(&b')') && count_len > 0;
+        let expanded = if is_group {
+            let unit = &after_open[..unit_len];
+            let digits = &after_open[count_start..count_start + count_len];
+            repeat_unit(unit, digits, out.len())
+        } else {
+            None
+        };
+        match expanded {
+            Some(bases) => {
+                out.extend_from_slice(&bases);
+                rest = &after_open[count_start + count_len..];
+            }
+            None => {
+                out.push(b'(');
+                rest = after_open;
+            }
+        }
+    }
+    out.extend_from_slice(rest);
+    Cow::Owned(out)
+}
+
+/// `unit` written out `digits` times; `None` when the count does not fit a
+/// `usize` or the allele, `written` bytes long so far, would pass
+/// [`MAX_EXPANDED_ALLELE_BYTES`].
+fn repeat_unit(unit: &[u8], digits: &[u8], written: usize) -> Option<Vec<u8>> {
+    let count: usize = std::str::from_utf8(digits).ok()?.parse().ok()?;
+    let total = unit.len().checked_mul(count)?;
+    if written.checked_add(total)? > MAX_EXPANDED_ALLELE_BYTES {
+        return None;
+    }
+    Some(unit.repeat(count))
+}
 
 /// `spdi_genomic` (VariationFeature.pm 2129) for one alternate allele of a
 /// record: `reference_name`, the 0-based position, the deleted bases and the
 /// inserted bases joined by `:`. `start..=end` is the record's span and
 /// `reference` and `alt` its alleles as the record writes them (`-` for no
-/// bases), which `reverse` reads on the reverse strand. A single-base span is a
-/// substitution or a one-base deletion (2185-2191); a reference of `-` is an
-/// insertion positioned after `end` (2193-2197); a deletion of more than 20
-/// bases writes their count (2201-2203); any other pair writes both alleles as
-/// they are (2207-2210). Alleles on the reverse strand are complemented when
-/// the deleted part is all bases (2214-2217): the count of a long deletion is
-/// not, and a reference carrying a character outside `ACGTN` leaves both the
-/// deleted and the inserted part as written. `None` where Ensembl VEP writes
-/// no value: a span before the first base (2144), an alternate allele with a
-/// character outside `ACGTN-` (2173), and a reference allele ending in one,
+/// bases), which `reverse` reads on the reverse strand. Each allele has its
+/// tandem notation expanded first (2156, 2170, [`expand_tandem`]), so
+/// `(AC)3` is the six bases `ACACAC`. A single-base span is a substitution or a
+/// one-base deletion (2185-2191); a reference of `-` is an insertion positioned
+/// after `end` (2193-2197); a deletion of more than 20 bases writes their count
+/// (2201-2203); any other pair writes both alleles as they are (2207-2210).
+/// Alleles on the reverse strand are complemented when the deleted part is all
+/// bases (2214-2217): the count of a long deletion is not, and a reference
+/// carrying a character outside `ACGTN` leaves both the deleted and the
+/// inserted part as written. `None` where Ensembl VEP writes no value: a span
+/// before the first base (2144), an expanded alternate allele with a character
+/// outside `ACGTN-` (2173), and an expanded reference allele ending in one,
 /// where Ensembl VEP stops the run (2159); a reference with such a character
 /// before its last is written as it is, as Ensembl VEP writes it.
 pub fn spdi_genomic(
@@ -37,6 +100,8 @@ pub fn spdi_genomic(
     if start < 1 || end < 1 {
         return None;
     }
+    let reference = &*expand_tandem(reference);
+    let alt = &*expand_tandem(alt);
     let base = |b: &u8| matches!(b.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T' | b'N');
     let base_or_dash = |b: &u8| *b == b'-' || base(b);
     if !reference.last().is_none_or(base_or_dash) || !alt.iter().all(base_or_dash) {
@@ -281,6 +346,68 @@ mod tests {
             spdi_genomic("NC_000021.9", 10538885, 10538885, b"A", b"C", false).as_deref(),
             Some("NC_000021.9:10538884:A:C")
         );
+    }
+
+    /// Ensembl VEP 116.2 under `--spdi` on the Ensembl-format record
+    /// `21 10538885 10538890 (AC)3/- +` prints `21:10538884:ACACAC:` on every
+    /// row: `spdi_genomic` expands a tandem notation (`expand`, Utils/Sequence.pm
+    /// 116-119) before it tests the characters (VariationFeature.pm 2156, 2170).
+    /// The alternate allele expands the same way, the text around a group is
+    /// kept, a reverse-strand allele is complemented after the expansion, and a
+    /// parenthesis that opens no `(unit)count` group is left as written: it
+    /// fails the character test where that test reaches it (the alternate
+    /// allele, the reference's last character) and is printed where it does
+    /// not, as Ensembl VEP prints it.
+    #[test]
+    fn spdi_expands_a_tandem_notation_before_the_character_test() {
+        let spdi = |start, end, reference: &str, alt: &str, reverse| {
+            spdi_genomic(
+                "21",
+                start,
+                end,
+                reference.as_bytes(),
+                alt.as_bytes(),
+                reverse,
+            )
+        };
+        assert_eq!(
+            spdi(10538885, 10538890, "(AC)3", "-", false).as_deref(),
+            Some("21:10538884:ACACAC:")
+        );
+        assert_eq!(
+            spdi(10538885, 10538890, "(AC)3", "-", true).as_deref(),
+            Some("21:10538884:GTGTGT:")
+        );
+        assert_eq!(
+            spdi(10538885, 10538885, "A", "(AC)3", false).as_deref(),
+            Some("21:10538884:A:ACACAC")
+        );
+        assert_eq!(
+            spdi(10538885, 10538892, "A(AC)3G", "T(GA)2", false).as_deref(),
+            Some("21:10538884:AACACACG:TGAGA")
+        );
+        assert_eq!(
+            spdi(10538885, 10538894, "(AC)3(GT)2", "-", false).as_deref(),
+            Some("21:10538884:ACACACGTGT:")
+        );
+        assert_eq!(spdi(10538885, 10538886, "(AC)", "-", false), None);
+        assert_eq!(
+            spdi(10538885, 10538886, "(AC", "-", false).as_deref(),
+            Some("21:10538884:(AC:")
+        );
+        assert_eq!(spdi(10538885, 10538886, "AC(", "-", false), None);
+        assert_eq!(spdi(10538885, 10538885, "A", "(AC", false), None);
+        assert_eq!(
+            spdi(10538885, 10538885, "A", "(AC)99999999999", false),
+            None
+        );
+        assert_eq!(
+            &*expand_tandem(b"(AC)3"),
+            b"ACACAC",
+            "the expansion alone, as `expand` rewrites the string"
+        );
+        assert_eq!(&*expand_tandem(b"AC(G)0T"), b"ACT");
+        assert_eq!(&*expand_tandem(b"ACGT"), b"ACGT");
     }
 
     /// Ensembl VEP 116.2 in database mode under `--spdi --ga4gh_vrs` for

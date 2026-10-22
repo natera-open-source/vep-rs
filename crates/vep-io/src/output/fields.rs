@@ -499,8 +499,10 @@ pub fn field_description(field: &str) -> Option<&'static str> {
         .map(|(_, d)| *d)
 }
 
+/// `%FIELD_DESCRIPTIONS` (Constants.pm:142-266), every key with its text.
 const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     ("Uploaded_variation", "Identifier of uploaded variant"),
+    ("ID", "Identifier of uploaded variant"),
     (
         "Location",
         "Location of variant in standard coordinate format (chr:start or chr:start-end)",
@@ -587,6 +589,10 @@ const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
         "List of transcription factors which bind to the transcription factor binding profile",
     ),
     (
+        "CELL_TYPE",
+        "List of cell types and classifications for regulatory feature",
+    ),
+    (
         "AF",
         "Frequency of existing variant in 1000 Genomes combined population",
     ),
@@ -599,6 +605,10 @@ const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
         "Frequency of existing variant in 1000 Genomes combined American population",
     ),
     (
+        "ASN_AF",
+        "Frequency of existing variant in 1000 Genomes combined Asian population",
+    ),
+    (
         "EAS_AF",
         "Frequency of existing variant in 1000 Genomes combined East Asian population",
     ),
@@ -609,6 +619,50 @@ const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     (
         "SAS_AF",
         "Frequency of existing variant in 1000 Genomes combined South Asian population",
+    ),
+    (
+        "AA_AF",
+        "Frequency of existing variant in NHLBI-ESP African American population",
+    ),
+    (
+        "EA_AF",
+        "Frequency of existing variant in NHLBI-ESP European American population",
+    ),
+    (
+        "ExAC_AF",
+        "Frequency of existing variant in ExAC combined population",
+    ),
+    (
+        "ExAC_Adj_AF",
+        "Adjusted frequency of existing variant in ExAC combined population",
+    ),
+    (
+        "ExAC_AFR_AF",
+        "Frequency of existing variant in ExAC African/American population",
+    ),
+    (
+        "ExAC_AMR_AF",
+        "Frequency of existing variant in ExAC American population",
+    ),
+    (
+        "ExAC_EAS_AF",
+        "Frequency of existing variant in ExAC East Asian population",
+    ),
+    (
+        "ExAC_FIN_AF",
+        "Frequency of existing variant in ExAC Finnish population",
+    ),
+    (
+        "ExAC_NFE_AF",
+        "Frequency of existing variant in ExAC Non-Finnish European population",
+    ),
+    (
+        "ExAC_OTH_AF",
+        "Frequency of existing variant in ExAC other combined populations",
+    ),
+    (
+        "ExAC_SAS_AF",
+        "Frequency of existing variant in ExAC South Asian population",
     ),
     (
         "gnomADe_AF",
@@ -729,6 +783,12 @@ const FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
         "Indicates if this consequence has been picked as the most severe",
     ),
     ("SOMATIC", "Somatic status of existing variant"),
+    ("REFSEQ_MATCH", "RefSeq transcript match status"),
+    (
+        "REFSEQ_OFFSET",
+        "HGVS adjustment length required due to mismatch between RefSeq transcript and the reference genome",
+    ),
+    ("BAM_EDIT", "Indicates success or failure of edit using BAM file"),
     ("IND", "Individual name"),
     ("ZYG", "Zygosity of individual genotype at this locus"),
     ("GIVEN_REF", "Reference allele from input"),
@@ -6196,5 +6256,47 @@ mod tests {
             .last()
             .unwrap()
             .ends_with("\tFLAGS\tCADD_PHRED\tCADD_RAW"));
+    }
+
+    /// `description_headers` (Tab.pm:144-156) describes every `--fields` name
+    /// from `%FIELD_DESCRIPTIONS` (Constants.pm:142-266), whether or not the run
+    /// produces it, and a name outside that table as `?`.
+    #[test]
+    fn tab_header_describes_every_field_of_the_constants_table() {
+        let fields: Vec<String> = [
+            "ID",
+            "REFSEQ_MATCH",
+            "BAM_EDIT",
+            "CELL_TYPE",
+            "ExAC_AF",
+            "NOT_A_FIELD",
+        ]
+        .map(String::from)
+        .to_vec();
+        let lines = tab_header(
+            &FieldOptions::default(),
+            &[],
+            Some(&fields),
+            "/c",
+            None,
+            "vep -i x",
+        );
+        for expected in [
+            "## ID : Identifier of uploaded variant",
+            "## REFSEQ_MATCH : RefSeq transcript match status",
+            "## BAM_EDIT : Indicates success or failure of edit using BAM file",
+            "## CELL_TYPE : List of cell types and classifications for regulatory feature",
+            "## ExAC_AF : Frequency of existing variant in ExAC combined population",
+            "## NOT_A_FIELD : ?",
+        ] {
+            assert!(
+                lines.contains(&expected.to_string()),
+                "{expected}\n{lines:?}"
+            );
+        }
+        assert_eq!(
+            lines.last().unwrap(),
+            "#ID\tREFSEQ_MATCH\tBAM_EDIT\tCELL_TYPE\tExAC_AF\tNOT_A_FIELD"
+        );
     }
 }

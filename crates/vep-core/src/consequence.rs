@@ -899,7 +899,11 @@ impl TranscriptConsequence {
         }
         let bp = end - start + 1;
         let feature_len = self.feature_end - self.feature_start + 1;
-        Some((bp, 100.0 * bp as f64 / feature_len as f64))
+        // The quotient first, then times 100, as OutputFactory.pm:2091 evaluates
+        // `100 * ($overlap_length / $feature_length)`: the two orders round a
+        // two-decimal tie differently (23 of 160 is 14.374999999999998 this way and
+        // 14.375 the other, printed 14.37 and 14.38).
+        Some((bp, 100.0 * (bp as f64 / feature_len as f64)))
     }
 }
 

@@ -414,10 +414,9 @@ fn finish(mut node: Node, keys: &[&str]) -> Result<Node, FilterError> {
     node.bound = match (&node.value, operator) {
         (_, Operator::In) => node.bound,
         (Some(v), _) if v.starts_with('#') => Some(Value::Field(resolve(&v[1..], keys)?)),
+        // An `is_child` value outside the Sequence Ontology is admitted: `filter_is_child`
+        // tests the regex first (FilterSet.pm:726) and asks the ontology only on a miss.
         (Some(v), Operator::Re | Operator::Nre | Operator::IsChild) => {
-            if operator == Operator::IsChild && !so_ontology::is_term(v) {
-                return Err(FilterError(format!("No matching SO terms found for {v}")));
-            }
             Some(Value::Text(v.clone(), Some(compile(v)?)))
         }
         (Some(v), _) => Some(Value::Text(v.clone(), None)),
@@ -873,10 +872,12 @@ mod tests {
             ));
     }
 
-    /// `is_child` passes on a regex match of the term, else when the field's
-    /// term descends from it in the Sequence Ontology (`filter_is_child`,
-    /// 722-748); a term the ontology table lacks is an error naming it. A list
-    /// of terms splits only after a digit (487), so two terms compare whole.
+    /// `is_child` passes on a regex match of the term (`filter_is_child`, 726),
+    /// else when the field's term descends from it in the Sequence Ontology
+    /// (728-746), which `vep` reaches with no ontology adaptor and dies on
+    /// (`No ontology adaptor set`, 736): the walk over the built-in table is
+    /// the documented extension. A list of terms splits only after a digit
+    /// (487), so two terms compare whole.
     #[test]
     fn is_child_walks_the_so_parent_table() {
         let missense = [("Consequence", "missense_variant")];
@@ -898,12 +899,27 @@ mod tests {
             "Consequence is_child coding_sequence_variant",
             &[("Consequence", "intron_variant,stop_gained")]
         ));
-        assert_eq!(
-            FilterSet::new(&["Consequence is_child lncRNA"], &["Consequence"])
-                .unwrap_err()
-                .to_string(),
-            "No matching SO terms found for lncRNA"
-        );
+    }
+
+    /// An `is_child` value outside the Sequence Ontology is no parse error:
+    /// `filter_is_child` returns on the regex match before it asks the ontology
+    /// (726), so `stable_id is_child ENST` passes every Ensembl transcript and
+    /// `biotype is_child lncRNA` the lncRNA ones.
+    #[test]
+    fn is_child_matches_a_non_so_value_as_a_regex() {
+        assert!(passes(
+            "stable_id is_child ENST",
+            &[("stable_id", "ENST00000000001")]
+        ));
+        assert!(!passes(
+            "stable_id is_child ENST",
+            &[("stable_id", "NM_000001.1")]
+        ));
+        assert!(passes("biotype is_child lncRNA", &[("biotype", "lncRNA")]));
+        assert!(!passes(
+            "biotype is_child lncRNA",
+            &[("biotype", "protein_coding")]
+        ));
     }
 
     /// A pattern outside the `regex` crate's dialect is an error naming the

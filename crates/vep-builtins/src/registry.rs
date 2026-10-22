@@ -21,6 +21,7 @@ use tracing::{debug, info};
 
 use crate::plugins;
 use crate::traits::{BuiltinPlugin, PluginError, PrefetchData};
+use vep_core::sv_routing::split_plugin_arg;
 use vep_core::variant::InputVariant;
 
 /// Per-plugin timing measurements from a single `run_batch_timed` call.
@@ -37,6 +38,15 @@ pub struct PluginTimings {
     pub total_annotate_ms: u64,
     /// Total wall-clock time for the entire plugin batch (prefetch + annotate).
     pub total_ms: u64,
+}
+
+/// What loading the `--plugin` arguments did not load: the arguments no built-in
+/// claims, as written, and the built-ins whose `init` failed, each with the name
+/// the argument gave and the error.
+#[derive(Debug, Default)]
+pub struct LoadOutcome {
+    pub unresolved: Vec<String>,
+    pub failed: Vec<(String, PluginError)>,
 }
 
 /// Registry of built-in plugins.
@@ -59,9 +69,14 @@ impl BuiltinRegistry {
     /// Load plugins from `--plugin` argument strings.
     ///
     /// Each argument has the format `"PluginName,param1,param2"`.
-    /// Returns names of plugins that were not found as builtins (for dylib fallback).
+    /// Returns names of plugins that were not found as builtins (for dylib
+    /// fallback); the first built-in whose `init` fails is the error.
     pub fn load_from_args(&mut self, plugin_args: &[String]) -> Result<Vec<String>, PluginError> {
-        self.load_from_args_with_context(plugin_args, None, None)
+        let outcome = self.load_from_args_with_context(plugin_args, None, None);
+        match outcome.failed.into_iter().next() {
+            Some((_, error)) => Err(error),
+            None => Ok(outcome.unresolved),
+        }
     }
 
     /// Load plugins with the full pipeline context: the shared reference FASTA
@@ -71,36 +86,33 @@ impl BuiltinRegistry {
     /// opening its data files. That ordering is load-bearing: REVEL must know the
     /// assembly to pick which coordinate column tabix indexed, and LoFTEE must
     /// know it to choose between a bigWig and a tabix-TSV GERP reader. The FASTA
-    /// is injected after `init()`.
+    /// is injected after `init()`. A built-in whose `init` fails is left out and
+    /// reported in the outcome with its name; the arguments after it still load.
     pub fn load_from_args_with_context(
         &mut self,
         plugin_args: &[String],
         reference_fasta: Option<std::sync::Arc<vep_fasta::IndexedFasta>>,
         assembly: Option<vep_core::assembly::Assembly>,
-    ) -> Result<Vec<String>, PluginError> {
-        let mut unresolved = Vec::new();
+    ) -> LoadOutcome {
+        let mut outcome = LoadOutcome::default();
 
         for arg in plugin_args {
-            let parts: Vec<&str> = arg.splitn(2, ',').collect();
-            let name = parts[0];
-            let params: Vec<String> = if parts.len() > 1 {
-                parts[1].split(',').map(String::from).collect()
-            } else {
-                Vec::new()
+            let (name, params) = split_plugin_arg(arg);
+            let Some(mut plugin) = create_builtin(name) else {
+                outcome.unresolved.push(arg.clone());
+                continue;
             };
-
-            if let Some(mut plugin) = create_builtin(name) {
-                plugin.set_assembly(assembly);
-                plugin.init(&params)?;
-                plugin.set_reference_fasta(reference_fasta.clone());
-                info!(name = plugin.name(), "loaded builtin plugin");
-                self.plugins.push(plugin);
-            } else {
-                unresolved.push(arg.clone());
+            plugin.set_assembly(assembly);
+            if let Err(error) = plugin.init(&params) {
+                outcome.failed.push((name.to_string(), error));
+                continue;
             }
+            plugin.set_reference_fasta(reference_fasta.clone());
+            info!(name = plugin.name(), "loaded builtin plugin");
+            self.plugins.push(plugin);
         }
 
-        Ok(unresolved)
+        outcome
     }
 
     /// Run all plugins on a buffer of variants using two-phase execution.
@@ -373,6 +385,37 @@ mod tests {
             .unwrap();
         assert_eq!(unresolved, vec!["UnknownPlugin,foo"]);
         assert!(registry.is_empty());
+    }
+
+    /// A built-in whose `init` fails is left out of the registry and named in the
+    /// outcome, and the arguments after it are still read; `load_from_args`
+    /// returns that failure as its error.
+    #[test]
+    fn failed_init_is_reported_and_the_rest_still_load() {
+        let mut registry = BuiltinRegistry::new();
+        let outcome = registry.load_from_args_with_context(
+            &[
+                "LoFtool,/no/such/scores.txt".to_string(),
+                "UnknownPlugin".to_string(),
+            ],
+            None,
+            None,
+        );
+        assert!(registry.is_empty());
+        assert_eq!(outcome.unresolved, ["UnknownPlugin"]);
+        let [(name, error)] = &outcome.failed[..] else {
+            panic!("one failure, got {:?}", outcome.failed);
+        };
+        assert_eq!(name, "LoFtool");
+        assert!(
+            error
+                .to_string()
+                .contains("LoFtool: failed to open /no/such/scores.txt"),
+            "{error}"
+        );
+        assert!(registry
+            .load_from_args(&["LoFtool,/no/such/scores.txt".to_string()])
+            .is_err());
     }
 
     /// A mock plugin that supports the two-phase prefetch/annotate protocol.

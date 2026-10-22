@@ -704,3 +704,32 @@ fn star_alleles_write_no_row() {
         ]
     );
 }
+
+/// An Ensembl-format allele in parenthesised tandem notation is expanded before
+/// `--spdi` tests its characters, as `spdi_genomic` expands it
+/// (VariationFeature.pm:2156, 2170; `expand`, Utils/Sequence.pm:116-119):
+/// Ensembl VEP 116.2 prints `SPDI=21:30282168:ACACAC:` on every row of
+/// `21 30282169 30282174 (AC)3/- 1`.
+#[test]
+fn tandem_notation_allele_gets_its_expanded_spdi() {
+    let dir = tempfile::tempdir().unwrap();
+    let tandem = write(
+        dir.path(),
+        "tandem.txt",
+        "21\t30282169\t30282174\t(AC)3/-\t1\ttandem_del\n",
+    );
+    let rows = annotate(dir.path(), &tandem, &["--spdi"]);
+    assert!(!rows.is_empty());
+    for row in &rows {
+        let fields: Vec<&str> = row.split('\t').collect();
+        assert_eq!(fields[0], "tandem_del", "{row}");
+        assert_eq!(fields[1], "21:30282169-30282174", "{row}");
+        assert_eq!(fields[2], "-", "{row}");
+        assert!(
+            fields[13]
+                .split(';')
+                .any(|kv| kv == "SPDI=21:30282168:ACACAC:"),
+            "{row}"
+        );
+    }
+}

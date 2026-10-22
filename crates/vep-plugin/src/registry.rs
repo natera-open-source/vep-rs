@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use crate::loader::LoadedPlugin;
 use crate::PluginError;
+use vep_core::sv_routing::split_plugin_arg;
 
 /// Registry of loaded plugins.
 #[derive(Debug)]
@@ -26,7 +27,8 @@ impl PluginRegistry {
     ///
     /// Each argument has the format `"PluginName,param1,param2"` or
     /// `"/path/to/plugin.so,param1,param2"`. The first comma-separated token
-    /// is the plugin name or path; the rest are init parameters.
+    /// is the plugin name or path; the rest are init parameters, read as Perl
+    /// reads the list ([`split_plugin_arg`]).
     ///
     /// `plugin_dir` is an optional directory where named plugins are searched
     /// for (e.g. `~/.vep/plugins/`).
@@ -36,13 +38,7 @@ impl PluginRegistry {
         plugin_dir: Option<&str>,
     ) -> Result<(), PluginError> {
         for arg in plugin_args {
-            let parts: Vec<&str> = arg.splitn(2, ',').collect();
-            let name_or_path = parts[0];
-            let params: Vec<String> = if parts.len() > 1 {
-                parts[1].split(',').map(String::from).collect()
-            } else {
-                Vec::new()
-            };
+            let (name_or_path, params) = split_plugin_arg(arg);
 
             let path = resolve_plugin_path(name_or_path, plugin_dir)?;
             let mut plugin = LoadedPlugin::load(&path)?;

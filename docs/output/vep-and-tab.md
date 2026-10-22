@@ -60,7 +60,7 @@ Every text format opens with a header block. `--no_headers` suppresses it whole,
 | 13  | Existing_variation | Co-located known variant IDs, comma-separated                                                   |
 | 14  | Extra              | `KEY=VALUE` pairs joined by `;`, in VEP's key order (see below); `-` when empty                  |
 
-The Allele column of a structural variant carries the SO term of its class (`deletion`, `duplication`, `Alu_insertion`). A breakend keeps its literal ALT instead (`N.`, `A[21:27348902[`, or `N[21:00030425700[` for a mate named by `CHR2`). `chromosome_breakpoint` is printed for a record without a parsed mate, a single breakend or a bare `<BND>`. Every ALT of a multi-allelic structural variant prints the record's class term, and an unsupported `<CPX>` prints `CPX`. A sequence allele whose reference base is ambiguous (`N G`) prints `G` with `coding_sequence_variant` and no amino acids, since no peptide is read from an ambiguous reference.
+The Allele column of a structural variant carries the SO term of its class (`deletion`, `duplication`, `Alu_insertion`). A breakend keeps its literal ALT instead (`N.`, `A[21:27348902[`, or `N[21:00030425700[` for a mate named by `CHR2`). `chromosome_breakpoint` is printed for a record without a parsed mate, a single breakend or a bare `<BND>`. Every ALT of a multi-allelic structural variant prints the record's class term, and an unsupported type prints Ensembl VEP's type string: the ALT as written (`<CPX>`), or `INFO/SVTYPE` when that names the type (`CPX`). A sequence allele whose reference base is ambiguous (`N G`) prints `G` with `coding_sequence_variant` and no amino acids, since no peptide is read from an ambiguous reference.
 
 ### Extra field
 
@@ -128,7 +128,7 @@ Selected with `--tab` or `--output_format tab`. A row holds the 13 default colum
 
 ### Choosing the columns (--fields)
 
-`--fields` names the columns, comma-separated, and the list stands in for the whole default set, defaults included, in the order given: `--fields Location,Allele,Feature,Consequence,SYMBOL` writes exactly those five columns, each with its description line. Any field a flag or a plugin produces is a valid name; a field whose flag is off prints `-`, so `SYMBOL` needs `--symbol`. A name nothing produces prints `-` in every row under a `## <name> : ?` description line, as Ensembl VEP writes it. Nothing is trimmed and a trailing comma opens no column.
+`--fields` names the columns, comma-separated, and the list stands in for the whole default set, defaults included, in the order given: `--fields Location,Allele,Feature,Consequence,SYMBOL` writes exactly those five columns, each with its description line. Any field a flag or a plugin produces is a valid name; a field whose flag is off prints `-`, so `SYMBOL` needs `--symbol`. A name nothing produces prints `-` in every row; its description line is Ensembl VEP's text when its description table has the name (`ID`, `ExAC_AF`, `REFSEQ_MATCH`) and `## <name> : ?` otherwise, as Ensembl VEP writes it. Nothing is trimmed and a trailing comma opens no column.
 
 An empty list writes the tab header block and no data line, as Ensembl VEP's output loop does (every row is the empty string, which ends it); the VCF output's entries are then empty (`CSQ=,,`) on both engines. That loop also ends at a row whose whole line is `0`, so `--tab --fields SIFT` makes Ensembl VEP stop at the first SIFT score of `0` and lose every later row; vep-rs writes every row.
 
@@ -224,7 +224,7 @@ Under `--spdi` every row of a sequence variant carries its allele in SPDI notati
 
 The chromosome is named as the cache names it on every row overlapping a transcript, and on an intergenic row as the reference FASTA names it. Ensembl VEP needs a FASTA for those rows and stops without one; vep-rs then prints the cache's name.
 
-Ensembl VEP keeps the record's notations by allele and looks them up by the row's `Allele`. So under `--shift_3prime 1` a row whose inserted bases the shift rotated (every row under `--shift_genomic 1`, a coding row without it) carries no `SPDI`, unless the rotation lands on another allele of the record, in which case the row carries that allele's notation. For `21 13620283 G GTCA,GCAT` the `TCA` allele moved 10 bases prints `CAT` as its Allele and `21:13620283::CAT` as its `SPDI`. A structural variant and an allele outside `ACGTN` carry none. The JSON key is `spdi`.
+Ensembl VEP keeps the record's notations by allele and looks them up by the row's `Allele`. So under `--shift_3prime 1` a row whose inserted bases the shift rotated (every row under `--shift_genomic 1`, a coding row without it) carries no `SPDI`, unless the rotation lands on another allele of the record, in which case the row carries that allele's notation. For `21 13620283 G GTCA,GCAT` the `TCA` allele moved 10 bases prints `CAT` as its Allele and `21:13620283::CAT` as its `SPDI`. A structural variant carries none, as does an allele outside `ACGTN` after a parenthesised tandem notation is expanded (`(AC)3` reads `ACACAC`, so `21 10538885 10538890 (AC)3/- +` prints `21:10538884:ACACAC:`), as Ensembl VEP expands it. The JSON key is `spdi`.
 
 ### GA4GH_VRS
 
