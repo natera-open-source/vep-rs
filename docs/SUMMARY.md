@@ -91,6 +91,11 @@
   - [The header and record column of `--skipped_variants_file`](divergences/skipped-variants-file-header.md)
   - [Compressed bytes on standard input, and a compressed stream cut short](divergences/compressed-input.md)
   - [SPDI notation resolved from the cache and the FASTA](divergences/spdi-input.md)
+  - [A breakend mate between 5,000 bases and `--distance` of a transcript](divergences/breakend-mate-beyond-5000.md)
+  - [A breakend mate on another chromosome under `--check_svs`](divergences/check-svs-mate-chromosome.md)
+  - [Two region notations: `UPLOADED_ALLELE` under `--minimal`, and a `BND` word](divergences/region-input.md)
+  - [The `HGNC_ID` of a gene named outside HGNC](divergences/hgnc-id-copy.md)
+  - [A VCF input without its `#CHROM` line](divergences/vcf-without-chrom-line.md)
   - [Reproducing the examples](divergences/reproducing.md)
 - [Divergence classes against 116.2](concordance-provenance/116.2-divergence-classes.md)
 

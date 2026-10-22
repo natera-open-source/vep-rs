@@ -55,15 +55,15 @@ Ensembl VEP 116 drops a record it marks skipped before annotation and writes not
 - a record whose end minus start exceeds `--max_sv_size` bases (default 10,000,000; `--max_sv_size -1` lifts the limit in both engines). A sequence record is measured too, on its minimised alleles, so a `<CNV:TR>` expanded with a FASTA is measured as the sequence record it becomes;
 - a symbolic ALT its type table lacks (`<CPX>`, `<NON_REF>`);
 - a multi-allelic symbolic list it has no type for (`<INS>,<DEL>`, `<INV>,<DUP>`);
-- a `<DEL>` with neither `END` nor `SVLEN`.
+- a `<DEL>` with neither `END` nor `SVLEN`, or whose start exceeds its end (`deletion looks incomplete`).
 
-vep-rs annotates every one of them, a [documented divergence](../divergences/defect-c.md#5-a-record-ensembl-vep-drops-before-annotation):
+vep-rs annotates the first three kinds, a [documented divergence](../divergences/defect-c.md#5-a-record-ensembl-vep-drops-before-annotation), and drops the fourth as Ensembl VEP drops it:
 
 - the default, tab and Parquet outputs list their rows: an oversize or unsupported record against every transcript it overlaps, a list with no type with one row per ALT under each ALT's own class;
 - the VCF output carries the line of an oversize or unsupported record without CSQ;
 - the JSON output writes an unsupported record as an `input`-only object and omits an oversize one.
 
-A `<DEL>` with neither `END` nor `SVLEN` is read as a deletion of the base after POS and written in every format. The golden corpora record the rows only vep-rs writes for such a record under the manifest class `reference_skipped_record`.
+A `<DEL>` with neither `END` nor `SVLEN`, or whose start exceeds its end, is warned `deletion looks incomplete` and written in no format, as Ensembl VEP writes it in none. `--dont_skip` keeps it on both engines, read as a deletion of the base after POS ([Defect C](../divergences/defect-c.md)). The golden corpora record the rows only vep-rs writes for the other three kinds under the manifest class `reference_skipped_record`.
 
 A `<NON_REF>` gVCF reference-confidence block is not a variant allele. It is annotated against no transcript and appears in the default and tab formats as one `intergenic_variant` row spanning the block, with a warning per record.
 
@@ -83,7 +83,7 @@ A dot-bounded ALT beside a bracket ALT (`.N,N[21:30425700[`) lends the own break
 
 ### Rows on each side
 
-A paired breakend has two alleles in the output. Its local end is printed as a single breakend (`.A`) and annotated against the transcripts at the record's own position. The bracket allele (`]21:27307377]A`) gets a row for a transcript only when the mate coordinate lies within the up- or downstream distance of that transcript, as VEP's `_close_to_feature` admits it.
+A paired breakend has two alleles in the output. Its local end is printed as a single breakend (`.A`) and annotated against the transcripts at the record's own position. The bracket allele (`]21:27307377]A`) gets a row for a transcript only when the mate coordinate lies within the up- or downstream distance of that transcript. Ensembl VEP's `_close_to_feature` admits the mate within 5,000 bases whatever `--distance` says, and above that distance writes no row for the record at all ([the divergence page](../divergences/breakend-mate-beyond-5000.md)).
 
 On the mate chromosome the bracket allele's rows describe the mate breakend at the mate coordinate. A mate inside the transcript earns `feature_truncation` with the region term; a mate outside it earns `upstream_gene_variant` or `downstream_gene_variant` with the distance. The `EXON` and `INTRON` fields are those of the mate coordinate. A transcript the local rows already name is not repeated on the mate side.
 

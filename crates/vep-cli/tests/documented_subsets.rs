@@ -43,6 +43,135 @@ fn assert_flag_row_states(path: &str, flag: &str, phrases: &[&str]) {
     assert_states(&format!("the {flag} row of docs/{path}"), row, phrases);
 }
 
+/// `check_ref`: a contig the FASTA lacks skips the record at every position with
+/// the sub-slice and mismatch warnings, where BaseVEP.pm:424-434 gives such a
+/// contig a one-base placeholder slice reading `N` (FastaSequence.pm:597-600), so
+/// Parser.pm:614 passes a one-base record at position 1 written `N` and :624-631
+/// refuses any other with the mismatch line alone.
+#[test]
+fn check_ref_exclusion_is_documented() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "Under `--check_ref` the same contig skips the record at every position with the \
+             sub-slice warning and then the mismatch warning",
+            "Ensembl VEP annotates a one-base record there whose reference is written `N`, and \
+             refuses one written otherwise with the mismatch warning alone (`Parser.pm` lines \
+             614-631)",
+        ],
+    );
+}
+
+/// `id-input-format`: an identifier list is resolved from the cache's variation
+/// files, where Parser/ID.pm:100 refuses the format offline, and a list line `0`
+/// is a name warned `No variant found`, where ID.pm:146 reads Perl's false string
+/// as no record and the buffer fill ends (Parser.pm:186-187, InputBuffer.pm:212,
+/// Runner.pm:423-424).
+#[test]
+fn id_input_exclusion_is_documented() {
+    assert_page_states(
+        "divergences/id-input.md",
+        &[
+            "Ensembl VEP reads an identifier list (`--format id`) only with a database \
+             connection",
+            "vep-rs resolves the list from the cache's variation files",
+            "A structural variant name (`nsv`, `esv`), a synonym, a subsnp identifier and a \
+             variant without a genomic mapping all take the `No variant found` warning",
+            "A list line `0` is a name here and takes the `No variant found` warning",
+            "Ensembl VEP reads that line, Perl's false string, as no record (`Parser/ID.pm` line \
+             146) and ends the buffer fill there",
+            "a `0` after a name is dropped without a word, and one that opens a fill, the list's \
+             first line among them, ends the run with the names after it unread",
+        ],
+    );
+}
+
+/// `default-format-header-lines`: the `## Output produced at` time is UTC, where
+/// Utils.pm:467-468 reads `localtime`, and the Perl API, database and `--custom`
+/// header lines have no counterpart.
+#[test]
+fn default_format_header_lines_exclusion_is_documented() {
+    assert_page_states(
+        "output/vep-and-tab.md",
+        &[
+            "the time, in UTC where Ensembl VEP prints the process's local time (`Utils.pm` \
+             lines 467-468)",
+            "Two kinds of line Ensembl VEP prints there have no counterpart",
+            "The Perl API component versions (`## ensembl version 116.0d85231`, `## \
+             ensembl-variation version ...`) are not written, since no Perl API runs here",
+            "The `## Connected to <database>` line of a database run is not written",
+            "The `## <short name> : [PATH]/<file>` lines of `--custom` sources are not written \
+             either",
+        ],
+    );
+}
+
+/// `vcf-csq-info-header`: the `##VEP=` line carries no Perl API component
+/// versions and no `--custom` `##INFO` line is written (OutputFactory/VCF.pm:234-263,
+/// 273), and a header without a `#CHROM` line gets the eight-column line, where
+/// VCF.pm:224 pops the last `#` line of the input whatever it is.
+#[test]
+fn vcf_csq_info_header_exclusion_is_documented() {
+    assert_page_states(
+        "output/vcf.md",
+        &[
+            "Ensembl VEP's `##VEP=` line also carries its Perl API component versions \
+             (`ensembl=116.0d85231 ...`), which have no counterpart here",
+            "Its `##INFO=<ID=<short>_<field>,...>` lines for `--custom` sources are not \
+             written, since custom annotation sources are not supported",
+        ],
+    );
+    assert_page_states(
+        "divergences/vcf-without-chrom-line.md",
+        &[
+            "Ensembl VEP's VCF output copies the input's `#` lines into its header and takes \
+             the last of them as the column line (`OutputFactory/VCF.pm` line 224)",
+            "A header without a `#CHROM` line hands its last meta line to that place",
+            "vep-rs takes the input's `#CHROM` line as the column line when the header has one \
+             and writes the eight-column line `#CHROM POS ID REF ALT QUAL FILTER INFO` \
+             otherwise; every meta line stays in the meta block",
+        ],
+    );
+}
+
+/// `single-dash-long-options`: a multi-letter one-dash name reads as Getopt::Long
+/// reads it under Config.pm:62, and the tokens that differ (`-qv`, `-ofile.txt`,
+/// an upper-case single-letter short, `+name`) are clap's readings.
+#[test]
+fn single_dash_long_options_exclusion_is_documented() {
+    assert_page_states(
+        "cli/compatibility.md",
+        &[
+            "A short with its value attached (`-ofile.txt`) and a cluster of switches (`-qv`) \
+             are clap's readings, where Getopt::Long refuses the token",
+            "A `+` before an option name, which Getopt::Long accepts, is not an option here",
+            "A single-letter short is clap's and is matched by case",
+            "Ensembl VEP refuses `-h`, a prefix of eight of its options, and has no `--version`",
+        ],
+    );
+}
+
+/// `stdin-input`, `gzip-bgzip-compressed-input`, `gzip-bgzip-input`: gzip or
+/// BGZF bytes on standard input or a pipe are decompressed, where Parser.pm:242
+/// decompresses a regular file alone, and a stream cut inside a member ends the
+/// run, where Ensembl VEP annotates the records before the cut and exits 0.
+#[test]
+fn compressed_input_exclusion_is_documented() {
+    assert_page_states(
+        "divergences/compressed-input.md",
+        &[
+            "Ensembl VEP decompresses an input only when it is a regular file whose bytes \
+             Perl's `-B` test calls binary (`Parser.pm` line 242)",
+            "vep-rs decompresses gzip or BGZF bytes on standard input, and on a pipe named by \
+             path, as it decompresses a file, so the piped stream annotates exactly as the \
+             file does",
+            "`--format` is still required on standard input, as in Ensembl VEP",
+            "vep-rs ends the run at the cut: one line `ERROR: [run] Failed to read input ...` on \
+             standard error, exit 1, and nothing past the header written",
+        ],
+    );
+}
+
 /// `attributes-cds-start-end-nf`: a native cache lists `cds_start_NF` before
 /// `cds_end_NF` on every transcript carrying both, where the Ensembl cache keeps
 /// its database's order (Dumper/Core.pm:203-207) and OutputFactory.pm:1477 prints
@@ -235,17 +364,24 @@ fn dir_plugins_exclusion_is_documented() {
     );
 }
 
-/// `flag_pick`, `flag_pick_allele`, `flag_pick_allele_gene`: under `--minimal`
-/// the pick family runs once over the rejoined record, where Ensembl VEP's rejoin
-/// filters each split feature first (OutputFactory.pm:2289, 2303 reaching :514
-/// and :609-626) and the marks persist into the merged pass (:301), so a split
-/// record carries one PICK per split feature.
+/// `flag_pick`, `flag_pick_allele`, `flag_pick_allele_gene`, `spdi`: under
+/// `--minimal` the pick family runs once over the rejoined record, where Ensembl
+/// VEP's rejoin filters each split feature first (OutputFactory.pm:2289, 2303
+/// reaching :514 and :609-626) and the marks persist into the merged pass (:301),
+/// so a split record carries one PICK per split feature; and a split allele's
+/// SPDI and GA4GH VRS are its own, where :1398 builds the table from the rejoined
+/// allele string and :1400 looks it up by the trimmed Allele.
 #[test]
 fn flag_pick_minimal_exclusion_is_documented() {
     assert_page_states(
         "divergences/minimal-split-hgvsp.md",
         &[
-            "and so do the `PICK` marks of the flagging variants",
+            "Each row's notation is then looked up by the row's `Allele`, the split allele's \
+             trimmed string (lines 1347 and 1400)",
+            "vep-rs builds each split allele's notation from the allele itself",
+            "| `GT`, trimmed `-` | `21:38218615:TT:`, the `G` allele's | `21:38218616:T:` |",
+            "So do the `SPDI` and `GA4GH_VRS` of a split allele and the `PICK` marks of the \
+             flagging variants",
             "A split feature holds one alternate allele, so the flagging branches (lines \
              609-626) set `PICK` on one row of it",
             "So Ensembl VEP marks one row per split feature",
@@ -482,11 +618,14 @@ fn lookup_ref_exclusion_is_documented() {
     );
 }
 
-/// `skipped_variants_file`: the header names standard input `STDIN` in any
-/// case and under `--input_data`, and the record column is 40 characters,
-/// where BaseRunner.pm:371-376 prints the `input_file` parameter as typed (the
-/// `*IN` glob of Runner.pm:818-820 under `--input_data`) and `%-40.40s` counts
-/// the bytes of the undecoded line.
+/// `skipped_variants_file`, `skipped-variant-reporting`,
+/// `skipped-variant-warning-lines`: the header names standard input `STDIN` in
+/// any case and under `--input_data`, the record column is 40 characters, and
+/// the line a skip warning quotes is cut at a character boundary, where
+/// BaseRunner.pm:371-376 prints the `input_file` parameter as typed (the `*IN`
+/// glob of Runner.pm:818-820 under `--input_data`), `%-40.40s` counts the bytes
+/// of the undecoded line and BaseVEP.pm:850's `substr` cuts byte 46 inside a
+/// character.
 #[test]
 fn skipped_variants_file_exclusion_is_documented() {
     assert_page_states(
@@ -495,6 +634,11 @@ fn skipped_variants_file_exclusion_is_documented() {
             "The header prints the `input_file` parameter as typed",
             "which prints as `*Bio::EnsEMBL::VEP::Runner::IN` (`Runner.pm` lines 818-820)",
             "so `length`, `substr` and `%-40.40s` count bytes",
+            "When byte 46 falls inside a character, the cut splits it and the warning quotes the \
+             character's lone lead byte",
+            "The quoted line is cut by bytes too, at the last character boundary at or before \
+             byte 46, so a line whose byte 46 falls inside a character loses that whole \
+             character and the stray lead byte is never written",
             "The header names standard input `STDIN` whatever case `-i` spelled it in, and \
              under `--input_data` it names `STDIN`, or the `--input_file` value when one \
              stands beside the string",

@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--allow_non_variant` keeps a VCF record whose ALT is `.` in every output format: its line in the VCF output, one object in the JSON output, no row elsewhere. (#N)
   - Region input needs `--fasta`, is refused with `--check_ref`, and reads its reference allele from the FASTA, as Ensembl VEP's region parser does. (#N)
   - `--use_transcript_ref` reads each row's reference allele from the transcript, as Ensembl VEP does, and adds the `GIVEN_REF` and `USED_REF` columns; without `--fasta` the run exits. (#N)
-  - Under `--lookup_ref` a contig the FASTA lacks skips the record, where Ensembl VEP annotates a one-base record at position 1 against a placeholder `N`; the cache page states it. (#N)
+  - Under `--check_ref` or `--lookup_ref` a contig the FASTA lacks skips the record, where Ensembl VEP annotates a one-base record at position 1 against a placeholder `N`. (#N)
   - Compressed standard input is decompressed and a stream cut inside a gzip member is exit 1, where Ensembl VEP reads standard input raw and annotates the prefix. (#N)
 - HGVS, SPDI and identifiers
   - `--shift_3prime 0|1`, `--shift_hgvs 0|1`, `--shift_genomic 0|1` and `--shift_length` move an insertion or deletion 3' as Ensembl VEP does, with `SHIFT_LENGTH`, shifted `Location` and `Allele`, and an unshifted HGVS mode. (#N)
@@ -240,6 +240,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The README is shortened to what vep-rs is, why, installation, quick start and a map of the site; its generated release sections are unchanged. (#65)
   - `build_golden_corpus.py flag-set` keeps a set's hand-written `masks` and `reference_warnings` when it rewrites the entry and validates both as the golden tests do. (#N)
   - The documentation gains "What vep-rs does not do", listing the Ensembl VEP features vep-rs lacks and what a run does with their flags. (#N)
+  - Five divergence pages: a breakend mate beyond 5,000 bases under `--distance`, a `--check_svs` mate on another chromosome, two region notations, the `HGNC_ID` copy, a VCF without `#CHROM`. (#N)
+  - The documented exclusions of `--check_ref`, `--fasta_dir`, identifier lists, skip warnings, `--spdi` under `--minimal`, the header time, `assembly_name` and `--gp` are stated on their pages, each with a test. (#N)
 - Dependencies and tooling
   - The container image and the CI test job install the DuckDB 2.0.0 CLI from its `duckdb-cli-linux-*.tar.gz` archive (1.x shipped a zip), both verified by sha256. (#N)
   - The release page groups its notes by area with nested bullets, marks breaking changes inline and may run to 400 lines; `CHANGELOG.md` nests the area groups under each kind. (#N)
@@ -299,6 +301,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A directory given as `--synonyms` or as the cache's `chr_synonyms.txt` is refused, where Ensembl VEP opens it and reads an empty table; the cache page states it. (#N)
   - A present but empty `assembly` in a cache's `info.json` is compared with `--assembly` and refused with the mismatch text. (#N)
   - A transcript shard the cache cannot read is refused under the `cache` component on every input path, not as a run failure. (#N)
+  - `storable_to_json.pl` keeps a cache's `sift` or `polyphen` marker only beside its `source_<tool>` line, the one Ensembl VEP reads, so a converted cache refuses the flag where Ensembl VEP does. (#N)
 - Co-located variants and frequencies
   - Under `--minimal`, every row of a split record lists the co-located variants and `SV` names of its first alternate allele's feature, as Ensembl VEP prints them. (#N)
   - A region file's empty `clin_sig_allele` or `clinical_impact` cell is a value, as Ensembl VEP reads it: `CLIN_SIG` is suppressed and `CLINVAR_SOMATIC_CLASSIFICATION` prints empty. (#N)
@@ -342,7 +345,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A refused Ensembl-format line or identifier mapping is skipped with the reason alone; the warning opened with `VCF parse error:`. (#N)
   - `--warning_file STDERR` carries each warning twice unless `--quiet`, as `print $fh` then `warn` write it; an empty or `0` value is the default file. (#N)
   - Under `--individual`, the identical skip warning of a record's sample copies is written once, as Ensembl VEP's seen set keys the whole text. (#N)
-  - The line a skip warning quotes is cut by bytes, at the last character boundary at or before byte 46, as Ensembl VEP's `substr` cuts it. (#N)
+  - The line a skip warning quotes is cut by bytes at the last character boundary at or before byte 46, where Ensembl VEP's `substr` splits the character. (#N)
 - Plugins
   - A tabix query answered from several chunks returns every record once, and a line cut between chunks is read whole instead of losing a record or yielding a fragment. (#N)
   - A tabix index built for another data file is refused with both files named instead of stopping the process. (#N)

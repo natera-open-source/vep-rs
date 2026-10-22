@@ -1324,6 +1324,82 @@ mod tests {
         assert!(CacheSeqEdit::from_attrib("amino_acid_sub", "x").is_none());
     }
 
+    /// A same-named HGNC gene's id is lent once, at build time, from the
+    /// transcripts overlapping the region the transcript starts in, so a transcript
+    /// prints one `HGNC_ID` whatever the input. Ensembl VEP's `merge_features`
+    /// lends it per 1 Mb region file (Dumper/Core.pm:109; AnnotationType/Transcript.pm:290,
+    /// 305) and again over every buffer's features (AnnotationSource.pm:139-143),
+    /// so its value follows the region file read and the buffer's other records;
+    /// `docs/divergences/hgnc-id-copy.md` states the difference.
+    #[test]
+    fn hgnc_id_is_copied_once_from_the_start_region() {
+        fn named(
+            id: &str,
+            start: u64,
+            end: u64,
+            symbol: &str,
+            hgnc_id: Option<&str>,
+        ) -> CacheTranscript {
+            let mut tr = transcript("3", 1, vec![exon(start, end, 1, 1)], vec![]);
+            tr.transcript_id = id.to_string();
+            let mut record =
+                build_transcript(&gene(&tr), &tr, &HashMap::new(), None, None, None, None);
+            record.gene_symbol = Some(symbol.to_string());
+            record.hgnc_id = hgnc_id.map(str::to_string);
+            record
+        }
+        let mut transcripts = vec![
+            // The HGNC-named gene, inside the region 185000001-186000000.
+            named(
+                "HGNC_NAMED",
+                185_960_039,
+                185_979_837,
+                "NMRAL2P",
+                Some("HGNC:52332"),
+            ),
+            // The same symbol, starting in that region and ending in the next.
+            named("BOUNDARY", 185_959_973, 186_012_561, "NMRAL2P", None),
+            // The same symbol in the next region alone.
+            named("NEXT_REGION", 186_005_000, 186_020_000, "NMRAL2P", None),
+            // The same symbol, far outside both regions.
+            named("FAR", 273_000_000, 273_001_000, "NMRAL2P", None),
+            // Another symbol in the HGNC gene's region.
+            named("OTHER", 185_970_000, 185_971_000, "OTHER", None),
+            // An HGNC-named gene spanning two regions lends its id in both.
+            named("WIDE", 190_990_000, 191_010_000, "WIDE", Some("HGNC:9")),
+            named("BEFORE_WIDE", 190_500_000, 190_600_000, "WIDE", None),
+            named("AFTER_WIDE", 191_500_000, 191_600_000, "WIDE", None),
+            named("PAST_WIDE", 192_000_001, 192_000_100, "WIDE", None),
+            // Two lenders of one symbol in one region: the later one's id is copied
+            // onto every transcript of the symbol, the earlier lender included.
+            named("TWO_FIRST", 200_100_000, 200_100_500, "TWO", Some("HGNC:1")),
+            named("TWO_LATER", 200_200_000, 200_200_500, "TWO", Some("HGNC:2")),
+            named("TWO_BORROWER", 200_300_000, 200_300_500, "TWO", None),
+        ];
+        copy_hgnc_ids_by_symbol(&mut transcripts);
+        let ids: Vec<(&str, Option<&str>)> = transcripts
+            .iter()
+            .map(|t| (t.stable_id.as_str(), t.hgnc_id.as_deref()))
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                ("HGNC_NAMED", Some("HGNC:52332")),
+                ("BOUNDARY", Some("HGNC:52332")),
+                ("NEXT_REGION", None),
+                ("FAR", None),
+                ("OTHER", None),
+                ("WIDE", Some("HGNC:9")),
+                ("BEFORE_WIDE", Some("HGNC:9")),
+                ("AFTER_WIDE", Some("HGNC:9")),
+                ("PAST_WIDE", None),
+                ("TWO_FIRST", Some("HGNC:2")),
+                ("TWO_LATER", Some("HGNC:2")),
+                ("TWO_BORROWER", Some("HGNC:2")),
+            ]
+        );
+    }
+
     #[test]
     fn test_region_binning() {
         // Position 1 -> region 1-1000000

@@ -111,7 +111,7 @@ An allele gets an `intergenic_consequences` entry only when it overlaps no trans
 | `start`, `end`            | integer | The record's VEP start and end                                                                  |
 | `strand`                  | integer | The record's strand                                                                             |
 | `allele_string`           | string  | The record's working allele string; see Field Details                                            |
-| `assembly_name`           | string  | The assembly, as `--assembly` names it                                                           |
+| `assembly_name`           | string  | The assembly, as `--assembly` names it, else as the cache's `info.json` names it; see Field Details |
 | `input`                   | string  | The record's own input line as Ensembl VEP stores it: trailing empty columns dropped and, for a structural record, QUAL, FILTER and INFO filled with `.` where absent, empty or `0` |
 | `variant_class`           | string  | Under `--variant_class`                                                                          |
 | `transcript_consequences` | array   | One object per (allele, transcript); absent when no allele overlaps a transcript                 |
@@ -168,6 +168,8 @@ Numeric-looking values are numbers, except under the identifier keys; a zero fra
 `--shift_genomic 1` adds a `location` to every transcript entry (the `Location` column, moved under `--shift_3prime 1`) and to the intergenic entry of an insertion or deletion `--shift_3prime 1` analysed. Plugin fields, built-in or dylib, sit inside each consequence object; none is written at the record level.
 
 The keys VEP derives from the variant alone sit on the record object, lower-cased, and on no consequence entry: `variant_class` (`--variant_class`), `ambiguity` (`--ambiguity`), `minimised` (`--minimal`) and `check_ref` (`--dont_skip`). `uploaded_allele`, `allele_num` and `ref_allele` sit on every consequence entry of a sequence variant; a structural variant's entries carry `allele_num` alone, as Ensembl VEP writes them.
+
+`assembly_name` is the `--assembly` value, else the assembly the cache's `info.json` names, under `--json_cache` and `--full_cache_dir` alike. Ensembl VEP reads the assembly from the cache directory's name, which `--full_cache_dir` bypasses, and its fallback to a `cache_assembly` parameter is declared and never set (`OutputFactory/JSON.pm` lines 168 and 242), so under `--full_cache_dir` with no `--assembly` it prints `"assembly_name":null`.
 
 `--terms display` or `--terms NCBI` renders `consequence_terms` and `most_severe_consequence` in that vocabulary. Ensembl VEP exits on a record with two or more distinct terms there, so this JSON is one it does not produce.
 

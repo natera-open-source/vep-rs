@@ -54,6 +54,10 @@ Planned for the next release, 0.6.0.
 
 `--database`, `--host`, `--port`, `--user`, `--password`, `--registry`, `--db_version`, `--genomes` and `--is_multispecies` are each refused with an error naming the flag; the error for `--database` begins `ERROR: [cli] --database is not supported: vep-rs reads a local cache only and never connects to an Ensembl database`. `--lrg` and `--ambiguous_hgvs`, which need the database, are refused with them. Database mode is refused for good and is not planned: vep-rs reads a local cache only.
 
+## 1000 Genomes pilot coordinates
+
+`--gp` is refused with an error naming it, which begins `ERROR: [cli] --gp is not supported: it reads 1000 Genomes pilot coordinates from INFO/GP`. In Ensembl VEP the flag reads a record's chromosome and position from the `GP` field of its INFO column, the convention of the 1000 Genomes pilot VCFs, and skips a record without that field (`Config.pm` line 120, `Parser/VCF.pm` lines 271-285). Not planned.
+
 ## Very long lines
 
 An input, cache variation or FASTA index line longer than 64 MiB is refused under the `input`, `cache` or `fasta` component (exit 1), with `longer than the 67108864-byte limit for one line` in the message, where Ensembl VEP reads such a line whole. Such a line drops a plugin at load (the `Failed to instantiate plugin` warning, or the `plugin` error under `--safe`); met by a query, it is a `plugin execution error` warning, `--safe` or not, and the batch loses that plugin's values and every later plugin's. `vep-cache-builder` refuses a GFF3, GTF, protein FASTA or core-dump line longer than 16 MiB under the `cache-builder` component, with `16777216-byte` in the message, and `vep-cache-converter` a plugin data line over 64 MiB.

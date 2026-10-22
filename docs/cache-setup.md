@@ -139,9 +139,11 @@ On GRCh37 and GRCh38 a read of the sequence named `Y` inside a pseudoautosomal r
 
 `--fasta_dir <dir>` chooses, as Ensembl VEP does, the `.fa` or `.fa.gz` of the directory whose name carries the species and assembly (case-insensitively), `toplevel` before any other name and a compressed file before a plain one. The choice stands in for `--fasta` and for the cache directory's FASTA. A directory holding no such file leaves those in force and warns (the table's line) in the warnings file and on standard error unless `--quiet`; one that cannot be opened is passed over silently, as Ensembl VEP does.
 
+Two files tied on both preferences are ordered by name, the first taken, where Ensembl VEP's sort on the two preferences alone keeps the directory listing's order (`BaseVEP.pm` lines 500-509), so on such a directory the two engines can read different files.
+
 `--hgvs` or `--hgvsg` with no FASTA in reach exits 1 with Ensembl VEP's offline refusal. `--everything` without a FASTA instead prints the INFO line on standard error (withheld under `--quiet`) and drops the HGVS notations it switched on, as Ensembl VEP does; an explicit `--hgvsg` beside it is still refused. `--use_transcript_ref` without a FASTA exits 1, since a non-coding transcript's cDNA is read from the FASTA.
 
-Under `--lookup_ref` a contig the FASTA lacks skips the record at every position with the could-not-fetch warning, where Ensembl VEP's one-base placeholder slice (`BaseVEP.pm` lines 424-434) gives a one-base record at position 1 the reference `N`.
+Under `--lookup_ref` a contig the FASTA lacks skips the record at every position with the could-not-fetch warning, where Ensembl VEP's one-base placeholder slice (`BaseVEP.pm` lines 424-434) gives a one-base record at position 1 the reference `N`. Under `--check_ref` the same contig skips the record at every position with the sub-slice warning and then the mismatch warning. That placeholder reads `N` at position 1, so Ensembl VEP annotates a one-base record there whose reference is written `N`, and refuses one written otherwise with the mismatch warning alone (`Parser.pm` lines 614-631).
 
 ### A `Y` read on a FASTA without `X`
 
@@ -172,7 +174,7 @@ A reference FASTA whose records are named by accession is read under the cache's
 
 `info.json` carries `species` and `assembly` in every cache the converter and the builder write; the resolver compares `--assembly` with `assembly`. Its other keys:
 
-- `sift` and `polyphen`, markers written only for a tool whose matrices the cache holds.
+- `sift` and `polyphen`, markers written only for a tool whose matrices the cache holds; a converted cache keeps a marker only beside the tool's `source_versions` entry ([SIFT and PolyPhen predictions](cache-predictions.md)).
 - `source_versions`: on a native cache the core `meta` table's `assembly`, `gencode` and `genebuild`, or the GTF header's. The dbSNP, ClinVar, COSMIC and gnomAD versions an Ensembl cache's `info.txt` lists come from the variation database, which the builder does not read, so a native cache's headers print none.
 - `variation_cols` and `var_type tabix`, only when the cache holds variation files; `variation_cols` names their columns.
 - `contig_order`: the cache's chromosome directories as autosomes by number, then X, Y and MT, then every other contig by name.

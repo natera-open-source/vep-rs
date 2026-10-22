@@ -683,7 +683,9 @@ mod tests {
     /// `quoted_line` counts bytes, as `length` and `substr` do on Perl's undecoded
     /// line (BaseVEP.pm:848-850): a 60-byte line of `é`s (two bytes each) is cut at
     /// byte 46, 23 characters, plus `...`; a line whose byte 46 falls inside a
-    /// character is cut at the boundary before it; 50 bytes pass whole.
+    /// character is cut at the boundary before it, where Perl's `substr` keeps the
+    /// character's lone lead byte (`docs/divergences/skipped-variants-file-header.md`);
+    /// 50 bytes pass whole.
     #[test]
     fn quoted_line_cuts_by_bytes_at_a_character_boundary() {
         let accented = "é".repeat(30);
@@ -698,6 +700,16 @@ mod tests {
             quoted_line(&straddling),
             format!("{}...", "x".repeat(45)),
             "byte 46 is the second byte of é, so the cut moves to byte 45"
+        );
+        // A VCF record whose ID is `xy` and twenty `é`s collapses to 59 bytes, byte 46
+        // the second byte of the nineteenth `é`: eighteen are kept, where Perl's
+        // `substr` writes the nineteenth's lead byte before the ellipsis.
+        let split_id = format!("21\t100\txy{}\tA\tG\t.\t.\t.", "é".repeat(20));
+        assert_eq!(split_id.replace('\t', " ").len(), 59);
+        assert_eq!(
+            quoted_line(&split_id),
+            format!("21 100 xy{}...", "é".repeat(18)),
+            "45 bytes then the ellipsis, the split character dropped whole"
         );
         let fifty_bytes = format!("{}é", "x".repeat(48));
         assert_eq!(quoted_line(&fifty_bytes), fifty_bytes);

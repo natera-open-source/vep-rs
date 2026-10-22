@@ -478,9 +478,12 @@ if (-e $synonyms_in) {
 
 $info->{contig_order} = [sort by_contig_order @chr_dirs];
 # The dumper's `sift b` and `polyphen b` lines say the cache was dumped with
-# predictions; a tool whose matrices this conversion did not write loses its line.
+# predictions. VEP reads a tool's availability from its `source_<tool>` line
+# alone (Cache/Transcript.pm:155 over the version data CacheDir.pm:468-470
+# collects), so a marker whose version line info.txt lacks is dropped, as is
+# one whose matrices this conversion did not write.
 for my $tool (qw(sift polyphen)) {
-    delete $info->{$tool} unless $matrices_written{$tool};
+    delete $info->{$tool} unless $matrices_written{$tool} && $info->{source_versions}{$tool};
 }
 write_info_json($info, "$output_dir/info.json");
 
