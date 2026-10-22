@@ -626,9 +626,10 @@ mod tests {
         assert!(!GwasPlugin::allele_matches_variant("A", "C"));
     }
 
-    /// A minimal catalog with the columns the parser resolves by name. The real
-    /// NHGRI-EBI file detects its header via `DATE ADDED TO CATALOG` and carries
-    /// ~40 columns; these are the ones this plugin reads.
+    /// A minimal catalog: the GWAS Catalog's leading `DATE ADDED TO CATALOG`, a
+    /// column the parser does not read, then the columns it resolves by name. The
+    /// header is the first line that is neither blank nor a `#` comment, and the
+    /// real catalog carries many more columns.
     const CATALOG: &str = "DATE ADDED TO CATALOG\tPUBMEDID\tDISEASE/TRAIT\tCHR_ID\tCHR_POS\tREPORTED GENE(S)\tSTRONGEST SNP-RISK ALLELE\tSNPS\tP-VALUE\tOR or BETA\t95% CI (TEXT)\tSTUDY ACCESSION\tMAPPED_TRAIT_URI
 2020-01-01\t12345678\tType 2 diabetes\t21\t33000100\tAPP\trs123-A\trs123\t1e-8\t1.35\t\tGCST000001\thttp://www.ebi.ac.uk/efo/EFO_0001360";
 

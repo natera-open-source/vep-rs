@@ -12,7 +12,7 @@ abstract: >-
   It annotates genomic variants with their predicted functional effects on
   genes, transcripts, and protein sequences, implementing the Ensembl Variant
   Effect Predictor (VEP) algorithm, reading a JSON transcript cache built from
-  Ensembl release files or converted from a Perl VEP cache, and producing
+  Ensembl release files or converted from an Ensembl VEP cache, and producing
   compatible output. Its concordance with Ensembl VEP release 116.2 is measured
   on the whole genome: 11,838,755,797 VEP consequence tuples from gnomAD, 1000
   Genomes and ClinVar data on GRCh37 and GRCh38, reported per dataset, with raw

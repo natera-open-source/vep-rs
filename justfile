@@ -20,8 +20,7 @@ bench: build
         --offline --json_cache tests/golden/116/GRCh37/json_cache --assembly GRCh37 \
         --fork 1 --buffer_size 5000 --force --no_stats --quiet
 
-# Run smoke concordance test (5000 variants). The harness needs the Perl VEP cache
-# root, a converted JSON cache and an indexed FASTA; pass them through the variables.
+# Run the smoke concordance test (Ensembl VEP cache root, converted JSON cache, indexed FASTA)
 concordance-smoke perl_cache json_cache fasta:
     scripts/concordance/run_concordance.sh --mode smoke --smoke-variants 5000 \
         --perl-cache-dir {{perl_cache}} --json-cache-dir {{json_cache}} --fasta {{fasta}}

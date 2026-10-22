@@ -160,10 +160,10 @@ pub trait BuiltinPlugin: Send + Sync {
 
     /// Batch-annotate a buffer of variants (single-phase fallback).
     ///
-    /// Called once per buffer (typically 5000 variants) when the plugin does
-    /// not implement the two-phase prefetch/annotate protocol. Tabix plugins
-    /// should prefer implementing [`prefetch`](BuiltinPlugin::prefetch) +
-    /// [`annotate`](BuiltinPlugin::annotate) instead.
+    /// Called once per buffer when the plugin does not implement the two-phase
+    /// prefetch/annotate protocol. Tabix plugins should prefer implementing
+    /// [`prefetch`](BuiltinPlugin::prefetch) + [`annotate`](BuiltinPlugin::annotate)
+    /// instead.
     ///
     /// Default implementation calls [`run`](BuiltinPlugin::run) for each
     /// variant/consequence pair.

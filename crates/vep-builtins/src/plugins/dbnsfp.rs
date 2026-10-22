@@ -5,7 +5,7 @@
 //!
 //! dbNSFP aggregates 100+ prediction/conservation scores from many tools. This
 //! plugin lets the user select which columns to extract via parameters, making it
-//! the most configurable tabix plugin in the suite.
+//! the most configurable of the built-in tabix plugins.
 //!
 //! **Usage:** `--plugin dbNSFP,/path/to/dbNSFP.gz,field1,field2,...`
 //!

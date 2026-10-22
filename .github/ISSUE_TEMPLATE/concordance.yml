@@ -1,11 +1,11 @@
-name: Output differs from Perl VEP
-description: vep-rs and Perl VEP give different annotations for the same input
+name: Output differs from Ensembl VEP
+description: vep-rs and Ensembl VEP give different annotations for the same input
 labels: ["bug", "concordance"]
 body:
   - type: markdown
     attributes:
       value: |
-        vep-rs matches Perl VEP (`ensemblorg/ensembl-vep`, release 116) exactly, except for a small set of documented divergences, most of them Perl VEP defects that vep-rs deliberately does not reproduce. Before filing, check three things. [docs/intended-divergences.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/intended-divergences.md) describes the documented divergence classes. [docs/cli/compatibility.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/cli/compatibility.md#accepted-without-effect) lists flags that are accepted but not implemented. Each `tests/golden/<release>/<assembly>/manifest.json` lists the consequence keys whose terms are documented to differ.
+        vep-rs matches Ensembl VEP (`ensemblorg/ensembl-vep`, release 116) exactly, except for a small set of documented divergences, most of them Ensembl VEP defects that vep-rs deliberately does not reproduce. Before filing, check three things. [docs/intended-divergences.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/intended-divergences.md) describes the documented divergence classes. [docs/cli/compatibility.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/cli/compatibility.md#accepted-without-effect) lists flags that are accepted but not implemented. Each `tests/golden/<release>/<assembly>/manifest.json` lists the consequence keys whose terms are documented to differ.
   - type: input
     id: version
     attributes:
@@ -16,7 +16,7 @@ body:
   - type: input
     id: perl-vep
     attributes:
-      label: Perl VEP version
+      label: Ensembl VEP version
       description: Release, or the Docker image tag or digest.
       placeholder: ensemblorg/ensembl-vep:release_116.2
     validations:
@@ -25,14 +25,14 @@ body:
     id: cache
     attributes:
       label: Cache
-      description: Assembly and Ensembl release. For vep-rs, say whether the JSON cache came from `vep-cache-builder` or from converting the same Perl VEP cache.
+      description: Assembly and Ensembl release. For vep-rs, say whether the JSON cache came from `vep-cache-builder` or from converting the same Ensembl VEP cache.
     validations:
       required: true
   - type: textarea
     id: commands
     attributes:
       label: Commands
-      description: Both command lines, vep-rs and Perl VEP.
+      description: Both command lines, vep-rs and Ensembl VEP.
       render: shell
     validations:
       required: true

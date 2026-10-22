@@ -8,7 +8,7 @@ Documentation: https://natera-open-source.github.io/vep-rs/
 
 A fast, memory-efficient reimplementation of the Ensembl Variant Effect Predictor (VEP) in Rust. It takes VEP's inputs and flags, writes VEP's consequence vocabulary in VEP's output formats, and annotates population-scale callsets two orders of magnitude faster than the Perl implementation.
 
-In this README, "Perl VEP" is the reference implementation, `ensemblorg/ensembl-vep` release 116.2. The accompanying paper calls the same engine "VEP".
+In this README, "Ensembl VEP" is the reference implementation, `ensemblorg/ensembl-vep`, written in Perl; unqualified, it means release 116.2. The accompanying paper calls the same engine "VEP".
 
 ## Why vep-rs instead of Ensembl VEP or fastVEP
 
@@ -31,9 +31,9 @@ The ten built-in plugin databases are CADD, REVEL, gnomADc, AlphaMissense, dbscS
 
 ### What "drop-in" means
 
-vep-rs takes the same input files and flag names as Perl VEP and writes the same output layouts. Two things differ:
+vep-rs takes the same input files and flag names as Ensembl VEP and writes the same output layouts. Two things differ:
 
-- **The transcript cache.** The cache is a directory built by `vep-cache-builder` or converted from a Perl VEP cache ([docs/cache-setup.md](docs/cache-setup.md)), found under `--dir_cache`, `--species` and `--cache_version` in Perl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout or named directly with `--json_cache`; a run with no cache stops with an error, and vep-rs never contacts a database.
+- **The transcript cache.** The cache is a directory built by `vep-cache-builder` or converted from an Ensembl VEP cache ([docs/cache-setup.md](docs/cache-setup.md)), found under `--dir_cache`, `--species` and `--cache_version` in Ensembl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout or named directly with `--json_cache`; a run with no cache stops with an error, and vep-rs never contacts a database.
 - **Some flags are accepted but not implemented.** Among them are `--regulatory`, `--custom` and the statistics flags (vep-rs writes no summary file); `--refseq` and `--merged` select the `_refseq` or `_merged` species directory, and `--refseq` also resolves an HGVS gene name among RefSeq transcripts first. [docs/cli-reference.md](docs/cli-reference.md) marks every such flag. [docs/getting-started/what-vep-rs-does-not-do.md](docs/getting-started/what-vep-rs-does-not-do.md) says in plain words what a run does when asked for each missing feature, and which of them the next release, 0.6.0, adds.
 
 ## Current release: v0.4.0
@@ -164,7 +164,7 @@ target/release/vep \
 
 ### 2. Annotate your own data
 
-Real data needs a JSON transcript cache, built natively with `vep-cache-builder` or converted from a Perl VEP cache. Then run the same VEP command you run, with `--json_cache` naming the cache directory. The [Quick start](docs/getting-started/quick-start.md) page gives the cache-builder command, the annotation command and the plugin and HGVS options. [Cache setup](docs/cache-setup.md) explains each input of the cache build.
+Real data needs a JSON transcript cache, built natively with `vep-cache-builder` or converted from an Ensembl VEP cache. Then run the same VEP command you run, with `--json_cache` naming the cache directory. The [Quick start](docs/getting-started/quick-start.md) page gives the cache-builder command, the annotation command and the plugin and HGVS options. [Cache setup](docs/cache-setup.md) explains each input of the cache build.
 
 ## Documentation
 
