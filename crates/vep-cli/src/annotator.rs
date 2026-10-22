@@ -1200,9 +1200,14 @@ mod tests {
                 .collect(),
             ..Default::default()
         };
-        let source = crate::variation_source::VariationSource::open(dir, &info, false)
-            .unwrap()
-            .expect("a region file is a variation source");
+        let source = crate::variation_source::VariationSource::open(
+            dir,
+            &info,
+            false,
+            Arc::new(vep_core::cache_manifest::CacheManifest::absent(dir)),
+        )
+        .unwrap()
+        .expect("a region file is a variation source");
         let resources = AnnotationResources {
             transcripts: Arc::new(LazyTranscriptIndexes::empty()),
             variation_source: Some(Arc::new(source)),

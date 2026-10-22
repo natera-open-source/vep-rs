@@ -22,6 +22,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 use vep_cli::json_cache;
 use vep_cli::variation_source::VariationSource;
+use vep_core::cache_manifest::CacheManifest;
 
 /// Root of the JSON cache (relative to workspace root).
 const CACHE_DIR: &str = "tmp/concordance/cache_json";
@@ -55,13 +56,15 @@ fn bench_load_transcripts_for_chr(c: &mut Criterion) {
         eprintln!("SKIP: chromosome {chr} not in cache {dir}");
         return;
     };
+    let manifest = CacheManifest::load(&dir).expect("manifest read failed");
 
     let mut group = c.benchmark_group("cache_loading");
     group.sample_size(10);
     group.measurement_time(Duration::from_secs(20));
     group.bench_function(format!("transcripts_chr{chr}"), |b| {
         b.iter(|| {
-            json_cache::load_transcripts_for_chr(&chr, paths).expect("transcript loading failed");
+            json_cache::load_transcripts_for_chr(&chr, paths, &manifest)
+                .expect("transcript loading failed");
         });
     });
     group.finish();

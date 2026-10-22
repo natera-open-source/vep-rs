@@ -42,7 +42,6 @@ use vep_core::transcript::Transcript;
 use vep_io::input::TranscriptSource;
 
 use crate::config::CliError;
-use crate::json_cache::load_transcripts_for_chr;
 use crate::transcript_index::LazyTranscriptIndexes;
 
 /// What the index keeps of a transcript: the identifiers a notation resolves
@@ -311,13 +310,7 @@ impl TranscriptLookup {
         let per_shard: Vec<Result<Vec<Entry>, String>> = shards
             .par_iter()
             .map(|shard| {
-                // A refusal of the cache keeps its message alone: the caller
-                // prints it under its own component.
-                let transcripts = load_transcripts_for_chr(chr, std::slice::from_ref(shard))
-                    .map_err(|error| match error.downcast_ref::<CliError>() {
-                        Some(refusal) => refusal.message.clone(),
-                        None => format!("{error:#}"),
-                    })?;
+                let transcripts = self.indexes.load_shard(chr, shard).map_err(error_message)?;
                 Ok(transcripts
                     .iter()
                     .filter(|transcript| self.indexes.accepts(transcript))
@@ -341,9 +334,7 @@ impl TranscriptLookup {
     /// materialized for the purpose when the annotation has not.
     fn materialize(&self, entry: &Entry) -> Result<Transcript, String> {
         let chr = &self.chromosomes[entry.chromosome];
-        self.indexes
-            .prewarm(chr)
-            .map_err(|error| format!("{error:#}"))?;
+        self.indexes.prewarm(chr).map_err(error_message)?;
         self.indexes
             .get(chr)
             .and_then(|index| {
@@ -405,6 +396,17 @@ impl TranscriptLookup {
             .into_iter()
             .map(|entry| self.materialize(entry))
             .collect()
+    }
+}
+
+/// A cache read failure as the parser's `Cannot read the transcript cache`
+/// error quotes it: a refusal of the error contract by its message alone,
+/// since the parser supplies the line's one `ERROR:` prefix; any other failure
+/// with its cause chain.
+fn error_message(error: anyhow::Error) -> String {
+    match error.downcast_ref::<CliError>() {
+        Some(refusal) => refusal.message.clone(),
+        None => format!("{error:#}"),
     }
 }
 

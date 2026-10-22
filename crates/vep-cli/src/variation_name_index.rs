@@ -16,7 +16,6 @@
 //! The pass costs a read of the whole variation data, about the size of the
 //! files, whatever the number of names; the chromosomes are read in parallel.
 
-use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
@@ -24,6 +23,7 @@ use anyhow::Context;
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use vep_core::cache_info::VariationColumns;
+use vep_core::cache_manifest::ManifestError;
 use vep_io::input::id::NameMapping;
 
 use crate::variation_source::{parse_record, VariationSource};
@@ -58,8 +58,16 @@ pub fn resolve_names(
         .files()
         .into_par_iter()
         .map(|(chr, path)| {
-            scan_file(chr, path, columns, name_column, delimiter, &wanted)
-                .with_context(|| format!("reading {}", path.display()))
+            scan_file(source, chr, path, columns, name_column, delimiter, &wanted).map_err(
+                |error| {
+                    // The refusal names the file itself.
+                    if error.is::<ManifestError>() {
+                        error
+                    } else {
+                        error.context(format!("reading {}", path.display()))
+                    }
+                },
+            )
         })
         .collect::<anyhow::Result<_>>()?;
     let mut by_name: FxHashMap<Vec<u8>, Vec<NameMapping>> = FxHashMap::default();
@@ -76,8 +84,10 @@ pub fn resolve_names(
 }
 
 /// The records of one variation file whose lower-cased name is in `wanted`,
-/// each with that key, in file order; `chr` is the file's chromosome.
+/// each with that key, in file order; `chr` is the file's chromosome. The file
+/// is read through `source`, which checks it against the cache's manifest.
 fn scan_file(
+    source: &VariationSource,
     chr: &str,
     path: &Path,
     columns: &VariationColumns,
@@ -85,8 +95,8 @@ fn scan_file(
     delimiter: u8,
     wanted: &FxHashSet<&[u8]>,
 ) -> anyhow::Result<Vec<(Vec<u8>, NameMapping)>> {
-    let file = fs::File::open(path)?;
-    let mut reader = BufReader::new(flate2::read::MultiGzDecoder::new(file));
+    let whole = source.open_whole(path)?;
+    let mut reader = BufReader::new(flate2::read::MultiGzDecoder::new(whole));
     let mut line = Vec::new();
     let mut key = Vec::new();
     let mut found = Vec::new();
@@ -121,14 +131,18 @@ fn scan_file(
             ));
         }
     }
+    reader.into_inner().into_inner().finish()?;
     Ok(found)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::io::Write;
+    use std::sync::Arc;
     use vep_core::cache_info::CacheInfo;
+    use vep_core::cache_manifest::CacheManifest;
 
     const COLS: &str = "chr,variation_name,failed,somatic,start,end,allele_string,strand,clin_sig,phenotype_or_disease,clin_sig_allele,clin_sig_ref_allele,clinical_impact,pubmed,var_synonyms,AF";
 
@@ -140,7 +154,7 @@ mod tests {
             var_type: var_type.map(str::to_string),
             ..Default::default()
         };
-        VariationSource::open(cache, &info, false)
+        VariationSource::open(cache, &info, false, Arc::new(CacheManifest::absent(cache)))
             .unwrap()
             .expect("variation files")
     }

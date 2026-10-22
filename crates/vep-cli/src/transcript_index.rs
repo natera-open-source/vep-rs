@@ -12,13 +12,14 @@
 //! searches.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use anyhow::Context;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 
+use vep_core::cache_manifest::CacheManifest;
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
 
@@ -339,14 +340,35 @@ pub struct LazyTranscriptIndexes {
     upstream_distance: u64,
     downstream_distance: u64,
     transcript_set: TranscriptSet,
+    /// The cache's checksum manifest, which every shard is checked against as
+    /// it is read.
+    manifest: Arc<CacheManifest>,
 }
 
 impl LazyTranscriptIndexes {
-    /// Enumerate `json_cache_dir` and prepare one lazy slot per chromosome.
+    /// Enumerate `json_cache_dir` and prepare one lazy slot per chromosome,
+    /// reading the directory's checksum manifest for the shard reads.
     pub fn new(
         json_cache_dir: &str,
         upstream_distance: u64,
         downstream_distance: u64,
+    ) -> anyhow::Result<Self> {
+        let manifest =
+            CacheManifest::load(json_cache_dir).map_err(crate::cache_resolve::manifest_error)?;
+        Self::new_with_manifest(
+            json_cache_dir,
+            upstream_distance,
+            downstream_distance,
+            Arc::new(manifest),
+        )
+    }
+
+    /// [`Self::new`] with the manifest the cache resolution already read.
+    pub fn new_with_manifest(
+        json_cache_dir: &str,
+        upstream_distance: u64,
+        downstream_distance: u64,
+        manifest: Arc<CacheManifest>,
     ) -> anyhow::Result<Self> {
         let shards: FxHashMap<String, Vec<PathBuf>> =
             crate::json_cache::enumerate_transcript_shards(json_cache_dir)?
@@ -364,6 +386,7 @@ impl LazyTranscriptIndexes {
             upstream_distance,
             downstream_distance,
             transcript_set: TranscriptSet::default(),
+            manifest,
         })
     }
 
@@ -383,6 +406,7 @@ impl LazyTranscriptIndexes {
             upstream_distance: 0,
             downstream_distance: 0,
             transcript_set: TranscriptSet::default(),
+            manifest: Arc::new(CacheManifest::absent("")),
         }
     }
 
@@ -419,6 +443,7 @@ impl LazyTranscriptIndexes {
             upstream_distance,
             downstream_distance,
             transcript_set: TranscriptSet::default(),
+            manifest: Arc::new(CacheManifest::absent("")),
         }
     }
 
@@ -447,6 +472,7 @@ impl LazyTranscriptIndexes {
             upstream_distance: 0,
             downstream_distance: 0,
             transcript_set: TranscriptSet::default(),
+            manifest: Arc::new(CacheManifest::absent("")),
         }
     }
 
@@ -461,11 +487,22 @@ impl LazyTranscriptIndexes {
         self.slots.keys().map(String::as_str)
     }
 
-    /// The shard files of `chr`, for a reader that parses them itself and keeps
-    /// nothing; `None` for a chromosome the cache does not cover or one built
-    /// from loaded transcripts, whose index [`Self::get`] already holds.
+    /// The shard files of `chr`, for a reader that parses them itself through
+    /// [`Self::load_shard`] and keeps nothing; `None` for a chromosome the cache
+    /// does not cover or one built from loaded transcripts, whose index
+    /// [`Self::get`] already holds.
     pub fn shards_of(&self, chr: &str) -> Option<&[PathBuf]> {
         self.shards.get(chr).map(Vec::as_slice)
+    }
+
+    /// The transcripts of one shard of `chr`, checked against the cache's
+    /// manifest as the index's own loads are.
+    pub fn load_shard(&self, chr: &str, shard: &Path) -> anyhow::Result<Vec<Transcript>> {
+        crate::json_cache::load_transcripts_for_chr(
+            chr,
+            std::slice::from_ref(&shard.to_path_buf()),
+            &self.manifest,
+        )
     }
 
     /// Whether the run's transcript set admits `transcript`, the test every
@@ -558,7 +595,7 @@ impl LazyTranscriptIndexes {
         if slot.get().is_some() {
             return Ok(());
         }
-        let mut txs = crate::json_cache::load_transcripts_for_chr(chr, shards)
+        let mut txs = crate::json_cache::load_transcripts_for_chr(chr, shards, &self.manifest)
             .with_context(|| format!("chr{chr} transcript load failed"))?;
         txs.retain(|tx| self.transcript_set.accepts(tx));
         tracing::info!("  chr{}: {} transcripts", chr, txs.len());
@@ -910,6 +947,7 @@ mod tests {
             upstream_distance: 5_000,
             downstream_distance: 5_000,
             transcript_set: TranscriptSet::default(),
+            manifest: Arc::new(CacheManifest::absent("")),
         };
 
         assert!(desynced.contains_key("21"), "advertised as present");

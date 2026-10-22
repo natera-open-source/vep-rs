@@ -6,6 +6,7 @@ import hashlib
 import gzip
 import os
 import random
+import shutil
 import struct
 import subprocess
 import sys
@@ -1783,6 +1784,80 @@ def test_prune_keeps_reachable_transcripts_in_every_shard(tmp_path: Path):
     assert not (out / "transcripts" / "22").exists()
     info = json.loads((out / "info.json").read_text())
     assert info["assembly"] == "GRCh37" and info["cache_version"] == 115
+
+
+def test_prune_writes_the_checksum_manifest_last(tmp_path: Path, capsys):
+    """The output ends with `CHECKSUMS.sha256`: one `sha256sum` text-mode line per file of the
+    output, the manifest itself excepted, paths relative to the output in byte order, so
+    `sha256sum --check` accepts it; `--info-only` refreshes it after rewriting `info.json`, and
+    `--manifest-only` writes it alone over an assembled cache directory."""
+    cache = tmp_path / "cache"
+    (cache / "transcripts" / "21").mkdir(parents=True)
+    (cache / "transcripts" / "21" / "1-1000000.json").write_text(
+        json.dumps([{"stable_id": "ENST_A", "start": "10000", "end": "20000", "dbID": "1"}]))
+    (cache / "chr_synonyms.txt").write_text("21\tchr21\n")
+    vcf = tmp_path / "v.vcf"
+    vcf.write_text("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t12000\t.\tA\tG\t.\t.\t.\n")
+    out = tmp_path / "out"
+    assert pjc.main(["--cache", str(cache), "--out", str(out), "--vcf", str(vcf), "--assembly", "GRCh38",
+                     "--cache-version", "116", "--gzip"]) == 0
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["manifest_files"] == 3
+    checksums = out / "CHECKSUMS.sha256"
+    lines = checksums.read_text().splitlines()
+    assert [line[66:] for line in lines] == ["chr_synonyms.txt", "info.json", "transcripts/21/1-1000000.json.gz"]
+    for line in lines:
+        digest, path = line[:64], line[66:]
+        assert line[64:66] == "  "
+        assert hashlib.sha256((out / path).read_bytes()).hexdigest() == digest
+    if shutil.which("sha256sum"):
+        check = subprocess.run(["sha256sum", "--check", "--strict", "CHECKSUMS.sha256"], cwd=out, capture_output=True, text=True, check=False)
+        assert check.returncode == 0, check.stdout + check.stderr
+    before = checksums.read_text()
+    assert pjc.main(["--info-only", "--out", str(out), "--assembly", "GRCh38", "--cache-version", "117"]) == 0
+    after = checksums.read_text()
+    assert after != before
+    assert hashlib.sha256((out / "info.json").read_bytes()).hexdigest() in after
+    (out / "transcripts" / "21" / "1000001-2000000.json").write_text("[]")
+    assert pjc.main(["--manifest-only", "--out", str(out)]) == 0
+    assert json.loads(capsys.readouterr().out) == {"manifest_files": 4}
+    assert "transcripts/21/1000001-2000000.json" in checksums.read_text()
+    assert pjc.main(["--manifest-only", "--out", str(tmp_path / "not-a-cache")]) == 2
+    assert "holds no info.json" in capsys.readouterr().err
+
+
+def test_manifest_lists_files_through_directory_links_in_path_byte_order(tmp_path: Path):
+    """The writer lists a file reached through a symbolic link to a directory, as the Rust writer
+    does, and orders the lines by the bytes of the paths alone: a name that is a proper prefix of
+    another whose next byte sorts below a newline comes first, as it does in the Rust writer's
+    byte order. A tree nested deeper than `MANIFEST_MAX_DEPTH`, a link to an ancestor, is refused
+    with the tool's error instead of walked without end."""
+    out = tmp_path / "out"
+    (out / "transcripts" / "21").mkdir(parents=True)
+    (out / "info.json").write_text("{}\n", encoding="utf-8")
+    (out / "info.json\tcopy").write_text("{}\n", encoding="utf-8")
+    (out / "transcripts" / "21" / "1-1000000.json").write_text("[]", encoding="utf-8")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "1-1000000_var.gz").write_bytes(b"gz")
+    (out / "variations").mkdir()
+    os.symlink(elsewhere, out / "variations" / "21", target_is_directory=True)
+    assert pjc.write_manifest(out) == 4
+    lines = (out / "CHECKSUMS.sha256").read_text(encoding="utf-8").splitlines()
+    assert [line[66:] for line in lines] == [
+        "info.json", "info.json\tcopy", "transcripts/21/1-1000000.json", "variations/21/1-1000000_var.gz",
+    ]
+    assert lines[3][:64] == hashlib.sha256(b"gz").hexdigest()
+    os.symlink(out, out / "transcripts" / "loop", target_is_directory=True)
+    with pytest.raises(SystemExit) as refusal:
+        pjc.write_manifest(out)
+    assert str(refusal.value).startswith("ERROR: [prune_json_cache] ")
+    assert str(refusal.value).endswith(f": directories nest more than {pjc.MANIFEST_MAX_DEPTH} levels deep")
+    (out / "transcripts" / "loop").unlink()
+    os.symlink(out / "absent", out / "dangling")
+    with pytest.raises(SystemExit) as refusal:
+        pjc.write_manifest(out)
+    assert str(refusal.value) == f"ERROR: [prune_json_cache] {out / 'dangling'}: a symbolic link to nothing"
 
 
 def test_prune_writes_contig_order_and_the_kept_chromosomes_synonyms(tmp_path: Path, capsys):

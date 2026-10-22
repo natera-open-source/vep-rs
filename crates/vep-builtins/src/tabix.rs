@@ -872,7 +872,7 @@ fn resolve_reference_sequence<'a>(
 /// Find the index file for a given data file in the order htslib searches:
 /// `<file>.csi` (the format `tabix -C` writes), `<stem>.csi`, `<file>.tbi`,
 /// `<stem>.tbi`, where `<stem>` drops the data file's last extension.
-fn find_index_path(data_path: &Path) -> Result<PathBuf, PluginError> {
+pub fn find_index_path(data_path: &Path) -> Result<PathBuf, PluginError> {
     for extension in ["csi", "tbi"] {
         let appended = PathBuf::from(format!("{}.{extension}", data_path.display()));
         if appended.exists() {

@@ -1368,9 +1368,14 @@ mod tests {
             .collect(),
             ..Default::default()
         };
-        VariationSource::open(dir, &info, false)
-            .unwrap()
-            .expect("a region file is a variation source")
+        VariationSource::open(
+            dir,
+            &info,
+            false,
+            std::sync::Arc::new(vep_core::cache_manifest::CacheManifest::absent(dir)),
+        )
+        .unwrap()
+        .expect("a region file is a variation source")
     }
 
     // The `-o vep` path streams the Extra column straight into the writer, and

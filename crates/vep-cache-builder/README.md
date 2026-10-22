@@ -7,7 +7,9 @@ release's GFF3 (General Feature Format version 3) and protein FASTA, without Per
 `vep-fasta` for genome reads and `vep-core` for the reverse complement, and `vep-cli`
 loads what it writes. The output is `info.json`, one transcript shard per chromosome and
 1 Mb region under `transcripts/` and, with `--include-variations`, one `all_vars.gz` with its
-`.csi` per chromosome under `variations/`, the variation file Ensembl VEP's own cache carries.
+`.csi` per chromosome under `variations/`, the variation file Ensembl VEP's own cache carries,
+then `CHECKSUMS.sha256`, one `sha256sum` line per file written, which `vep-cli` checks every
+file it reads against.
 
 ## How it works
 
@@ -82,7 +84,7 @@ identifier takes that identifier, as Ensembl VEP's `merge_features` copies it at
 time. The record carries the keys the dumper keeps and none of its own: no exon or
 intron strand, no mapper pair count or map names. The builder bins the transcripts by chromosome and by the 1 Mb
 region of their start and writes each bin as a pretty-printed JSON array to
-`transcripts/<chr>/<start>-<end>.json`; `info::CacheInfoJson` closes with `info.json`,
+`transcripts/<chr>/<start>-<end>.json`; `info::CacheInfoJson` writes `info.json`,
 whose `cache_version` is `--release`, whose `sift` and `polyphen` read `b` only when a
 matrix of that tool was written, whose `source_versions` come from the core `meta` table
 (`assembly`, `gencode`, `genebuild`, as Ensembl VEP's cache info carries them) or, without
@@ -94,7 +96,9 @@ written. With `--core-dumps`,
 `seq_region_synonym` tables, the pairs Ensembl VEP's dump pipeline writes (each
 sequence region's name against its synonyms, linked one step further through the
 synonyms already recorded), so `NC_000021.9` or `CM000683.2` in an input resolves to the
-cache's `21`.
+cache's `21`. Last, `vep_core::cache_manifest::CacheManifest::write` lists every file of the
+output directory in `CHECKSUMS.sha256`, the file `vep-cli` checks each cache file it reads
+against.
 
 Without `--core-dumps` the cache states what the GFF3 states and no more: no symbol
 source or HGNC identifier, no gene phenotype count, no MANE accession, no APPRIS, no

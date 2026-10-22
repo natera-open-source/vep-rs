@@ -83,6 +83,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
+use vep_core::cache_manifest::{CacheManifest, MANIFEST_FILE};
 use vep_core::consequence::Consequence;
 
 /// One corpus directory.
@@ -384,7 +385,9 @@ fn mask_entries(masks: &[String], format: &str, expected: &mut Vec<Entry>, actua
 
 /// A copy of the corpus cache in `out_dir` with the reference and its indexes
 /// inside it under their own names (made once; later calls reuse it), for a
-/// corpus whose run relies on the cache directory's FASTA detection.
+/// corpus whose run relies on the cache directory's FASTA detection. The copy's
+/// checksum manifest is rewritten over the added files, as a user who places a
+/// FASTA in a cache directory lists it.
 fn staged_cache(corpus: &Corpus, out_dir: &Path) -> PathBuf {
     let target = out_dir.join(format!("{}-cache", corpus.name));
     if !target.is_dir() {
@@ -395,6 +398,9 @@ fn staged_cache(corpus: &Corpus, out_dir: &Path) -> PathBuf {
         copy_dir(&corpus.cache_dir(), &building);
         let fasta = committed_fasta(corpus);
         link_or_copy_indexed_fasta(&fasta, &building.join(fasta.file_name().unwrap()));
+        if building.join(MANIFEST_FILE).is_file() {
+            CacheManifest::write(&building).unwrap();
+        }
         fs::rename(&building, &target).unwrap();
     }
     target

@@ -22,12 +22,14 @@ use serde::Deserialize;
 use tracing::info;
 
 use vep_core::cache_info::CacheInfo;
+use vep_core::cache_manifest::CacheManifest;
 use vep_core::coordinate::Strand;
 use vep_core::transcript::{
     Attribute, Exon, ExonCoordMapper, Intron, MapperPair, PredictionMatrix, ProteinFeature,
     ProteinFunctionPredictions, SeqEdit, Transcript, TranscriptMapper, TranscriptVEFC, Translation,
 };
 
+use crate::cache_resolve::manifest_error;
 use crate::config::CliError;
 
 /// Visitors for the numeric fields a Storable-derived cache may store as a JSON number
@@ -1068,9 +1070,11 @@ fn shard_start(path: &Path) -> (u64, String) {
     (start, name)
 }
 
-/// Read a shard's bytes, inflating a `.json.gz` shard.
-fn read_shard(path: &Path) -> anyhow::Result<Vec<u8>> {
+/// Read a shard's bytes, checking them against the cache's manifest before a
+/// `.json.gz` shard is inflated.
+fn read_shard(path: &Path, manifest: &CacheManifest) -> anyhow::Result<Vec<u8>> {
     let raw = std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?;
+    manifest.verify_bytes(path, &raw).map_err(manifest_error)?;
     if path.extension().is_some_and(|e| e == "gz") {
         let mut out = Vec::new();
         std::io::Read::read_to_end(&mut flate2::read::GzDecoder::new(&raw[..]), &mut out)
@@ -1112,12 +1116,17 @@ fn parse_shard_transcripts(data: &[u8]) -> serde_json::Result<Vec<JsonTranscript
 /// `--fork 1` does not make shard parsing single-threaded.
 ///
 /// `chr` is the chromosome name the shards belong to; it is stamped onto every
-/// transcript by `convert_transcript`.
-pub fn load_transcripts_for_chr(chr: &str, shards: &[PathBuf]) -> anyhow::Result<Vec<Transcript>> {
+/// transcript by `convert_transcript`. Every shard's bytes are checked against
+/// `manifest`, the cache's checksum manifest, as they are read.
+pub fn load_transcripts_for_chr(
+    chr: &str,
+    shards: &[PathBuf],
+    manifest: &CacheManifest,
+) -> anyhow::Result<Vec<Transcript>> {
     let parsed: Vec<anyhow::Result<Vec<Transcript>>> = shards
         .par_iter()
         .map(|path| -> anyhow::Result<Vec<Transcript>> {
-            let data = read_shard(path)?;
+            let data = read_shard(path, manifest)?;
             let json_transcripts = parse_shard_transcripts(&data)
                 .with_context(|| format!("Failed to parse {}", path.display()))?;
             let transcripts: Vec<Transcript> = json_transcripts
@@ -1247,10 +1256,15 @@ fn assign_id_ranks(transcripts: &mut [Transcript]) {
 /// `load_transcripts_for_chr`: the loop below is parallel, so logging from the
 /// closure would interleave the ~25 lines in completion order and make two runs
 /// of the same cache produce different logs.
+///
+/// The cache's checksum manifest is read from the directory, every file it
+/// lists must be present, and every shard is checked against it.
 pub fn load_all_transcripts(
     json_cache_dir: &str,
 ) -> anyhow::Result<HashMap<String, Vec<Transcript>>> {
     let shards = enumerate_transcript_shards(json_cache_dir)?;
+    let manifest = CacheManifest::load(json_cache_dir).map_err(manifest_error)?;
+    manifest.require_complete().map_err(manifest_error)?;
     // Parallel across chromosomes, not only across one chromosome's shards: a
     // serial outer loop drains the pool at every chromosome boundary and runs
     // each tail shard alone. Rayon nests safely here because this eager path
@@ -1260,7 +1274,10 @@ pub fn load_all_transcripts(
         .par_iter()
         .map(
             |(chr, paths)| -> anyhow::Result<(String, Vec<Transcript>)> {
-                Ok((chr.clone(), load_transcripts_for_chr(chr, paths)?))
+                Ok((
+                    chr.clone(),
+                    load_transcripts_for_chr(chr, paths, &manifest)?,
+                ))
             },
         )
         .collect::<anyhow::Result<HashMap<_, _>>>()?;
@@ -1282,6 +1299,11 @@ mod tests {
     use vep_core::variation::CachedVariation;
     use vep_io::output::fields::{ClinSigAllele, FieldOptions};
 
+    /// A manifest that checks nothing, for the shards these tests write.
+    fn unchecked() -> CacheManifest {
+        CacheManifest::absent("")
+    }
+
     /// A directory without `transcripts/`, or whose `transcripts/` holds no
     /// shard, loads nothing and says so: an empty transcript set would annotate
     /// every variant as intergenic and exit 0.
@@ -1302,6 +1324,36 @@ mod tests {
         assert!(
             error.to_string().contains("no transcript shards under"),
             "{error}"
+        );
+    }
+
+    /// A copy of a manifest-carrying cache that lacks a listed shard is refused
+    /// before any shard is read, naming the file, as a run's cache resolution
+    /// refuses it.
+    #[test]
+    fn eager_load_refuses_a_cache_missing_a_listed_shard() {
+        let dir = cache_with_shards(
+            "vep_jc_incomplete_",
+            &[
+                ("21", "[]"),
+                ("22", &format!("[{}]", coding_transcript_json(""))),
+            ],
+        );
+        CacheManifest::write(dir.path()).unwrap();
+        let path = dir.path().to_str().unwrap();
+        assert_eq!(load_all_transcripts(path).unwrap().len(), 2);
+        let shard = dir
+            .path()
+            .join("transcripts")
+            .join("22")
+            .join("1-1000000.json");
+        std::fs::remove_file(&shard).unwrap();
+        let error = load_all_transcripts(path).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "ERROR: [cache] transcripts/22/1-1000000.json is listed in CHECKSUMS.sha256 but missing from {path}"
+            )
         );
     }
 
@@ -1419,7 +1471,7 @@ mod tests {
             ]
         );
 
-        let txs = load_transcripts_for_chr("21", &shards["21"]).unwrap();
+        let txs = load_transcripts_for_chr("21", &shards["21"], &unchecked()).unwrap();
         let mut ids: Vec<&str> = txs.iter().map(|t| &*t.stable_id).collect();
         ids.sort();
         assert_eq!(ids, vec!["ENST_A", "ENST_NODB", "ENST_STRADDLE"]);
@@ -1464,7 +1516,7 @@ mod tests {
         .unwrap();
 
         let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
-        let txs = load_transcripts_for_chr("21", &shards["21"]).unwrap();
+        let txs = load_transcripts_for_chr("21", &shards["21"], &unchecked()).unwrap();
         let mut ranked: Vec<(&str, u32)> = txs.iter().map(|t| (&*t.stable_id, t.id_rank)).collect();
         ranked.sort();
         // Byte order, not numeric: the shorter `ENST0000002` sorts between
@@ -1510,7 +1562,7 @@ mod tests {
 
         let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
         assert_eq!(shards["21"].len(), 1);
-        let txs = load_transcripts_for_chr("21", &shards["21"]).unwrap();
+        let txs = load_transcripts_for_chr("21", &shards["21"], &unchecked()).unwrap();
         assert_eq!(txs.len(), 1);
         assert_eq!(&*txs[0].stable_id, "ENST_GZ");
     }
@@ -1547,7 +1599,7 @@ mod tests {
         .unwrap();
 
         let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
-        let txs = load_transcripts_for_chr("21", &shards["21"]).unwrap();
+        let txs = load_transcripts_for_chr("21", &shards["21"], &unchecked()).unwrap();
         let ids: Vec<&str> = txs.iter().map(|t| &*t.stable_id).collect();
         assert_eq!(ids, vec!["ENST_ARR", "ENST_MAP_A", "ENST_MAP_B"]);
         assert!(txs.iter().all(|t| t.chr == "21"));
@@ -1570,7 +1622,7 @@ mod tests {
         .unwrap();
 
         let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
-        let err = load_transcripts_for_chr("21", &shards["21"]).unwrap_err();
+        let err = load_transcripts_for_chr("21", &shards["21"], &unchecked()).unwrap_err();
         let msg = format!("{err:#}");
         assert!(msg.contains("1-1000000.json"), "{msg}");
         assert!(msg.contains("EOF"), "{msg}");
@@ -1595,7 +1647,7 @@ mod tests {
             }
             let dir = cache_with_shards("vep_jc_mapper_", &[("21", &format!("[{json}]"))]);
             let shards = enumerate_transcript_shards(dir.path().to_str().unwrap()).unwrap();
-            load_transcripts_for_chr("21", &shards["21"]).map(|txs| txs.len())
+            load_transcripts_for_chr("21", &shards["21"], &unchecked()).map(|txs| txs.len())
         };
         // The fixture's one mapper pair ends at cDNA 30, so its `from_end` is
         // the cDNA length.
@@ -1870,9 +1922,14 @@ mod tests {
         let region_dir = dir.path().join("variations").join("21");
         std::fs::create_dir_all(&region_dir).unwrap();
         write_region_file(&region_dir.join("1-1000000_var.gz"), line);
-        let source = VariationSource::open(dir.path(), &region_cache_info(extra_columns), false)
-            .unwrap()
-            .expect("a region file is a variation source");
+        let source = VariationSource::open(
+            dir.path(),
+            &region_cache_info(extra_columns),
+            false,
+            Arc::new(CacheManifest::absent(dir.path())),
+        )
+        .unwrap()
+        .expect("a region file is a variation source");
         (dir, Arc::new(source))
     }
 
@@ -2210,7 +2267,7 @@ mod tests {
             ["21", "GL000008.2", "HG1012_PATCH", "KI270728.1", "LRG_1"]
         );
         for (chr, id) in [("HG1012_PATCH", "ENST_PATCH"), ("LRG_1", "ENST_LRG")] {
-            let txs = load_transcripts_for_chr(chr, &shards[chr]).unwrap();
+            let txs = load_transcripts_for_chr(chr, &shards[chr], &unchecked()).unwrap();
             assert_eq!(txs.len(), 1);
             assert_eq!(&*txs[0].stable_id, id);
             assert_eq!(txs[0].chr, chr);
@@ -2541,9 +2598,14 @@ mod tests {
         let variations = dir.path().join("variations");
         std::fs::create_dir_all(&variations).unwrap();
         std::os::unix::fs::symlink(&real_variations, variations.join("21")).unwrap();
-        let source = VariationSource::open(dir.path(), &region_cache_info(&[]), false)
-            .unwrap()
-            .expect("the linked chromosome directory is a variation source");
+        let source = VariationSource::open(
+            dir.path(),
+            &region_cache_info(&[]),
+            false,
+            Arc::new(CacheManifest::absent(dir.path())),
+        )
+        .unwrap()
+        .expect("the linked chromosome directory is a variation source");
         let records = source.records_overlapping("21", 100, 100).unwrap();
         assert_eq!(records[0].variation_name, "rs123");
     }

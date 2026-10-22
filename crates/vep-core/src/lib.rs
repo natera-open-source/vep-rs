@@ -10,11 +10,13 @@
 pub mod allele;
 pub mod assembly;
 pub mod cache_info;
+pub mod cache_manifest;
 pub mod codon;
 pub mod consequence;
 pub mod coordinate;
 pub mod minimal;
 pub mod prediction;
+pub mod sha256;
 pub mod so_ontology;
 pub mod spdi;
 pub mod sv_record;

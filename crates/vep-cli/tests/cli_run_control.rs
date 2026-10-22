@@ -463,7 +463,10 @@ fn show_cache_info_prints_info_json_and_exits_0() {
         r#"{"assembly":"GRCh38","source_versions":{"dbSNP":"156","assembly":"GRCh38.p14"}}"#,
     )
     .unwrap();
+    // The cache carries no checksum manifest, so each run warns and the warnings
+    // file lands in the working directory, kept out of the source tree here.
     let output = vep()
+        .current_dir(root.path())
         .args(["--show_cache_info", "--cache", "--dir_cache"])
         .arg(root.path())
         .args(["--species", "homo_sapiens", "--cache_version", "116"])
@@ -473,6 +476,7 @@ fn show_cache_info_prints_info_json_and_exits_0() {
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     assert_eq!(text(&output.stdout), "assembly\tGRCh38.p14\ndbSNP\t156\n");
     let refused = vep()
+        .current_dir(root.path())
         .args(["--show_cache_info", "--quiet", "--dir_cache"])
         .arg(root.path())
         .args(["--assembly", "GRCh37"])
@@ -489,6 +493,7 @@ fn show_cache_info_prints_info_json_and_exits_0() {
     // VEP compiles it while building the sources the info is read from
     // (BaseRunner.pm:415, AnnotationSource.pm:87-89).
     let refused = vep()
+        .current_dir(root.path())
         .args(["--show_cache_info", "--quiet", "--cache", "--dir_cache"])
         .arg(root.path())
         .args(["--transcript_filter", "biotype equals protein_coding"])

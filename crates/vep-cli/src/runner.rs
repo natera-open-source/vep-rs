@@ -16,7 +16,7 @@
 use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Cursor, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -31,7 +31,7 @@ use crate::annotator::{
     build_thread_pool, hgvs_options, hgvsg_options, spdi_options, LoadedPlugins, PredictionConfig,
     HGVS_NEEDS_FASTA,
 };
-use crate::cache_resolve::ResolvedCache;
+use crate::cache_resolve::{manifest_error, ResolvedCache};
 use crate::config::{
     reported_parallelism, resolve_decompression_threads, CliError, Config, DecompressionThreads,
 };
@@ -52,6 +52,7 @@ use crate::variation_name_index;
 use crate::variation_source::{ReadFailure, VariationSource};
 use vep_builtins::BuiltinRegistry;
 use vep_core::cache_info::CacheInfo;
+use vep_core::cache_manifest::CacheManifest;
 use vep_core::consequence::{Consequence, Impact};
 use vep_core::sv_routing::perl_true;
 use vep_core::synonyms::ChromosomeSynonyms;
@@ -492,6 +493,7 @@ pub(crate) fn open_fasta(
     };
     if config.fasta.is_none() && cache.fasta.as_deref() == Some(path.as_str()) {
         debug!("Auto-detected FASTA file in cache directory");
+        check_cache_fasta(Path::new(&path), &cache.manifest)?;
     }
     let mut opened = vep_fasta::IndexedFasta::from_path(&path)
         .map_err(|e| CliError::new("fasta", e.to_string()))?;
@@ -507,6 +509,81 @@ pub(crate) fn open_fasta(
         opened.set_assembly(assembly);
     }
     Ok(Some(Arc::new(opened)))
+}
+
+/// The FASTA found in the cache directory, against the cache's checksum
+/// manifest: its index files, which the reader reads whole (`.fai`, and the
+/// `.gzi` of a compressed file), are hashed and compared, and the FASTA itself,
+/// read by byte range, must be listed and, when it is a plain file, hold every
+/// base its `.fai` places (the reader's own `.gzi` check does the same for a
+/// compressed file). A manifest that is not present checks nothing.
+fn check_cache_fasta(fasta: &Path, manifest: &CacheManifest) -> Result<(), CliError> {
+    if !manifest.is_present() {
+        return Ok(());
+    }
+    manifest.require_listed(fasta).map_err(manifest_error)?;
+    let fasta_error = |path: &Path, e: std::io::Error| {
+        CliError::new("fasta", format!("failed to read {}: {e}", path.display()))
+    };
+    let verified_index = |extension: &str| -> Result<Option<Vec<u8>>, CliError> {
+        let index = PathBuf::from(format!("{}.{extension}", fasta.display()));
+        if !index.is_file() {
+            return Ok(None);
+        }
+        let bytes = std::fs::read(&index).map_err(|e| fasta_error(&index, e))?;
+        manifest
+            .verify_bytes(&index, &bytes)
+            .map_err(manifest_error)?;
+        Ok(Some(bytes))
+    };
+    let fai = verified_index("fai")?;
+    let gzi = verified_index("gzi")?;
+    if let (Some(fai), None) = (fai, gzi) {
+        let length = std::fs::metadata(fasta)
+            .map_err(|e| fasta_error(fasta, e))?
+            .len();
+        if fai_end(&fai).is_some_and(|end| length < end) {
+            let relative = manifest.relative(fasta).map_err(manifest_error)?;
+            return Err(manifest_error(manifest.mismatch(relative)));
+        }
+    }
+    Ok(())
+}
+
+/// The byte just past the last base a FASTA index places, over every record
+/// of the index text (`name length offset line_bases line_width`): the length
+/// the plain FASTA must reach. `None` for a record of another shape or a zero
+/// `line_bases`, which the FASTA reader refuses in its own words, and for
+/// arithmetic that leaves `u64`. The index is split into lines as the reader
+/// splits it (`BufRead::lines`), so a `\r` the reader keeps, one not followed
+/// by `\n`, is a field that fails to parse here as there.
+fn fai_end(fai: &[u8]) -> Option<u64> {
+    let mut end = 0u64;
+    for line in fai.lines() {
+        let line = line.ok()?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let mut fields = line.split('\t');
+        let _name = fields.next()?;
+        let length: u64 = fields.next()?.parse().ok()?;
+        let offset: u64 = fields.next()?.parse().ok()?;
+        let line_bases: u64 = fields.next()?.parse().ok()?;
+        let line_width: u64 = fields.next()?.parse().ok()?;
+        if line_bases == 0 {
+            return None;
+        }
+        if length == 0 {
+            continue;
+        }
+        let last = length - 1;
+        let record_end = (last / line_bases)
+            .checked_mul(line_width)?
+            .checked_add(last % line_bases + 1)?
+            .checked_add(offset)?;
+        end = end.max(record_end);
+    }
+    Some(end)
 }
 
 /// Pipeline runner for VEP.
@@ -1156,8 +1233,12 @@ impl Runner {
         upstream_distance: u64,
         downstream_distance: u64,
     ) -> anyhow::Result<LazyTranscriptIndexes> {
-        let indexes =
-            LazyTranscriptIndexes::new(&self.cache.dir, upstream_distance, downstream_distance)?;
+        let indexes = LazyTranscriptIndexes::new_with_manifest(
+            &self.cache.dir,
+            upstream_distance,
+            downstream_distance,
+            Arc::clone(&self.cache.manifest),
+        )?;
         Ok(indexes.with_transcript_set(TranscriptSet::from_config(&self.config)))
     }
 
@@ -1944,8 +2025,13 @@ impl Runner {
         let parser = IdParser::read(reader)?;
         let cache_dir = self.cache.dir.as_str();
         // The pass reads names and spans alone, which `--old_maf` never rewrites.
-        let source = VariationSource::open(Path::new(cache_dir), &self.cache.info, false)
-            .map_err(|error| CliError::new("cache", format!("{error:#}")))?;
+        let source = VariationSource::open(
+            Path::new(cache_dir),
+            &self.cache.info,
+            false,
+            Arc::clone(&self.cache.manifest),
+        )
+        .map_err(|error| CliError::new("cache", format!("{error:#}")))?;
         let Some(source) = source else {
             let files_without_columns = Path::new(cache_dir).join("variations").is_dir()
                 && self.cache.info.variation_columns().is_none();
@@ -2273,8 +2359,13 @@ pub(crate) fn open_variation_source(
     check_gnomad_columns(config, &cache.info)?;
     check_frequency_filter(config, &cache.info)?;
     let cache_dir = cache.dir.as_str();
-    let source = VariationSource::open(Path::new(cache_dir), &cache.info, config.old_maf)
-        .map_err(|error| CliError::new("cache", format!("{error:#}")))?;
+    let source = VariationSource::open(
+        Path::new(cache_dir),
+        &cache.info,
+        config.old_maf,
+        Arc::clone(&cache.manifest),
+    )
+    .map_err(|error| CliError::new("cache", format!("{error:#}")))?;
     match source {
         Some(source) => {
             info!("Variation cache: {cache_dir} (lazy per-chromosome)");
@@ -3156,6 +3247,43 @@ mod tests {
     use super::*;
     use crate::vcf_parser::parse_vcf_line;
     use std::collections::HashMap;
+
+    /// The length a plain FASTA must reach is the byte past the last base its
+    /// index places: `offset + (length - 1) / line_bases * line_width +
+    /// (length - 1) % line_bases + 1`, the largest over the records; a record
+    /// of zero length places no base, a `\r\n` index and blank lines read as the
+    /// FASTA reader reads them, and an index of another shape, with a `\r` the
+    /// reader keeps (`\r\r\n`, or `\r` ending the file), with `line_bases` 0 or
+    /// with values whose arithmetic leaves `u64` yields no length.
+    #[test]
+    fn fai_end_is_the_byte_past_the_last_indexed_base() {
+        assert_eq!(fai_end(b"21\t48129895\t4\t60\t61\n"), Some(48_932_063));
+        assert_eq!(fai_end(b"21\t48129895\t4\t60\t61"), Some(48_932_063));
+        assert_eq!(fai_end(b"21\t48129895\t4\t60\t61\r\n"), Some(48_932_063));
+        assert_eq!(fai_end(b"a\t61\t3\t60\t61\r\n\r\n"), Some(65));
+        assert_eq!(fai_end(b"\na\t61\t3\t60\t61\n   \n"), Some(65));
+        assert_eq!(fai_end(b"a\t60\t3\t60\t61\n"), Some(63));
+        assert_eq!(fai_end(b"a\t61\t3\t60\t61\n"), Some(65));
+        assert_eq!(
+            fai_end(b"a\t61\t3\t60\t61\nb\t0\t70\t60\t61\nc\t5\t73\t60\t61\n"),
+            Some(78)
+        );
+        assert_eq!(fai_end(b"a\t0\t3\t60\t61\n"), Some(0));
+        assert_eq!(fai_end(b""), Some(0));
+        assert_eq!(fai_end(b"a\t61\t3\t60\t61\r\r\n"), None);
+        assert_eq!(fai_end(b"a\t61\t3\t60\t61\r"), None);
+        assert_eq!(fai_end(b"a\t61\t3\t0\t61\n"), None);
+        assert_eq!(fai_end(b"a\t61\t3\n"), None);
+        assert_eq!(fai_end(b"a\tx\t3\t60\t61\n"), None);
+        assert_eq!(fai_end(&[0xff, b'\t', b'1', b'\n']), None);
+        for huge in [
+            "21\t48129895\t18446744073709551615\t60\t61\n",
+            "21\t48129895\t4\t60\t18446744073709551615\n",
+            "21\t18446744073709551615\t4\t60\t61\n",
+        ] {
+            assert_eq!(fai_end(huge.as_bytes()), None, "{huge:?}");
+        }
+    }
 
     #[test]
     fn parquet_row_groups_are_whole_duckdb_vectors() {
@@ -4525,9 +4653,14 @@ mod tests {
                 .collect(),
             ..Default::default()
         };
-        let source = VariationSource::open(dir.path(), &info, false)
-            .unwrap()
-            .expect("a region file is a variation source");
+        let source = VariationSource::open(
+            dir.path(),
+            &info,
+            false,
+            Arc::new(CacheManifest::absent(dir.path())),
+        )
+        .unwrap()
+        .expect("a region file is a variation source");
         let transcripts = Arc::new(
             LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap(),
         );
@@ -4591,9 +4724,14 @@ mod tests {
                 .collect(),
             ..Default::default()
         };
-        let source = VariationSource::open(dir.path(), &info, false)
-            .unwrap()
-            .expect("a region file is a variation source");
+        let source = VariationSource::open(
+            dir.path(),
+            &info,
+            false,
+            Arc::new(CacheManifest::absent(dir.path())),
+        )
+        .unwrap()
+        .expect("a region file is a variation source");
         let transcripts = Arc::new(
             LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 5_000, 5_000).unwrap(),
         );

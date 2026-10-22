@@ -338,5 +338,9 @@ fn main() -> Result<()> {
     .write(&output_dir)
     .context("Failed to write info.json")?;
 
+    let listed = vep_core::cache_manifest::CacheManifest::write(&output_dir)
+        .context("Failed to write CHECKSUMS.sha256")?;
+    info!("Checksum manifest written for {} files", listed);
+
     Ok(())
 }

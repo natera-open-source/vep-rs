@@ -11,7 +11,10 @@
 //!   The variation files are the Ensembl VEP dumper's own, copied unchanged to
 //!   `variations/<chr>/`: `all_vars.gz` with its `.csi` or `.tbi`, or
 //!   `{start}-{end}_var.gz`, read from `variations/<chr>/`, or with a `{chr}_`
-//!   prefix from directly under `variations/`.
+//!   prefix from directly under `variations/`. The checksum manifest
+//!   `CHECKSUMS.sha256` is written last, over every file then under the output
+//!   directory: the files this conversion wrote and any an earlier use of the
+//!   same `--output-dir` left there.
 //! - **convert-plugin-data**: Convert tabix-indexed plugin data files
 //!   (`.tsv.gz`) to the binary annotation store format (`.vpd` + `.vpdi`)
 //!   for mmap-backed zero-copy lookups.
@@ -26,6 +29,7 @@ use std::time::Instant;
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use tracing::{info, warn};
+use vep_core::cache_manifest::CacheManifest;
 
 #[derive(Parser)]
 #[command(
@@ -444,10 +448,12 @@ fn convert_cache(json_dir: &Path, output_dir: &str, _region_size: u64) -> Result
         &output_path.join("variations"),
     )?;
 
+    let listed = CacheManifest::write(output_path).context("Failed to write CHECKSUMS.sha256")?;
+
     info!(
         "Conversion complete: {} transcript regions ({} transcripts), \
-         {} variation files on {} chromosomes",
-        transcript_regions, transcript_entries, variation_files, variation_chromosomes
+         {} variation files on {} chromosomes, {} files in the checksum manifest",
+        transcript_regions, transcript_entries, variation_files, variation_chromosomes, listed
     );
 
     Ok(())
@@ -856,6 +862,67 @@ mod tests {
         fs::write(shards.join("21_1-1000000.json"), b"[]").unwrap();
         let error = copy_variation_files(&shards, &tmp.path().join("out3")).unwrap_err();
         assert!(error.to_string().contains("JSON variation shard"));
+    }
+
+    /// A conversion ends with `CHECKSUMS.sha256` in the output directory: one
+    /// entry per written file, the manifest itself excepted, each the digest
+    /// of the file's bytes, so the runtime's check of every file passes and
+    /// `sha256sum --check` accepts the file where the tool is installed.
+    #[test]
+    fn conversion_writes_the_checksum_manifest_last() {
+        let tmp = Scratch::new();
+        let src = tmp.path().join("src");
+        fs::create_dir_all(src.join("transcripts")).unwrap();
+        fs::create_dir_all(src.join("variations")).unwrap();
+        fs::write(
+            src.join("info.json"),
+            r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":116}"#,
+        )
+        .unwrap();
+        fs::write(src.join("chr_synonyms.txt"), "21\tNC_000021.9\n").unwrap();
+        fs::write(src.join("transcripts/21_1-1000000.json"), b"[]").unwrap();
+        fs::write(src.join("variations/21_all_vars.gz"), b"gz").unwrap();
+        fs::write(src.join("variations/21_all_vars.gz.csi"), b"csi").unwrap();
+        let out = tmp.path().join("out");
+        convert_cache(&src, out.to_str().unwrap(), 1_000_000).unwrap();
+
+        let manifest = CacheManifest::load(&out).unwrap();
+        assert!(manifest.is_present());
+        let listed = [
+            "chr_synonyms.txt",
+            "info.json",
+            "transcripts/21/1-1000000.json",
+            "variations/21/all_vars.gz",
+            "variations/21/all_vars.gz.csi",
+        ];
+        assert_eq!(manifest.len(), listed.len());
+        for relative in listed {
+            let path = out.join(relative);
+            manifest
+                .verify_bytes(&path, &fs::read(&path).unwrap())
+                .unwrap_or_else(|error| panic!("{relative}: {error}"));
+        }
+        let text = fs::read_to_string(out.join("CHECKSUMS.sha256")).unwrap();
+        let paths_in_file: Vec<&str> = text
+            .lines()
+            .map(|line| {
+                let (_digest, relative) = line.split_once("  ").unwrap();
+                relative
+            })
+            .collect();
+        assert_eq!(paths_in_file, listed);
+        if let Ok(check) = std::process::Command::new("sha256sum")
+            .args(["--check", "--strict", "--quiet", "CHECKSUMS.sha256"])
+            .current_dir(&out)
+            .output()
+        {
+            assert!(
+                check.status.success(),
+                "{}{}",
+                String::from_utf8_lossy(&check.stdout),
+                String::from_utf8_lossy(&check.stderr)
+            );
+        }
     }
 
     /// `info.json` is copied with `chr_synonyms.txt` beside it; a metadata set

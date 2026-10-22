@@ -1,6 +1,6 @@
 # Cache setup
 
-The JSON transcript cache vep-rs annotates from is built with `vep-cache-builder` or converted from an existing Ensembl VEP cache. The page then covers how a run names the cache, the reference FASTA, chromosome names, `info.json` and the SIFT and PolyPhen matrices.
+The JSON transcript cache vep-rs annotates from is built with `vep-cache-builder` or converted from an existing Ensembl VEP cache. The page then covers how a run names the cache, the reference FASTA, chromosome names, `info.json` and the SIFT and PolyPhen matrices. The Cache checksum manifest page covers integrity checks.
 
 The cache is a directory holding `info.json` and `transcripts/`: the release directory itself, not its parent, for example `$HOME/.vep/homo_sapiens/116_GRCh38`. A run names it with `--json_cache`, or with Ensembl VEP's own cache flags when the directory sits in Ensembl VEP's layout ([Naming the cache](#naming-the-cache)). For example:
 

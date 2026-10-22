@@ -408,6 +408,71 @@ fn core_dumps_build_writes_the_synonyms_and_the_contig_order() {
     assert!(!out.path().join("chr_synonyms.txt").exists());
 }
 
+/// A build ends with `CHECKSUMS.sha256` in the cache directory: one
+/// `sha256sum` line per file written, the manifest itself excepted, which
+/// `sha256sum --check` accepts and the runtime's check of every file passes.
+#[test]
+fn build_writes_a_checksum_manifest_sha256sum_accepts() {
+    let (out, _native) = build(&[("--core-dumps", "")]);
+    let manifest_path = out.path().join("CHECKSUMS.sha256");
+    let text = std::fs::read_to_string(&manifest_path).unwrap();
+    let mut listed: Vec<&str> = text.lines().map(|line| &line[66..]).collect();
+    let mut written: Vec<String> = Vec::new();
+    for path in files_under(out.path()) {
+        let relative = path.strip_prefix(out.path()).unwrap();
+        if relative != Path::new("CHECKSUMS.sha256") {
+            written.push(relative.to_str().unwrap().to_string());
+        }
+    }
+    written.sort();
+    listed.sort();
+    assert_eq!(listed, written);
+    assert!(listed.contains(&"info.json") && listed.contains(&"chr_synonyms.txt"));
+    assert!(listed
+        .iter()
+        .any(|path| path.starts_with("transcripts/21/")));
+    let manifest = vep_core::cache_manifest::CacheManifest::load(out.path()).unwrap();
+    for relative in &written {
+        let path = out.path().join(relative);
+        manifest
+            .verify_bytes(&path, &std::fs::read(&path).unwrap())
+            .unwrap_or_else(|error| panic!("{relative}: {error}"));
+    }
+    let check_args = ["--check", "--strict", "--quiet", "CHECKSUMS.sha256"];
+    let check = Command::new("sha256sum")
+        .args(check_args)
+        .current_dir(out.path())
+        .output()
+        .or_else(|_| {
+            Command::new("shasum")
+                .args(["-a", "256"])
+                .args(check_args)
+                .current_dir(out.path())
+                .output()
+        })
+        .expect("sha256sum or shasum runs");
+    assert!(
+        check.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&check.stdout),
+        String::from_utf8_lossy(&check.stderr)
+    );
+}
+
+/// Every regular file under `dir`, recursively.
+fn files_under(dir: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            files.extend(files_under(&path));
+        } else {
+            files.push(path);
+        }
+    }
+    files
+}
+
 /// The `--core-dumps` bullet of `docs/cache-setup.md` states the documented
 /// exclusion of a cache built from the GFF3 alone: no symbol source, HGNC id
 /// or mature miRNA arm, and on GRCh37, whose release 87 GFF3 carries no

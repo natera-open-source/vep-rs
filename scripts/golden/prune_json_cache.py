@@ -43,7 +43,13 @@ copied from the source cache, else written from `--species`, `--assembly` and
 variation slice, so a cache's metadata never advertises variation data its directory lacks, and
 `contig_order` names the output's own chromosome directories in the converter's order. A source
 cache's `chr_synonyms.txt` is copied beside `info.json`, kept to the lines that name a
-chromosome the output holds. `--info-only` writes just that file.
+chromosome the output holds. `--info-only` writes just that file, then refreshes the manifest.
+
+The output ends with the checksum manifest `CHECKSUMS.sha256` the cache tools write: one
+`sha256sum` line per file of the output directory, the manifest itself excepted, paths relative
+to the directory in byte order, so `sha256sum --check CHECKSUMS.sha256` run in the directory
+verifies the slice and vep-rs checks each file it reads against it. `--manifest-only` writes
+that file alone for a cache directory assembled by other means.
 
 Usage:
     prune_json_cache.py --cache <src-dir> --out <dst-dir> --vcf <a.vcf> [--vcf <b.vcf.gz>]
@@ -53,6 +59,7 @@ Usage:
          [--variation-info <cache>/info.json]]
         [--species homo_sapiens --assembly GRCh37 --cache-version 116]
     prune_json_cache.py --info-only --out <dst-dir> --perl-info <cache>/info.txt --cache-version 116
+    prune_json_cache.py --manifest-only --out <cache-dir>
 
 The source layout is `<dir>/transcripts/<chr>/<start>-<end>.json[.gz]`, each shard a JSON
 array of transcript objects with integer-like `start`/`end` strings.
@@ -61,7 +68,9 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
+import os
 import re
 import struct
 import sys
@@ -522,6 +531,43 @@ def write_info(out: Path, info: dict) -> None:
     (out / "info.json").write_text(json.dumps(info, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+MANIFEST_FILE = "CHECKSUMS.sha256"
+# Directory levels the walk descends below the output directory before it treats the tree as a
+# symbolic-link loop, the limit the Rust writer applies; a cache is three levels deep.
+MANIFEST_MAX_DEPTH = 16
+
+
+def write_manifest(out: Path) -> int:
+    """Writes `<out>/CHECKSUMS.sha256`: one `<sha256 hex>  <path relative to out>` line per regular
+    file under `out`, through symbolic links to files and to directories, the manifest itself
+    excepted, in byte order of the paths with `/` between components, the shape `sha256sum --check`
+    reads and the cache tools write. Returns the number of files listed; exits with the tool's
+    error when directories nest more than `MANIFEST_MAX_DEPTH` levels deep or a symbolic link
+    points to nothing, as the cache tools' writer fails on both."""
+    entries: list[tuple[str, str]] = []
+    for root, _dirnames, filenames in os.walk(out, followlinks=True):
+        depth = len(Path(root).relative_to(out).parts)
+        if depth > MANIFEST_MAX_DEPTH:
+            raise SystemExit(f"ERROR: [prune_json_cache] {root}: directories nest more than {MANIFEST_MAX_DEPTH} levels deep")
+        for name in filenames:
+            path = Path(root) / name
+            if not path.is_file():
+                if path.is_symlink():
+                    raise SystemExit(f"ERROR: [prune_json_cache] {path}: a symbolic link to nothing")
+                continue
+            relative = path.relative_to(out).as_posix()
+            if relative == MANIFEST_FILE:
+                continue
+            digest = hashlib.sha256()
+            with path.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1 << 20), b""):
+                    digest.update(chunk)
+            entries.append((relative, digest.hexdigest()))
+    entries.sort(key=lambda entry: entry[0].encode("utf-8"))
+    (out / MANIFEST_FILE).write_text("".join(f"{digest}  {relative}\n" for relative, digest in entries), encoding="utf-8")
+    return len(entries)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--cache", type=Path)
@@ -547,7 +593,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--variation-info", type=Path, default=None, metavar="INFO_JSON",
                     help="the info.json of the cache the --variations files belong to, whose variation_cols and "
                          "var_type replace those of the info being written")
-    ap.add_argument("--info-only", action="store_true", help="write info.json and nothing else")
+    ap.add_argument("--info-only", action="store_true",
+                    help="write info.json, refresh CHECKSUMS.sha256 and nothing else")
+    ap.add_argument("--manifest-only", action="store_true",
+                    help="write CHECKSUMS.sha256 over the files already under --out and nothing else")
     ap.add_argument("--species", default="homo_sapiens")
     ap.add_argument("--assembly", default=None)
     ap.add_argument("--cache-version", type=int, default=None)
@@ -555,6 +604,12 @@ def main(argv: list[str] | None = None) -> int:
     if "peptide" in args.drop:
         print("ERROR: [prune_json_cache] --drop peptide: vep-rs reads the reference peptide's sequence edits from it", file=sys.stderr)
         return 2
+    if args.manifest_only:
+        if not (args.out / "info.json").is_file():
+            print(f"ERROR: [prune_json_cache] --manifest-only: {args.out} holds no info.json, so it is not a cache directory", file=sys.stderr)
+            return 2
+        print(json.dumps({"manifest_files": write_manifest(args.out)}))
+        return 0
     args.out.mkdir(parents=True, exist_ok=True)
     info = cache_info(args)
     if isinstance(info, int):
@@ -564,9 +619,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.info_only:
         if args.variations is not None:
-            print("ERROR: [prune_json_cache] --info-only writes info.json alone; --variations and --variation-info describe a slice this run does not cut", file=sys.stderr)
+            print("ERROR: [prune_json_cache] --info-only writes info.json and refreshes CHECKSUMS.sha256, nothing else; --variations and --variation-info describe a slice this run does not cut", file=sys.stderr)
             return 2
         write_info(args.out, info)
+        write_manifest(args.out)
         return 0
     if args.cache is None or not (args.cache / "transcripts").is_dir():
         print(f"ERROR: [prune_json_cache] {args.cache} has no transcripts/ directory", file=sys.stderr)
@@ -690,6 +746,7 @@ def main(argv: list[str] | None = None) -> int:
         (args.out / "chr_synonyms.txt").write_text("".join(f"{line}\n" for line in kept_lines), encoding="utf-8")
         summary["synonym_lines"] = len(kept_lines)
     write_info(args.out, info)
+    summary["manifest_files"] = write_manifest(args.out)
     summary["spans_by_chromosome"] = {c: len(v) for c, v in sorted(spans.items())}
     print(json.dumps(summary))
     return 0

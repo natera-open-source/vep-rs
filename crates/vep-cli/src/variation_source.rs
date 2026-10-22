@@ -18,19 +18,32 @@
 //! A chromosome's file is opened the first time a variant on it is annotated
 //! (`VariationTabix.pm:260-284`): a whole-genome cache costs one index read per
 //! chromosome touched, never a read of every file.
+//!
+//! Every file is checked against the cache's checksum manifest: an index and
+//! a region file as they are read whole, `all_vars.gz` by its listing and by
+//! reaching past the last block its index names, and a file streamed start to
+//! end ([`VariationSource::open_whole`]) by the digest of the whole stream. A
+//! failure is reported by its message alone; the callers put it under the
+//! `cache` component.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 
 use anyhow::{bail, Context};
+use noodles::csi::binning_index::index::reference_sequence::Index as ReferenceSequenceIndex;
+use noodles::csi::binning_index::Index as BinningIndexData;
+use noodles::csi::binning_index::ReferenceSequence as _;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
-use vep_builtins::tabix::{BatchQueryResult, TabixAnnotator, TabixConfig, TabixRecord};
+use vep_builtins::tabix::{
+    find_index_path, BatchQueryResult, TabixAnnotator, TabixConfig, TabixRecord,
+};
 use vep_builtins::PluginError;
 use vep_core::cache_info::{CacheInfo, VariationColumns};
+use vep_core::cache_manifest::{CacheManifest, HashingReader};
 use vep_core::variation::{perl_number_string, perl_numeric, CachedVariation, ClinVarDetail};
 
 /// The populations whose values `--old_maf` rewrites
@@ -123,6 +136,8 @@ pub struct VariationSource {
     regions: Mutex<RegionCache>,
     prefetched: RwLock<FxHashMap<String, PrefetchedChromosome>>,
     opened: Mutex<BTreeSet<String>>,
+    /// The cache's checksum manifest, which every file is checked against.
+    manifest: Arc<CacheManifest>,
 }
 
 impl VariationSource {
@@ -130,11 +145,13 @@ impl VariationSource {
     /// returns `None` when the cache has none to offer: no file under that
     /// directory, or an `info.json` without `variation_cols`, which attaches no
     /// variation source in Ensembl VEP either (`CacheDir.pm:179`). Nothing but
-    /// the directory listing is read here.
+    /// the directory listing is read here; `manifest` is the cache's checksum
+    /// manifest, which every file read later is checked against.
     pub fn open(
         json_cache_dir: &Path,
         info: &CacheInfo,
         old_maf: bool,
+        manifest: Arc<CacheManifest>,
     ) -> anyhow::Result<Option<Self>> {
         let dir = json_cache_dir.join("variations");
         if !dir.is_dir() {
@@ -187,24 +204,44 @@ impl VariationSource {
             regions: Mutex::new(RegionCache::default()),
             prefetched: RwLock::new(FxHashMap::default()),
             opened: Mutex::new(BTreeSet::new()),
+            manifest,
         }))
     }
 
     /// Opens the variation files of the JSON cache at `json_cache_dir`, reading
-    /// its `info.json` for the layout and the columns; a cache without one
-    /// declares no columns and so has no variation source.
+    /// its checksum manifest, demanding every file it lists, and reading its
+    /// `info.json` for the layout and the columns; a cache without an
+    /// `info.json` declares no columns and so has no variation source.
     pub fn open_json_cache(json_cache_dir: &str, old_maf: bool) -> anyhow::Result<Option<Self>> {
         let dir = Path::new(json_cache_dir);
+        let manifest = CacheManifest::load(dir)?;
+        manifest.require_complete()?;
         let info_path = dir.join("info.json");
         let info = match fs::read_to_string(&info_path) {
-            Ok(text) => serde_json::from_str(&text)
-                .with_context(|| format!("parsing {}", info_path.display()))?,
+            Ok(text) => {
+                manifest.verify_bytes(&info_path, text.as_bytes())?;
+                serde_json::from_str(&text)
+                    .with_context(|| format!("parsing {}", info_path.display()))?
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => CacheInfo::default(),
             Err(error) => {
                 return Err(error).with_context(|| format!("reading {}", info_path.display()))
             }
         };
-        Self::open(dir, &info, old_maf)
+        Self::open(dir, &info, old_maf, Arc::new(manifest))
+    }
+
+    /// Opens the variation file at `path` to be read start to end; the bytes
+    /// are hashed as they are read and [`WholeFile::finish`] checks the digest
+    /// against the manifest.
+    pub fn open_whole<'a>(&'a self, path: &'a Path) -> anyhow::Result<WholeFile<'a>> {
+        let file = fs::File::open(path)
+            .with_context(|| format!("opening the variation file {}", path.display()))?;
+        Ok(WholeFile {
+            reader: HashingReader::new(file),
+            path,
+            manifest: &self.manifest,
+        })
     }
 
     /// The warning for a run that asked for co-located variants from a cache
@@ -426,11 +463,13 @@ impl VariationSource {
             .collect()
     }
 
-    /// The open `all_vars.gz` of `chr`, opened on first use.
+    /// The open `all_vars.gz` of `chr`, opened on first use, its index checked
+    /// against the manifest first.
     fn handle(&self, chr: &str, path: &Path) -> anyhow::Result<Arc<TabixAnnotator>> {
         if let Some(handle) = self.handles.read().unwrap().get(chr) {
             return Ok(Arc::clone(handle));
         }
+        self.check_indexed_file(path)?;
         let config = TabixConfig {
             file_path: path.to_path_buf(),
             chr_col: 0,
@@ -472,21 +511,54 @@ impl VariationSource {
         Ok(records)
     }
 
-    /// Every record of one region file, in file order.
+    /// Every record of one region file, in file order, the file checked
+    /// against the manifest once it is read.
     fn parse_region(&self, chr: &str, path: &Path) -> anyhow::Result<Vec<CachedVariation>> {
-        let file = fs::File::open(path)
-            .with_context(|| format!("opening the variation file {}", path.display()))?;
-        let reader = BufReader::new(flate2::read::MultiGzDecoder::new(file));
+        let whole = self.open_whole(path)?;
+        let mut reader = BufReader::new(flate2::read::MultiGzDecoder::new(whole));
         let mut records = Vec::new();
-        for line in reader.lines() {
+        for line in reader.by_ref().lines() {
             let line = line.with_context(|| format!("reading {}", path.display()))?;
             let fields: Vec<&str> = line.split(' ').collect();
             if let Some(record) = parse_record(&self.columns, &fields, self.old_maf) {
                 records.push(record);
             }
         }
+        reader.into_inner().into_inner().finish()?;
         self.opened.lock().unwrap().insert(chr.to_string());
         Ok(records)
+    }
+
+    /// The start-indexed file at `path` against the manifest: its index, which
+    /// the engine reads whole, is hashed and compared, and the file itself,
+    /// read by byte range, must be listed and must extend past the compressed
+    /// offset of the last block the index names. A copy cut at or before that
+    /// offset is refused here as a mismatch; a copy cut inside that block is
+    /// left to the block reads, which fail when a lookup reaches the cut.
+    fn check_indexed_file(&self, path: &Path) -> anyhow::Result<()> {
+        if !self.manifest.is_present() {
+            return Ok(());
+        }
+        let index_path = find_index_path(path).map_err(|error| {
+            cache_file_error(
+                error,
+                format!("opening the variation file {}", path.display()),
+            )
+        })?;
+        let bytes = fs::read(&index_path)
+            .with_context(|| format!("reading the index {}", index_path.display()))?;
+        self.manifest.verify_bytes(&index_path, &bytes)?;
+        self.manifest.require_listed(path)?;
+        let extent = index_extent(&index_path, &bytes)
+            .with_context(|| format!("reading the index {}", index_path.display()))?;
+        let length = fs::metadata(path)
+            .with_context(|| format!("reading {}", path.display()))?
+            .len();
+        if length <= extent {
+            let relative = self.manifest.relative(path)?;
+            return Err(self.manifest.mismatch(relative).into());
+        }
+        Ok(())
     }
 
     /// The region files parsed and kept at this moment, in load order.
@@ -510,6 +582,64 @@ fn cache_file_error(error: PluginError, context: String) -> anyhow::Error {
         PluginError::Io(error) => error.to_string(),
     };
     anyhow::anyhow!(message).context(context)
+}
+
+/// The compressed offset of the last block a `.csi` or `.tbi` index refers to:
+/// the furthest chunk end or metadata end over every reference sequence. The
+/// indexed file holds a block at that offset, so it is longer than this.
+fn index_extent(index_path: &Path, bytes: &[u8]) -> std::io::Result<u64> {
+    fn extent<I: ReferenceSequenceIndex>(index: &BinningIndexData<I>) -> u64 {
+        index
+            .reference_sequences()
+            .iter()
+            .flat_map(|sequence| {
+                let chunks = sequence
+                    .bins()
+                    .values()
+                    .flat_map(|bin| bin.chunks().iter().map(|chunk| chunk.end()));
+                let metadata = sequence.metadata().map(|metadata| metadata.end_position());
+                chunks.chain(metadata)
+            })
+            .map(|position| position.compressed())
+            .max()
+            .unwrap_or(0)
+    }
+    if index_path
+        .extension()
+        .is_some_and(|extension| extension == "csi")
+    {
+        let index = noodles::csi::io::Reader::new(bytes).read_index()?;
+        Ok(extent(&index))
+    } else {
+        let index = noodles::tabix::io::Reader::new(bytes).read_index()?;
+        Ok(extent(&index))
+    }
+}
+
+/// A variation file read start to end, hashed as it goes.
+pub struct WholeFile<'a> {
+    reader: HashingReader<fs::File>,
+    path: &'a Path,
+    manifest: &'a CacheManifest,
+}
+
+impl WholeFile<'_> {
+    /// Reads whatever the consumer left and checks the whole file's digest
+    /// against the manifest.
+    pub fn finish(self) -> anyhow::Result<()> {
+        let digest = self
+            .reader
+            .digest_to_end()
+            .with_context(|| format!("reading {}", self.path.display()))?;
+        self.manifest.verify_digest(self.path, &digest)?;
+        Ok(())
+    }
+}
+
+impl Read for WholeFile<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.reader.read(buf)
+    }
 }
 
 /// The start window of a variant at `start..=end`: `start - 1 ..= end + 1`
@@ -704,7 +834,7 @@ mod tests {
     use noodles::csi::binning_index::index::header::format::CoordinateSystem;
     use noodles::csi::binning_index::index::header::Format;
     use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
-    use noodles::csi::binning_index::index::reference_sequence::index::BinnedIndex;
+    use noodles::csi::binning_index::index::reference_sequence::index::{BinnedIndex, LinearIndex};
     use noodles::csi::binning_index::index::Header;
     use noodles::csi::binning_index::Indexer;
     use std::io::Write;
@@ -741,15 +871,66 @@ mod tests {
         }
     }
 
+    /// [`VariationSource::open`] under a manifest that checks nothing, for the
+    /// files these tests write.
+    fn open_unchecked(
+        cache: &Path,
+        info: &CacheInfo,
+        old_maf: bool,
+    ) -> anyhow::Result<Option<VariationSource>> {
+        VariationSource::open(cache, info, old_maf, Arc::new(CacheManifest::absent(cache)))
+    }
+
+    /// [`VariationSource::open`] under the manifest `cache` carries, for the
+    /// files these tests write, list and then change.
+    fn open_checked(cache: &Path, info: &CacheInfo) -> VariationSource {
+        let manifest = CacheManifest::load(cache).unwrap();
+        VariationSource::open(cache, info, false, Arc::new(manifest))
+            .unwrap()
+            .unwrap()
+    }
+
+    /// The manifest's refusal of the file at `relative` under `dir`.
+    fn mismatch(dir: &Path, relative: &str) -> String {
+        format!("checksum mismatch for {relative} in {}", dir.display())
+    }
+
+    /// Enough records to fill more than one BGZF block, so an index over them
+    /// names a block past the first.
+    fn multi_block_records() -> Vec<String> {
+        (0..3000u64)
+            .map(|i| format!("21\trs{i}\t.\t.\t{}\t.\tA/G\t.", 1000 + i * 10))
+            .collect()
+    }
+
     /// Writes `lines` (tab-delimited, chromosome first, sorted by start) as
     /// `<cache>/variations/<chr>/all_vars.gz` with a `.csi` built on the start
     /// column alone, the index `tabix -C -s 1 -b <start> -e <start>` writes.
     fn write_all_vars(cache: &Path, chr: &str, start_col: usize, lines: &[&str]) {
+        let (path, index) = write_all_vars_data::<BinnedIndex>(cache, chr, start_col, lines);
+        noodles::csi::fs::write(format!("{}.csi", path.display()), &index).unwrap();
+    }
+
+    /// [`write_all_vars`] with a `.tbi`, the index `tabix -s 1 -b <start>
+    /// -e <start>` writes.
+    fn write_all_vars_tbi(cache: &Path, chr: &str, start_col: usize, lines: &[&str]) {
+        let (path, index) = write_all_vars_data::<LinearIndex>(cache, chr, start_col, lines);
+        noodles::tabix::fs::write(format!("{}.tbi", path.display()), &index).unwrap();
+    }
+
+    /// Writes the data file of [`write_all_vars`] and returns its path with the
+    /// index of kind `I` built over it, for the caller to write beside it.
+    fn write_all_vars_data<I: ReferenceSequenceIndex + Default>(
+        cache: &Path,
+        chr: &str,
+        start_col: usize,
+        lines: &[&str],
+    ) -> (PathBuf, BinningIndexData<I>) {
         let dir = cache.join("variations").join(chr);
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("all_vars.gz");
         let mut writer = bgzf::io::Writer::new(fs::File::create(&path).unwrap());
-        let mut indexer = Indexer::<BinnedIndex>::new(14, 5);
+        let mut indexer = Indexer::<I>::new(14, 5);
         for line in lines {
             let begin = writer.virtual_position();
             writeln!(writer, "{line}").unwrap();
@@ -769,7 +950,7 @@ mod tests {
             .set_reference_sequence_names([chr.as_bytes().into()].into_iter().collect())
             .build();
         let index = indexer.set_header(header).build(1);
-        noodles::csi::fs::write(format!("{}.csi", path.display()), &index).unwrap();
+        (path, index)
     }
 
     /// Writes `lines` (space-delimited, no chromosome column) as
@@ -796,7 +977,7 @@ mod tests {
     fn reads_all_vars_gz_through_csi() {
         let tmp = tempfile::tempdir().unwrap();
         write_all_vars(tmp.path(), "21", 4, &CHR21_RECORDS);
-        let source = VariationSource::open(tmp.path(), &info(GRCH38_COLS, Some("tabix")), false)
+        let source = open_unchecked(tmp.path(), &info(GRCH38_COLS, Some("tabix")), false)
             .unwrap()
             .expect("variation files are present");
         // The window is start - 1 ..= end + 1 on the record's start, so a
@@ -885,7 +1066,7 @@ mod tests {
     fn prefetch_answers_a_batch_from_memory() {
         let tmp = tempfile::tempdir().unwrap();
         write_all_vars(tmp.path(), "21", 4, &CHR21_RECORDS);
-        let source = VariationSource::open(tmp.path(), &info(GRCH38_COLS, Some("tabix")), false)
+        let source = open_unchecked(tmp.path(), &info(GRCH38_COLS, Some("tabix")), false)
             .unwrap()
             .unwrap();
         let batch = [
@@ -963,7 +1144,7 @@ mod tests {
         ];
         let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
         write_all_vars(tmp.path(), "21", 4, &lines);
-        let source = VariationSource::open(tmp.path(), &info(GRCH38_COLS, Some("tabix")), false)
+        let source = open_unchecked(tmp.path(), &info(GRCH38_COLS, Some("tabix")), false)
             .unwrap()
             .unwrap();
         // An insertion between 500 and 501, a variant at 900, and the SNV at
@@ -1004,7 +1185,7 @@ mod tests {
             4,
             &["22\trs1\t.\t.\t100\t.\tA/G\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t.\t."],
         );
-        let source = VariationSource::open(tmp.path(), &info(GRCH38_COLS, Some("tabix")), false)
+        let source = open_unchecked(tmp.path(), &info(GRCH38_COLS, Some("tabix")), false)
             .unwrap()
             .unwrap();
         assert!(source.opened_chromosomes().is_empty());
@@ -1046,7 +1227,7 @@ mod tests {
         write_region(tmp.path(), "21", 1, 1_000_000, &[in_first, on_edge]);
         write_region(tmp.path(), "21", 1_000_001, 2_000_000, &[in_second]);
         write_region(tmp.path(), "21", 2_000_001, 3_000_000, &[in_third]);
-        let source = VariationSource::open(tmp.path(), &info(cols, None), false)
+        let source = open_unchecked(tmp.path(), &info(cols, None), false)
             .unwrap()
             .unwrap();
         assert!(!source.tabix);
@@ -1116,7 +1297,7 @@ mod tests {
                 .join(chr)
                 .join(format!("{name}_var.gz"))
         };
-        let source = VariationSource::open(tmp.path(), &info(cols, None), false)
+        let source = open_unchecked(tmp.path(), &info(cols, None), false)
             .unwrap()
             .unwrap();
         assert!(source.loaded_regions().is_empty());
@@ -1172,44 +1353,220 @@ mod tests {
     }
 
     /// A chromosome file without its index fails at first use, naming the file
-    /// and the index, with no plugin vocabulary.
+    /// and the index, with no plugin vocabulary, in the same words under the
+    /// cache's manifest as without one.
     #[test]
     fn missing_index_names_the_cache_file() {
         let tmp = tempfile::tempdir().unwrap();
         write_all_vars(tmp.path(), "21", 4, &CHR21_RECORDS);
+        CacheManifest::write(tmp.path()).unwrap();
         let csi = tmp
             .path()
             .join("variations")
             .join("21")
             .join("all_vars.gz.csi");
         fs::remove_file(&csi).unwrap();
-        let source = VariationSource::open(tmp.path(), &info(GRCH38_COLS, Some("tabix")), false)
+        let tabix_info = info(GRCH38_COLS, Some("tabix"));
+        let unchecked = open_unchecked(tmp.path(), &tabix_info, false)
             .unwrap()
             .unwrap();
-        let error = source
-            .records_overlapping("21", 44195140, 44195140)
-            .expect_err("no index");
-        let message = format!("{error:#}");
-        assert!(
-            message.starts_with(&format!(
-                "opening the variation file {}: tabix index not found",
-                csi.with_extension("").display()
-            )),
-            "{message}"
+        let checked = open_checked(tmp.path(), &tabix_info);
+        for source in [unchecked, checked] {
+            let error = source
+                .records_overlapping("21", 44195140, 44195140)
+                .expect_err("no index");
+            let message = format!("{error:#}");
+            assert!(
+                message.starts_with(&format!(
+                    "opening the variation file {}: tabix index not found",
+                    csi.with_extension("").display()
+                )),
+                "{message}"
+            );
+            assert!(!message.contains("plugin"), "{message}");
+        }
+    }
+
+    /// Under the cache's manifest a region file is checked by the digest of its
+    /// whole stream, on the per-variant lookup and on the prefetch alike, and an
+    /// unlisted region file is refused; on the start-indexed layout a changed
+    /// index is refused by its digest and `all_vars.gz` by a copy that ends at
+    /// the compressed offset of the last block the index names, while a copy
+    /// one byte longer passes that check and still serves the blocks it holds.
+    /// Every refusal is the contract's message with no context of its own.
+    #[test]
+    fn manifest_refuses_changed_unlisted_and_truncated_variation_files() {
+        let regions = tempfile::tempdir().unwrap();
+        let cols = GRCH38_COLS.strip_prefix("chr,").unwrap();
+        write_region(regions.path(), "21", 1, 1_000_000, &["rs1   500  A/G"]);
+        write_region(
+            regions.path(),
+            "21",
+            1_000_001,
+            2_000_000,
+            &["rs2   1500000  A/G"],
         );
-        assert!(!message.contains("plugin"), "{message}");
+        CacheManifest::write(regions.path()).unwrap();
+        let open_regions = || open_checked(regions.path(), &info(cols, None));
+        let source = open_regions();
+        assert_eq!(
+            names(&source.records_overlapping("21", 500, 500).unwrap()),
+            ["rs1"]
+        );
+        source.prefetch([("21", 1_500_000, 1_500_000)]).unwrap();
+
+        write_region(regions.path(), "21", 1, 1_000_000, &["rs1   500  A/T"]);
+        let source = open_regions();
+        let changed = mismatch(regions.path(), "variations/21/1-1000000_var.gz");
+        let error = source.records_overlapping("21", 500, 500).unwrap_err();
+        assert_eq!(format!("{error:#}"), changed);
+        let error = source.prefetch([("21", 500, 500)]).unwrap_err();
+        assert_eq!(format!("{error:#}"), changed);
+        write_region(
+            regions.path(),
+            "21",
+            2_000_001,
+            3_000_000,
+            &["rs3   2500000  A/G"],
+        );
+        let error = open_regions()
+            .records_overlapping("21", 2_500_000, 2_500_000)
+            .unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            mismatch(regions.path(), "variations/21/2000001-3000000_var.gz")
+        );
+
+        let indexed = tempfile::tempdir().unwrap();
+        let lines = multi_block_records();
+        let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+        write_all_vars(indexed.path(), "21", 4, &lines);
+        CacheManifest::write(indexed.path()).unwrap();
+        let open_indexed = || open_checked(indexed.path(), &info(GRCH38_COLS, Some("tabix")));
+        assert_eq!(
+            names(
+                &open_indexed()
+                    .records_overlapping("21", 1000, 1000)
+                    .unwrap()
+            ),
+            ["rs0"]
+        );
+        let csi = indexed.path().join("variations/21/all_vars.gz.csi");
+        let all_vars = indexed.path().join("variations/21/all_vars.gz");
+        let index_bytes = fs::read(&csi).unwrap();
+        let mut flipped = index_bytes.clone();
+        flipped[20] ^= 0xff;
+        fs::write(&csi, &flipped).unwrap();
+        let error = open_indexed()
+            .records_overlapping("21", 1000, 1000)
+            .unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            mismatch(indexed.path(), "variations/21/all_vars.gz.csi")
+        );
+        fs::write(&csi, &index_bytes).unwrap();
+
+        let extent = index_extent(&csi, &index_bytes).unwrap() as usize;
+        let whole = fs::read(&all_vars).unwrap();
+        assert!(
+            extent > 0 && extent < whole.len(),
+            "{extent} of {}",
+            whole.len()
+        );
+        fs::write(&all_vars, &whole[..extent]).unwrap();
+        let error = open_indexed()
+            .records_overlapping("21", 1000, 1000)
+            .unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            mismatch(indexed.path(), "variations/21/all_vars.gz")
+        );
+        fs::write(&all_vars, &whole[..extent + 1]).unwrap();
+        assert_eq!(
+            names(
+                &open_indexed()
+                    .records_overlapping("21", 1000, 1000)
+                    .unwrap()
+            ),
+            ["rs0"]
+        );
+    }
+
+    /// Opening a cache directory on its own demands every file its manifest
+    /// lists, before `info.json` is consulted, as a run's resolution does.
+    #[test]
+    fn opening_a_cache_directory_refuses_a_missing_listed_file() {
+        let cache = tempfile::tempdir().unwrap();
+        write_region(cache.path(), "21", 1, 1_000_000, &["rs1   500  A/G"]);
+        CacheManifest::write(cache.path()).unwrap();
+        let dir = cache.path().to_str().unwrap();
+        assert!(VariationSource::open_json_cache(dir, false)
+            .unwrap()
+            .is_none());
+        fs::remove_file(cache.path().join("variations/21/1-1000000_var.gz")).unwrap();
+        let error = VariationSource::open_json_cache(dir, false)
+            .err()
+            .expect("a cache missing a listed file must be refused");
+        assert_eq!(
+            format!("{error:#}"),
+            format!(
+                "variations/21/1-1000000_var.gz is listed in CHECKSUMS.sha256 but missing from {dir}"
+            )
+        );
+    }
+
+    /// A `.tbi` index names the same last block as the `.csi` over the same
+    /// data, so the cut-file refusal holds through either index.
+    #[test]
+    fn tbi_index_extent_refuses_a_cut_file_as_the_csi_does() {
+        let lines = multi_block_records();
+        let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+        let with_csi = tempfile::tempdir().unwrap();
+        write_all_vars(with_csi.path(), "21", 4, &lines);
+        let with_tbi = tempfile::tempdir().unwrap();
+        write_all_vars_tbi(with_tbi.path(), "21", 4, &lines);
+        let csi = with_csi.path().join("variations/21/all_vars.gz.csi");
+        let tbi = with_tbi.path().join("variations/21/all_vars.gz.tbi");
+        assert!(
+            tbi.is_file()
+                && !with_tbi
+                    .path()
+                    .join("variations/21/all_vars.gz.csi")
+                    .exists()
+        );
+        let extent = index_extent(&tbi, &fs::read(&tbi).unwrap()).unwrap();
+        assert_eq!(
+            extent,
+            index_extent(&csi, &fs::read(&csi).unwrap()).unwrap()
+        );
+        assert!(extent > 0);
+
+        CacheManifest::write(with_tbi.path()).unwrap();
+        let open = || open_checked(with_tbi.path(), &info(GRCH38_COLS, Some("tabix")));
+        assert_eq!(
+            names(&open().records_overlapping("21", 1000, 1000).unwrap()),
+            ["rs0"]
+        );
+        let all_vars = with_tbi.path().join("variations/21/all_vars.gz");
+        let whole = fs::read(&all_vars).unwrap();
+        fs::write(&all_vars, &whole[..extent as usize]).unwrap();
+        let error = open().records_overlapping("21", 1000, 1000).unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            mismatch(with_tbi.path(), "variations/21/all_vars.gz")
+        );
     }
 
     #[test]
     fn open_refuses_a_layout_its_info_json_contradicts() {
         let tmp = tempfile::tempdir().unwrap();
         write_all_vars(tmp.path(), "21", 4, &CHR21_RECORDS);
-        let error = VariationSource::open(tmp.path(), &info(GRCH38_COLS, None), false)
+        let error = open_unchecked(tmp.path(), &info(GRCH38_COLS, None), false)
             .err()
             .expect("all_vars.gz under a cache without var_type tabix is refused");
         assert!(error.to_string().contains("var_type (unset)"), "{error}");
         let without_chr = GRCH38_COLS.strip_prefix("chr,").unwrap();
-        let error = VariationSource::open(tmp.path(), &info(without_chr, Some("tabix")), false)
+        let error = open_unchecked(tmp.path(), &info(without_chr, Some("tabix")), false)
             .err()
             .expect("variation_cols without chr first is refused on the tabix layout");
         assert!(
@@ -1218,22 +1575,20 @@ mod tests {
         );
         let empty = tempfile::tempdir().unwrap();
         assert!(
-            VariationSource::open(empty.path(), &info(GRCH38_COLS, Some("tabix")), false)
+            open_unchecked(empty.path(), &info(GRCH38_COLS, Some("tabix")), false)
                 .unwrap()
                 .is_none()
         );
         fs::create_dir_all(empty.path().join("variations/21")).unwrap();
         fs::write(empty.path().join("variations/21/1-1000000.json"), "[]").unwrap();
         assert!(
-            VariationSource::open(empty.path(), &info(GRCH38_COLS, Some("tabix")), false)
+            open_unchecked(empty.path(), &info(GRCH38_COLS, Some("tabix")), false)
                 .unwrap()
                 .is_none()
         );
-        assert!(
-            VariationSource::open(tmp.path(), &CacheInfo::default(), false)
-                .unwrap()
-                .is_none()
-        );
+        assert!(open_unchecked(tmp.path(), &CacheInfo::default(), false)
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -1526,7 +1881,7 @@ mod tests {
         assert!(!rewritten.frequencies.contains_key("ASN"));
         let tmp = tempfile::tempdir().unwrap();
         write_all_vars(tmp.path(), "21", 4, &CHR21_RECORDS);
-        let source = VariationSource::open(tmp.path(), &info(GRCH38_COLS, Some("tabix")), true)
+        let source = open_unchecked(tmp.path(), &info(GRCH38_COLS, Some("tabix")), true)
             .unwrap()
             .unwrap();
         let records = source

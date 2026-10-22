@@ -77,7 +77,8 @@ fn run_input(dir: &Path, name: &str, input: &Path, extra: &[&str]) -> (Output, S
 /// A GRCh38 cache under `dir` holding no transcripts:
 /// `transcripts/<name>/1-1000000.json`, an empty shard, for each name in
 /// `with_shard`, and a bare `transcripts/<name>` directory for each in
-/// `without_shard`.
+/// `without_shard`, with its checksum manifest, so a run warns of nothing but
+/// what the records bring.
 fn cache_with_chromosomes(dir: &Path, with_shard: &[&str], without_shard: &[&str]) -> PathBuf {
     let cache = dir.join("json_cache");
     let transcripts = cache.join("transcripts");
@@ -90,6 +91,7 @@ fn cache_with_chromosomes(dir: &Path, with_shard: &[&str], without_shard: &[&str
         std::fs::create_dir_all(transcripts.join(name)).unwrap();
     }
     std::fs::write(cache.join("info.json"), r#"{"assembly":"GRCh38"}"#).unwrap();
+    vep_core::cache_manifest::CacheManifest::write(&cache).unwrap();
     cache
 }
 

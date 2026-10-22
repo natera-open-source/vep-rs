@@ -18,11 +18,17 @@
 //! `chr_synonyms.txt` (`CacheDir.pm:254`, `Runner.pm:131`). Every refusal is a
 //! [`CliError`]: the cache's under the `cache` component, an unreadable
 //! `--synonyms` file under `config`.
+//!
+//! The cache's checksum manifest (`CHECKSUMS.sha256`, [`CacheManifest`]) is
+//! read here, once, before `info.json`, and every cache file the run then reads
+//! whole is checked against it; a cache without one warns once and loads.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use tracing::warn;
 use vep_core::cache_info::CacheInfo;
+use vep_core::cache_manifest::{CacheManifest, ManifestError};
 use vep_core::synonyms::ChromosomeSynonyms;
 
 use crate::config::{CliError, Config};
@@ -32,6 +38,9 @@ use crate::config::{CliError, Config};
 pub struct ResolvedCache {
     /// The cache directory, as the output headers name it.
     pub dir: String,
+    /// The cache's checksum manifest, which every cache file the run reads is
+    /// checked against; one that is not present checks nothing.
+    pub manifest: Arc<CacheManifest>,
     /// The cache's `info.json`.
     pub info: CacheInfo,
     /// The assembly of the run: the cache's own, else the one the directory name
@@ -78,7 +87,8 @@ pub fn resolve(config: &Config) -> Result<ResolvedCache, CliError> {
         None => layout_dir(config, config_assembly)?,
     };
     validate_leaf(&dir)?;
-    let info = read_info(&dir)?;
+    let manifest = Arc::new(load_manifest(&dir)?);
+    let info = read_info(&dir, &manifest)?;
     // CacheDir.pm:407-408 compares the configuration's assembly after `dir` set it
     // from the directory name (:356); Ensembl VEP's text names the Storable cache's
     // info.txt, the file a JSON cache carries as info.json.
@@ -99,9 +109,10 @@ pub fn resolve(config: &Config) -> Result<ResolvedCache, CliError> {
     } else {
         detect_fasta(&dir)
     };
-    let synonyms = Arc::new(load_synonyms(config.synonyms.as_deref(), &dir)?);
+    let synonyms = Arc::new(load_synonyms(config.synonyms.as_deref(), &dir, &manifest)?);
     Ok(ResolvedCache {
         dir,
+        manifest,
         info,
         assembly,
         fasta,
@@ -110,17 +121,22 @@ pub fn resolve(config: &Config) -> Result<ResolvedCache, CliError> {
 }
 
 /// The run's chromosome synonyms: the `--synonyms` file when given, else the
-/// cache's `chr_synonyms.txt` when it exists (`CacheDir.pm:254`), else an empty
-/// table. A file that cannot be read is Ensembl VEP's error
-/// (`BaseVEP.pm:644`), with the reason the operating system gives.
-fn load_synonyms(user_file: Option<&str>, cache_dir: &str) -> Result<ChromosomeSynonyms, CliError> {
+/// cache's `chr_synonyms.txt` when it exists (`CacheDir.pm:254`), checked
+/// against the manifest, else an empty table. A file that cannot be read is
+/// Ensembl VEP's error (`BaseVEP.pm:644`), with the reason the operating system
+/// gives.
+fn load_synonyms(
+    user_file: Option<&str>,
+    cache_dir: &str,
+    manifest: &CacheManifest,
+) -> Result<ChromosomeSynonyms, CliError> {
     let cache_file = Path::new(cache_dir).join("chr_synonyms.txt");
     let (path, component) = match user_file {
         Some(file) => (PathBuf::from(file), "config"),
         None if cache_file.exists() => (cache_file, "cache"),
         None => return Ok(ChromosomeSynonyms::new()),
     };
-    ChromosomeSynonyms::load_from_file(&path).map_err(|e| {
+    let text = std::fs::read_to_string(&path).map_err(|e| {
         CliError::new(
             component,
             format!(
@@ -129,7 +145,29 @@ fn load_synonyms(user_file: Option<&str>, cache_dir: &str) -> Result<ChromosomeS
                 os_error_text(&e)
             ),
         )
-    })
+    })?;
+    if user_file.is_none() {
+        manifest
+            .verify_bytes(&path, text.as_bytes())
+            .map_err(manifest_error)?;
+    }
+    Ok(ChromosomeSynonyms::parse(&text))
+}
+
+/// The cache's checksum manifest, read once for the run, every file it lists
+/// present; a cache without one warns once and is read unchecked.
+fn load_manifest(dir: &str) -> Result<CacheManifest, CliError> {
+    let manifest = CacheManifest::load(dir).map_err(manifest_error)?;
+    if !manifest.is_present() {
+        warn!("cache {dir} carries no checksum manifest");
+    }
+    manifest.require_complete().map_err(manifest_error)?;
+    Ok(manifest)
+}
+
+/// A manifest failure as the run reports it: under the `cache` component.
+pub(crate) fn manifest_error(error: ManifestError) -> CliError {
+    cache_error(error.to_string())
 }
 
 /// An I/O error's text as the C library words it (`No such file or directory`),
@@ -255,13 +293,16 @@ fn validate_leaf(dir: &str) -> Result<(), CliError> {
     Ok(())
 }
 
-/// The cache's `info.json`, a JSON object (a list would deserialize into a
-/// metadata-less default).
-fn read_info(dir: &str) -> Result<CacheInfo, CliError> {
+/// The cache's `info.json`, checked against the manifest, a JSON object (a list
+/// would deserialize into a metadata-less default).
+fn read_info(dir: &str, manifest: &CacheManifest) -> Result<CacheInfo, CliError> {
     let path = Path::new(dir).join("info.json");
     let file_error =
         |cause: &dyn std::fmt::Display| cache_error(format!("{}: {cause}", path.display()));
     let text = std::fs::read_to_string(&path).map_err(|e| file_error(&e))?;
+    manifest
+        .verify_bytes(&path, text.as_bytes())
+        .map_err(manifest_error)?;
     let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| file_error(&e))?;
     if !value.is_object() {
         return Err(file_error(&"not a JSON object"));
@@ -867,6 +908,64 @@ mod tests {
         assert_eq!(
             error(&["--json_cache", path]),
             format!("ERROR: [cache] {path}/info.json: not a JSON object")
+        );
+    }
+
+    /// The resolution reads `CHECKSUMS.sha256` once and checks `info.json` and
+    /// the cache's `chr_synonyms.txt` against it as it reads them: a changed
+    /// byte in either is `checksum mismatch for <relative path> in <cache dir>`
+    /// under the `cache` component, a listed file that is missing is named, a
+    /// `--synonyms` file of the user's is read unchecked, a manifest of another
+    /// shape names its line, and a cache without the file resolves with a
+    /// manifest that is not present.
+    #[test]
+    fn manifest_checks_info_json_and_the_cache_synonyms() {
+        let dir = tempfile::tempdir().unwrap();
+        make_leaf(dir.path(), Some(INFO));
+        fs::write(dir.path().join("chr_synonyms.txt"), "21\tNC_000021.9\n").unwrap();
+        let path = dir.path().to_str().unwrap();
+        assert!(!resolve_flags(&["--json_cache", path])
+            .unwrap()
+            .manifest
+            .is_present());
+
+        CacheManifest::write(dir.path()).unwrap();
+        let resolved = resolve_flags(&["--json_cache", path]).unwrap();
+        assert!(resolved.manifest.is_present());
+        assert_eq!(resolved.manifest.len(), 2);
+        assert_eq!(resolved.info.assembly, "GRCh38");
+
+        fs::write(dir.path().join("chr_synonyms.txt"), "21\tNC_000021.9\n\n").unwrap();
+        assert_eq!(
+            error(&["--json_cache", path]),
+            format!("ERROR: [cache] checksum mismatch for chr_synonyms.txt in {path}")
+        );
+        let mine = dir.path().join("mine.txt");
+        fs::write(&mine, "21\tCM000683.2\n").unwrap();
+        assert!(
+            resolve_flags(&["--json_cache", path, "--synonyms", mine.to_str().unwrap()]).is_ok()
+        );
+
+        fs::write(dir.path().join("info.json"), format!("{INFO} ")).unwrap();
+        assert_eq!(
+            error(&["--json_cache", path]),
+            format!("ERROR: [cache] checksum mismatch for info.json in {path}")
+        );
+
+        fs::write(dir.path().join("info.json"), INFO).unwrap();
+        fs::remove_file(dir.path().join("chr_synonyms.txt")).unwrap();
+        assert_eq!(
+            error(&["--json_cache", path]),
+            format!(
+                "ERROR: [cache] chr_synonyms.txt is listed in CHECKSUMS.sha256 but missing from {path}"
+            )
+        );
+        fs::write(dir.path().join("chr_synonyms.txt"), "21\tNC_000021.9\n").unwrap();
+
+        fs::write(dir.path().join("CHECKSUMS.sha256"), "x\n").unwrap();
+        assert_eq!(
+            error(&["--json_cache", path]),
+            format!("ERROR: [cache] {path}/CHECKSUMS.sha256: line 1 is not a sha256sum line")
         );
     }
 

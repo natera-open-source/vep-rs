@@ -120,6 +120,12 @@ fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
+/// Rewrites the checksum manifest of a copied cache whose files a test edited,
+/// so the run checks the edited files against their own digests.
+fn rewrite_manifest(cache: &Path) {
+    vep_core::cache_manifest::CacheManifest::write(cache).unwrap();
+}
+
 /// An identifier annotates as its site read from a VCF named by the same ID
 /// (Parser/ID.pm:185-191: one feature per mapping, the identifier as its name),
 /// in the default and tab outputs column for column, and the JSON object
@@ -282,6 +288,7 @@ fn cache_without_variation_columns_names_the_missing_list() {
         serde_json::from_str(&std::fs::read_to_string(&info_path).unwrap()).unwrap();
     info.as_object_mut().unwrap().remove("variation_cols");
     std::fs::write(&info_path, serde_json::to_string_pretty(&info).unwrap()).unwrap();
+    rewrite_manifest(&cache);
     let names = write(dir.path(), "names.txt", "rs2838519\n");
     let out = output_path(dir.path());
     let output = vep(dir.path(), &names, &out, &cache, &["--format", "id"]);
@@ -311,6 +318,7 @@ fn cache_with_variation_records(dir: &Path, records: &[&str]) -> PathBuf {
     }
     encoder.finish().unwrap();
     std::fs::remove_file(variations.join("all_vars.gz.csi")).unwrap();
+    rewrite_manifest(&cache);
     cache
 }
 

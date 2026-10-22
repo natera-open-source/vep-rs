@@ -128,6 +128,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Compressed standard input is decompressed and a stream cut inside a gzip member is exit 1, where Ensembl VEP reads standard input raw and annotates the prefix. (#N)
 - `--nearest` lists every protein-coding transcript of a shared start site in stable-id order, where Ensembl VEP prints the one its tree search returns; a divergence page states it. (#N)
 - A version-less `NC_` accession and a span past the chromosome end in SPDI input are skipped, where Ensembl VEP's database resolves both; a divergence page states it. (#N)
+- vep-cache-builder and vep-cache-converter write `CHECKSUMS.sha256`; vep checks every shard, index and metadata file it reads against it and refuses a mismatch; a cache without one loads with a warning. (#N)
 
 ### Changed
 
