@@ -169,6 +169,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A `<CNV:TR>` record with a FASTA expands to explicit alleles as Ensembl VEP expands it; without one it stays the symbolic gain over the run with Ensembl VEP's warning. (#N)
   - An alternate allele equal to the reference, looked up or written, writes no row and takes no number; `FREQS` lists a repeated alternate allele once. (#N)
   - `--max_sv_size` measures every record as Ensembl VEP does; a negative tandem length is refused as `start > end+1`; a structural insertion past its own flank writes no row. (#N)
+  - The region, `--chr` and HGVS transcript pages state an unsupported structural word's run end, a chromosome literally named `1-5`, and the four transcript readings, each with a test. (#N)
 - HGVS, SPDI and identifiers
   - `--hgvsg` writes each row's HGVS genomic notation as Ensembl VEP's `hgvs_genomic` does; it needs a reference FASTA and exits with Ensembl VEP's error without one. (#N)
   - `--hgvs` or `--hgvsg` without a FASTA stops with Ensembl VEP's message; `--everything` drops HGVS with its `INFO` line; `--shift_3prime 1` without one is refused. (#N)
@@ -190,6 +191,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Native variation records take the variation database's form: `TSA=insertion` records two bases right of the VCF anchor, COSMIC and HGMD-PUBLIC variants as `COSMIC_MUTATION`/`HGMD_MUTATION`, `clin_sig` from the `CLIN_<term>` flags. (#N)
   - A native cache built by an earlier release holds JSON variation files nothing reads; build it again with `vep-cache-builder` 0.5.0 for co-located variants and the 1000 Genomes columns. (#N)
   - A native cache lists `cds_start_NF` before `cds_end_NF` on every transcript carrying both, where the Ensembl cache's order puts `cds_end_NF` first on seven GRCh38 transcripts. (#N)
+  - The cache page states the `--fasta_dir` tie order, the assembly that arms the pseudoautosomal redirect, a non-UTF-8 `--synonyms` file and a two-hop synonym admitted after a miss, with tests. (#N)
 - Co-located variants and frequencies
   - Under `--check_existing` a cache without variation data warns once, in the warnings file and on standard error unless `--quiet`, that `Existing_variation` and the frequency columns stay empty; Ensembl VEP annotates silently. (#N)
   - `--check_existing` matches known variants by allele after trimming from either end, strand-aware and span-exact, in Ensembl VEP's order; structural variants are not co-located. (#N)
@@ -199,6 +201,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `AF` prints with four decimals and the frequency columns report the record allele matched to the row's own allele, merged across co-located variants, as Ensembl VEP does. (#N)
   - `MAX_AF` prints its maximum over every frequency group, combined populations excluded, and `MAX_AF_POPS` lists every tied population in Ensembl VEP's order. (#N)
   - `--freq_pop 1KG_ALL` and `--filter_common` read the cache's `AF` column, where Ensembl VEP 116.2 finds no 1000 Genomes data and filters nothing. (#N)
+  - The reach of a `--check_frequency` drop's rejoin reset under `--minimal` is stated on each side: a `--buffer_size` batch here, Ensembl VEP's chromosome buffer or fork chunk. (#N)
 - Transcript attributes, predictions and consequences
   - `--distance up,0` reads the downstream distance as the upstream one, as Ensembl VEP does; a value that is not one or two integers exits with an error. (#N)
   - MANE, APPRIS, TSL, CCDS, RefSeq, UniProt, GENE_PHENO and miRNA print Ensembl VEP's values: accessions, APPRIS principal and alternative grades, digits, lists, no `-` sentinel. (#N)
@@ -208,6 +211,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A reverse-strand record's alleles are read against each transcript's strand in every coding predicate; only its nucleotide alleles are reverse-complemented, a structural-variant word or symbolic allele staying as written. (#N)
   - `Codons` complements an IUPAC letter of an allele on the strand opposite its transcript's (`gcY`, not `gcR`), as Ensembl VEP's `reverse_comp` does. (#N)
   - `vep_core::codon::complement_base` complements the IUPAC letters as Ensembl's `reverse_comp` does, so a natively built cache's reverse-strand sequences agree with Ensembl's; `vep_effects::coding::reverse_complement_pub` is removed. (#N)
+  - The `--minimal` split-allele page names the `miRNA` column: the default and tab outputs of Ensembl VEP compute a split allele's hairpin terms over the rejoined record. (#N)
 - Output formats, columns and headers
   - `--output_format` is matched in any case, `ensembl` naming the default format; plugin header descriptions reach the default, tab and VCF headers; `--fields` or `--compress_output` with Parquet is refused. (#N)
   - `--total_length` appends the cDNA, CDS and peptide lengths to the position columns, and `VARIANT_CLASS` is the whole record's class, so a multi-allelic record prints one. (#N)
@@ -228,6 +232,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--decompression_threads` above the host's logical CPUs is lowered to that count, so a huge value reads the input instead of exhausting threads. (#N)
   - The pipeline streams by default (the hidden `--pipeline_mode batched` restores whole-batch passes); the hidden `--pipeline_depth`, `--render_task_records`, `--writer_strategy` and `--output_buffer_size` knobs write the same bytes at every setting. (#N)
   - `--buffer_size 0` annotates every record, where Ensembl VEP writes the header alone; a negative or underscored value is an argument syntax error (exit 2). (#N)
+  - The compatibility page states Ensembl VEP's reading of a repeatable `--config` key alone on its line and of `--sift 0`, `--polyphen 0` and `--nearest 0`, with tests. (#N)
 - Warnings and skipped variants
   - A record Ensembl VEP skips (unknown chromosome, invalid alleles, unsupported or oversize SV, incomplete deletion) gets its `line N skipped` warning, N the record ordinal. (#N)
   - A skipped record's warning quotes its input line in every input format, as Ensembl VEP's `line N skipped (...)` does. (#N)
@@ -250,6 +255,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The release page groups its notes by area with nested bullets, marks breaking changes inline and may run to 400 lines; `CHANGELOG.md` nests the area groups under each kind. (#N)
   - The minimum supported Rust version is 1.89; the noodles crates move to 0.115, whose BGZF reader rejects a block that declares more than 65536 bytes. (#N)
   - `--output_format parquet` needs DuckDB 1.3.2 or newer, the first release whose Parquet `COPY` accepts `WRITE_BLOOM_FILTER`; the check compares the patch version. (#N)
+- Per-sample genotype modes
+  - The per-individual trimmed-record page covers every bi-allelic record `--minimal` trims past the anchor chop (`GA/GT`), where a `0/0` sample reads `HOM` in Ensembl VEP and `HOMREF` here. (#N)
 
 ### Removed
 

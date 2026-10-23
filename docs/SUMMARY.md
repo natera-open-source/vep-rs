@@ -74,7 +74,7 @@
   - [A transcript shard the cache cannot read](divergences/damaged-cache-shard.md)
   - [An individual carrying two alternate alleles](divergences/individual-allele-order.md)
   - [The ZYG list order under `--individual_zyg`](divergences/individual-zyg-order.md)
-  - [An individual's copy of an indel the anchor chop leaves trimmable](divergences/individual-trimmable-indel.md)
+  - [An individual's copy of a record `--minimal` trims past the anchor chop](divergences/individual-trimmable-indel.md)
   - [A JSON summary row with no consequence](divergences/json-summary-without-term.md)
   - [Two `--minimal` alleles that trim to the same allele string](divergences/minimal-same-trimmed-allele.md)
   - [A repeated alternate allele the looked-up reference equals](divergences/minimal-lookup-ref-repeated-allele.md)

@@ -45,6 +45,18 @@ fn vep(dir: &Path, records: &str, format: &[&str], extra: &[&str]) -> Output {
 /// output format flags and `extra` the run's other flags, `--format` among them
 /// for a non-VCF input.
 fn vep_on(dir: &Path, name: &str, input_text: &str, format: &[&str], extra: &[&str]) -> Output {
+    vep_in(&corpus(), dir, name, input_text, format, extra)
+}
+
+/// [`vep_on`] against the cache of the corpus at `corpus_dir`.
+fn vep_in(
+    corpus_dir: &Path,
+    dir: &Path,
+    name: &str,
+    input_text: &str,
+    format: &[&str],
+    extra: &[&str],
+) -> Output {
     let input = dir.join(name);
     std::fs::write(&input, input_text).unwrap();
     let out = dir.join("out");
@@ -54,7 +66,7 @@ fn vep_on(dir: &Path, name: &str, input_text: &str, format: &[&str], extra: &[&s
         .arg("-o")
         .arg(&out)
         .arg("--json_cache")
-        .arg(corpus().join("json_cache"))
+        .arg(corpus_dir.join("json_cache"))
         .args([
             "--assembly",
             "GRCh38",
@@ -345,6 +357,114 @@ fn a_split_record_rejoins_as_ensembl_vep_rejoins_it() {
     assert_eq!(
         csq,
         ["G|439|87|29|2", "-|438-440|86-88|29-30|3", "G|438|86|29|1"]
+    );
+}
+
+/// The attributes corpus: a chromosome 21 cache whose transcripts carry the
+/// miRNA structure attributes.
+fn attributes_corpus() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38-attributes")
+}
+
+/// A record on the hairpin transcript ENST00000581792 whose alleles split under
+/// `--minimal` into the deletion `CT/-` at 8987004-8987005, cDNA 6-7, and the
+/// insertion `-/TTA` after 8987005, cDNA 7-8.
+const MIRNA_SPLIT: &str = "21\t8987003\tmulti\tACT\tA,ACTTTA\t.\t.\t.\n";
+
+/// `(Allele, cDNA_position, Consequence, ALLELE_NUM, miRNA)` of every row on
+/// `transcript`.
+fn mirna_rows(lines: &[String], transcript: &str) -> Vec<[String; 5]> {
+    rows_on(lines, transcript)
+        .iter()
+        .map(|r| {
+            let extra = |key: &str| {
+                r[6].split(';')
+                    .find_map(|kv| kv.strip_prefix(key))
+                    .unwrap_or_default()
+                    .to_string()
+            };
+            [
+                r[1].clone(),
+                r[2].clone(),
+                r[5].clone(),
+                extra("ALLELE_NUM="),
+                extra("miRNA="),
+            ]
+        })
+        .collect()
+}
+
+/// A split allele's miRNA structure terms are computed over the allele's own
+/// span. `mirna_structure_terms` runs once per split allele on the allele it
+/// analyses (`calculate_consequences` in
+/// `crates/vep-effects/src/consequences.rs`), so the insertion `TTA`, cDNA 7-8,
+/// gets the terms `miRNA_loop` and `miRNA_stem` and the deletion, cDNA 6-7,
+/// `miRNA_loop` alone, in the default output (`miRNA=miRNA_loop,miRNA_stem`) and
+/// the VCF output (`miRNA_loop&miRNA_stem`) alike, while the default format's
+/// cDNA_position column prints the rejoined record's span, `6-7`, on both rows.
+/// Ensembl VEP 116.2's default factory rejoins the record
+/// (OutputFactory.pm:294 `$self->rejoin_variants_in_InputBuffer($buffer) if
+/// $buffer->rejoin_required;`) and then clears every allele's cached cDNA
+/// coordinates (:297-298 `map {@{$self->reset_shifted_positions($_)}}
+/// @{$buffer->buffer};`, through `clear_shifting_variables` at :318, which
+/// deletes `cdna_start`, `cdna_end` and `_cdna_coords`,
+/// TranscriptVariationAllele.pm:515-517), so its miRNA block
+/// (OutputFactory.pm:1630 `my ($cdna_start, $cdna_end) = ($tv->cdna_start,
+/// $tv->cdna_end);`) reads the span afresh over the rejoined record, cDNA 6-7,
+/// and Ensembl VEP 116.2 prints `miRNA=miRNA_loop` for the `TTA` allele. Its VCF
+/// factory clears the coordinates before the rejoin (OutputFactory/VCF.pm:305-308),
+/// so the `TTA` CSQ entry carries `miRNA_loop&miRNA_stem` at cDNA `7-8` in both
+/// engines.
+#[test]
+fn a_split_alleles_mirna_terms_come_from_its_own_span_in_the_default_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let corpus = attributes_corpus();
+    let input = format!("{VCF_HEADER}{MIRNA_SPLIT}");
+    let flags = ["--mirna", "--minimal"];
+    vep_in(&corpus, dir.path(), "in.vcf", &input, &[], &flags);
+    let lines = data_lines(dir.path());
+    assert_eq!(
+        mirna_rows(&lines, "ENST00000581792"),
+        [
+            [
+                "TTA",
+                "6-7",
+                "non_coding_transcript_exon_variant",
+                "2",
+                "miRNA_loop,miRNA_stem",
+            ],
+            [
+                "-",
+                "6-7",
+                "non_coding_transcript_exon_variant",
+                "1",
+                "miRNA_loop",
+            ],
+        ]
+    );
+    for line in &lines {
+        assert!(line.contains("\t21:8987004-8987005\t"), "{line}");
+    }
+
+    vep_in(&corpus, dir.path(), "in.vcf", &input, &["--vcf"], &flags);
+    let csq: Vec<String> = data_lines(dir.path())
+        .pop()
+        .unwrap()
+        .split('\t')
+        .nth(7)
+        .unwrap()
+        .trim_start_matches("CSQ=")
+        .split(',')
+        .filter(|entry| entry.contains("ENST00000581792"))
+        .map(|entry| {
+            let f: Vec<&str> = entry.split('|').collect();
+            // Allele, cDNA_position, ALLELE_NUM, miRNA.
+            format!("{}|{}|{}|{}", f[0], f[12], f[18], f[25])
+        })
+        .collect();
+    assert_eq!(
+        csq,
+        ["TTA|7-8|2|miRNA_loop&miRNA_stem", "-|6-7|1|miRNA_loop"]
     );
 }
 

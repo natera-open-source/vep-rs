@@ -297,9 +297,26 @@ fn cache_flag_exclusion_is_documented() {
     );
 }
 
+/// The page's sentences on a configuration-file key alone on its line: a scalar
+/// or switch key alone is dropped by both engines (Config.pm:1100 `next unless
+/// is_valid_param($config, $key, $split[0]);`, whose Getopt::Long call sets no
+/// option for the scalar's undefined value, and :1101 `$config->{$key} ||=
+/// $split[0];`, which leaves the switch unset), and a repeatable key alone is
+/// dropped here (`read_config_file` in `argv.rs`) where Config.pm:1094-1097
+/// pushes the empty string, which Runner.pm:935 warns `Failed to compile plugin`
+/// for and AnnotationSourceAdaptor.pm:376 dies on.
+const KEY_ALONE_ON_ITS_LINE: &[&str] = &[
+    "A key alone on its line is dropped",
+    "Ensembl VEP drops a scalar or switch key alone on its line too (`Config.pm:1101`) and \
+     keeps an empty value for a repeatable key alone on its line (`Config.pm:1094-1097`): \
+     `plugin` warns `Failed to compile plugin` there, and `custom` and `transcript_filter` \
+     are fatal",
+];
+
 /// `config`: a lower source never overwrites a higher source's value, and a
 /// value the parser refuses is an argument syntax error, where Config.pm:1101's
-/// `||=` lets a false value yield and :1046-1047 drops the line.
+/// `||=` lets a false value yield and :1046-1047 drops the line; a repeatable
+/// key alone on its line is dropped where Config.pm:1094-1097 keeps `''`.
 #[test]
 fn config_exclusion_is_documented() {
     assert_page_states(
@@ -314,10 +331,12 @@ fn config_exclusion_is_documented() {
             "Ensembl VEP's `is_valid_param` drops the line (`Config.pm:1046-1047`)",
         ],
     );
+    assert_page_states("cli/compatibility.md", KEY_ALONE_ON_ITS_LINE);
 }
 
 /// `config-file`: the same merge rule read from `vep.ini` and the environment
-/// (Config.pm:1101, 1158), with the page's own `shift_hgvs` example.
+/// (Config.pm:1101, 1158), with the page's own `shift_hgvs` example, and the
+/// same reading of a repeatable key alone on its line.
 #[test]
 fn config_file_exclusion_is_documented() {
     assert_page_states(
@@ -328,6 +347,7 @@ fn config_file_exclusion_is_documented() {
              included",
         ],
     );
+    assert_page_states("cli/compatibility.md", KEY_ALONE_ON_ITS_LINE);
 }
 
 /// `dont_skip`: four refused shapes are skipped under the flag, where
@@ -793,7 +813,12 @@ fn tilde_expansion_exclusion_is_documented() {
 /// `option_rule_tables`: a comma-joined or trailing-comma value of a `%VALID`
 /// scalar flag is an argument syntax error here, where Config.pm:946 splits the
 /// value on commas before the `%VALID` test and OutputFactory.pm:1808 reads
-/// `--sift b,` by its first letter.
+/// `--sift b,` by its first letter; so is a `0` or empty value, which Config.pm:904-905
+/// (`return 0 unless defined($config->{$flag}); return ... : $config->{$flag};`)
+/// and :945 (`grep {$self->_is_flag_active($config, $_)} keys %VALID`) read as the
+/// flag unset and OutputFactory.pm:1805 (`if (my $opt = $self->{$lc_tool})`) and
+/// AnnotationType/Transcript.pm:170 (`if(my $nearest_type = $self->{nearest})`)
+/// print no column for.
 #[test]
 fn option_rule_tables_exclusion_is_documented() {
     assert_page_states(
@@ -804,6 +829,11 @@ fn option_rule_tables_exclusion_is_documented() {
              error (exit 2)",
             "Ensembl VEP's `check_config` splits such a value on commas before its `%VALID` test \
              (`Config.pm:946`) and reads the first token by prefix (`OutputFactory.pm:1808`)",
+            "A `0` or empty value of such a flag (`--sift 0`, `--sift ''`, `--polyphen 0`, \
+             `--nearest 0`) is an argument syntax error too (exit 2)",
+            "Ensembl VEP reads a value Perl reads as false as the flag unset \
+             (`Config.pm:904-905, 945`) and annotates without the column \
+             (`OutputFactory.pm:1805`, `AnnotationType/Transcript.pm:170`)",
         ],
     );
 }
@@ -876,10 +906,16 @@ fn assembly_alias_exclusion_is_documented() {
     );
 }
 
-/// `freq_filter` under `--minimal`: a split record none of whose alleles writes
-/// a row stays one record under a `--check_frequency` drop, where Ensembl VEP's
-/// buffer, its rejoin cancelled by the drop (BaseCacheVariation.pm:365-369,
-/// InputBuffer.pm:535-537), writes each of its features as its own.
+/// `freq_filter` and `check_frequency` under `--minimal`: a split record none of
+/// whose alleles writes a row stays one record under a `--check_frequency` drop,
+/// where Ensembl VEP's buffer, its rejoin cancelled by the drop
+/// (BaseCacheVariation.pm:365-368 `if($filtered_count) { $buffer->reset_buffer();`,
+/// InputBuffer.pm:535-537), writes each of its features as its own; and the reset
+/// reaches the dropped record's chromosome run within a `--buffer_size` batch of
+/// input lines here (`runs_reset_by_a_drop` in `pipeline.rs`), where it reaches
+/// Ensembl VEP's buffer of one chromosome's records (InputBuffer.pm:191-199
+/// `if($prev_chr && $vf->{chr} ne $prev_chr) { ... return $buffer; }`) or under
+/// `--fork` a chunk of it (Runner.pm:486 `int($buffer_size / (2 * $fork_number))`).
 #[test]
 fn minimal_frequency_filter_exclusion_is_documented() {
     assert_page_states(
@@ -888,6 +924,13 @@ fn minimal_frequency_filter_exclusion_is_documented() {
             "A split record none of whose alleles writes a row (`GG *,GG`) stays one VCF line \
              and one JSON object under a reset, where Ensembl VEP writes each of its features \
              as its own",
+            "The reach of the reset differs. Here it is the dropped record's run of one \
+             chromosome within a batch of `--buffer_size` input lines counted from the file's \
+             first data line, skipped lines included",
+            "In Ensembl VEP it is the buffer, one chromosome's records up to `--buffer_size` \
+             (`InputBuffer.pm` lines 191-199), or under `--fork` a chunk of the buffer holding \
+             at most `--buffer_size` over twice the fork count (`Runner.pm` line 486)",
+            "Where the units differ, one engine rejoins a split record the other resets",
         ],
     );
     assert_page_states(
@@ -895,6 +938,11 @@ fn minimal_frequency_filter_exclusion_is_documented() {
         &[
             "a split record none of whose alleles writes a row (`GG *,GG`) stays one VCF line \
              and one JSON object here",
+            "Ensembl VEP's reach is its buffer of one chromosome's records up to \
+             `--buffer_size`, or under `--fork` a chunk of it, and vep-rs's the dropped \
+             record's chromosome run within a batch of `--buffer_size` input lines counted \
+             from the file's first line, so where the units differ one engine rejoins a split \
+             record the other resets",
         ],
     );
 }
@@ -916,6 +964,272 @@ fn shift_hgvs_exclusion_is_documented() {
             "So `2` leaves the default shift on, and `10` sets the shifting variables to 10, \
              which shifts HGVSc and HGVSp (tested against `0`) and not HGVSg (tested against \
              `1`)",
+        ],
+    );
+}
+
+/// `fasta_dir`: two files tied on both preferences are ordered by name, the
+/// first taken (`fasta_dir_match` in vep-fasta's `lib.rs`), where
+/// BaseVEP.pm:500-509 sorts on the two preferences alone (`$a !~ /toplevel/ <=> $b
+/// !~ /toplevel/ || $a !~ /gz$/ <=> $b !~ /gz$/`) over `readdir`'s order and :513
+/// takes `$files[0]`.
+#[test]
+fn fasta_dir_exclusion_is_documented() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "Two files tied on both preferences are ordered by name, the first taken, where \
+             Ensembl VEP's sort on the two preferences alone keeps the directory listing's \
+             order (`BaseVEP.pm` lines 500-509), so on such a directory the two engines can \
+             read different files",
+        ],
+    );
+    assert_flag_row_states(
+        "cli/cache-species-runtime.md",
+        "--fasta_dir",
+        &[
+            "a toplevel file before any other, a bgzipped file before a plain one and the first \
+             by name of two tied on both (where Ensembl VEP keeps the directory listing's order)",
+        ],
+    );
+}
+
+/// `hgvs-transcript-input`: the four readings of the transcript branch that
+/// differ. An `NM_` or `XM_` reference resolves against the
+/// cache's RefSeq transcripts alone (`resolve` in vep-io's `hgvs/transcript.rs`),
+/// the lookup reads the run's transcript set, a gene name resolves in
+/// database-id order, and a description whose position the expression leaves
+/// undefined (`c.-A>G`) is refused as one it could not parse
+/// (`genomic_position` there), where VariationFeatureAdaptor.pm:1829-1849 and
+/// :2146-2226 read the RefSeq and core databases and
+/// `_parse_hgvs_transcript_position` (:1608, called at :1858) carries the
+/// undefined position on.
+#[test]
+fn hgvs_transcript_input_exclusion_is_documented() {
+    assert_page_states(
+        "divergences/hgvs-transcript-input.md",
+        &[
+            "Four readings differ:",
+            "An `NM_` or `XM_` reference resolves against the cache's RefSeq transcripts, present \
+             under `--refseq` or `--merged`, and is otherwise refused as a reference no \
+             transcript carries (`Could not get a Transcript object`)",
+            "Ensembl VEP reads such a reference from its RefSeq database whatever cache the run \
+             annotates with",
+            "The lookup reads the run's transcript set, so under `--gencode_basic` or \
+             `--gencode_primary` a transcript outside the set is not found, where Ensembl VEP's \
+             resolver reads its whole database",
+            "A gene name resolves among the transcripts on the assembled chromosomes and the \
+             unplaced scaffolds, in database-id order, where Ensembl VEP's `is_reference` test \
+             reads the database",
+            "A description whose position its regular expression leaves undefined (`c.-A>G`, a \
+             sign with no digits) is refused as one it could not parse, where Ensembl VEP \
+             carries the undefined position on",
+        ],
+    );
+}
+
+/// `individual_zyg`, `individual` and `individual-modes`: an individual's copy of
+/// a bi-allelic record `--minimal` trims past the anchor chop at either end
+/// (`GA/GT`, `AG/TG`), the indel class included, is compared chopped against
+/// chopped (`CalledGenotype::read` in `individuals.rs`), so a `0/0` sample is
+/// reference-homozygous and `--individual_zyg` prints its reference row
+/// (`zygosity_record`), where Parser/VCF.pm:691-692 take the minimised `A` as
+/// `$ref` and :716 and :720 compare the chop-level `GA` with it (`grep {$_ ne
+/// $ref && $_ !~ /\*/} @bits`), so Ensembl VEP prints the alternate row with
+/// `ZYG=S1:HOM`.
+#[test]
+fn individual_minimal_trimmed_record_exclusion_is_documented() {
+    assert_page_states(
+        "divergences/individual-trimmable-indel.md",
+        &[
+            "An individual's copy of a record `--minimal` trims past the anchor chop",
+            "Under `--minimal` it minimises every bi-allelic record whose alleles still share a \
+             base at either end (line 852: `GA/GT` becomes `A/T` a base on, `AG/TG` becomes \
+             `A/T` at the written position)",
+            "vep-rs compares the chopped alleles with the chopped reference, so the `0/0` \
+             individual is reference-homozygous",
+            "as does a same-length record without `--minimal`",
+            "So `21 34716539 GA GT` with one sample `0/0` under `--individual_zyg --minimal` is \
+             the `T` row with `ZYG=S1:HOM` and `ALLELE_NUM=1` in Ensembl VEP and the `A` row \
+             with `ZYG=S1:HOMREF` and `ALLELE_NUM=0` here, `MINIMISED=1` on both",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "Ensembl VEP builds an individual's copy of a bi-allelic record `--minimal` trims \
+             past the anchor chop at either end, an indel such as `ACAC/AC` or a same-length \
+             record such as `GA/GT`, from the chopped alleles against the minimised reference",
+        ],
+    );
+    assert_page_states(
+        "output-formats.md",
+        &[
+            "an indel such as `ACAC/AC` with or without the flag and a same-length record such \
+             as `GA/GT` under it",
+            "The reading above of a record trimmed past the anchor chop, an indel or under \
+             `--minimal` a same-length record such as `GA/GT`, applies to the list too. Ensembl \
+             VEP reads a `0/0` sample of it as `HOM` and keeps the alternate allele's rows, where \
+             vep-rs reads `HOMREF` and annotates the reference allele",
+        ],
+    );
+}
+
+/// `mirna` under `--minimal`: a split allele's hairpin terms come from its own
+/// span in every format (`calculate_consequences` in vep-effects'
+/// `consequences.rs` runs `mirna_structure_terms` on the allele it analyses),
+/// where the default and tab factories rejoin the record (OutputFactory.pm:294)
+/// and then clear the cDNA coordinates (:297-298 `reset_shifted_positions`,
+/// TranscriptVariationAllele.pm:515-517 `delete($tv->{cdna_start});
+/// delete($tv->{cdna_end});`), so the miRNA block (OutputFactory.pm:1630 `my
+/// ($cdna_start, $cdna_end) = ($tv->cdna_start, $tv->cdna_end);`) reads the
+/// rejoined record's span.
+#[test]
+fn mirna_minimal_split_exclusion_is_documented() {
+    assert_page_states(
+        "divergences/minimal-split-hgvsp.md",
+        &[
+            "and the `miRNA` terms of a split allele on a miRNA transcript",
+            "The `miRNA` column reads the same cleared coordinates (`OutputFactory.pm` line 1630 \
+             takes `cdna_start` and `cdna_end`, which `clear_shifting_variables` deleted, \
+             `TranscriptVariationAllele.pm` lines 515-517). So the default and tab factories \
+             compute a split allele's hairpin terms over the record's restored span, and the VCF \
+             and JSON factories over the allele's own",
+            "For `21 8987003 multi ACT A,ACTTTA` under `--mirna --minimal`, the `TTA` allele's \
+             row on the miRNA transcript prints `miRNA=miRNA_loop` in Ensembl VEP's default \
+             output and `miRNA=miRNA_loop,miRNA_stem` here; the VCF and JSON of both engines \
+             print `miRNA_loop&miRNA_stem`",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "under `--mirna` the default and tab outputs compute a split allele's hairpin terms \
+             over the record's span",
+            "vep-rs prints the allele's own positions, terms, amino acids, miRNA terms and \
+             notations in every format",
+        ],
+    );
+}
+
+/// `region-input-format`: a region line whose structural word `%SO_TERMS` lacks
+/// is warned about and skipped (`RegionParser::parse_record` in vep-io's
+/// `region.rs` fails the line with `IoError::SkippedLine`) and the run goes on,
+/// where Parser/Region.pm:205-206 (`my $so_term = $self->get_SO_term($allele);
+/// return [] unless defined $so_term;`) builds no feature after the warning of
+/// Parser.pm:725, so a line that opens a buffer fill ends Ensembl VEP's run
+/// (Parser.pm:186-187, InputBuffer.pm:212, Runner.pm:424).
+#[test]
+fn region_unsupported_structural_word_exclusion_is_documented() {
+    assert_page_states(
+        "divergences/dont-skip-cannot-keep.md",
+        &[
+            "A region line whose structural word is not a supported type \
+             (`21:14221000-14222000/FOO`) is warned about by both engines, `FOO is not a \
+             supported structural variant type`",
+            "Ensembl VEP then builds no feature for it (`Parser/Region.pm` lines 205-206), so \
+             when the line opens a fill it ends the run the same way, with the warning and no \
+             row written, where vep-rs goes on to the lines after it",
+        ],
+    );
+}
+
+/// `chromosome-synonyms`: a name two hops from a cache chromosome under a chained
+/// or whitespace-led `--synonyms` table is skipped as not found whatever came
+/// before it (`known_as` in `pipeline.rs` tests one hop and `validate.rs` writes
+/// the skip), where Parser.pm:782 (`$valid->{$_} = 1 for map {keys
+/// %{$synonyms->{$_} || {}}} keys %$valid;`) widens the parser's persistent valid
+/// hash (:328-331) in place at every miss, so a later record on the two-hop name
+/// passes :784 and BaseVEP.pm:711-716 resolve one hop to nothing:
+/// `intergenic_variant`.
+#[test]
+fn chromosome_synonyms_two_hop_exclusion_is_documented() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "Three cases differ from Ensembl VEP, which checks a record against the cache's \
+             names widened by their synonyms, a set it widens again in place at every miss \
+             (`Parser.pm` line 782), and then looks the unwidened name up one hop",
+            "The third is a name two hops from a cache chromosome under a `--synonyms` table \
+             whose lines chain or open with whitespace (`21 ALPHA` then `ALPHA BETA`: `BETA`), \
+             admitted once an earlier record missed",
+            "Each passes its check there and annotates as intergenic; in vep-rs a bare `M` \
+             resolves to `MT` and every other such name is skipped as not found, whatever \
+             record came before it",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "a set each miss widens again in place, and then resolves the unwidened name one hop",
+            "or a two-hop synonym of a chained or whitespace-led `--synonyms` table after an \
+             earlier miss gets rows from one engine that the other does not write",
+        ],
+    );
+}
+
+/// `fasta`: the pseudoautosomal `Y` to `X` redirect is armed from the assembly
+/// the cache resolves to (`open_fasta` in `runner.rs` sets the opened FASTA's
+/// assembly to the one `cache_resolve::resolve` took, `info.json` first), where
+/// BaseVEP.pm:525 (`-ASSEMBLY => $self->param('assembly'),`) and
+/// FastaSequence.pm:254 (`$pars ||= $PARS{$assembly} if $assembly && ...`) arm it
+/// from `--assembly` alone, which CacheDir.pm:356 fills in the `--dir_cache` scan
+/// alone, so `--offline --full_cache_dir` without `--assembly` leaves it unarmed
+/// there (FastaSequence.pm:550 `$Bio::EnsEMBL::Slice::_fasta_PARs &&`).
+#[test]
+fn fasta_exclusion_is_documented() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "The redirect is armed by the assembly the cache resolves to, its `info.json` first, \
+             then its directory name, then `--assembly`, where Ensembl VEP arms it from \
+             `--assembly` alone (`BaseVEP.pm` line 525, `Utils/FastaSequence.pm` line 254)",
+            "Under `--offline --full_cache_dir` (`--json_cache` here) without `--assembly` that \
+             parameter stays unset there, since the directory scan that fills it runs for \
+             `--dir_cache` alone (`CacheDir.pm` line 356)",
+            "So there Ensembl VEP reads a `Y` span inside the region as written and vep-rs reads \
+             `X`",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "Under `--full_cache_dir` with no `--assembly`, Ensembl VEP's assembly stays unset, \
+             so its JSON prints `\"assembly_name\":null` and its pseudoautosomal redirect of `Y` \
+             reads to `X` is not armed",
+            "vep-rs takes the assembly the cache's `info.json` names, as it does under \
+             `--json_cache`, prints it and arms the redirect from it",
+        ],
+    );
+}
+
+/// `synonyms`: a `--synonyms` file holding a byte that is not UTF-8 is refused
+/// (`ChromosomeSynonyms::load_from_file` in vep-core's `synonyms.rs` reads it
+/// with `read_to_string`, worded `Could not read synonyms file <file>: stream
+/// did not contain valid UTF-8`, exit 1), where Ensembl VEP reads the file as
+/// bytes.
+#[test]
+fn synonyms_file_encoding_exclusion_is_documented() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "A file holding a byte that is not UTF-8 is refused the same way, the reason \
+             `stream did not contain valid UTF-8`, where Ensembl VEP reads the file as bytes",
+        ],
+    );
+}
+
+/// `chr`: a chromosome literally named `1-5` is refused silently under `--chr 1-5`
+/// (`ChromosomeList::new` in `validate.rs` files the token under `ranges`), where
+/// Parser.pm:471 (`grep {$vf->{chr} eq $_} @{$self->{chr}}`) admits it by
+/// equality.
+#[test]
+fn chr_literal_range_name_exclusion_is_documented() {
+    assert_page_states(
+        "divergences/chr-range.md",
+        &[
+            "A chromosome literally named `1-5`, which Ensembl VEP admits under that token, is \
+             refused silently here, as a record `--chr` leaves out is in both engines",
         ],
     );
 }

@@ -889,7 +889,11 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          error (exit 2). Ensembl VEP's `check_config` splits such a value on commas before its \
          `%VALID` test (`Config.pm:946`) and reads the first token by prefix \
          (`OutputFactory.pm:1808`), so `--sift b,` annotates there (`SIFT=tolerated(0.19)` on one \
-         transcript of `21 14216193 C G`).\n\
+         transcript of `21 14216193 C G`). A `0` or empty value of such a flag (`--sift 0`, \
+         `--sift ''`, `--polyphen 0`, `--nearest 0`) is an argument syntax error too (exit 2). \
+         Ensembl VEP reads a value Perl reads as false as the flag unset \
+         (`Config.pm:904-905, 945`) and annotates without the column (`OutputFactory.pm:1805`, \
+         `AnnotationType/Transcript.pm:170`).\n\
          - The `-o` value names the output file as given. Ensembl VEP opens it with Perl's \
          two-argument `open` (`BaseRunner.pm:226`), which strips surrounding whitespace and \
          reads a leading `>` as the append mode, so `-o ' lead.txt'` writes `lead.txt` there \
@@ -936,7 +940,10 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          will be provided when using --var_synonyms`, and writes no synonyms, as Ensembl VEP \
          tests that flag with `defined` (Runner.pm:117). `cache` is on with `1`, a \
          directory or an empty quoted value and off with `0`. A key alone on its line is \
-         dropped.\n\
+         dropped. Ensembl VEP drops a scalar or switch key alone on its line too \
+         (`Config.pm:1101`) and keeps an empty value for a repeatable key alone on its line \
+         (`Config.pm:1094-1097`): `plugin` warns `Failed to compile plugin` there, and `custom` \
+         and `transcript_filter` are fatal.\n\
          - A flag taking a value takes the first word after its name, or, for a repeatable \
          flag, the rest of the line. Blanks inside double quotes are part of a value and the \
          quotes are removed.\n\

@@ -446,6 +446,44 @@ fn structural_words_annotate_as_their_class() {
     );
 }
 
+/// A structural word `%SO_TERMS` lacks on the first line of the file is warned
+/// about with `get_SO_term`'s text (Parser.pm:725) and skipped
+/// (`RegionParser::parse_record` fails the line with `IoError::SkippedLine`
+/// carrying that text, and the caller warns and skips it), and the lines after
+/// it annotate: `21:14221107-14221107/A` writes its 17 rows, each named by its
+/// line as written, exit 0. Ensembl VEP 116.2 writes the same warning and then
+/// 0 rows for this input, exit 0: `create_VariationFeatures` builds no feature
+/// for the word (Parser/Region.pm:205-206, `my $so_term =
+/// $self->get_SO_term($allele); return [] unless defined $so_term;`), the
+/// parser's `next` returns the empty list's undefined record (Parser.pm:186-187,
+/// `my $vf = shift @$cache; return $vf unless $vf;`), the buffer fill ends on it
+/// (InputBuffer.pm:212, `while(@$buffer < $buffer_size && (my $vf =
+/// $parser->next))`) and the run ends (Runner.pm:424; :477 under `--fork`), the
+/// second line unread.
+#[test]
+fn an_unsupported_structural_word_on_the_first_line_is_skipped_and_the_run_goes_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let region = write(
+        dir.path(),
+        "first.region.txt",
+        "21:14221000-14222000/FOO\n21:14221107-14221107/A\n",
+    );
+    let (rows, warnings) = annotate_with_warnings(dir.path(), &region, &["--format", "region"]);
+    assert_eq!(
+        warnings.lines().collect::<Vec<_>>(),
+        [
+            "WARNING: line 1 skipped (21:14221000-14222000/FOO): FOO is not a supported \
+             structural variant type",
+        ],
+        "{warnings}"
+    );
+    assert_eq!(rows.len(), 17, "{rows:?}");
+    assert!(
+        only_record_has_rows(&rows, "21:14221107-14221107/A"),
+        "{rows:?}"
+    );
+}
+
 /// A line outside Ensembl VEP's region expression (Utils/VEP.pm:391) builds no
 /// feature in Ensembl VEP and ends its run; here it is warned about and skipped,
 /// the run going on: a position without its end, a trailing blank, a strand

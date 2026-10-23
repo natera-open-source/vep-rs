@@ -262,6 +262,69 @@ fn empty_chromosome_directory_annotates_intergenic_and_a_dot_directory_is_absent
     );
 }
 
+/// A name two synonym hops from a cache chromosome is skipped as not found,
+/// whatever record came before it: vep-rs tests one hop (`known_as` in
+/// `crates/vep-cli/src/pipeline.rs`: a name is known when the cache holds it or
+/// holds one of the name's own synonyms) and writes Parser.pm:542-546's warning
+/// (`crates/vep-cli/src/validate.rs`).
+/// Ensembl VEP 116.2 widens one valid-chromosome hash in place on every miss
+/// and keeps it for the parser's life (Parser.pm:328-331; :774 `my $valid =
+/// $self->valid_chromosomes;`, :777 `if($valid->{$vf_chr}) {`, :782
+/// `$valid->{$_} = 1 for map {keys %{$synonyms->{$_} || {}}} keys %$valid;`,
+/// :784 `if($valid->{$vf->{chr}}) {`). Under a `--synonyms` table of `21 ALPHA`
+/// and `ALPHA BETA`, a record on `chr21` misses at :777, the widening adds
+/// `ALPHA`, and the `chr` rule at :791 admits the record; `ALPHA` stays in the
+/// hash, so the next miss widens it with `ALPHA`'s synonyms, `BETA` among them,
+/// and a record on `BETA` is admitted two hops from `21`. The source-name
+/// lookup then tries one hop (BaseVEP.pm:711-716 `foreach my $syn(keys
+/// %{$synonyms->{$chr} || {}}) { if($valid{$syn}) { $mapped_name = $syn; last;
+/// } }`), finds nothing, and Ensembl VEP 116.2 writes the record as
+/// `BETA:43774760 ... intergenic_variant`. vep-rs annotates the `chr21` record
+/// through its `chr` rule at `chr21:43774760` and skips the `BETA` record with
+/// the not-found warning in either order, where Ensembl VEP's admission rests
+/// on the miss before it.
+#[test]
+fn a_two_hop_synonym_is_skipped_after_an_earlier_miss() {
+    let dir = tempfile::tempdir().unwrap();
+    let synonyms = dir.path().join("chained_synonyms.txt");
+    std::fs::write(&synonyms, "21\tALPHA\nALPHA\tBETA\n").unwrap();
+    let on_chr21 = "chr21\t43774760\tfirst\tC\tT\t.\t.\t.";
+    let on_beta = "BETA\t43774760\tsecond\tC\tT\t.\t.\t.";
+    for (name, records, skipped_line) in [
+        ("chr21_first", format!("{on_chr21}\n{on_beta}\n"), 2),
+        ("beta_first", format!("{on_beta}\n{on_chr21}\n"), 1),
+    ] {
+        let (output, written, warnings) = run_vcf(
+            dir.path(),
+            name,
+            &records,
+            &["--synonyms", synonyms.to_str().unwrap()],
+        );
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{name}: {}",
+            text(&output.stderr)
+        );
+        let first = rows_of(&written, "first");
+        assert!(
+            !first.is_empty() && first.iter().all(|row| row.starts_with("chr21:43774760\t")),
+            "{name}: {written}"
+        );
+        assert_eq!(
+            record_names(&written),
+            ["first"].into_iter().collect(),
+            "{name}: {written}"
+        );
+        let expected = format!(
+            "WARNING: line {skipped_line} skipped (BETA 43774760 second C T . . .): Chromosome \
+             BETA not found in annotation sources or synonyms; chromosome BETA does not \
+             overlap any features"
+        );
+        assert_eq!(warning_lines(&warnings), [expected.as_str()], "{name}");
+    }
+}
+
 /// `--dont_skip` keeps a record `validate_vf` refuses and annotates it as it
 /// stands (Parser.pm:189): the `X/Y` record carries its allele `Y`, and a record
 /// whose reference allele fails `--check_ref` prints `CHECK_REF` as `failed` on

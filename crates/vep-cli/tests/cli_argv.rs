@@ -675,3 +675,52 @@ fn vep_ini_is_read_through_the_binary() {
         .unwrap();
     assert_prints_cache_info(&output, "--dir vep.ini");
 }
+
+/// A repeatable key alone on its line of a `--config` file (`plugin`,
+/// `custom`, `transcript_filter`) is dropped here (`read_config_file` in
+/// `argv.rs`), where Ensembl VEP 116.2 keeps the empty string for it
+/// (`Config.pm:1094-1097`, `my $value = join(' ', @split);` then
+/// `push @{$config->{$key}}, $value;`): a bare `plugin` line reaches
+/// `my ($module, @params) = split /,/, $plugin_config;` and the `use $module`
+/// of `Runner.pm:928-935`, which warns `Failed to compile plugin`; a bare
+/// `custom` line dies at `AnnotationSourceAdaptor.pm:376` (`No file was added
+/// for custom annotation source`, exit 2) and a bare `transcript_filter` line
+/// dies (exit 255). A scalar or switch key alone on its line is dropped by both
+/// (`Config.pm:1101`, `$config->{$key} ||= $split[0];` with no value). Here
+/// `protein 1` above a bare `plugin` line exits 0, annotates with `ENSP`,
+/// raises no plugin warning, and prints `--protein` and no `--plugin` in the
+/// command-line header.
+#[test]
+fn a_repeatable_key_alone_on_its_config_line_is_dropped() {
+    let home = tempfile::tempdir().unwrap();
+    let file = home.path().join("flags.ini");
+    fs::write(&file, "protein 1\nplugin\n").unwrap();
+    let out = home.path().join("out.txt");
+    let mut args = corpus_args();
+    args.extend([
+        "--config".to_string(),
+        file.display().to_string(),
+        "-o".to_string(),
+        out.display().to_string(),
+    ]);
+    let output = vep(home.path()).args(&args).output().unwrap();
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let warnings =
+        fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap_or_default();
+    assert!(
+        !warnings.to_lowercase().contains("plugin"),
+        "the bare plugin line raised a plugin warning: {warnings}"
+    );
+    let annotated = fs::read_to_string(&out).unwrap();
+    let command_line = annotated
+        .lines()
+        .find(|l| l.starts_with("## VEP command-line:"))
+        .unwrap();
+    assert_eq!(
+        command_line,
+        "## VEP command-line: vep --assembly GRCh38 --config [PATH]/flags.ini --force_overwrite \
+         --input_file [PATH]/variants.vcf --json_cache [PATH]/json_cache --max_sv_size -1 \
+         --no_stats --offline --output_file [PATH]/out.txt --protein --quiet"
+    );
+    assert!(annotated.contains("ENSP="), "the file's protein line acts");
+}

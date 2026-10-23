@@ -360,7 +360,7 @@ pub struct Args {
     #[arg(help_heading = "Cache / Offline", long, visible_alias = "fa")]
     pub fasta: Option<String>,
 
-    /// Directory holding FASTA files of several species or assemblies: the .fa or .fa.gz whose name carries --species and the assembly is used, a toplevel file before any other and a bgzipped file before a plain one, in place of --fasta and of the cache directory's FASTA; when none qualifies the run warns and falls back to --fasta or the cache directory's FASTA
+    /// Directory holding FASTA files of several species or assemblies: the .fa or .fa.gz whose name carries --species and the assembly is used, a toplevel file before any other, a bgzipped file before a plain one and the first by name of two tied on both (where Ensembl VEP keeps the directory listing's order), in place of --fasta and of the cache directory's FASTA; when none qualifies the run warns and falls back to --fasta or the cache directory's FASTA
     #[arg(help_heading = "Cache / Offline", long = "fasta_dir")]
     pub fasta_dir: Option<String>,
 

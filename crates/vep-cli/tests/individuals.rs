@@ -1190,6 +1190,57 @@ fn individual_zyg_writes_one_record_with_a_zygosity_list_in_every_format() {
     );
 }
 
+/// A same-length record is no indel to the anchor chop (Parser/VCF.pm:297,
+/// `length($alt_allele) != length($ref)`), so `GA/GT` reaches `--minimal` whole
+/// and is trimmed to `A/T` one base on (Parser.pm:852, `$vfs =
+/// $self->minimise_alleles($vfs) if $self->{minimal};`) before the genotypes are
+/// read (Parser/VCF.pm:362-364). Ensembl VEP 116.2 then compares each sample's
+/// chop-level alleles with the minimised reference: `my @alleles = split '\/',
+/// $vf->{allele_string}; my $ref = $alleles[0];` (`:691-692`, the `A`), `my @bits
+/// = map { $allele_map->{$_} } split /\||\/|\\/, $gt;` (`:716`, the `GA`), `my
+/// %non_ref = map {$_ => 1} grep {$_ ne $ref && $_ !~ /\*/} @bits;` (`:720`), and
+/// `GA ne A` leaves a `0/0` sample with a non-reference allele. With that sample
+/// alone named, Ensembl VEP 116.2 prints the alternate row, Allele `T`,
+/// `ZYG=S1:HOM` (OutputFactory.pm:985, one distinct allele and no
+/// `hom_ref_samples`), `ALLELE_NUM=1` (`--minimal` sets `allele_number`,
+/// Config.pm:525-527), `MINIMISED=1`. vep-rs compares the chopped alleles with
+/// the chopped reference (`CalledGenotype::read` and `hom_ref` in
+/// `crates/vep-cli/src/individuals.rs`), so the sample is reference-homozygous
+/// and `zygosity_record` writes the reference row alone, Allele `A`,
+/// `ZYG=S1:HOMREF`, `ALLELE_NUM=0`, `MINIMISED=1` at the trimmed position, for a
+/// shared base at either end (`docs/divergences/individual-trimmable-indel.md`).
+#[test]
+fn individual_zyg_reads_a_minimal_trimmed_same_length_record_as_reference_homozygous() {
+    let dir = tempfile::tempdir().unwrap();
+    let records = "\
+##fileformat=VCFv4.2
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1
+21\t34716539\tmnp\tGA\tGT\t.\t.\t.\tGT\t0/0
+21\t34716539\tright\tAG\tTG\t.\t.\t.\tGT\t0/0
+";
+    let input = write_input(dir.path(), "in.vcf", records);
+    let (text, stderr, ok) = run(dir.path(), &input, &["--individual_zyg", "S1", "--minimal"]);
+    assert!(ok, "{stderr}");
+    let rows = body(&text);
+    for (id, location) in [("mnp", "21:34716540"), ("right", "21:34716539")] {
+        let record: Vec<&str> = rows
+            .iter()
+            .copied()
+            .filter(|l| column(l, 0) == id)
+            .collect();
+        assert_eq!(record.len(), 4, "{id}: one reference row per transcript");
+        for row in record {
+            assert_eq!(column(row, 1), location, "{row}");
+            assert_eq!(column(row, 2), "A", "{row}");
+            assert_eq!(extra_value(row, "ZYG"), Some("S1:HOMREF"), "{row}");
+            assert_eq!(extra_value(row, "ALLELE_NUM"), Some("0"), "{row}");
+            assert_eq!(extra_value(row, "MINIMISED"), Some("1"), "{row}");
+        }
+    }
+    assert!(!rows.iter().any(|l| column(l, 2) == "T"));
+    assert_eq!(rows.len(), 8);
+}
+
 /// `affects_cds` asks an overlap's alternate alleles alone
 /// (BaseTranscriptVariation.pm:662-665; an alternate equal to the reference is
 /// built as none, VariationFeatureOverlap.pm:481), so under `--coding_only` the

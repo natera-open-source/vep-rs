@@ -2653,6 +2653,77 @@ fn a_comma_joined_enumerated_value_is_a_syntax_error() {
     }
 }
 
+/// A value Perl reads as false, `0` or the empty string, given to a
+/// clap-enumerated `%VALID` flag (`--sift` and `--polyphen` take `s`, `p` or
+/// `b` and `--nearest` takes `transcript`, `gene` or `symbol`, the
+/// `value_parser` lists of `args.rs`) is an argument syntax error (exit 2) in
+/// clap's words, `0` an invalid value and the empty string a missing one,
+/// before any run and with no output file written. Ensembl VEP 116.2 reads such
+/// a value as the flag unset:
+/// `_is_flag_active` (Config.pm:902-905, `return 0 unless
+/// defined($config->{$flag}); return ref($config->{$flag}) eq 'ARRAY' ? scalar
+/// @{$config->{$flag}} : $config->{$flag};`) keeps it out of the `%VALID` test
+/// (`:945`, `foreach my $flag(grep {$self->_is_flag_active($config, $_)} keys
+/// %VALID) {`), and the column gates are truthiness tests too,
+/// OutputFactory.pm:1805 (`if (my $opt = $self->{$lc_tool}) {`) for SIFT and
+/// PolyPhen and AnnotationType/Transcript.pm:170 (`if(my $nearest_type =
+/// $self->{nearest}) {`) for NEAREST, so `--sift 0`, `--sift ''`, `--polyphen 0`
+/// and `--nearest 0` each exit 0 there and annotate without the column;
+/// `--sift x` exits 2 in both. `docs/cli/compatibility.md` states the
+/// difference.
+#[test]
+fn a_false_value_of_an_enumerated_flag_is_a_syntax_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    for (flag, value, first_line) in [
+        (
+            "--sift",
+            "0",
+            "error: invalid value '0' for '--sift <SIFT>'",
+        ),
+        (
+            "--sift",
+            "",
+            "error: a value is required for '--sift <SIFT>' but none was supplied",
+        ),
+        (
+            "--polyphen",
+            "0",
+            "error: invalid value '0' for '--polyphen <POLYPHEN>'",
+        ),
+        (
+            "--nearest",
+            "0",
+            "error: invalid value '0' for '--nearest <TYPE>'",
+        ),
+    ] {
+        let output = vep()
+            .args([
+                flag,
+                value,
+                "-i",
+                "/nonexistent/input.vcf",
+                "-o",
+                out.to_str().unwrap(),
+                "--quiet",
+            ])
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        let stderr = text(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{flag} {value:?}: {stderr}");
+        assert_eq!(
+            stderr.lines().next(),
+            Some(first_line),
+            "{flag} {value:?}: {stderr}"
+        );
+        assert!(
+            !out.exists(),
+            "{flag} {value:?}: an output file was created"
+        );
+    }
+}
+
 /// The `-o` value names the output file as given: `-o ' lead.txt'` writes a file
 /// named ` lead.txt`, where Ensembl VEP's two-argument `open` (BaseRunner.pm:226)
 /// strips the whitespace and writes `lead.txt`; `docs/cli/compatibility.md` states
