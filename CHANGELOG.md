@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The container image distrusts the two compromised eMudhra CA roots until Debian trixie ships the fixed ca-certificates, so cache downloads cannot be intercepted through a forged certificate. (#70)
+- Region-format input (`--format region`) reads its reference allele from `--fasta` over the line's span, as Ensembl VEP 116.2 does, so a deletion (`21:14109088-14109089:1/-`) is a deletion with its HGVSc and HGVSp; without the bases a deletion keeps one `N` per base, and `Uploaded_variation` is unchanged.
 
 ## [0.4.0] - 2026-10-16
 

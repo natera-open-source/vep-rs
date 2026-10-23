@@ -1445,3 +1445,77 @@ fn parquet_round_trip_nested() {
         adapter_text
     );
 }
+
+/// A region-format deletion, `chr:start-end:strand/-`, is annotated against the
+/// reference FASTA's bases over its span, as Ensembl VEP 116.2 annotates it: each
+/// of the two below writes the rows the GRCh37-hgvs golden corpus expects for the
+/// same deletion written as a VCF record (`829531`, `rs149363218`), consequences
+/// and HGVS alike, under the name the region line gives it (`21_27062184_-/-`).
+#[test]
+fn region_deletion_is_annotated_against_the_reference_bases() {
+    use std::io::Read;
+
+    let corpus = format!(
+        "{}/../../tests/golden/116/GRCh37-hgvs",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let fasta = dir.path().join("reference.fa");
+    let mut bases = Vec::new();
+    flate2::read::GzDecoder::new(std::fs::File::open(format!("{corpus}/reference.fa.gz")).unwrap())
+        .read_to_end(&mut bases)
+        .unwrap();
+    std::fs::write(&fasta, bases).unwrap();
+    std::fs::copy(
+        format!("{corpus}/reference.fa.fai"),
+        dir.path().join("reference.fa.fai"),
+    )
+    .unwrap();
+    let input = dir.path().join("in.txt");
+    std::fs::write(
+        &input,
+        "21:27062184-27062184:1/-\n21:10910401-10910402:1/-\n",
+    )
+    .unwrap();
+    let output = dir.path().join("out");
+    let result = vep_binary()
+        .args(["-i", input.to_str().unwrap(), "--format", "region"])
+        .args(["-o", output.to_str().unwrap()])
+        .args(["--json_cache", &format!("{corpus}/json_cache")])
+        .args(["--offline", "--assembly", "GRCh37", "--hgvs"])
+        .args(["--fasta", fasta.to_str().unwrap()])
+        .args(["--force_overwrite", "--no_stats", "--quiet"])
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+
+    let mut expected_text = String::new();
+    flate2::read::GzDecoder::new(
+        std::fs::File::open(format!("{corpus}/expected/default.txt.gz")).unwrap(),
+    )
+    .read_to_string(&mut expected_text)
+    .unwrap();
+    let actual_text = std::fs::read_to_string(&output).unwrap();
+    for (vcf_id, region_name) in [
+        ("829531", "21_27062184_-/-"),
+        ("rs149363218", "21_10910401_-/-"),
+    ] {
+        let rows_named = |text: &str, name: &str| -> Vec<String> {
+            text.lines()
+                .filter(|l| l.split('\t').next() == Some(name))
+                .map(|l| l.split_once('\t').unwrap().1.to_string())
+                .collect()
+        };
+        let expected = rows_named(&expected_text, vcf_id);
+        assert!(!expected.is_empty(), "{vcf_id} in the golden output");
+        assert_eq!(
+            rows_named(&actual_text, region_name),
+            expected,
+            "{region_name}"
+        );
+    }
+}

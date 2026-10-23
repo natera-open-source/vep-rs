@@ -55,7 +55,7 @@ formatter struct here: `vep-cli` renders its rows from this crate's field table
 | `input`              | The `InputParser` trait: `next_variant` yields one `InputVariant` per ALT allele and `None` at end of input.                                                                                                                           |
 | `input::vcf`         | `VcfParser`: a `noodles` VCF reader with blocked gzip (BGZF) decompression on a configurable worker count, shared-prefix trimming, and structural records built by `vep_core::sv_record::structural_variants` under `--max_sv_size`.   |
 | `input::ensembl`     | `EnsemblParser`: VEP's five- or six-column default format, tab or whitespace delimited, one variant per ALT of the allele string.                                                                                                      |
-| `input::region`      | `RegionParser`: `chr:start-end:strand/allele` or `chr:start-end/allele`; the reference allele is `-` and the strand defaults to forward.                                                                                              |
+| `input::region`      | `RegionParser`: `chr:start-end:strand/allele` or `chr:start-end/allele`; the reference allele is the reference FASTA's bases over the span (`-` for an insertion), else `N` per base for a deletion and `-` otherwise; the allele string stays `-/allele`; the strand defaults to forward. |
 | `input::hgvs`        | `HgvsParser`: genomic `:g.` substitutions, deletions, insertions, delins and duplications (a duplication is read as an insertion of the duplicated bases); `:c.`, `:p.`, `:n.` and `:r.` expressions fail with `NotImplemented`.       |
 | `output`             | The `OutputFormatter` trait: `write_header`, `format_variant`, `format_record` (every allele split from one input record together) and `finish`.                                                                                       |
 | `output::fields`     | The field table every text format shares: the thirteen default columns, the flag-to-field order, header descriptions, `record_rows` ordering, `field_value`, the `Extra` column keys, the default and tab headers and the VCF `##VEP=` meta line. |
@@ -82,6 +82,7 @@ Input:
 | `VcfParser::from_path_with_decompression_threads(path, n)` | Uses `noodles::bgzf::io::MultithreadedReader` with `n` workers when `n > 1` and the file is gzipped.                              |
 | `VcfParser::with_max_sv_size(Option<u64>)`     | The span cap a `<CNV:TR>` allele is expanded under; `None` for no cap.                                                                       |
 | `EnsemblParser::new`, `RegionParser::new`, `HgvsParser::new` | Line parsers over any `BufRead`; blank and `#` lines are skipped.                                                               |
+| `RegionParser::with_reference(Option<Arc<IndexedFasta>>)` | The FASTA a line covering bases reads its reference allele from.                                                                  |
 
 Output:
 

@@ -634,7 +634,11 @@ impl Runner {
             _ => {
                 let parser: Box<dyn vep_io::InputParser> = match format {
                     "ensembl" => Box::new(vep_io::input::ensembl::EnsemblParser::new(reader)),
-                    "region" => Box::new(vep_io::input::region::RegionParser::new(reader)),
+                    "region" => Box::new(
+                        vep_io::input::region::RegionParser::new(reader).with_reference(
+                            annotation_resources.effects_config.reference_fasta.clone(),
+                        ),
+                    ),
                     "hgvs" => Box::new(vep_io::input::hgvs::HgvsParser::new(reader)),
                     other => {
                         bail!(
