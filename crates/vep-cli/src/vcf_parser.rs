@@ -310,11 +310,14 @@ fn record_alleles<'a>(
 }
 
 /// `variants`, or, when a sequence record's ALTs write no row, the record as the
-/// allele-less feature over its chopped alleles ([`allele_less_record`]). Under
-/// `--minimal` a bi-allelic record is minimised and marked whatever its allele
-/// writes (`minimise_alleles`, Parser.pm:987-1011, runs before the alleles are
-/// read): `A A` at POS is the feature `-/-` at POS + 1 to POS, its class
-/// `sequence_alteration`, and `A *` keeps its alleles, both marked minimised.
+/// allele-less feature over its chopped alleles ([`allele_less_record`]). The
+/// feature is minimised as `minimise_alleles` (Parser.pm:987-1011) minimises it
+/// before the alleles are read: under `--minimal` every bi-allelic record, marked
+/// whatever its allele writes, so `A A` at POS is the feature `-/-` at POS + 1 to
+/// POS, its class `sequence_alteration`, and `A *` keeps its alleles, both marked
+/// minimised; whatever the flags a bi-allelic record whose alleles differ in
+/// length (`post_process_vfs`, :876-881), so `C *C` at POS is the feature `-/*`
+/// at POS to POS - 1, marked minimised.
 fn with_allele_less_fallback(
     chr: &str,
     chopped: Chopped,
@@ -324,8 +327,14 @@ fn with_allele_less_fallback(
     if !variants.is_empty() {
         return variants;
     }
-    let minimised = minimal && chopped.written_case_alts.len() == 1;
-    let trimmed = minimised.then(|| {
+    let bi_allelic = chopped.written_case_alts.len() == 1;
+    let minimises = bi_allelic
+        && (minimal
+            || perl_minimises(
+                &chopped.written_case_reference,
+                &chopped.written_case_alts[0],
+            ));
+    let trimmed = minimises.then(|| {
         trim_sequences(
             chopped.written_case_reference.as_bytes(),
             chopped.written_case_alts[0].as_bytes(),
@@ -334,8 +343,9 @@ fn with_allele_less_fallback(
         )
     });
     let mut record = allele_less_record(chr.to_string(), chopped);
-    record.minimised = minimised;
+    record.minimised = bi_allelic && minimal;
     if let Some((reference, alt, start, end, true)) = trimmed {
+        record.minimised = true;
         record.written_case_allele_string = written_case_pair(&reference, &alt);
         let reference = reference.to_ascii_uppercase();
         let alt = alt.to_ascii_uppercase();
@@ -355,8 +365,8 @@ fn with_allele_less_fallback(
 /// The variants of a sequence record, one per ALT that writes a row, over its
 /// chopped alleles: `raw_reference` and `alts` are the alleles as the record gave
 /// them (the VCF columns, or the expansion of a `<CNV:TR>` record), each ALT with
-/// its written position, which the `*` and `.` tests and `post_process_vfs`'s
-/// length test read.
+/// its written position, which the `.` test and `post_process_vfs`'s length test
+/// read; the `*` test reads the chopped allele.
 fn sequence_variants(
     chr: &str,
     chopped: &Chopped,
@@ -389,7 +399,9 @@ fn sequence_variants(
     for (k, (((allele_idx, alt), vep_alt), number)) in
         alts.iter().zip(trimmed_alts).zip(&numbers).enumerate()
     {
-        if *alt == "*" || *alt == "." || vep_alt == "<DEL:*>" {
+        // The `*` test reads the chopped allele, not the written one: the one ALT
+        // `C*` of a `C` record is the allele `*` VariationFeatureOverlap.pm:484 skips.
+        if vep_alt == "*" || *alt == "." || vep_alt == "<DEL:*>" {
             continue;
         }
         // A dropped allele, or one Ensembl VEP numbers and writes no row for; under
@@ -480,6 +492,13 @@ fn sequence_variants(
         // trimmed or not.
         if bi_allelic && parse.minimal {
             variant.minimised = true;
+        }
+        // The overlap alleles are built from the minimised string
+        // (VariationFeatureOverlap.pm:484 after Parser.pm:881), so a `*` the
+        // minimisation leaves (`C *C`, or `CA C*` under `--minimal`) writes no row
+        // either: the record is the allele-less feature, minimised the same way.
+        if variant.alt_alleles[0] == b"*" {
+            continue;
         }
 
         variant.allele_index = *allele_idx;
@@ -911,6 +930,8 @@ struct Chopped {
     /// never trimmed, so its raw and working strings coincide (Parser/VCF.pm,
     /// Parser.pm `post_process_vfs` and `minimise_alleles`, OutputFactory.pm).
     uploaded: Arc<str>,
+    /// Whether the anchor base was chopped (Parser/VCF.pm:309-310, :331-334).
+    anchor_chopped: bool,
     /// Ensembl VEP's working string of a record with several ALTs, `*` and `.`
     /// counted (`scalar @$alts > 1`, Parser/VCF.pm:301-322): every allele behind the
     /// chopped anchor, a string `minimise_alleles` leaves as it is; `None` for one ALT.
@@ -970,6 +991,7 @@ fn chop_record(ref_allele: &str, alts: &[(usize, &str)], pos: u64) -> Chopped {
         start,
         end,
         uploaded,
+        anchor_chopped: prefix_trimmed > 0,
         working,
         written_case_reference,
         written_case_alts,
@@ -1000,6 +1022,7 @@ impl Chopped {
             start,
             end,
             uploaded,
+            anchor_chopped: false,
             working,
             written_case_reference: reference,
             written_case_alts: alts,
@@ -1036,10 +1059,16 @@ fn allele_less_record(chr: String, chopped: Chopped) -> InputVariant {
         chopped.reference.as_bytes().to_vec(),
         b"*".to_vec(),
     );
-    variant.allele_string = chopped
-        .working
-        .as_deref()
-        .map_or_else(|| chopped.uploaded.to_ascii_uppercase(), str::to_string);
+    // The feature's string is the chopped one (Parser/VCF.pm:342), which a
+    // bi-allelic record's raw string equals unless the anchor was chopped: the
+    // one ALT `C*` of a `C` record is the feature `-/*`.
+    variant.allele_string = match chopped.working.as_deref() {
+        Some(working) => working.to_string(),
+        None if chopped.anchor_chopped => {
+            allele_string(&chopped.reference, chopped.alts.iter().map(String::as_str)).to_string()
+        }
+        None => chopped.uploaded.to_ascii_uppercase(),
+    };
     variant.no_allele = true;
     variant.written_case_allele_string = chopped.written_case_string();
     variant.uploaded_allele_string = Some(chopped.uploaded);
@@ -1082,8 +1111,10 @@ fn perl_minimises(ref_allele: &str, alt: &str) -> bool {
 /// or when any ALT begins with `D` or `I`, the pileup spelling of a deletion or insertion
 /// (`/^[DI]/`, :297), so `DA DG` is chopped to `A/G` at POS + 1 like `DA DC,DG` to `A/C/G`;
 /// and the first base is chopped when REF and every ALT other than `*` share it (:306-308
-/// with several ALTs, :328 with one), `*` kept as written and an allele the chop emptied
-/// reading `-` (:315-316). An ALT written empty between two others (`G,,T`) stays empty
+/// with several ALTs, :328 with one), an allele the chop emptied reading `-` (:309, :316,
+/// :331-332). With several ALTs one carrying a `*` is kept as written (:315); the one ALT
+/// of a record is chopped whatever it carries (:332), so `C C*` reads `-/*` and writes no
+/// row. An ALT written empty between two others (`G,,T`) stays empty
 /// when nothing is chopped, as :342 joins the parts as they are, so the record's working
 /// string reads `C/G//T`; an empty REF reads `-` either way. The comparison is Perl's
 /// `eq` on the first characters, case-sensitive (the upper-casing comes later,
@@ -1122,10 +1153,13 @@ pub(crate) fn trim_multi_alleles(
             String::from_utf8_lossy(rest).into_owned()
         }
     };
+    // The `*` exemption is the multi-ALT branch's alone (:315); the one ALT of
+    // a record is chopped whatever it carries (:332), so `C C*` reads `-/*`.
+    let keep_stars = alt_alleles.len() > 1;
     let trimmed_alts = alt_alleles
         .iter()
         .map(|alt| {
-            if alt.contains('*') {
+            if keep_stars && alt.contains('*') {
                 alt.to_string()
             } else {
                 chop(alt, anchored)
@@ -5358,6 +5392,75 @@ mod tests {
                 assert!(!v.minimised, "{reference} {alts}");
             }
         }
+    }
+
+    /// The `*` exemption from the anchor chop belongs to the multi-ALT branch alone
+    /// (Parser/VCF.pm:315, inside `if(scalar @$alts > 1)` at :301); the one ALT of a
+    /// record is chopped whatever it carries (:332 `substr($alts->[0], 1) || '-'`), so
+    /// Ensembl VEP 116.2 reads `21 30289183 x C C*` as the feature `-/*` at
+    /// 30289184-30289183, whose one allele is a `*` it writes no row for
+    /// (VariationFeatureOverlap.pm:484): no default or tab row, the VCF line carried
+    /// without consequences, the JSON object with `allele_string` `-/*` and
+    /// `most_severe_consequence` `?`. Beside another ALT the same `C*` is kept whole
+    /// (`C CT,C*` reads `-/T/C*`) and annotated, as `C*` is not `*` at :484.
+    #[test]
+    fn the_one_alt_of_a_record_is_chopped_whatever_it_carries() {
+        assert_eq!(
+            trim_multi_alleles("C", &["C*"]),
+            ("-".to_string(), vec!["*".to_string()], 1)
+        );
+        let single = parse_vcf_line("21\t30289183\tx\tC\tC*\t.\t.\t.", false).unwrap();
+        assert_eq!(single.len(), 1, "{single:?}");
+        assert!(single[0].no_allele, "{single:?}");
+        assert_eq!(single[0].allele_string, "-/*");
+        assert_eq!((single[0].start, single[0].end), (30289184, 30289183));
+        assert_eq!(single[0].location(), "21:30289183-30289184");
+
+        assert_eq!(
+            trim_multi_alleles("C", &["CT", "C*"]),
+            ("-".to_string(), vec!["T".to_string(), "C*".to_string()], 1)
+        );
+        let beside = parse_vcf_line("21\t30289183\tx\tC\tCT,C*\t.\t.\t.", false).unwrap();
+        let read: Vec<(String, String, usize)> = beside
+            .iter()
+            .map(|v| (v.location(), v.display_allele(), v.allele_index))
+            .collect();
+        assert_eq!(
+            read,
+            [
+                ("21:30289183-30289184".to_string(), "T".to_string(), 0),
+                ("21:30289183-30289184".to_string(), "C*".to_string(), 1),
+            ]
+        );
+        assert!(beside.iter().all(|v| v.record_allele_string() == "-/T/C*"));
+    }
+
+    /// A `*` the minimisation leaves writes no row either: Ensembl VEP builds the
+    /// overlap alleles from the minimised string (VariationFeatureOverlap.pm:484
+    /// runs after `post_process_vfs`, Parser.pm:881), so `21 30289183 x C *C`,
+    /// whose alleles differ in length and are minimised whatever the flags
+    /// (`:876-881`), is the feature `-/*` at 30289183-30289182, and `CA C*` under
+    /// `--minimal` the feature `A/*` at 30289184, each marked minimised
+    /// (`:1011`), with no row. Without the flag `CA C*` keeps its lengths and
+    /// annotates the allele `C*`, as the unminimised string names no `*`.
+    #[test]
+    fn a_star_left_by_the_minimisation_writes_no_row() {
+        let suffix = parse_vcf_line("21\t30289183\tx\tC\t*C\t.\t.\t.", false).unwrap();
+        assert_eq!(suffix.len(), 1, "{suffix:?}");
+        assert!(suffix[0].no_allele && suffix[0].minimised, "{suffix:?}");
+        assert_eq!(suffix[0].allele_string, "-/*");
+        assert_eq!((suffix[0].start, suffix[0].end), (30289183, 30289182));
+
+        let minimal = parse_minimal("21\t30289183\tx\tCA\tC*\t.\t.\t.");
+        assert_eq!(minimal.len(), 1, "{minimal:?}");
+        assert!(minimal[0].no_allele && minimal[0].minimised, "{minimal:?}");
+        assert_eq!(minimal[0].allele_string, "A/*");
+        assert_eq!((minimal[0].start, minimal[0].end), (30289184, 30289184));
+
+        let plain = parse_vcf_line("21\t30289183\tx\tCA\tC*\t.\t.\t.", false).unwrap();
+        assert_eq!(plain.len(), 1, "{plain:?}");
+        assert!(!plain[0].no_allele && !plain[0].minimised, "{plain:?}");
+        assert_eq!(plain[0].allele_string, "CA/C*");
     }
 
     /// A `*` beside an indel keeps the record multi-allelic: `minimise_alleles`

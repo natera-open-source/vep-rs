@@ -319,6 +319,43 @@ fn span_past_the_sequence_end_is_warned_and_skipped() {
     );
 }
 
+/// A deletion of length `0` is skipped with a warning naming the empty span,
+/// where Ensembl VEP's adaptor reads it as a deletion ending at the position
+/// (VariationFeatureAdaptor.pm:2552, :2563), takes the empty slice's sequence as
+/// its reference allele (:2564) and keeps the feature `/-` (:2566), which
+/// writes no consequence row: Ensembl VEP 116.2 writes no default or tab row
+/// for `21:10538884:0:`, the VCF line `21 10538885 21:10538884:0: <empty> . . .`
+/// without consequences and a JSON object with `allele_string` `/-` and
+/// `most_severe_consequence` `?`. The notation with `0` for both parts is
+/// refused by both engines (:2540-2542); the run goes on after each.
+#[test]
+fn a_zero_length_deletion_is_warned_and_skipped() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write(
+        dir.path(),
+        "zero.spdi.txt",
+        "21:10538884:0:\nNC_000021.9:46709983::A\n21:10538884:00:\n21:10538884:0:0\n",
+    );
+    let out = output_path(dir.path());
+    let output = vep(dir.path(), &input, &out, &["--format", "spdi"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let rows = rows(&out);
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert!(
+        rows[0].starts_with("NC_000021.9:46709983::A\t21:46709983-46709984\tA\t"),
+        "{}",
+        rows[0]
+    );
+    assert_eq!(
+        warnings(&out).lines().collect::<Vec<_>>(),
+        [
+            "WARNING: line 1 skipped (21:10538884:0:): Unable to parse SPDI notation '21:10538884:0:': Deleted sequence length (0) leaves nothing to delete: span 10538885-10538884 is empty",
+            "WARNING: line 3 skipped (21:10538884:00:): Unable to parse SPDI notation '21:10538884:00:': Deleted sequence length (00) leaves nothing to delete: span 10538885-10538884 is empty",
+            "WARNING: line 4 skipped (21:10538884:0:0): Unable to parse SPDI notation '21:10538884:0:0': Could not parse the SPDI notation 21:10538884:0:0. SPDI notation not supported.",
+        ]
+    );
+}
+
 /// A record whose span exceeds `--max_sv_size` is skipped with the text
 /// Ensembl VEP's `validate_vf` skips it with (Parser.pm:491-499), the span being
 /// end minus start: under a limit of 1000 a deletion of 1002 bases (span 1001)

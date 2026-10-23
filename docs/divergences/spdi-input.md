@@ -4,7 +4,7 @@ A difference in which inputs resolve, on an input format no measured dataset use
 
 Ensembl VEP reads SPDI notation (`--format spdi`) only with a database connection (`Parser/SPDI.pm` line 96, `Cannot use SPDI format in offline mode`). Each line goes to its variation database adaptor (`VariationFeatureAdaptor.pm` lines 2477-2611). The adaptor resolves the sequence name through the core database's slice adaptor (line 2533) and places the variant at the 0-based position plus one (line 2524). It then checks the deleted bases against the genome or reads them from it (lines 2545-2596).
 
-vep-rs resolves the same notations from the cache and the reference FASTA: the sequence name through the cache's chromosomes and their synonyms, the reference bases from `--fasta`, which the format therefore needs. The shapes, positions, refusals and warning texts are the adaptor's, and the `tests/golden/116/GRCh38-input-spdi` corpus compares its rows with Ensembl VEP 116.2's database-mode output. Two readings differ.
+vep-rs resolves the same notations from the cache and the reference FASTA: the sequence name through the cache's chromosomes and their synonyms, the reference bases from `--fasta`, which the format therefore needs. The shapes, positions, refusals and warning texts are the adaptor's, and the `tests/golden/116/GRCh38-input-spdi` corpus compares its rows with Ensembl VEP 116.2's database-mode output. Three readings differ.
 
 ## A version-less accession
 
@@ -44,5 +44,23 @@ vep-rs reads the sequence's length before it reads the shape and refuses a span 
 An HGVS genomic notation (`g.`, `m.`) whose span runs past the last base is read the same way by Ensembl VEP. `fetch_by_hgvs_notation` takes the span's bases from the slice (`VariationFeatureAdaptor.pm` lines 2060-2062), which the core sequence adaptor extends past the end with no bounds test and pads with `N` (`SequenceAdaptor.pm` lines 148-152 and 222-233). So `21:g.46709984del` is the deletion `N/-` at 46709984 and `21:g.46709983_46709984insA` the insertion `-/A` after the last base, and each is annotated as an intergenic row.
 
 vep-rs reads the genome before it reads the shape and skips each with `Unable to parse HGVS notation '<notation>': The reference FASTA has no bases at 21:46709984-46709984` (for the insertion, `at 21:46709983-46709984`). The last base itself is inside the sequence: `21:g.46709983del` and `21:g.46709982_46709983insA` annotate as intergenic rows on both engines.
+
+## A deletion of length 0
+
+The adaptor reads `<sequence>:<position>:0:` as a deletion (line 2552) and ends the span at the position (line 2563). The reference allele is the empty slice's sequence (line 2564): the core API's `Slice.pm` line 693 returns an empty string for a slice whose start is its end plus one. The adaptor keeps the feature `/-` from the position plus one to the position (line 2566), a feature with no allele to annotate. So Ensembl VEP 116.2 writes no row for it in the default and tab formats, carries its VCF line with an empty REF column and no consequences, and writes a JSON object with `allele_string` `/-` and `most_severe_consequence` `?`.
+
+vep-rs refuses the notation and skips the record, naming the empty span:
+
+```
+21:10538884:0:
+```
+
+```
+WARNING: line 1 skipped (21:10538884:0:): Unable to parse SPDI notation
+'21:10538884:0:': Deleted sequence length (0) leaves nothing to delete: span
+10538885-10538884 is empty
+```
+
+A length written `00` is read the same way by both engines. The notation with `0` for both parts, `21:10538884:0:0`, is refused by both with `SPDI notation not supported.` (lines 2540-2542).
 
 To reproduce: vep-rs with `--format spdi --fasta` over the GRCh38 cache and the records above, and with `--format hgvs --fasta` for the notations. Ensembl VEP 116.2 reads both formats with a database connection alone; it reads the two VCF records with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--fasta`.

@@ -433,16 +433,20 @@ impl<R: BufRead> BufRead for LineCapture<R> {
         let read = read_until_bounded(&mut self.inner, byte, buf, self.lines + 1)?;
         if read > 0 {
             self.lines += 1;
-            let mut end = buf.len();
-            while end > start && matches!(buf[end - 1], b'\n' | b'\r') {
-                end -= 1;
-            }
+            // The newline and one `\r` before it go, as ensembl-io removes them
+            // (TextParser.pm:138 replaces one `\r\n`, ColumnBasedParser.pm:249
+            // chomps the `\n`): a second `\r` stays in the line, as the VCF
+            // reader keeps it, and the warning quotes it as a space.
+            let line = match buf[start..].strip_suffix(b"\n") {
+                Some(line) => strip_cr(line),
+                None => &buf[start..],
+            };
             let mut last = self
                 .last
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             last.clear();
-            last.extend_from_slice(&buf[start..end]);
+            last.extend_from_slice(line);
         }
         Ok(read)
     }
@@ -1488,20 +1492,21 @@ fn without_perl_blanks(line: &str) -> String {
 
 /// The chromosome of a line a parser refused, as `validate_vf`'s `--chr` test
 /// reads it (Parser.pm:470-472): an Ensembl-format line's first column, split
-/// on the run's delimiter; the text before the first `:` of a region or SPDI
-/// line, an SPDI accession resolved to the cache's name as the SPDI parser
-/// resolves it before `validate_vf` runs (Parser/SPDI.pm:196), the line's blanks
-/// removed first as the parser removes them. No HGVS line reaches here
-/// ([`refused_by_validate_vf`]).
+/// on the run's delimiter, its trailing white space removed as the parser
+/// removes every column's (Parser/VEP_input.pm:121), so a one-column line
+/// ending in a kept `\r` names its chromosome; the text before the first `:` of
+/// a region or SPDI line, an SPDI accession resolved to the cache's name as the
+/// SPDI parser resolves it before `validate_vf` runs (Parser/SPDI.pm:196), the
+/// line's blanks removed first as the parser removes them. No HGVS line reaches
+/// here ([`refused_by_validate_vf`]).
 fn refused_line_chromosome(line: &str, format: InputFormat, cfg: &ReaderConfig<'_>) -> String {
     match format {
-        InputFormat::Ensembl => cfg
-            .delimiter
-            .split(line)
-            .first()
-            .copied()
-            .unwrap_or("")
-            .to_string(),
+        InputFormat::Ensembl => {
+            let first_column = cfg.delimiter.split(line).first().copied().unwrap_or("");
+            first_column
+                .trim_end_matches(|c: char| c.is_ascii_whitespace() || c == '\u{0B}')
+                .to_string()
+        }
         InputFormat::Spdi => {
             let notation = without_perl_blanks(line);
             let accession = notation.split(':').next().unwrap_or("");
@@ -3244,6 +3249,42 @@ mod tests {
         assert!(!refused_by_validate_vf(InputFormat::Hgvs, &parse_error));
     }
 
+    /// The chromosome the `--chr` test reads from a refused Ensembl-format line
+    /// is its first column without trailing white space, as Parser/VEP_input.pm:121
+    /// strips every column (`s/\s+$//`): a one-column line that kept its `\r`,
+    /// or one whose column ends in a blank, still names `Z`, so `--chr Z` admits
+    /// its refusal and the warning is written.
+    #[test]
+    fn a_refused_ensembl_lines_chromosome_loses_its_trailing_blanks() {
+        let transcripts = LazyTranscriptIndexes::empty();
+        let cfg = ReaderConfig {
+            batch_size: 8,
+            capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
+            allow_non_variant: false,
+            individuals: None,
+            process_ref_homs: false,
+            dont_skip: false,
+            max_sv_size: Some(10_000_000),
+            minimal: false,
+            output_format: "vep",
+            no_headers: false,
+            vcf_formatter: None,
+            transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
+            prewarm_order: &[],
+            checks: &crate::validate::NO_CHECKS,
+        };
+        for line in ["Z\r", "Z \u{0B}", "Z\t1000\t1000", "Z \t1000\t1000", "Z"] {
+            assert_eq!(
+                refused_line_chromosome(line, InputFormat::Ensembl, &cfg),
+                "Z",
+                "{line:?}"
+            );
+        }
+        assert_eq!(refused_line_chromosome("", InputFormat::Ensembl, &cfg), "");
+    }
+
     fn scan_all(input: &[u8], fill: usize) -> Vec<Vec<u8>> {
         let mut scanner = LineScanner::new(BufReader::with_capacity(fill, Cursor::new(input)));
         let mut lines = Vec::new();
@@ -4618,7 +4659,7 @@ mod tests {
     /// their place.
     #[test]
     fn line_capture_keeps_the_last_line_read() {
-        let input: &[u8] = b"a b\r\nc d\n\ne f\n\xffg h\ni j";
+        let input: &[u8] = b"a b\r\nc d\n\ne f\n\xffg h\nk l\r\r\ni j";
         let (mut reader, last) = LineCapture::new(Cursor::new(input));
         let mut buf = String::new();
         let mut lines = Vec::new();
@@ -4637,10 +4678,71 @@ mod tests {
                 ("\n".to_string(), b"".to_vec()),
                 ("e f\n".to_string(), b"e f".to_vec()),
                 ("\u{FFFD}g h\n".to_string(), b"\xffg h".to_vec()),
+                ("k l\r\r\n".to_string(), b"k l\r".to_vec()),
                 ("i j".to_string(), b"i j".to_vec()),
             ]
         );
         assert_eq!(last_line_read(&last), b"i j".to_vec());
+    }
+
+    /// An Ensembl-format line ending `\r\r\n` is quoted with one trailing space
+    /// before the closing parenthesis: ensembl-io's `TextParser.pm:138`
+    /// replaces one `\r\n` with `\n` and `ColumnBasedParser.pm:249` chomps that
+    /// `\n`, so one `\r` stays in the line, and `BaseVEP.pm:849` collapses it to
+    /// a space, so Ensembl VEP writes `(Z 1000 1000 A/G + unknown_chr ): ...`.
+    #[test]
+    fn a_second_cr_before_the_newline_is_quoted_as_a_trailing_space() {
+        let input: &[u8] = b"Z\t1000\t1000\tA/G\t+\tunknown_chr\r\r\n";
+        let transcripts = LazyTranscriptIndexes::from_loaded(
+            std::collections::HashMap::from([("21".to_string(), Vec::new())]),
+            0,
+            0,
+        );
+        let cfg = ReaderConfig {
+            batch_size: 8,
+            capture_raw_input: false,
+            delimiter: &Delimiter::Tab,
+            allow_non_variant: false,
+            individuals: None,
+            process_ref_homs: false,
+            dont_skip: false,
+            max_sv_size: Some(10_000_000),
+            minimal: false,
+            output_format: "vep",
+            no_headers: false,
+            vcf_formatter: None,
+            transcripts: &transcripts,
+            synonyms: &ChromosomeSynonyms::new(),
+            prewarm_order: &[],
+            checks: &crate::validate::NO_CHECKS,
+        };
+        let _in_turn = crate::warnings::sink_test_guard();
+        let dir = tempfile::tempdir().unwrap();
+        let warnings = dir.path().join("warnings.txt");
+        let sink = crate::warnings::global();
+        sink.configure(crate::warnings::Target::File(warnings.clone()), true, false);
+        let (reader, last_line) = LineCapture::new(Cursor::new(input));
+        let parser: Box<dyn vep_io::InputParser> =
+            Box::new(vep_io::input::ensembl::EnsemblParser::new(
+                reader,
+                &vep_io::input::ParserContext::default(),
+            ));
+        let (tx, _rx) = mpsc::sync_channel(8);
+        read_parsed(parser, &last_line, InputFormat::Ensembl, &cfg, tx).unwrap();
+        sink.configure(crate::warnings::Target::Stderr, false, false);
+        let skips: Vec<String> = std::fs::read_to_string(&warnings)
+            .unwrap()
+            .lines()
+            .filter(|line| line.contains(" skipped ("))
+            .map(str::to_string)
+            .collect();
+        assert_eq!(
+            skips,
+            [
+                "WARNING: line 1 skipped (Z 1000 1000 A/G + unknown_chr ): Chromosome Z not found \
+              in annotation sources or synonyms; chromosome Z does not overlap any features"
+            ]
+        );
     }
 
     /// With raw input captured (VCF output), the whole trimmed line is kept and

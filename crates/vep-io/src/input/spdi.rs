@@ -37,7 +37,9 @@
 //! bases come from the run's FASTA, so the format needs one; a span past the
 //! end of its sequence is refused with a warning naming the span and the
 //! sequence's length, where Ensembl VEP's slice reads `N` for every base past
-//! the end (Utils/FastaSequence.pm:619-629) and the record is annotated.
+//! the end (Utils/FastaSequence.pm:619-629) and the record is annotated; and a
+//! deletion of length 0 is refused with a warning naming the empty span, where
+//! Ensembl VEP keeps the feature `/-` (`:2563-2566`) and writes no row for it.
 
 use std::collections::HashSet;
 use std::io::BufRead;
@@ -181,6 +183,17 @@ impl<R: BufRead> SpdiParser<R> {
                         "Could not parse the SPDI notation {spdi}. Deleted sequence length \
                          ({deleted}) does not match inserted sequence length ({}).",
                         inserted.len()
+                    ));
+                }
+                // Ensembl VEP keeps a deletion of length 0 as the feature `/-` over
+                // the empty span (`:2563-2566`; the slice's sequence is empty when
+                // its start is its end plus one), a feature that writes no
+                // consequence row. The span is refused by name here, before
+                // `reference` reads it as a sequence the FASTA lacks.
+                if length == 0 {
+                    return Err(format!(
+                        "Deleted sequence length ({deleted}) leaves nothing to delete: span \
+                         {start}-{position} is empty"
                     ));
                 }
                 let end = position + length;
@@ -775,6 +788,40 @@ mod tests {
         assert_eq!(
             refused("NC_000021:40:1:"),
             "Unable to parse SPDI notation 'NC_000021:40:1:': Sequence name NC_000021 not valid"
+        );
+    }
+
+    /// A deletion of length `0` (or `00`) with nothing inserted is refused
+    /// naming the empty span, start to the position, never the sequence: Ensembl
+    /// VEP reads it as a deletion (`:2552`), ends it at the position
+    /// (`:2563`), takes the empty slice's sequence as its reference allele
+    /// (`:2564`) and keeps the feature `/-` (`:2566`), which writes no
+    /// consequence row. `0` for both parts stays `SPDI notation not supported.`
+    /// (`:2540-2542`), and a length that matches no inserted bases keeps the
+    /// mismatch text (`:2586`).
+    #[test]
+    fn a_zero_length_deletion_is_refused_naming_the_empty_span() {
+        let empty_span = |spdi: &str, length: &str, span: &str| {
+            format!(
+                "Unable to parse SPDI notation '{spdi}': Deleted sequence length ({length}) \
+                 leaves nothing to delete: span {span} is empty"
+            )
+        };
+        assert_eq!(
+            refused("21:10538884:0:"),
+            empty_span("21:10538884:0:", "0", "10538885-10538884")
+        );
+        assert_eq!(refused("21:3:00:"), empty_span("21:3:00:", "00", "4-3"));
+        assert_eq!(refused("21:3:00:0"), empty_span("21:3:00:0", "00", "4-3"));
+        assert_eq!(
+            refused("21:3:0:0"),
+            "Unable to parse SPDI notation '21:3:0:0': Could not parse the SPDI notation \
+             21:3:0:0. SPDI notation not supported."
+        );
+        assert_eq!(
+            refused("21:3:00:G"),
+            "Unable to parse SPDI notation '21:3:00:G': Could not parse the SPDI notation \
+             21:3:00:G. Deleted sequence length (00) does not match inserted sequence length (1)."
         );
     }
 

@@ -766,9 +766,10 @@ fn option_prefix_abbreviation_exclusion_is_documented() {
 /// `spdi-input-format`: SPDI notation is resolved offline from the cache and
 /// the FASTA, where Ensembl VEP reads the format with a database alone
 /// (Parser/SPDI.pm:96). A version-less accession, which the core slice adaptor
-/// resolves as a synonym prefix (SliceAdaptor.pm:2871-2884), and a span past
-/// the chromosome end, which it pads with `N` (FastaSequence.pm:619-639), are
-/// skipped.
+/// resolves as a synonym prefix (SliceAdaptor.pm:2871-2884), a span past the
+/// chromosome end, which it pads with `N` (FastaSequence.pm:619-639), and a
+/// deletion of length 0, which the variation adaptor keeps as the feature `/-`
+/// (VariationFeatureAdaptor.pm:2563-2566), are skipped.
 #[test]
 fn spdi_input_format_exclusion_is_documented() {
     assert_page_states(
@@ -777,12 +778,17 @@ fn spdi_input_format_exclusion_is_documented() {
             "Ensembl VEP reads SPDI notation (`--format spdi`) only with a database \
              connection",
             "vep-rs resolves the same notations from the cache and the reference FASTA",
+            "Three readings differ.",
             "queries the synonym table again with the name as a prefix",
             "vep-rs matches a name against the cache's chromosomes and their synonyms \
              exactly, regardless of ASCII case, never as a prefix",
             "tests no coordinate against the sequence's length",
             "so the record is annotated at a coordinate the chromosome lacks",
             "refuses a span the FASTA does not hold",
+            "The adaptor keeps the feature `/-` from the position plus one to the position \
+             (line 2566), a feature with no allele to annotate.",
+            "vep-rs refuses the notation and skips the record, naming the empty span",
+            "Deleted sequence length (0) leaves nothing to delete",
         ],
     );
 }
