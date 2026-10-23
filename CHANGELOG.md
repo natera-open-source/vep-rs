@@ -139,6 +139,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The `GRCh38-individual` corpus runs eight sample columns of the 1000 Genomes high-coverage chromosome 21 panel plain and under five per-sample flag sets, and `GRCh38-vcf-minimal` gains a reference-row flag set. (#N)
   - The `GRCh38-individual-zyg` golden corpus runs eight sample columns of the 1000 Genomes high-coverage chromosome 21 panel under four `--individual_zyg` flag sets, the `ZYG` list compared as a set. (#N)
   - The `GRCh38-vcf-check-ref` corpus gains two `--use_transcript_ref` flag sets, plain and with `--process_ref_homs`, compared with Ensembl VEP 116.2 in tab, VCF and JSON. (#N)
+  - The `GRCh38-minor-allele-columns` golden corpus: a fabricated variation slice declaring `minor_allele` and `minor_allele_freq`, compared with Ensembl VEP 116.2 under `--check_existing --af_1kg` in every format. (#N)
 - Dependencies and tooling
   - Container image for linux/arm64 and linux/amd64 from generic-CPU archives; the measured binaries ship as the `X.Y.Z-neoverse-v1` and `X.Y.Z-x86-64-v3` tags. (#N)
   - Container image carries `bgzip` and `tabix` from Debian's `tabix` package, so `--compress_output bgzip` VCF output can be indexed in the container. (#N)

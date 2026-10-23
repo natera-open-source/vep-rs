@@ -1,0 +1,65 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --check_existing --af_1kg [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "variants.vcf: 43 chromosome 21 records, one exemplar per consequence combination that Ensembl VEP 116.2 wrote for a pool of candidate records over the CHODL, TMPRSS15 and JAM2 transcripts and their flanks, three non-coding genes and eight intergenic positions, plus two multi-allelic records; each record's position and alleles are a release-116 cache variant's, its identifier is . and no identifier of that cache is carried",
+ "sha256": {
+  "default.txt": "b2536887861168c93c556098b801a34fe6679443216ee6d9f4a1cd9ab6eeed0b",
+  "tab.txt": "85c027aa069b0c31cf8ede3eb9076550e5d8613d76f7cce0b45da802497738b4",
+  "vcf.vcf": "5ddc229c4392c33a44112748711d5f15da9fb38a78992460c7b0026dcf2078ee",
+  "json.jsonl": "b9ea1826e72d7e96fead054cb5f8138dcae82e404820881bdd5b408774dd62d8"
+ },
+ "variants_vcf_sha256": "5a55b9fdf4d253a1e8eece837587e183c34c77815f431783d720740adaccf71c",
+ "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite ma=<reference>=<candidates> --k 1 --seed 1 --multi-allelic-per-suite 2 --cache tests/golden/116/GRCh38-release116/json_cache --covers minor-allele-columns --matrix tests/parity/matrix.tsv --flag=--check_existing --flag=--af_1kg; scripts/golden/prune_json_cache.py --cache tests/golden/116/GRCh38-release116/json_cache --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <the release-116 GRCh38 cache's info.txt with variation_cols extended by the two columns> --cache-version 116 --variations <a directory holding the slice committed as json_cache/variations/21/all_vars.gz>; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",
+ "pruned_cache": {
+  "source": "tests/golden/116/GRCh38-release116/json_cache, cut to the transcripts within 5,000 bases of a record",
+  "transcripts_per_chromosome": {
+   "21": 55
+  },
+  "shards": 7,
+  "spans_by_chromosome": {
+   "21": 43
+  }
+ },
+ "variation_slice": {
+  "source": "fabricated: no record of any Ensembl VEP cache is copied. One known variant per input record, its start, end and allele string the ones Ensembl VEP's VCF parser derives for the record, and a second known variant carrying one more alternate allele at three loci (rs9900000005, rs9900000012, rs9900000023); identifiers rs9900000001 to rs9900000046, above the range of dbSNP build 156; every frequency invented; composed for this corpus; no script in the repository regenerates it",
+  "columns": "the 42 variation_cols of the release-116 GRCh38 cache followed by minor_allele and minor_allele_freq, the two columns Ensembl VEP's dumper wrote until release 107 (Dumper/Variation.pm, dump_obj, where they followed strand and the frequency was printed with four decimals) and no release-116 cache declares; both engines read a column by its name, so the position is immaterial; info.txt on the Ensembl VEP side and info.json here declare all 44, and both engines read the same all_vars.gz and .csi",
+  "minor_allele_shapes": {
+   "alternate allele, four-decimal frequency": 27,
+   "reference allele, four-decimal frequency": 8,
+   "no minor allele (both columns .)": 7,
+   "frequency 0, a spelling the dumper's four-decimal format never wrote, kept in the slice because Ensembl VEP's JSON factory prunes exactly the string 0 (OutputFactory/JSON.pm:433-435)": [
+    "rs9900000006"
+   ],
+   "frequency 0.0000, kept and written as 0": [
+    "rs9900000013"
+   ],
+   "minor allele without a frequency": [
+    "rs9900000019"
+   ],
+   "minor allele - on an insertion record": [
+    "rs9900000002"
+   ]
+  },
+  "frequencies": "AF, AFR, AMR, EAS, EUR and SAS filled with invented per-allele values on two records of three (the --af_1kg columns); the gnomAD, clinical, pubmed and synonym columns, failed, somatic and strand are . on every record",
+  "records_kept": 46,
+  "windows": 40,
+  "sha256": {
+   "all_vars.gz": "1dbc908ecec8f93e7a0371c2d355a6f083d488002f911a680aa9a338921d9284",
+   "all_vars.gz.csi": "e7801038694dfc0f529b6467c0763b1396bfa9a2be0e0c02289f7c86a442d05c"
+  },
+  "perl_cache": "the release-116 GRCh38 cache's chromosome 21 transcript and regulatory files and chr_synonyms.txt, its info.txt with variation_cols extended by the two columns, and this slice as 21/all_vars.gz with its .csi"
+ },
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "flags_passed": [
+   "--check_existing",
+   "--af_1kg"
+  ]
+ }
+}
