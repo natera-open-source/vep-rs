@@ -16,8 +16,14 @@
 //! first, `AnnotationType/Variation.pm:96` filters after matching). A record
 //! whose every alternate allele is dropped leaves the batch; a record that
 //! loses some of them keeps the others, with its allele string, `ALLELE_NUM`
-//! and `FREQS` as Ensembl VEP writes them. The library [`crate::Annotator`]
-//! annotates a batch in place with every allele kept and never filters.
+//! and `FREQS` as Ensembl VEP writes them. The alleles of a `--minimal` split
+//! record are the features Ensembl VEP's buffer made of them before the source
+//! ran (InputBuffer.pm:265), each judged alone ([`FrequencyFilter::filter_record`]),
+//! and a drop among the records of one chromosome writes every split feature of
+//! that chromosome's run as a record of its own, as the drop cancels Ensembl VEP's
+//! rejoin and its buffer ends where the chromosome changes. The library
+//! [`crate::Annotator`] annotates a batch in place with every allele kept and
+//! never filters.
 //!
 //! `--freq_pop 1KG_ALL`, the default and what `--filter_common` reads, is
 //! resolved to the cache's `AF` column: Ensembl VEP 116.2 reads the
@@ -27,9 +33,11 @@
 //! states the difference.
 
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Arc;
 
 use vep_core::cache_info::CacheInfo;
+use vep_core::minimal::{rowless_alternate_allele, rowless_first_feature};
 use vep_core::sv_routing::{perl_split, perl_true};
 use vep_core::variant::{ColocatedVariant, InputVariant};
 use vep_core::variation::{perl_number_string, perl_numeric, reverse_comp};
@@ -312,6 +320,9 @@ impl FrequencyFilter {
         if record.is_empty() {
             return Vec::new();
         }
+        if is_split_record(record) {
+            return self.filter_split_record(record);
+        }
         let (frequencies, matched) = self.frequency_data(record);
         if frequencies.is_empty() {
             return vec![!self.include; record.len()];
@@ -320,23 +331,12 @@ impl FrequencyFilter {
         let mut passes = Vec::with_capacity(alleles.len());
         let mut freqs = Vec::with_capacity(alleles.len());
         for (allele, _) in &alleles {
-            // `$freq_data->{$alt} || 'NA'`, then the matched record allele's
-            // value when the allele's own is not Perl-true (:419-429).
-            let mut frequency = frequencies.get(allele).filter(|f| f.is_true());
-            if frequency.is_none() {
-                frequency = matched
-                    .get(allele)
-                    .filter(|record_allele| perl_true(record_allele))
-                    .and_then(|record_allele| frequencies.get(record_allele))
-                    .filter(|f| f.is_true());
-            }
-            let text = frequency.map_or_else(|| "NA".to_string(), Frequency::text);
+            let (passed, entry) = self.judge_allele(allele, &frequencies, &matched);
             // `%used_freqs` is keyed by allele (:433), so a repeated ALT lists once.
-            let entry = format!("{}:{allele}:{text}", self.freqs_key);
             if !freqs.contains(&entry) {
                 freqs.push(entry);
             }
-            passes.push(frequency.is_some_and(|f| self.passes(f)));
+            passes.push(passed);
         }
         let passed = passes.iter().filter(|&&p| p).count();
         let all_passed = passed == alleles.len();
@@ -357,11 +357,169 @@ impl FrequencyFilter {
                 keep[*index] = stay;
             }
         }
-        if stays.iter().any(|&s| s) && !stays.iter().all(|&s| s) {
+        let feature_stays = stays.iter().any(|&s| s);
+        if feature_stays && !stays.iter().all(|&s| s) {
             rewrite_allele_string(record, &alleles, &stays, &mut keep);
+        }
+        // The reference allele's row (`--process_ref_homs`) is a row of the
+        // feature, not an allele it judges, so it stays with the feature.
+        for (variant, kept) in record.iter().zip(&mut keep) {
+            if variant.reference_allele_row {
+                *kept = feature_stays;
+            }
         }
         keep
     }
+
+    /// One alternate allele's verdict and `FREQS` entry
+    /// (`_add_check_freq_data_to_vf`, :419-440). The frequency judged is the
+    /// allele's own when Perl reads it as true, else the one of the record allele
+    /// it was matched to (`$freq_data->{$alt} || 'NA'`, then the matched allele's
+    /// value, :419-429); an allele with neither lists `NA` and passes nothing.
+    fn judge_allele(
+        &self,
+        allele: &str,
+        frequencies: &HashMap<String, Frequency>,
+        matched: &HashMap<String, String>,
+    ) -> (bool, String) {
+        let frequency = frequencies.get(allele).filter(|f| f.is_true()).or_else(|| {
+            matched
+                .get(allele)
+                .filter(|record_allele| perl_true(record_allele))
+                .and_then(|record_allele| frequencies.get(record_allele))
+                .filter(|f| f.is_true())
+        });
+        let text = frequency.map_or_else(|| "NA".to_string(), Frequency::text);
+        let passed = frequency.is_some_and(|f| self.passes(f));
+        (passed, format!("{}:{allele}:{text}", self.freqs_key))
+    }
+
+    /// `frequency_check_buffer` over a `--minimal` split record, whose alleles
+    /// Ensembl VEP's input buffer made features of their own before the
+    /// variation source ran (InputBuffer.pm:265, :638-718), so :315 judges each
+    /// on its own co-located variants, the ones each allele carries here, and its
+    /// one alternate allele (:404). Each feature, with the reference row leading
+    /// it (`--process_ref_homs`), stays or goes whole and carries its own `FREQS`.
+    /// A reference row leading no allele is the row of a feature that writes none
+    /// ([`vep_core::minimal::rowless_alternate_allele`]): the first feature's is
+    /// judged on the matches it carries ([`Self::judge_rowless_first_feature`]),
+    /// and a later one's feature matches no known allele, so it has no frequency
+    /// data, goes under `include` (:322) and stays under `exclude` (:341). Whether
+    /// the features that stay are written as one record or each as its own is the
+    /// batch's to decide once every record is judged, by the drops of the batch.
+    fn filter_split_record(&self, record: &mut [InputVariant]) -> Vec<bool> {
+        let mut keep = vec![true; record.len()];
+        for feature in split_features(record) {
+            let allele = feature.clone().find(|&i| !record[i].reference_allele_row);
+            let (stays, freqs) = match allele {
+                Some(allele) => self.judge_feature(&record[allele]),
+                None => (feature.start == 0)
+                    .then(|| self.judge_rowless_first_feature(&record[0]))
+                    .flatten()
+                    .unwrap_or_else(|| (!self.include, Vec::new())),
+            };
+            for i in feature {
+                keep[i] = stays;
+                record[i].freqs.clone_from(&freqs);
+            }
+        }
+        keep
+    }
+
+    /// The verdict and `FREQS` of the first feature of a split record whose first
+    /// alternate allele writes no row (`*`, `<DEL:*>`, or the reference once
+    /// trimmed), which no allele of the batch stands for: :315 judges it like any
+    /// other feature, on its own matches, which are the ones `allele`, any allele
+    /// or reference row of the record, carries as `annotate_colocated` left them.
+    /// Under `include` a feature matching no known allele goes (:322). `None` for
+    /// an allele of any other record.
+    pub fn judge_rowless_first_feature(
+        &self,
+        allele: &InputVariant,
+    ) -> Option<(bool, Vec<String>)> {
+        let mut first = rowless_first_feature(allele)?;
+        first
+            .colocated_variants
+            .clone_from(&allele.colocated_variants);
+        Some(self.judge_feature(&first))
+    }
+
+    /// Whether the filter drops a feature of `record`, a split record, that no
+    /// allele of the batch stands for and whose verdict no reference row carries:
+    /// an alternate allele after the first that writes no row
+    /// ([`vep_core::minimal::rowless_alternate_allele`]) matches no known allele
+    /// (`get_matched_variant_alleles` keys on the trimmed pair), so its feature has
+    /// no frequency data and `include` leaves it out of the buffer (:322), which
+    /// resets the buffer (:365-369) like any other drop. Under `exclude` it stays
+    /// (:341). The first feature is [`Self::judge_rowless_first_feature`]'s.
+    pub fn drops_later_rowless_feature(&self, record: &[InputVariant]) -> bool {
+        if !self.include {
+            return false;
+        }
+        let working = record[0].record_allele_string();
+        let mut parts = working.split('/');
+        let reference = parts.next().unwrap_or("");
+        parts
+            .skip(1)
+            .any(|alt| rowless_alternate_allele(reference, alt))
+    }
+
+    /// Gives every allele of a rejoined `--minimal` split record the `FREQS` of its
+    /// first feature: the rejoin builds every row of the record from the hash of the
+    /// feature the others merge into (OutputFactory.pm:2289, read by :1149), so the
+    /// later features' own values never print. A first feature no allele stands for
+    /// is judged here ([`Self::judge_rowless_first_feature`]). A record the split
+    /// left alone is left as it is.
+    pub fn share_first_feature_freqs(&self, record: &mut [InputVariant]) {
+        if !is_split_record(record) {
+            return;
+        }
+        let freqs = match self.judge_rowless_first_feature(&record[0]) {
+            Some((_, freqs)) => freqs,
+            None => record[0].freqs.clone(),
+        };
+        for variant in record.iter_mut() {
+            variant.freqs.clone_from(&freqs);
+        }
+    }
+
+    /// One split feature's verdict and `FREQS`: `_add_check_freq_data_to_vf` on its
+    /// one alternate allele, then :319-358 with one allele, so under `include` it
+    /// stays when the allele passes and under `exclude` when it does not. A
+    /// feature with no frequency data stays under `exclude` alone (:322, :341) and
+    /// lists no `FREQS` (:255 sets none).
+    fn judge_feature(&self, feature: &InputVariant) -> (bool, Vec<String>) {
+        let (frequencies, matched) = self.frequency_data(std::slice::from_ref(feature));
+        if frequencies.is_empty() {
+            return (!self.include, Vec::new());
+        }
+        let (passed, entry) = self.judge_allele(&feature.display_allele(), &frequencies, &matched);
+        (passed == self.include, vec![entry])
+    }
+}
+
+/// Whether `record` is a `--minimal` split record: its alleles carry the
+/// record's span as `original_start` (`vep_core::minimal::apply_minimal_split`).
+pub fn is_split_record(record: &[InputVariant]) -> bool {
+    record.iter().any(|v| v.original_start.is_some())
+}
+
+/// The features of a split record as ranges over its alleles, in the record's
+/// order: each alternate allele with the reference row leading it
+/// (`--process_ref_homs`), and a reference row leading no allele on its own.
+pub fn split_features(record: &[InputVariant]) -> Vec<Range<usize>> {
+    let mut features = Vec::new();
+    let mut start = 0;
+    while start < record.len() {
+        let leads_an_allele = record[start].reference_allele_row
+            && record
+                .get(start + 1)
+                .is_some_and(|next| !next.reference_allele_row);
+        let end = start + 1 + usize::from(leads_an_allele);
+        features.push(start..end);
+        start = end;
+    }
+    features
 }
 
 /// The alternate alleles of the record's allele string in order, each with the
@@ -369,15 +527,19 @@ impl FrequencyFilter {
 /// carries (`*` and `.`, which the parser keeps in the string and reads as no
 /// allele). A spelling shared by several alleles is carried by its variants in
 /// order, and a variant the string does not spell follows, under its own
-/// allele, so every variant is judged.
+/// allele, so every variant is judged. An ALT written empty is the string's empty
+/// part and the variant's `-` (VariationFeatureOverlap.pm:462). The reference
+/// allele's row (`--process_ref_homs`) carries no alternate allele and is passed
+/// over.
 fn record_alleles(record: &[InputVariant]) -> Vec<(String, Option<usize>)> {
     let displayed: Vec<String> = record.iter().map(InputVariant::display_allele).collect();
-    let mut taken = vec![false; record.len()];
+    let mut taken: Vec<bool> = record.iter().map(|v| v.reference_allele_row).collect();
     let allele_string = record[0].record_allele_string();
     let mut alleles: Vec<(String, Option<usize>)> = perl_split(&allele_string, &['/'])
         .skip(1)
         .map(|allele| {
-            let index = (0..record.len()).find(|&i| !taken[i] && displayed[i] == allele);
+            let spelled = if allele.is_empty() { "-" } else { allele };
+            let index = (0..record.len()).find(|&i| !taken[i] && displayed[i] == spelled);
             if let Some(i) = index {
                 taken[i] = true;
             }
@@ -394,12 +556,13 @@ fn record_alleles(record: &[InputVariant]) -> Vec<(String, Option<usize>)> {
 
 /// The record's allele string after `frequency_check_buffer` dropped alleles
 /// (`BaseCacheVariation.pm:355`, `join('/', ref_allele_string, @alts)`): the
-/// reference and the alleles that stay, set on every kept variant with its new
-/// `ALLELE_NUM`, which Ensembl VEP numbers from the rewritten string
-/// (`VariationFeatureOverlapAllele::allele_number` of ensembl-variation). When
-/// no variant stays, the first variant stays in its place marked as having no
+/// reference and the alleles that stay, set on every kept variant, each allele
+/// with its new `ALLELE_NUM`, which Ensembl VEP numbers from the rewritten string
+/// (`VariationFeatureOverlapAllele::allele_number` of ensembl-variation), and a
+/// reference row (`--process_ref_homs`) keeping its number 0. When no variant
+/// stays, the first allele's variant stays in its place marked as having no
 /// allele, spelled as the first staying allele so that nothing reads it as the
-/// dropped one.
+/// dropped one; the reference row keeps printing as the feature's row beside it.
 fn rewrite_allele_string(
     record: &mut [InputVariant],
     alleles: &[(String, Option<usize>)],
@@ -423,13 +586,22 @@ fn rewrite_allele_string(
         }
     }
     let rewritten: Arc<str> = Arc::from(parts.join("/"));
+    // The reference allele's row (`--process_ref_homs`) prints the feature's
+    // string and class, so it reads the rewritten string as the alleles do.
+    for variant in record.iter_mut().filter(|v| v.reference_allele_row) {
+        variant.filtered_allele_string = Some(Arc::clone(&rewritten));
+    }
     if numbers.is_empty() {
-        let placeholder = &mut record[0];
+        let index = record
+            .iter()
+            .position(|v| !v.reference_allele_row)
+            .unwrap_or(0);
+        let placeholder = &mut record[index];
         placeholder.no_allele = true;
         placeholder.alt_alleles = vec![parts[1].as_bytes().to_vec()];
         placeholder.allele_num = None;
         placeholder.filtered_allele_string = Some(rewritten);
-        keep[0] = true;
+        keep[index] = true;
         return;
     }
     for (index, number) in numbers {
@@ -710,6 +882,16 @@ mod tests {
         assert_eq!(record[0].display_allele(), "*");
         assert_eq!(record[0].filtered_allele_string.as_deref(), Some("T/*"));
         assert_eq!(record[0].allele_num, None);
+
+        // Under `--process_ref_homs` the reference allele's row leads the record
+        // and stays with the feature: the placeholder is the allele's variant.
+        let mut with_row = star_record("T/C/*");
+        with_row.insert(0, with_row[0].reference_allele_row());
+        assert_eq!(exclude.filter_record(&mut with_row), [true, true]);
+        assert!(with_row[0].reference_allele_row && !with_row[0].no_allele);
+        assert!(with_row[1].no_allele);
+        assert_eq!(with_row[0].freqs, ["AF:C:0.1939", "AF:*:NA"]);
+        assert_eq!(with_row[0].filtered_allele_string.as_deref(), Some("T/*"));
 
         let include = filter(&[
             "--check_frequency",
@@ -1127,5 +1309,234 @@ mod tests {
         record[1].colocated_variants = vec![earlier, later];
         f.filter_record(&mut record);
         assert_eq!(record[0].freqs, ["AF:C:0.2", "AF:G:NA"]);
+    }
+
+    /// The alleles `(own, alt)` of a `21 31148973 . GG <alts>` record whose chopped
+    /// string is `working`, split under `--minimal` as `apply_minimal_split` splits
+    /// them, each carrying its own feature's match: `G` is `G/-` at 31148974,
+    /// co-located with rs56835856 (`GG/G`, `AF` `G:0.6705`, the input `-` matched to
+    /// its `G`), and `TG` is `G/T` at 31148973, with rs200166967 (`G/T`, `AF`
+    /// `T:0.1396`).
+    fn split_alleles(working: &str, alleles: &[(usize, &str)]) -> Vec<InputVariant> {
+        let working: Arc<str> = Arc::from(working);
+        alleles
+            .iter()
+            .map(|&(own, alt)| {
+                let mut v = InputVariant::new(
+                    "21".into(),
+                    31_148_973,
+                    31_148_974,
+                    b"GG".to_vec(),
+                    alt.as_bytes().to_vec(),
+                );
+                v.allele_index = own;
+                v.input_record = 1;
+                v.record_allele_string_multi = Some(Arc::clone(&working));
+                v.uploaded_allele_string = Some(Arc::clone(&working));
+                vep_core::minimal::apply_minimal_split(&mut v, own);
+                let (mut matched, end) = if alt == "G" {
+                    (
+                        known("rs56835856", "GG/G", &[("AF", "G:0.6705")], &[("-", "G")]),
+                        31_148_974,
+                    )
+                } else {
+                    (
+                        known("rs200166967", "G/T", &[("AF", "T:0.1396")], &[("T", "T")]),
+                        31_148_973,
+                    )
+                };
+                (matched.start, matched.end) = (31_148_973, end);
+                v.colocated_variants = vec![matched];
+                v
+            })
+            .collect()
+    }
+
+    /// `21 31148973 . GG G,TG` under `--minimal`: `G/-` and `G/T`.
+    fn split_record() -> Vec<InputVariant> {
+        split_alleles("GG/G/TG", &[(0, "G"), (1, "TG")])
+    }
+
+    /// Ensembl VEP 116.2 on the release-116 GRCh38 cache, `21 31148973 . GG G,TG`
+    /// under `--minimal --check_frequency --freq_pop AF --freq_freq 0.0001
+    /// --freq_gt_lt gt --freq_filter include`: the input buffer split the record
+    /// into `G/-` and `G/T` before the variation source ran (InputBuffer.pm:265),
+    /// `frequency_check_buffer` judged each feature alone (BaseCacheVariation.pm:315,
+    /// :404) and both passed, so the rejoined record writes 32 rows, every one
+    /// `FREQS=AF:-:0.6705`, the first feature's (OutputFactory.pm:2289, :1149).
+    /// Under `--freq_freq 0.5 --freq_filter exclude` the deletion passes and goes
+    /// and the substitution stays, written on its own with `FREQS=AF:T:0.1396`.
+    /// Judged as one record over `GG/G/TG`, the `TG` allele would have no frequency
+    /// and `include` would drop the record whole.
+    #[test]
+    fn a_minimal_split_record_is_judged_feature_by_feature() {
+        let include = filter(&[
+            "--minimal",
+            "--check_frequency",
+            "--freq_pop",
+            "AF",
+            "--freq_freq",
+            "0.0001",
+            "--freq_filter",
+            "include",
+        ]);
+        let mut record = split_record();
+        assert_eq!(include.filter_record(&mut record), [true, true]);
+        assert_eq!(record[0].freqs, ["AF:-:0.6705"]);
+        assert_eq!(record[1].freqs, ["AF:T:0.1396"]);
+        include.share_first_feature_freqs(&mut record);
+        assert_eq!(record[1].freqs, ["AF:-:0.6705"]);
+        assert!(record.iter().all(|v| v.filtered_allele_string.is_none()));
+
+        let exclude = filter(&[
+            "--minimal",
+            "--check_frequency",
+            "--freq_pop",
+            "AF",
+            "--freq_freq",
+            "0.5",
+            "--freq_filter",
+            "exclude",
+        ]);
+        let mut record = split_record();
+        assert_eq!(exclude.filter_record(&mut record), [false, true]);
+        assert_eq!(record[1].freqs, ["AF:T:0.1396"]);
+    }
+
+    /// Ensembl VEP 116.2 on the release-116 GRCh38 cache, `21 31148973 . GG *,G,TG`
+    /// under `--minimal --check_frequency --freq_pop AF --freq_gt_lt gt`: the first
+    /// feature, `GG/*`, matches no known allele, so under `--freq_freq 0.0001
+    /// --freq_filter include` it goes (BaseCacheVariation.pm:322) while `G/-` and
+    /// `G/T`, judged on their own matches, stay and are written on their own, 16
+    /// rows each with `FREQS=AF:-:0.6705` and `FREQS=AF:T:0.1396`; under
+    /// `--freq_freq 0.9 --freq_filter exclude` nothing goes and the rejoined
+    /// record's 32 rows print no `FREQS`, the first feature's. `GG G,TG,*` under
+    /// `include` loses its `*` feature the same way, and under `--process_ref_homs`
+    /// the reference row of a feature with no allele takes the feature's verdict.
+    #[test]
+    fn a_split_feature_that_writes_no_row_has_no_frequency_data() {
+        let include = filter(&[
+            "--minimal",
+            "--check_frequency",
+            "--freq_pop",
+            "AF",
+            "--freq_freq",
+            "0.0001",
+            "--freq_filter",
+            "include",
+        ]);
+        let exclude = filter(&[
+            "--minimal",
+            "--check_frequency",
+            "--freq_pop",
+            "AF",
+            "--freq_freq",
+            "0.9",
+            "--freq_filter",
+            "exclude",
+        ]);
+        let record = split_alleles("GG/*/G/TG", &[(1, "G"), (2, "TG")]);
+        // As `annotate_colocated` leaves them, the alleles carry the first
+        // feature's matches: none.
+        let mut as_matched = record[0].clone();
+        as_matched.colocated_variants.clear();
+        assert_eq!(
+            include.judge_rowless_first_feature(&as_matched),
+            Some((false, vec![]))
+        );
+        assert_eq!(
+            exclude.judge_rowless_first_feature(&as_matched),
+            Some((true, vec![]))
+        );
+        assert_eq!(
+            include.judge_rowless_first_feature(&split_record()[0]),
+            None
+        );
+
+        let mut judged = record.clone();
+        assert_eq!(include.filter_record(&mut judged), [true, true]);
+        assert_eq!(judged[0].freqs, ["AF:-:0.6705"]);
+        assert_eq!(judged[1].freqs, ["AF:T:0.1396"]);
+        let mut rejoined = judged.clone();
+        for allele in &mut rejoined {
+            allele.colocated_variants.clear();
+        }
+        exclude.share_first_feature_freqs(&mut rejoined);
+        assert!(rejoined.iter().all(|v| v.freqs.is_empty()));
+
+        let star_last = split_alleles("GG/G/TG/*", &[(0, "G"), (1, "TG")]);
+        assert!(include.drops_later_rowless_feature(&star_last));
+        assert!(!exclude.drops_later_rowless_feature(&star_last));
+        assert!(!include.drops_later_rowless_feature(&record));
+        assert!(!include.drops_later_rowless_feature(&split_record()));
+
+        let with_rows = vec![
+            vep_core::minimal::split_reference_row(&record[0], 0),
+            record[0].reference_allele_row(),
+            record[0].clone(),
+            record[1].reference_allele_row(),
+            record[1].clone(),
+        ];
+        assert_eq!(split_features(&with_rows), [0..1, 1..3, 3..5]);
+        assert_eq!(
+            include.filter_record(&mut with_rows.clone()),
+            [false, true, true, true, true]
+        );
+        assert_eq!(
+            exclude.filter_record(&mut with_rows.clone()),
+            [true, true, true, true, true]
+        );
+    }
+
+    /// `C G,,T`, whose working string keeps the empty ALT (`C/G//T`) while its
+    /// allele reads `-`: Ensembl VEP judges the string's alleles `G`, the empty
+    /// one and `T` (`$vf->alt_alleles`, :404), lists the empty one in `FREQS`
+    /// under its empty name and joins it as the empty part of a rewritten string
+    /// (:355). It reads `NA`: no frequency is keyed by an empty allele, and
+    /// `get_matched_variant_alleles` records no match for an alternate allele Perl
+    /// reads as false. The `-` variant carries that allele, not one of its own.
+    #[test]
+    fn an_empty_alt_is_the_allele_its_dash_variant_carries() {
+        let exclude = filter(&[
+            "--check_frequency",
+            "--freq_pop",
+            "AF",
+            "--freq_freq",
+            "0.4",
+            "--freq_filter",
+            "exclude",
+        ]);
+        let mut record =
+            crate::vcf_parser::parse_vcf_line("21\t100\t.\tC\tG,,T\t.\t.\t.", false).unwrap();
+        let deletion = known("rs1", "C/-", &[("AF", "-:0.3")], &[]);
+        let snv = known("rs2", "C/G", &[("AF", "G:0.5")], &[("G", "G")]);
+        for allele in &mut record {
+            allele.colocated_variants = vec![deletion.clone(), snv.clone()];
+        }
+        assert_eq!(exclude.filter_record(&mut record), [false, true, true]);
+        assert_eq!(record[1].freqs, ["AF:G:0.5", "AF::NA", "AF:T:NA"]);
+        assert_eq!(record[1].filtered_allele_string.as_deref(), Some("C//T"));
+        assert_eq!(
+            (record[1].allele_num, record[2].allele_num),
+            (Some(1), Some(2))
+        );
+    }
+
+    /// The features of a split record (`split_features`): an allele with the
+    /// reference row leading it, a reference row leading no allele on its own.
+    #[test]
+    fn split_features_pair_each_reference_row_with_the_allele_it_leads() {
+        let record = split_record();
+        assert_eq!(split_features(&record), [0..1, 1..2]);
+        let with_rows = vec![
+            record[0].reference_allele_row(),
+            record[0].clone(),
+            record[1].reference_allele_row(),
+            record[1].clone(),
+            record[1].reference_allele_row(),
+        ];
+        assert_eq!(split_features(&with_rows), [0..2, 2..4, 4..5]);
+        assert!(is_split_record(&with_rows));
+        assert!(!is_split_record(&one("A", "G", vec![])));
     }
 }

@@ -945,7 +945,7 @@ fn chop_record(ref_allele: &str, alts: &[(usize, &str)], pos: u64) -> Chopped {
     let (written_case_reference, written_case_alts, prefix_trimmed) =
         trim_multi_alleles(ref_allele, &alt_strings);
     let reference = written_case_reference.to_ascii_uppercase();
-    let chopped_alts: Vec<String> = written_case_alts
+    let working_alts: Vec<String> = written_case_alts
         .iter()
         .map(|alt| alt.to_ascii_uppercase())
         .collect();
@@ -957,7 +957,13 @@ fn chop_record(ref_allele: &str, alts: &[(usize, &str)], pos: u64) -> Chopped {
     let end = (pos + ref_allele.len() as u64).saturating_sub(1);
     let uploaded = allele_string(ref_allele, alt_strings.iter().copied());
     let working = (alts.len() > 1)
-        .then(|| allele_string(&reference, chopped_alts.iter().map(String::as_str)));
+        .then(|| allele_string(&reference, working_alts.iter().map(String::as_str)));
+    // An ALT the working string keeps empty is the allele `-` to every overlap
+    // (VariationFeatureOverlap.pm:462 `$a ||= '-'`).
+    let chopped_alts: Vec<String> = working_alts
+        .into_iter()
+        .map(|alt| if alt.is_empty() { "-".to_string() } else { alt })
+        .collect();
     Chopped {
         reference,
         alts: chopped_alts,
@@ -1076,14 +1082,16 @@ fn perl_minimises(ref_allele: &str, alt: &str) -> bool {
 /// or when any ALT begins with `D` or `I`, the pileup spelling of a deletion or insertion
 /// (`/^[DI]/`, :297), so `DA DG` is chopped to `A/G` at POS + 1 like `DA DC,DG` to `A/C/G`;
 /// and the first base is chopped when REF and every ALT other than `*` share it (:306-308
-/// with several ALTs, :328 with one), `*` kept as written and an emptied allele reading
-/// `-` (:315-316). The comparison is Perl's `eq` on the first characters, case-sensitive
-/// (the upper-casing comes later, Parser.pm:554), so `C c,<DEL:*>` is not chopped, and an
-/// empty REF is chopped when every ALT carries a `*`, its first character the empty
-/// string alone in the vote. Same-length alleles are never trimmed; the secondary
-/// minimisation of a bi-allelic indel is `parse_vcf_line`'s (Parser.pm:860-881). Returns
-/// the trimmed REF, the trimmed ALTs in their written order and the number of bases
-/// chopped.
+/// with several ALTs, :328 with one), `*` kept as written and an allele the chop emptied
+/// reading `-` (:315-316). An ALT written empty between two others (`G,,T`) stays empty
+/// when nothing is chopped, as :342 joins the parts as they are, so the record's working
+/// string reads `C/G//T`; an empty REF reads `-` either way. The comparison is Perl's
+/// `eq` on the first characters, case-sensitive (the upper-casing comes later,
+/// Parser.pm:554), so `C c,<DEL:*>` is not chopped, and an empty REF is chopped when every
+/// ALT carries a `*`, its first character the empty string alone in the vote. Same-length
+/// alleles are never trimmed; the secondary minimisation of a bi-allelic indel is
+/// `parse_vcf_line`'s (Parser.pm:860-881). Returns the trimmed REF, the trimmed ALTs in
+/// their written order and the number of bases chopped.
 pub(crate) fn trim_multi_alleles(
     ref_allele: &str,
     alt_alleles: &[&str],
@@ -1104,9 +1112,15 @@ pub(crate) fn trim_multi_alleles(
                 .all(shares_first_base),
         };
     let prefix_len = usize::from(anchored);
-    let chop = |allele: &str| match allele.as_bytes().get(prefix_len..).unwrap_or(&[]) {
-        [] => "-".to_string(),
-        rest => String::from_utf8_lossy(rest).into_owned(),
+    // `-` for an allele the chop emptied (:309, :316, :331-332); an ALT written
+    // empty stays empty in an unchopped string, which :342 joins as written.
+    let chop = |allele: &str, dash_if_empty: bool| {
+        let rest: &[u8] = allele.as_bytes().get(prefix_len..).unwrap_or(&[]);
+        if rest.is_empty() && dash_if_empty {
+            "-".to_string()
+        } else {
+            String::from_utf8_lossy(rest).into_owned()
+        }
     };
     let trimmed_alts = alt_alleles
         .iter()
@@ -1114,11 +1128,11 @@ pub(crate) fn trim_multi_alleles(
             if alt.contains('*') {
                 alt.to_string()
             } else {
-                chop(alt)
+                chop(alt, anchored)
             }
         })
         .collect();
-    (chop(ref_allele), trimmed_alts, prefix_len)
+    (chop(ref_allele, true), trimmed_alts, prefix_len)
 }
 
 /// Convert VCF padded alleles to VEP minimal representation.
@@ -1986,6 +2000,40 @@ mod tests {
         assert_eq!(variants[1].display_allele(), "T");
         assert_eq!(variants[0].allele_index, 0);
         assert_eq!(variants[1].allele_index, 1);
+    }
+
+    /// An empty ALT between two others, `C G,,T`: the first characters `C`, `G`,
+    /// none and `T` are not one, so nothing is chopped and Parser/VCF.pm:342 joins
+    /// the parts as written, the working string `C/G//T` the JSON `allele_string`
+    /// prints; the empty part is the allele `-` to every overlap
+    /// (VariationFeatureOverlap.pm:462), numbered 2 between `G` and `T`. Ensembl
+    /// VEP 116.2 writes three rows, `G`, `-` and `T`, each `UPLOADED_ALLELE=C/G//T`.
+    #[test]
+    fn an_empty_alt_between_others_stays_empty_in_the_working_string() {
+        let variants = parse_vcf_line("21\t30289183\t.\tC\tG,,T\t.\t.\t.", true).unwrap();
+        let alleles: Vec<(String, usize, Option<u32>)> = variants
+            .iter()
+            .map(|v| (v.display_allele(), v.allele_index, v.allele_num))
+            .collect();
+        assert_eq!(
+            alleles,
+            [
+                ("G".to_string(), 0, None),
+                ("-".to_string(), 1, None),
+                ("T".to_string(), 2, None),
+            ]
+        );
+        assert_eq!(variants[1].record_allele_string(), "C/G//T");
+        assert_eq!(variants[1].allele_string, "C/-");
+        assert_eq!(
+            variants[1].uploaded_allele_string.as_deref(),
+            Some("C/G//T")
+        );
+        assert_eq!((variants[1].start, variants[1].end), (30289183, 30289183));
+
+        // The chop keeps `-` for an allele it emptied (:316).
+        let chopped = parse_vcf_line("21\t30289183\t.\tCT\tC,CG\t.\t.\t.", true).unwrap();
+        assert_eq!(chopped[0].record_allele_string(), "T/-/G");
     }
 
     #[test]

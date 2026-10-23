@@ -68,7 +68,7 @@ pub struct Args {
     /// Input format. "guess" detects it from the first data line, as Ensembl VEP does: a single field is a region, SPDI, CAid, HGVS or identifier, several fields a VCF or Ensembl record.
     /// An identifier list (one variant name per line) is resolved in one pass over the cache's variation files, every name held in memory and every file read once: a name maps to each variation feature of that name in the cache (rsIDs and the other names the cache carries; structural variant names, synonyms and subsnp identifiers are not among them), a name the cache lacks is warned about and skipped, and a cache without variation files refuses the format.
     /// CAid input is looked up in the Ensembl variation database, which vep-rs does not reach, and is refused; a region, SPDI or HGVS input needs --fasta, which fills a region record's reference allele and fills or checks an SPDI record's.
-    /// An SPDI span past the end of its sequence, an insertion after a position the sequence lacks or a deletion running past its last base, is skipped with `Span <start>-<end> lies past the end of sequence <name> (<length> bases)`, where Ensembl VEP reads `N` for the missing bases and annotates the record at a position the chromosome lacks.
+    /// An SPDI span past the end of its sequence, an insertion after a position the sequence lacks or a deletion running past its last base, is skipped with `Span <start>-<end> lies past the end of sequence <name> (<length> bases)`, and an HGVS genomic (g., m.) span past the last base with `The reference FASTA has no bases at <name>:<start>-<end>`, where Ensembl VEP reads `N` for the missing bases and annotates the record at a position the chromosome lacks.
     /// HGVS input is resolved against the FASTA and the transcript cache as Ensembl VEP resolves it through its database: a genomic notation (g., m.) reads its bases from the genome, a transcript notation (c., n.) finds its transcript by stable id, else by gene name through Ensembl VEP's pick order with its warning, places the position through the transcript's exons and keeps the transcript's strand, the reference allele is checked, a deletion, duplication or inversion takes its bases from the genome, and a notation Ensembl VEP cannot resolve is skipped with its warning; a protein notation (p.) finds its transcript by translation id, by transcript id or, every transcript of the gene tried in turn, by gene name, and resolves a substitution or delins to the one shortest nucleotide path to the new residue (several equally short paths are skipped with Ensembl VEP's message, as --ambiguous_hgvs is not accepted) and a deletion to its codons, frameshifts refused as Ensembl VEP refuses them; a run with transcript or protein notations reads the cache's assembled chromosomes and scaffolds once to find them, its alternate loci and patches only for an id found on none; an r. notation is refused
     #[arg(
         help_heading = "Input",
@@ -78,7 +78,7 @@ pub struct Args {
     )]
     pub format: String,
 
-    /// Delimiter between the columns of an Ensembl-format or VCF input, a tab unless given: \t for a tab (a JSON `input` then joins its fields with a tab, where Ensembl VEP writes the two characters), a space to split on whitespace, a space and a plus (` +`) to split on runs of spaces, `\s+`, text with no regular-expression character to split on that text, or any other text as the regular expression Ensembl VEP hands to Perl's split, read byte by byte as Perl reads it (a value its syntax refuses, one that can match the empty string, or one that could match part of a UTF-8 character is an error); a VCF record read under another delimiter is re-joined with tabs. With --format guess the delimiter is detected from the first data line instead, as Ensembl VEP detects it, and this flag is not read
+    /// Delimiter between the columns of an Ensembl-format or VCF input, a tab unless given: \t for a tab (a JSON `input` then joins its fields with a tab, where Ensembl VEP writes the two characters), a space to split on whitespace, a space and a plus (` +`) to split on runs of spaces, `\s+`, text with no regular-expression character to split on that text, or any other text as the regular expression Ensembl VEP hands to Perl's split, read byte by byte as Perl reads it (a value its syntax refuses, one that can match the empty string, or one that could match part of a UTF-8 character is an error); a VCF record read under another delimiter is re-joined with tabs, so a field holding a tab is cut at it in the JSON `input` and the VCF line, where Ensembl VEP keeps the field whole. With --format guess the delimiter is detected from the first data line instead, as Ensembl VEP detects it, and this flag is not read
     #[arg(help_heading = "Input", long, value_name = "TEXT")]
     pub delimiter: Option<String>,
 
@@ -271,11 +271,16 @@ pub struct Args {
     #[arg(help_heading = "Output", long)]
     pub fields: Option<String>,
 
-    /// VCF INFO field name for VEP annotation
+    /// The INFO key the consequence entry of a VCF output is written under and its ##INFO
+    /// header line declares. It must be a VCF INFO key (a letter or underscore, then letters,
+    /// digits, underscores or dots, or 1000G); any other value, the empty string and 0
+    /// included, is an argument syntax error, where Ensembl VEP accepts it, declares the given
+    /// name in the header and keys the entry under it, or under CSQ for the empty string and 0
     #[arg(
         help_heading = "Output",
         long = "vcf_info_field",
-        default_value = "CSQ"
+        default_value = "CSQ",
+        value_parser = vcf_info_key
     )]
     pub vcf_info_field: String,
 
@@ -1198,6 +1203,29 @@ fn real_number(text: &str) -> Result<f64, String> {
     text.replace('_', "")
         .parse()
         .map_err(|_| NOT_A_REAL_NUMBER.to_string())
+}
+
+/// A VCF INFO key, `[A-Za-z_][0-9A-Za-z_.]*` or `1000G`, the one key the VCF
+/// specification reserves outside that grammar: any other `--vcf_info_field`
+/// value would write an INFO entry no VCF reader can key. Ensembl VEP takes any
+/// string and, for one Perl reads as false (the empty string, `0`), prints it in
+/// the `##INFO` line (`OutputFactory/VCF.pm:268`) but keys the entry, and strips
+/// an input's earlier entry, under `CSQ` (`:219`, `:312` `|| 'CSQ'`).
+fn vcf_info_key(text: &str) -> Result<String, String> {
+    let mut chars = text.chars();
+    let is_key = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.');
+    if is_key || text == "1000G" {
+        Ok(text.to_string())
+    } else {
+        Err(
+            "a VCF INFO key is expected: a letter or underscore, then letters, digits, \
+             underscores or dots, or 1000G"
+                .to_string(),
+        )
+    }
 }
 
 /// The `--pick_order` criteria as Ensembl VEP reads the option: the fields of

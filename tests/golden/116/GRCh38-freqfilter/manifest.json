@@ -245,6 +245,74 @@
     "filter_common",
     "check_frequency"
    ]
+  },
+  {
+   "name": "minimal-freqfilter",
+   "flags": [
+    "--minimal",
+    "--check_frequency",
+    "--freq_pop",
+    "AF",
+    "--freq_freq",
+    "0.0001",
+    "--freq_gt_lt",
+    "gt",
+    "--freq_filter",
+    "include"
+   ],
+   "input": "minimal.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_minimal-freqfilter",
+   "covers": [
+    "freq_filter",
+    "check_frequency",
+    "minimal",
+    "freqs-column"
+   ],
+   "masks": [
+    "order_only"
+   ]
+  },
+  {
+   "name": "minimal-freqfilter-exclude",
+   "flags": [
+    "--minimal",
+    "--check_frequency",
+    "--freq_pop",
+    "AF",
+    "--freq_freq",
+    "0.5",
+    "--freq_gt_lt",
+    "gt",
+    "--freq_filter",
+    "exclude"
+   ],
+   "input": "minimal.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_minimal-freqfilter-exclude",
+   "covers": [
+    "freq_filter",
+    "check_frequency",
+    "minimal",
+    "freqs-column"
+   ],
+   "masks": [
+    "order_only"
+   ]
   }
  ],
  "divergences": [],

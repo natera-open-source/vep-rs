@@ -61,7 +61,7 @@ use smallvec::SmallVec;
 use tracing::debug;
 
 use crate::config::{PipelineMode, WriterStrategy};
-use crate::frequency_filter::FrequencyFilter;
+use crate::frequency_filter::{is_split_record, split_features, FrequencyFilter};
 use crate::individuals::{
     add_reference_allele_row, IndividualMode, IndividualRequest, IndividualSplit, RecordReading,
 };
@@ -76,7 +76,7 @@ use crate::validate::{
     invalid_vcf_coordinate, keep_overlap_allele, looks_like_number, rowless_allele, AllelePatch,
     RecordLine, ReferenceChecks, SkipRules,
 };
-use crate::variation_matcher;
+use crate::variation_matcher::{self, ColocationRules};
 use crate::variation_source::{ReadFailure, VariationSource};
 use crate::vcf_parser::{
     non_variant_record, parse_vcf_line_with, parse_vcf_line_with_max_sv_size, record_splits,
@@ -85,7 +85,7 @@ use crate::vcf_parser::{
 };
 use vep_core::coordinate::parse_pos;
 use vep_core::minimal::{
-    apply_minimal_split, minimise_bi_allelic, split_reference_row, MinimalSplit,
+    apply_minimal_split, feature_on_its_own, minimise_bi_allelic, split_reference_row, MinimalSplit,
 };
 use vep_core::sv_record::StructuralRecordError;
 use vep_core::sv_routing::{
@@ -93,7 +93,7 @@ use vep_core::sv_routing::{
 };
 use vep_core::sv_span::{end_text_before_start, structural_end, SpanClass, SpanError};
 use vep_core::synonyms::ChromosomeSynonyms;
-use vep_core::variant::{classify_variant, InputVariant};
+use vep_core::variant::{classify_variant, so_variation_class, ColocatedVariant, InputVariant};
 use vep_core::vcf_info::{info_value, info_value_written};
 use vep_io::input::detect::InputFormat;
 use vep_io::input::{
@@ -2011,8 +2011,8 @@ fn frequency_filter_stage(
     source: &VariationSource,
 ) -> anyhow::Result<()> {
     let rules = c.resources.colocation();
+    let failure = ReadFailure::default();
     if !batch.variants.is_empty() {
-        let failure = ReadFailure::default();
         c.pool.install(|| {
             batch.variants.par_iter_mut().for_each(|variant| {
                 variation_matcher::annotate_colocated(variant, source, rules, &failure);
@@ -2020,6 +2020,39 @@ fn frequency_filter_stage(
         });
         check_variation_reads(&failure)?;
     }
+    // The alleles of a split record whose first alternate allele writes no row
+    // carry that feature's matches, the ones the rejoined rows print
+    // (`annotate_colocated`); the filter judges every feature on its own
+    // (BaseCacheVariation.pm:315), so each allele takes its own matches while it
+    // is judged, and the first feature, which no allele stands for, is judged
+    // from the matches they carried. A later feature no allele stands for is a
+    // drop of its own under `include`.
+    let mut first_feature_matches: Vec<(usize, Vec<ColocatedVariant>)> = Vec::new();
+    let mut rowless_dropped = vec![false; batch.units.len()];
+    for (unit, unit_rowless_dropped) in batch.units.iter().zip(&mut rowless_dropped) {
+        let Unit::Record(range) = unit else {
+            continue;
+        };
+        let record = &batch.variants[range.clone()];
+        if !is_split_record(record) || record[0].no_allele {
+            continue;
+        }
+        *unit_rowless_dropped = filter.drops_later_rowless_feature(record);
+        let Some((first_stays, _)) = filter.judge_rowless_first_feature(&record[0]) else {
+            continue;
+        };
+        *unit_rowless_dropped |= !first_stays;
+        for index in range.clone() {
+            let variant = &mut batch.variants[index];
+            if variant.reference_allele_row {
+                continue;
+            }
+            let own = own_colocated_variants(variant, source, rules, &failure);
+            let first = std::mem::replace(&mut variant.colocated_variants, own);
+            first_feature_matches.push((index, first));
+        }
+    }
+    check_variation_reads(&failure)?;
     let mut keep = vec![true; batch.variants.len()];
     for unit in &batch.units {
         if let Unit::Record(range) = unit {
@@ -2039,11 +2072,170 @@ fn frequency_filter_stage(
             keep[range.clone()].copy_from_slice(&verdict);
         }
     }
+    // Where a drop resets the buffer (`runs_reset_by_a_drop`), OutputFactory.pm:294
+    // writes each split feature left as a record of its own, printing its own
+    // matches; with nothing dropped the rejoin builds every row of a split record
+    // from the first feature's hash, whose matches and `FREQS` they all print
+    // (:2289, :1046, :1149).
+    let reset = runs_reset_by_a_drop(&batch.units, &batch.variants, &keep, &rowless_dropped);
+    batch.units = features_as_records(
+        std::mem::take(&mut batch.units),
+        &mut batch.variants,
+        &reset,
+    );
+    for (index, first) in first_feature_matches {
+        let variant = &mut batch.variants[index];
+        if variant.standalone_feature.is_some() {
+            variant.existing_variation = variation_matcher::existing_variation_names(
+                &variant.colocated_variants,
+                &variant.display_allele(),
+            );
+        } else {
+            variant.colocated_variants = first;
+        }
+    }
+    for unit in &batch.units {
+        if let Unit::Record(range) = unit {
+            filter.share_first_feature_freqs(&mut batch.variants[range.clone()]);
+        }
+    }
     let dropped = retain_alleles(&mut batch.units, &mut batch.variants, &keep);
     if c.stats_enabled {
         c.stats.record_filtered(dropped);
     }
     Ok(())
+}
+
+/// Which units of a batch Ensembl VEP's buffer reset would reach: a `--check_frequency`
+/// drop, of a feature of the buffer, resets the buffer (BaseCacheVariation.pm:365-369)
+/// and with it the rejoin mark of every split record in it (InputBuffer.pm:535-537,
+/// :610). Each feature of a split record is one, dropped where `keep` marks its
+/// rows or where no allele stands for it (`rowless_dropped`, per unit); any other
+/// record is one feature, dropped when `keep` leaves it no row, since `exclude`
+/// keeps a record with its failing alleles when some pass (:350-357). That buffer
+/// ends where the chromosome changes (InputBuffer.pm:195-200, :224-234), so the drop
+/// reaches the records of its own run of one chromosome and no other. One flag per
+/// unit of `units`; a text unit's flag is unread.
+fn runs_reset_by_a_drop(
+    units: &[Unit],
+    variants: &[InputVariant],
+    keep: &[bool],
+    rowless_dropped: &[bool],
+) -> Vec<bool> {
+    let mut reset = vec![false; units.len()];
+    let mut run = 0..0;
+    let mut run_chr: Option<&str> = None;
+    let mut run_dropped = false;
+    for (u, unit) in units.iter().enumerate() {
+        let Unit::Record(range) = unit else {
+            continue;
+        };
+        if range.is_empty() {
+            continue;
+        }
+        let record = &variants[range.clone()];
+        let chr = record[0].chr.as_str();
+        if run_chr != Some(chr) {
+            if run_dropped {
+                reset[run.clone()].fill(true);
+            }
+            run = u..u;
+            run_chr = Some(chr);
+            run_dropped = false;
+        }
+        run.end = u + 1;
+        let kept = &keep[range.clone()];
+        let dropped = if is_split_record(record) {
+            kept.iter().any(|&k| !k)
+        } else {
+            kept.iter().all(|&k| !k)
+        };
+        run_dropped |= rowless_dropped[u] || dropped;
+    }
+    if run_dropped {
+        reset[run].fill(true);
+    }
+    reset
+}
+
+/// `units` with every `--minimal` split record's features made records of their
+/// own (`vep_core::minimal::feature_on_its_own`) where `reset` marks the unit, one
+/// unit per feature in the record's order, the other units as they were. A
+/// feature's position among the record's alternate alleles is its allele's; a
+/// reference row leading no allele takes the position after the feature before it.
+fn features_as_records(
+    units: Vec<Unit>,
+    variants: &mut [InputVariant],
+    reset: &[bool],
+) -> Vec<Unit> {
+    let mut out = Vec::with_capacity(units.len());
+    for (unit, &reset) in units.into_iter().zip(reset) {
+        let Unit::Record(range) = &unit else {
+            out.push(unit);
+            continue;
+        };
+        if !reset || !is_split_record(&variants[range.clone()]) {
+            out.push(unit);
+            continue;
+        }
+        let mut previous: Option<u32> = None;
+        for feature in split_features(&variants[range.clone()]) {
+            let feature = range.start + feature.start..range.start + feature.end;
+            let allele = feature.clone().find(|&i| !variants[i].reference_allele_row);
+            let own = match allele {
+                Some(allele) => variants[allele].allele_index as u32,
+                None => previous.map_or(0, |p| p + 1),
+            };
+            for variant in &mut variants[feature.clone()] {
+                feature_on_its_own(variant, own);
+            }
+            // The reference allele's row is a row of the feature, so it prints
+            // the feature's class (`VariationFeature::class_SO_term` of the one
+            // feature), as it prints the record's when the record is rejoined: the
+            // allele's class, or, for a feature no allele stands for, the class of
+            // the pair the row was built from.
+            let class = match allele {
+                Some(allele) => variants[allele].class_so_term(),
+                None => {
+                    let row = &variants[feature.start];
+                    let pair = format!(
+                        "{}/{}",
+                        String::from_utf8_lossy(&row.ref_allele),
+                        row.reference_row_shift_allele.as_deref().unwrap_or("-")
+                    );
+                    so_variation_class(&pair).to_string()
+                }
+            };
+            for variant in &mut variants[feature.clone()] {
+                if variant.reference_allele_row {
+                    variant.record_so_term = Some(class.clone());
+                }
+            }
+            previous = Some(own);
+            out.push(Unit::Record(feature));
+        }
+    }
+    out
+}
+
+/// The known variants of `source` co-located with `variant` as the feature it is,
+/// on its own span and allele string (`variation_matcher::find_colocated_variants`),
+/// where `annotate_colocated` matches an allele of a split record whose first
+/// alternate allele writes no row as that first feature. A failure to read a
+/// variation file lands in `failure`, as it does there.
+fn own_colocated_variants(
+    variant: &InputVariant,
+    source: &VariationSource,
+    rules: &ColocationRules,
+    failure: &ReadFailure,
+) -> Vec<ColocatedVariant> {
+    match source.records_overlapping(&variant.chr, variant.start, variant.end) {
+        Ok(candidates) => variation_matcher::find_colocated_variants(variant, candidates, rules),
+        Err(error) => {
+            failure.record(format!("{error:#}"));
+            Vec::new()
+        }
+    }
 }
 
 /// Keeps the variants `keep` marks and the units that still hold one: the
@@ -5520,6 +5712,75 @@ mod tests {
                 "GGGGGGGGGGA/GGGGGGGGGGT".to_string(),
                 true
             )
+        );
+    }
+
+    /// Ensembl VEP's buffer ends where the chromosome changes (InputBuffer.pm:195-200,
+    /// :224-234), so a `--check_frequency` drop resets the rejoin of the split
+    /// records on its own chromosome's run alone: a drop among chromosome 22's
+    /// records leaves chromosome 21's written as one, and a run with a drop of a
+    /// feature no allele stands for is reset like one with a dropped allele. A
+    /// record left with some of its alleles stays in the buffer
+    /// (BaseCacheVariation.pm:350-357), so it resets nothing; a split record left
+    /// with some of its features lost one, so it does.
+    #[test]
+    fn a_drop_resets_the_rejoin_of_its_own_chromosomes_run_alone() {
+        let variant =
+            |chr: &str| InputVariant::new(chr.into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let variants = vec![
+            variant("21"),
+            variant("21"),
+            variant("22"),
+            variant("22"),
+            variant("21"),
+        ];
+        // A record unit left empty reads as no record.
+        let units = vec![
+            Unit::Record(0..1),
+            Unit::Text(0..0),
+            Unit::Record(1..2),
+            Unit::Record(2..3),
+            Unit::Record(3..4),
+            Unit::Record(4..5),
+            Unit::Record(5..5),
+        ];
+        let no_rowless_drop = vec![false; units.len()];
+        let keep = [true, true, true, false, true];
+        assert_eq!(
+            runs_reset_by_a_drop(&units, &variants, &keep, &no_rowless_drop),
+            [false, false, false, true, true, false, false]
+        );
+        let keep = [true, false, true, true, true];
+        assert_eq!(
+            runs_reset_by_a_drop(&units, &variants, &keep, &no_rowless_drop),
+            [true, true, true, false, false, false, false]
+        );
+        let mut rowless_drop = no_rowless_drop;
+        rowless_drop[5] = true;
+        assert_eq!(
+            runs_reset_by_a_drop(&units, &variants, &[true; 5], &rowless_drop),
+            [false, false, false, false, false, true, false]
+        );
+
+        let mut split = variant("21");
+        split.original_start = Some(100);
+        let variants = vec![variant("21"), variant("21"), split.clone(), split];
+        let units = vec![Unit::Record(0..2), Unit::Record(2..4)];
+        let no_rowless_drop = vec![false; units.len()];
+        let keep = [true, false, true, true];
+        assert_eq!(
+            runs_reset_by_a_drop(&units, &variants, &keep, &no_rowless_drop),
+            [false, false]
+        );
+        let keep = [false, false, true, true];
+        assert_eq!(
+            runs_reset_by_a_drop(&units, &variants, &keep, &no_rowless_drop),
+            [true, true]
+        );
+        let keep = [true, true, true, false];
+        assert_eq!(
+            runs_reset_by_a_drop(&units, &variants, &keep, &no_rowless_drop),
+            [true, true]
         );
     }
 }

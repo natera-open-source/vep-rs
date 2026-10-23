@@ -252,6 +252,17 @@ pub struct InputVariant {
     /// form.
     #[serde(skip)]
     pub split_first_feature_rowless: bool,
+    /// The feature this allele, or the reference row leading it, stands alone as
+    /// once `--check_frequency` dropped an allele of its batch: its position among
+    /// the alternate alleles of the `--minimal` split record. Ensembl VEP's drop
+    /// resets the buffer (BaseCacheVariation.pm:365-369, InputBuffer.pm:535-537),
+    /// which cancels the rejoin of every split record in it (OutputFactory.pm:294),
+    /// so each surviving feature is written as a record of its own, on its own
+    /// span with its own string, and [`Self::same_record`] keeps two features of
+    /// one line apart by it. `None` for every other allele. Not part of the
+    /// variant's JSON form.
+    #[serde(skip)]
+    pub standalone_feature: Option<u32>,
     /// Raw input line (for passthrough in some output formats), one buffer shared by
     /// every allele of the record.
     pub raw_input: Option<Arc<str>>,
@@ -551,6 +562,7 @@ impl Default for InputVariant {
             original_end: None,
             rejoin_key_prefix: None,
             split_first_feature_rowless: false,
+            standalone_feature: None,
             raw_input: None,
             raw_input_bytes: None,
             existing_variation: Vec::new(),
@@ -645,6 +657,7 @@ impl InputVariant {
             original_end: None,
             rejoin_key_prefix: None,
             split_first_feature_rowless: false,
+            standalone_feature: None,
             raw_input: None,
             raw_input_bytes: None,
             existing_variation: Vec::new(),
@@ -716,12 +729,17 @@ impl InputVariant {
     /// one (alleles built from a line alone), they share the line's identity; and
     /// the same [`Self::individual`] at the same [`Self::copy_ordinal`], since
     /// each individual's copy of a record is a feature of its own in Ensembl VEP,
-    /// picked and written apart from the others. The pipeline lays a batch out in
-    /// record order, so the alleles of one record are adjacent and
+    /// picked and written apart from the others; and the same
+    /// [`Self::standalone_feature`], a split feature written on its own being a
+    /// record of its own. The pipeline lays a batch out in record order, so the
+    /// alleles of one record are adjacent and
     /// `chunk_by_mut(InputVariant::same_record)` yields one chunk per record, or
     /// per individual's copy of it.
     pub fn same_record(&self, other: &InputVariant) -> bool {
-        if self.individual != other.individual || self.copy_ordinal != other.copy_ordinal {
+        if self.individual != other.individual
+            || self.copy_ordinal != other.copy_ordinal
+            || self.standalone_feature != other.standalone_feature
+        {
             return false;
         }
         if self.input_record != 0 || other.input_record != 0 {

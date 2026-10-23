@@ -790,6 +790,115 @@ fn tilde_expansion_exclusion_is_documented() {
     );
 }
 
+/// `option_rule_tables`: a comma-joined or trailing-comma value of a `%VALID`
+/// scalar flag is an argument syntax error here, where Config.pm:946 splits the
+/// value on commas before the `%VALID` test and OutputFactory.pm:1808 reads
+/// `--sift b,` by its first letter.
+#[test]
+fn option_rule_tables_exclusion_is_documented() {
+    assert_page_states(
+        "cli/compatibility.md",
+        &[
+            "A trailing comma or a comma-joined value of `--sift`, `--polyphen`, `--terms`, \
+             `--nearest`, `--compress_output` or `--format` (`--sift b,`) is an argument syntax \
+             error (exit 2)",
+            "Ensembl VEP's `check_config` splits such a value on commas before its `%VALID` test \
+             (`Config.pm:946`) and reads the first token by prefix (`OutputFactory.pm:1808`)",
+        ],
+    );
+}
+
+/// `tab-column-order-and-placeholder`: a plugin header key the registry lists
+/// twice (one plugin named twice, Runner.pm:925 and :994 loading one instance per
+/// `--plugin`, or two plugins sharing a key) is one tab column, where Tab.pm:195
+/// appends every key it is handed.
+#[test]
+fn tab_column_order_exclusion_is_documented() {
+    assert_page_states(
+        "output/vep-and-tab.md",
+        &[
+            "A plugin header key listed twice, the plugin named twice on the command line or \
+             two plugins sharing a key, prints one column, where Ensembl VEP prints one per \
+             instance",
+        ],
+    );
+}
+
+/// `hgvs-genomic-input`: a `g.` or `m.` span past the sequence's last base is
+/// skipped, where Ensembl VEP's slice read pads the missing bases with `N`
+/// (SequenceAdaptor.pm:148-152, :222-233) and annotates an intergenic row.
+#[test]
+fn hgvs_genomic_input_exclusion_is_documented() {
+    assert_page_states(
+        "divergences/spdi-input.md",
+        &[
+            "An HGVS genomic notation (`g.`, `m.`) whose span runs past the last base is read \
+             the same way by Ensembl VEP",
+            "pads with `N` (`SequenceAdaptor.pm` lines 148-152 and 222-233)",
+            "vep-rs reads the genome before it reads the shape and skips each with `Unable to \
+             parse HGVS notation '<notation>': The reference FASTA has no bases at \
+             21:46709984-46709984`",
+        ],
+    );
+    assert_flag_row_states(
+        "cli/input-output.md",
+        "--format",
+        &["an HGVS genomic (g., m.) span past the last base with `The reference FASTA has no bases at <name>:<start>-<end>`"],
+    );
+}
+
+/// `output_file`: the `-o` value names the file as given, where BaseRunner.pm:226
+/// opens it with Perl's two-argument `open`, which strips surrounding whitespace
+/// and reads a leading `>` as the append mode.
+#[test]
+fn output_file_exclusion_is_documented() {
+    assert_page_states(
+        "cli/compatibility.md",
+        &[
+            "The `-o` value names the output file as given",
+            "Ensembl VEP opens it with Perl's two-argument `open` (`BaseRunner.pm:226`), which \
+             strips surrounding whitespace and reads a leading `>` as the append mode",
+        ],
+    );
+}
+
+/// `assembly`: `--assembly` is compared exactly and case-sensitively, as
+/// CacheDir.pm:347 and :407 compare it with `ne`, with one addition Ensembl VEP
+/// lacks: `hg19` and `hg38` read as `GRCh37` and `GRCh38`.
+#[test]
+fn assembly_alias_exclusion_is_documented() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "`--assembly` is compared exactly and case-sensitively, as Ensembl VEP compares it, \
+             with one addition: `hg19` and `hg38` are read as `GRCh37` and `GRCh38`",
+        ],
+    );
+}
+
+/// `freq_filter` under `--minimal`: a split record none of whose alleles writes
+/// a row stays one record under a `--check_frequency` drop, where Ensembl VEP's
+/// buffer, its rejoin cancelled by the drop (BaseCacheVariation.pm:365-369,
+/// InputBuffer.pm:535-537), writes each of its features as its own.
+#[test]
+fn minimal_frequency_filter_exclusion_is_documented() {
+    assert_page_states(
+        "output/known-variants.md",
+        &[
+            "A split record none of whose alleles writes a row (`GG *,GG`) stays one VCF line \
+             and one JSON object under a reset, where Ensembl VEP writes each of its features \
+             as its own",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "a split record none of whose alleles writes a row (`GG *,GG`) stays one VCF line \
+             and one JSON object here",
+        ],
+    );
+}
+
 /// `shift_hgvs`: `--shift_hgvs` takes `0` or `1`, where Ensembl VEP's `=i`
 /// (Config.pm:201) takes any integer and BaseRunner.pm:498 matches it against
 /// `/(0|1)/` as a substring, so `2` runs with the default and `10` shifts

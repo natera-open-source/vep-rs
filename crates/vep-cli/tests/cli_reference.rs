@@ -883,7 +883,18 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          upper-case short names no flag here. A short with its value attached (`-ofile.txt`) \
          and a cluster of switches (`-qv`) are clap's readings, where Getopt::Long refuses the \
          token. A `+` before an option name, which Getopt::Long accepts, is not an option \
-         here.\n\n",
+         here.\n\
+         - A trailing comma or a comma-joined value of `--sift`, `--polyphen`, `--terms`, \
+         `--nearest`, `--compress_output` or `--format` (`--sift b,`) is an argument syntax \
+         error (exit 2). Ensembl VEP's `check_config` splits such a value on commas before its \
+         `%VALID` test (`Config.pm:946`) and reads the first token by prefix \
+         (`OutputFactory.pm:1808`), so `--sift b,` annotates there (`SIFT=tolerated(0.19)` on one \
+         transcript of `21 14216193 C G`).\n\
+         - The `-o` value names the output file as given. Ensembl VEP opens it with Perl's \
+         two-argument `open` (`BaseRunner.pm:226`), which strips surrounding whitespace and \
+         reads a leading `>` as the append mode, so `-o ' lead.txt'` writes `lead.txt` there \
+         and ` lead.txt` here, and `-o '>out.txt'` appends to `out.txt` there and writes \
+         `>out.txt` here.\n\n",
     );
 
     out.push_str("## Configuration sources\n\n");
@@ -1035,7 +1046,11 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          - A directory named as the input is a `run` failure, exit 1 with no output written, \
          where Ensembl VEP passes the existence test (`Parser.pm:239`), leaves the directory \
          uncompressed (`:242` tests `-f`), opens it, reads nothing from it and exits 0 with the \
-         header alone written.\n\n",
+         header alone written.\n\
+         - An unwritable `--warning_file` is an `output` failure, exit 1, raised after the \
+         batch that warned, with that batch's rows written and each warning echoed on standard \
+         error unless `--quiet`. Ensembl VEP dies inside the first warning (`BaseVEP.pm:894`), \
+         with the header alone written and no warning echoed.\n\n",
     );
     let rows: Vec<Vec<String>> = COMPONENTS
         .iter()

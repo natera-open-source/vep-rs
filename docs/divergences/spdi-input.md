@@ -39,4 +39,10 @@ Ensembl VEP fetches the whole-sequence slice before it reads the shape (line 253
 
 vep-rs reads the sequence's length before it reads the shape and refuses a span the FASTA does not hold, skipping the record with `Span <start>-<end> lies past the end of sequence <name> (<length> bases)`. So `NC_000021.9:46709984::A`, an insertion after a base the chromosome lacks, and `NC_000021.9:46709983:1:`, a deletion of the base after the last, are each skipped with that warning and write no row. An insertion after the last base, `NC_000021.9:46709983::A`, is annotated by both engines as `21:46709983-46709984 A intergenic_variant`.
 
-To reproduce: vep-rs with `--format spdi --fasta` over the GRCh38 cache and the records above; Ensembl VEP 116.2 reads the format with a database connection alone, and reads the two VCF records with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--fasta`.
+### An HGVS genomic notation past the end
+
+An HGVS genomic notation (`g.`, `m.`) whose span runs past the last base is read the same way by Ensembl VEP. `fetch_by_hgvs_notation` takes the span's bases from the slice (`VariationFeatureAdaptor.pm` lines 2060-2062), which the core sequence adaptor extends past the end with no bounds test and pads with `N` (`SequenceAdaptor.pm` lines 148-152 and 222-233). So `21:g.46709984del` is the deletion `N/-` at 46709984 and `21:g.46709983_46709984insA` the insertion `-/A` after the last base, and each is annotated as an intergenic row.
+
+vep-rs reads the genome before it reads the shape and skips each with `Unable to parse HGVS notation '<notation>': The reference FASTA has no bases at 21:46709984-46709984` (for the insertion, `at 21:46709983-46709984`). The last base itself is inside the sequence: `21:g.46709983del` and `21:g.46709982_46709983insA` annotate as intergenic rows on both engines.
+
+To reproduce: vep-rs with `--format spdi --fasta` over the GRCh38 cache and the records above, and with `--format hgvs --fasta` for the notations. Ensembl VEP 116.2 reads both formats with a database connection alone; it reads the two VCF records with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--fasta`.

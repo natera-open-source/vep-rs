@@ -3,7 +3,8 @@
 
 //! The `VARIANT_CLASS` column as the `vep` binary prints it: the `Allele` and
 //! class of a structural record whose type the Sequence Ontology term table
-//! lacks, and the class of a record `--check_frequency` rewrote.
+//! lacks, and the class of a record `--check_frequency` rewrote, whole or
+//! split under `--minimal`.
 
 use std::path::Path;
 use std::process::Stdio;
@@ -170,4 +171,78 @@ fn frequency_filtered_record_prints_the_class_of_its_kept_alleles() {
             ("del_plus_snv", "C", "sequence_alteration"),
         ]
     );
+}
+
+/// A split feature whose only row is its reference row prints the class of
+/// its own allele string: `--minimal` splits the record per ALT
+/// (InputBuffer.pm:638-718), the frequency check judges each feature
+/// (BaseCacheVariation.pm:308-375), `--process_ref_homs` adds the reference
+/// allele's rows (OutputFactory.pm:511) and `class_SO_term` reads the
+/// feature's string (VariationFeature.pm:1118). Ensembl VEP 116.2 prints 48
+/// rows for `21 31148973 . GG *,G,TG` under the exclude set below: the `GG/G`
+/// feature's common `-` allele (AF 0.6705) is dropped whole, the `GG/*`
+/// feature, whose `*` writes no row and has no frequency data, keeps 16 `GG`
+/// rows with `VARIANT_CLASS=sequence_alteration` and `MINIMISED=1`, and the
+/// `G/T` feature writes 16 `G` and 16 `T` rows with `SNV` and
+/// `FREQS=AF:T:0.1396`.
+#[test]
+fn a_split_feature_left_with_its_reference_row_prints_its_own_class() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("star-first.vcf");
+    std::fs::write(
+        &input,
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+         21\t31148973\t.\tGG\t*,G,TG\t.\t.\t.\n",
+    )
+    .unwrap();
+    let exclude = [
+        "--minimal",
+        "--check_frequency",
+        "--freq_pop",
+        "AF",
+        "--freq_freq",
+        "0.5",
+        "--freq_gt_lt",
+        "gt",
+        "--freq_filter",
+        "exclude",
+        "--process_ref_homs",
+        "--variant_class",
+        "--allele_number",
+    ];
+    let filtered = rows("GRCh38-freqfilter", dir.path(), &input, &exclude);
+    assert_eq!(filtered.len(), 48);
+    for (id, _, _) in &filtered {
+        assert_eq!(id, "21_31148973_GG/*/G/TG");
+    }
+    let shapes: Vec<_> = filtered
+        .iter()
+        .map(|(_, allele, extra)| {
+            let value = |key: &str| extra.split(';').find_map(|kv| kv.strip_prefix(key));
+            (
+                allele.as_str(),
+                value("ALLELE_NUM="),
+                value("VARIANT_CLASS="),
+                value("MINIMISED="),
+                value("FREQS="),
+            )
+        })
+        .collect();
+    for shape in [
+        (
+            "GG",
+            Some("0"),
+            Some("sequence_alteration"),
+            Some("1"),
+            None,
+        ),
+        ("G", Some("0"), Some("SNV"), None, Some("AF:T:0.1396")),
+        ("T", Some("3"), Some("SNV"), None, Some("AF:T:0.1396")),
+    ] {
+        assert_eq!(
+            shapes.iter().filter(|row| **row == shape).count(),
+            16,
+            "{shape:?}"
+        );
+    }
 }

@@ -126,6 +126,8 @@ The example shows two records of the GRCh37 golden corpus as Ensembl VEP 116.2 w
 
 Selected with `--tab` or `--output_format tab`. A row holds the 13 default columns, then one column per Extra key the active flags can produce, in the Extra key order above, then one column per built-in plugin field. An absent value prints `-`; lists join with `,`. The header repeats the default format's block with a `## <column> : <description>` line for every column (a plugin column takes the plugin's own description) and no `Extra column keys` block. Its column line names every column.
 
+A plugin header key listed twice, the plugin named twice on the command line or two plugins sharing a key, prints one column, where Ensembl VEP prints one per instance (`OutputFactory/Tab.pm` line 195 appends every key it is handed).
+
 ### Choosing the columns (--fields)
 
 `--fields` names the columns, comma-separated, and the list stands in for the whole default set, defaults included, in the order given: `--fields Location,Allele,Feature,Consequence,SYMBOL` writes exactly those five columns, each with its description line. Any field a flag or a plugin produces is a valid name; a field whose flag is off prints `-`, so `SYMBOL` needs `--symbol`. A name nothing produces prints `-` in every row; its description line is Ensembl VEP's text when its description table has the name (`ID`, `ExAC_AF`, `REFSEQ_MATCH`) and `## <name> : ?` otherwise, as Ensembl VEP writes it. Nothing is trimmed and a trailing comma opens no column.

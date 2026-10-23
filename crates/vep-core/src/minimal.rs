@@ -156,15 +156,23 @@ pub fn apply_minimal_split(variant: &mut InputVariant, own: usize) -> MinimalSpl
     let (trimmed_ref, trimmed_alt, new_start, new_end, _) =
         trim_sequences(reference.as_bytes(), own_alt.as_bytes(), start, end);
     if variant.record_so_term.is_none() {
-        let (first_ref, first_alt, _, _, _) =
-            trim_sequences(reference.as_bytes(), alts[0].as_bytes(), start, end);
-        variant.record_so_term =
-            Some(so_variation_class(&allele_pair(&first_ref, &first_alt)).to_string());
+        variant.record_so_term = Some(first_feature_class(&working));
     }
     variant.original_start = Some(start);
     variant.original_end = Some(end);
     variant.minimised = true;
     variant.allele_num = None;
+    // The record's string as uploaded is every feature's `original_allele_string`
+    // (Parser.pm:982, set before the split and inherited by each copy); the first
+    // feature's is then overwritten with the working string (:694), which is what
+    // every allele prints after the rejoin. A feature written on its own after a
+    // `--check_frequency` drop prints the string it kept.
+    if variant.original_allele_string.is_none() {
+        variant.original_allele_string = variant
+            .uploaded_allele_string
+            .as_deref()
+            .map(str::to_string);
+    }
     variant.uploaded_allele_string = Some(Arc::clone(&working));
     if trimmed_ref == trimmed_alt {
         return MinimalSplit::NoAllele;
@@ -229,13 +237,72 @@ pub fn rowless_first_feature(allele: &InputVariant) -> Option<InputVariant> {
     let mut parts = working.split('/');
     let reference = parts.next()?;
     let first = parts.next()?;
-    let (trimmed_ref, trimmed_alt, _, _, _) =
-        trim_sequences(reference.as_bytes(), first.as_bytes(), 0, 0);
-    let rowless = trimmed_ref == trimmed_alt || matches!(first, "*" | "<DEL:*>");
-    if !rowless {
+    if !rowless_alternate_allele(reference, first) {
         return None;
     }
     split_feature(allele, 0)
+}
+
+/// Whether the split feature of `alt`, an alternate allele of a record's working
+/// string, writes no row: a `*` or `<DEL:*>` (VariationFeatureOverlap.pm:469-474,
+/// :484), or an allele equal to `reference` once the pair is trimmed (:481).
+pub fn rowless_alternate_allele(reference: &str, alt: &str) -> bool {
+    if matches!(alt, "*" | "<DEL:*>") {
+        return true;
+    }
+    let (trimmed_ref, trimmed_alt, _, _, _) =
+        trim_sequences(reference.as_bytes(), alt.as_bytes(), 0, 0);
+    trimmed_ref == trimmed_alt
+}
+
+/// `variant`, an allele of a `--minimal` split record or the reference row leading
+/// it, as the feature of its own that Ensembl VEP writes once a `--check_frequency`
+/// drop has reset the buffer and its rejoin mark (BaseCacheVariation.pm:365-369,
+/// InputBuffer.pm:535-537 and :610), so that OutputFactory.pm:294 skips the
+/// rejoin: the feature prints its own span, string and class, is named by the
+/// record's `variation_name` (Parser.pm:462, given before the split and inherited
+/// by every copy), and as the first feature keeps the `minimised` mark and the
+/// working string as its `UPLOADED_ALLELE` (InputBuffer.pm:694-696), as a later
+/// one prints the record's uploaded string and no mark. `own` tells the
+/// features of one record apart ([`InputVariant::standalone_feature`]); the
+/// first feature is the one without a rejoin key prefix.
+pub fn feature_on_its_own(variant: &mut InputVariant, own: u32) {
+    variant.id = Some(variant.variation_name());
+    let is_first_feature = variant.rejoin_key_prefix.is_none();
+    // The class the split gave every allele is the first feature's, so the
+    // feature's own class takes its place; a class the record carried before the
+    // split, a resolved identifier's, stays on every copy (VariationFeature.pm:1117).
+    let split_class = variant
+        .record_allele_string_multi
+        .as_deref()
+        .map(first_feature_class);
+    if variant.record_so_term == split_class {
+        variant.record_so_term = None;
+    }
+    variant.standalone_feature = Some(own);
+    variant.original_start = None;
+    variant.original_end = None;
+    variant.record_allele_string_multi = None;
+    variant.rejoin_key_prefix = None;
+    if !is_first_feature {
+        variant.minimised = false;
+        if let Some(uploaded) = &variant.original_allele_string {
+            variant.uploaded_allele_string = Some(Arc::from(uploaded.as_str()));
+        }
+    }
+}
+
+/// The class `VARIANT_CLASS` prints for a `--minimal` split record: that of the
+/// first alternate allele of `working`, the record's chopped allele string, trimmed
+/// against the reference (OutputFactory.pm:2289 builds the first feature's hash,
+/// which caches `class_SO_term`, before the rejoin).
+fn first_feature_class(working: &str) -> String {
+    let mut parts = working.split('/');
+    let reference = parts.next().unwrap_or("");
+    let first = parts.next().unwrap_or("");
+    let (trimmed_ref, trimmed_alt, _, _, _) =
+        trim_sequences(reference.as_bytes(), first.as_bytes(), 0, 0);
+    so_variation_class(&allele_pair(&trimmed_ref, &trimmed_alt)).to_string()
 }
 
 /// The `REF_ALLELE` of every row of a split record, `working` the record's

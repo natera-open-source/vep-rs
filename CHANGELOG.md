@@ -244,6 +244,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The documentation gains "What vep-rs does not do", listing the Ensembl VEP features vep-rs lacks and what a run does with their flags. (#N)
   - Five divergence pages: a breakend mate beyond 5,000 bases under `--distance`, a `--check_svs` mate on another chromosome, two region notations, the `HGNC_ID` copy, a VCF without `#CHROM`. (#N)
   - The documented exclusions of `--check_ref`, `--fasta_dir`, identifier lists, skip warnings, `--spdi` under `--minimal`, the header time, `assembly_name` and `--gp` are stated on their pages, each with a test. (#N)
+  - Seven more departures are stated: `--sift b,`, `-o` spellings, an unwritable `--warning_file`, a tab in a delimited field, HGVS spans past the end, repeated plugin keys, `--assembly` aliases. (#N)
 - Dependencies and tooling
   - The container image and the CI test job install the DuckDB 2.0.0 CLI from its `duckdb-cli-linux-*.tar.gz` archive (1.x shipped a zip), both verified by sha256. (#N)
   - The release page groups its notes by area with nested bullets, marks breaking changes inline and may run to 400 lines; `CHANGELOG.md` nests the area groups under each kind. (#N)
@@ -294,6 +295,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The `--individual` refusal names the header's samples as Ensembl VEP lists them, one per name in column order, a trailing tab naming no sample. (#N)
   - `-i ""` and `-i 0` are refused as `No input file given`, Ensembl VEP's text for a name Perl reads as false. (#N)
   - A BGZF stream followed by a plain gzip member is read whole, as `gzip -dc` reads every member for Ensembl VEP. (#N)
+  - An empty ALT between two others keeps its empty part in the record's working string (`C/G//T`) and its `-` allele. (#N)
 - HGVS, SPDI and identifiers
   - HGVSp and shifted codons of a moved insertion turn the allele as the record wrote it, unturned on a reverse-strand transcript when the shift exceeds its length. (#N)
   - `SHIFT_LENGTH` is written on sequence variants' transcript rows alone under `--shift_3prime 1 --shift_length`; a structural record's rows carry none, as in Ensembl VEP. (#N)
@@ -322,6 +324,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The JSON `frequencies` of a co-located variant are keyed by the record's own alleles, so a `--minimal` split allele's trimmed spelling finds none, as Ensembl VEP writes. (#N)
   - `CLIN_SIG` on a `--minimal` split row reads the ClinVar reference against the reference `REF_ALLELE` prints, not the allele's own trimmed one, as Ensembl VEP compares them. (#N)
   - JSON `colocated_variants` objects echo `minor_allele` and `minor_allele_freq` from a cache declaring them, as Ensembl VEP's JSON factory copies the record. (#N)
+  - `--check_frequency` under `--minimal` judges each trimmed feature of a split record against its own co-located frequencies, as Ensembl VEP does. (#N)
+  - Under `--freq_filter exclude` the `--process_ref_homs` reference row prints the record's rewritten allele string and class. (#N)
 - Transcript attributes, predictions and consequences
   - `--mane_select` alone lists no MANE Plus Clinical transcript, UNIPARC and UNIPROT_ISOFORM carry the cache's accessions, and a VCF SYMBOL writes whitespace as `%20`. (#N)
   - `--distance` up to `18446744073709551615` annotates structural variants without overflowing; a debug build panicked and a release build wrapped the window past a transcript's end. (#N)
@@ -335,6 +339,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--total_length` appends the CDS and peptide totals behind `-` for an insertion between a UTR and the CDS, as Ensembl VEP's coding predicate admits it. (#N)
   - `VARIANT_CLASS` classes the alleles `--check_frequency` kept, so a record whose dropped allele was its `-` prints `SNV`, as Ensembl VEP does. (#N)
   - `NEAREST` on a `--minimal` multi-allelic record is the first split allele's on every row of the default, tab and VCF formats, as in JSON and Ensembl VEP. (#N)
+  - `--vcf_info_field` refuses a value that is not a VCF INFO key, and a removed INFO entry takes its closing `;` with it. (#N)
 - Picking, filtering and summaries
   - `--pick` on a `--minimal` split ranks the alleles in Ensembl VEP's rejoin key order, so a repeated trimmable alternate allele keeps the row Ensembl VEP keeps. (#N)
   - `--transcript_filter` reads `uniprot_isoform`, the cache's UniProt isoform ids, matching any id of a list as Ensembl VEP does. (#N)

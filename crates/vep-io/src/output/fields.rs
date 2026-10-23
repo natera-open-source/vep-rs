@@ -5351,6 +5351,33 @@ mod tests {
         );
     }
 
+    /// A plugin header key listed twice, as the registry hands it when one plugin
+    /// is named twice on the command line (Runner.pm:925 and :994 load one instance
+    /// per `--plugin`) or two plugins share a key, is one tab column here, where
+    /// `OutputFactory/Tab.pm:195` appends every key it is handed and Ensembl VEP
+    /// 116.2 prints `LoFtool\tLoFtool` after `FLAGS` under `--plugin LoFtool,<file>
+    /// --plugin LoFtool,<file>`. The collapse is stated in `docs/output/vep-and-tab.md`.
+    #[test]
+    fn a_repeated_plugin_key_is_one_tab_column() {
+        let options = FieldOptions::default();
+        let repeated: Vec<String> = ["LoFtool", "LoFtool", "CADD_PHRED"]
+            .map(str::to_string)
+            .to_vec();
+        let columns = tab_columns(&options, &repeated, None);
+        assert_eq!(
+            &columns[13..],
+            &[
+                "IMPACT",
+                "DISTANCE",
+                "STRAND",
+                "FLAGS",
+                "LoFtool",
+                "CADD_PHRED"
+            ]
+        );
+        assert_eq!(columns.iter().filter(|c| *c == "LoFtool").count(), 1);
+    }
+
     /// `OutputFactory/Tab.pm` `description_headers` prints `## <name> : ?` for a
     /// field neither the field table nor a plugin describes, and
     /// `output_hash_to_line` prints `-` where the row has no such key; Ensembl VEP

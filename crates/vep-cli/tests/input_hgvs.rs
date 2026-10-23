@@ -408,6 +408,45 @@ fn unresolvable_notations_are_skipped_with_the_warning() {
     );
 }
 
+/// A genomic span past the sequence's last base (chromosome 21 of GRCh38 ends at
+/// 46709983) is skipped with the FASTA's refusal, where Ensembl VEP 116.2 reads
+/// the span from its slice padded with `N` (`VariationFeatureAdaptor.pm:2060-2062`,
+/// `SequenceAdaptor.pm:148-152` and `:222-233`), so `21:g.46709984del` is `N/-` at
+/// 46709984 and `21:g.46709983_46709984insA` the insertion `-/A` after the last
+/// base, each an intergenic row there. The last base itself is inside the
+/// sequence on both engines: `21:g.46709983del` annotates as an intergenic row.
+/// `docs/divergences/spdi-input.md` states the difference.
+#[test]
+fn a_span_past_the_last_base_is_skipped_with_the_fastas_refusal() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write(
+        dir.path(),
+        "past-end.hgvs",
+        "21:g.46709984del\n21:g.46709983_46709984insA\n21:g.46709983del\n",
+    );
+    let out = dir.path().join("past-end.txt");
+    let rows = annotate(dir.path(), &input, &out, &["--format", "hgvs"]);
+    let placed: Vec<(&str, &str, &str)> = rows
+        .iter()
+        .map(|row| {
+            let columns: Vec<&str> = row.split('\t').collect();
+            (columns[0], columns[1], columns[6])
+        })
+        .collect();
+    assert_eq!(
+        placed,
+        [("21:g.46709983del", "21:46709983", "intergenic_variant")]
+    );
+    let warnings = std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap();
+    assert_eq!(
+        warnings,
+        "WARNING: line 1 skipped (21:g.46709984del): Unable to parse HGVS notation \
+         '21:g.46709984del': The reference FASTA has no bases at 21:46709984-46709984\n\
+         WARNING: line 2 skipped (21:g.46709983_46709984insA): Unable to parse HGVS notation \
+         '21:g.46709983_46709984insA': The reference FASTA has no bases at 21:46709983-46709984\n"
+    );
+}
+
 /// A notation whose alternate names no bases builds a feature with the reference
 /// alone: `21:g.30282172DUP` under `--lookup_ref` keeps `get_hgvs_alleles`'s `-`
 /// (`_hgvs_from_components` tests `/dup/` in lower case only,

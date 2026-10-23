@@ -34,4 +34,12 @@ Ensembl VEP  DP=13;CSQ=A|old_csq;ANN=;ANN=A|missense_variant...
 vep-rs       DP=13;CSQ=A|old_csq;ANN=A|missense_variant...
 ```
 
-To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--vcf --allow_non_variant` for the first two records and `--vcf --vcf_info_field ANN` for the third; vep-rs with the same flags over the same cache.
+A `;` that ends the column right after the entry under the name goes with the entry in both engines, since the one or more non-blank characters take it: `DP=87;ANN=T|old;` becomes `DP=87;ANN=...`. A `;` ending the column anywhere else stays, so `ANN=x;DP=87;` becomes `DP=87;;ANN=...` in both.
+
+## The name read as a regular expression
+
+Ensembl VEP interpolates the field name unescaped into the header test (`OutputFactory/VCF.pm` line 221) and the substitution over INFO (lines 328-329), so a name holding a metacharacter matches other keys. Under `--vcf_info_field A.N` the input lines `##INFO=<ID=ANN,...>` and `##contig=<ID=ANN,...>` are dropped and the entry `ANN=G|old_ann` is removed, as if the name were `ANN`. vep-rs matches the name literally: those lines and that entry stay, and the new entry is appended under `A.N`.
+
+A dot is the one metacharacter a VCF INFO key admits. A value that is not a key (a letter or underscore, then letters, digits, underscores or dots, or the reserved `1000G`), the empty string and `0` included, is an argument syntax error here (exit 2). Ensembl VEP accepts it, declares the given name in the `##INFO` line and, for a name Perl reads as false, keys the entry `CSQ` (lines 219 and 312).
+
+To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--vcf --allow_non_variant` for the first two records and `--vcf --vcf_info_field ANN` for the third. The dotted name takes `--vcf --vcf_info_field A.N`; vep-rs runs with the same flags over the same cache.

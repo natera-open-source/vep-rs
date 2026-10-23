@@ -50,6 +50,52 @@
     "vcf.vcf": "7d1ae38b2eb593c8d4d5b2a60ea819879bb795a5bee1f5f9c06fb6b81bf085f1",
     "json.jsonl": "e939beb21f007d7e01a35141606850aab1462385173628dbb2d6c2b7702a5b8b"
    }
+  },
+  "minimal-freqfilter": {
+   "flags": [
+    "--minimal",
+    "--check_frequency",
+    "--freq_pop",
+    "AF",
+    "--freq_freq",
+    "0.0001",
+    "--freq_gt_lt",
+    "gt",
+    "--freq_filter",
+    "include"
+   ],
+   "input": "minimal.vcf",
+   "expected_dir": "expected_minimal-freqfilter",
+   "sha256": {
+    "default.txt": "aba7125b4fdca7746c1e553f58d7cf1e8f43d1b9fffe86bcc79ce71dca367a35",
+    "tab.txt": "dacb2a4a05d849cf3c15b709697f427cc465c70dc3de58e9415876d768949cb0",
+    "vcf.vcf": "f217c5e6e9f7a271224444413270dd1477916efe5b5ba97ebc5e2ea0735c2388",
+    "json.jsonl": "a80d735f842804a19d41e003058f5528b3d499032a1525436b4e9e149aa13112"
+   },
+   "input_notes": "variants.vcf with a second ALT on two records, `21 31148973 GG G,TG` and `21 42029386 GTG G,GAG`, so that the --minimal split runs and the frequency filter judges each split allele alone; the other 13 records as in variants.vcf"
+  },
+  "minimal-freqfilter-exclude": {
+   "flags": [
+    "--minimal",
+    "--check_frequency",
+    "--freq_pop",
+    "AF",
+    "--freq_freq",
+    "0.5",
+    "--freq_gt_lt",
+    "gt",
+    "--freq_filter",
+    "exclude"
+   ],
+   "input": "minimal.vcf",
+   "expected_dir": "expected_minimal-freqfilter-exclude",
+   "sha256": {
+    "default.txt": "806d019785482e02f07b753880886869d5ef9c3d842af2123f05d04395317b9d",
+    "tab.txt": "290e7cad45e225473c4ad0f0b2dfe7d8e939559e33d3ec2daa574f69159d905c",
+    "vcf.vcf": "bdd3441d0124455e9a423fb9ed225c721b7e7627fa2ac82ac2d58b574ead6052",
+    "json.jsonl": "536f3b61d25b103c44fc1e1e1f2b8c5005f5480cfc1eaf839f3c130609a99064"
+   },
+   "input_notes": "variants.vcf with a second ALT on two records, `21 31148973 GG G,TG` and `21 42029386 GTG G,GAG`, so that the --minimal split runs and the frequency filter judges each split allele alone; the other 13 records as in variants.vcf"
   }
  },
  "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py classify",

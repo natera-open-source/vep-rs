@@ -605,6 +605,12 @@ impl OutputFormatter for VcfOutputFormatter {
                 .position(|kv| kv.starts_with(csq_key.as_bytes()))
             {
                 entries.remove(first);
+                // A `;` closing the removed entry at the end of the column goes
+                // with it, as the substitution's `\S+?` takes it before `$`
+                // matches, so the strip leaves no empty field behind.
+                if entries.len() == first + 1 && entries[first].is_empty() {
+                    entries.pop();
+                }
             }
             entries.join(&b";"[..])
         };
@@ -936,6 +942,33 @@ mod tests {
             info.starts_with("DP=3;CSQ=G|old|entry;ANN=G|missense_variant|"),
             "{info}"
         );
+    }
+
+    /// An INFO ending in `;` after the entry under the field's name: the `\S+?` of
+    /// `OutputFactory/VCF.pm:329` takes that `;` with the value before `$` matches,
+    /// so Ensembl VEP 116.2 writes `DP=87;ANN=T|...` for the input
+    /// `DP=87;ANN=T|old;` and no empty field is left between `DP=87` and the new
+    /// entry. A `;` ending the column elsewhere stays, as it does there
+    /// (`ANN=x;DP=87;` gives `DP=87;;ANN=T|...` in both).
+    #[test]
+    fn a_semicolon_closing_the_removed_entry_goes_with_it() {
+        let formatter = VcfOutputFormatter::new(
+            "ANN".to_string(),
+            VcfFieldOptions::default(),
+            Vec::new(),
+            None,
+        );
+        let mut trailing = annotated_variant();
+        trailing.raw_input = Some("21\t100\trs1\tA\tG\t.\t.\tDP=87;ANN=T|old;".into());
+        let lines = formatter.format_record(&[&trailing]).unwrap();
+        let info = info_of(&lines[0]);
+        assert!(info.starts_with("DP=87;ANN=G|missense_variant|"), "{info}");
+
+        let mut elsewhere = annotated_variant();
+        elsewhere.raw_input = Some("21\t100\trs1\tA\tG\t.\t.\tANN=x;DP=87;".into());
+        let lines = formatter.format_record(&[&elsewhere]).unwrap();
+        let info = info_of(&lines[0]);
+        assert!(info.starts_with("DP=87;;ANN=G|missense_variant|"), "{info}");
     }
 
     #[test]

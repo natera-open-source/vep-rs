@@ -2522,9 +2522,56 @@ fn existing_skipped_file_is_refused_without_force() {
         .starts_with("[VEP skipped the following variants from "));
 }
 
+/// `--vcf_info_field` takes a VCF INFO key alone (`[A-Za-z_][0-9A-Za-z_.]*`, or
+/// the reserved `1000G`): the empty string, `0` and a name with a `;` are argument
+/// syntax errors (exit 2) naming the flag. Ensembl VEP 116.2 accepts them, prints
+/// the given name in the `##INFO` line (OutputFactory/VCF.pm:268) and keys the
+/// entry `CSQ` for the two Perl reads as false (`:219`, `:312`). A dotted key,
+/// which the grammar admits, and `1000G` are accepted.
+#[test]
+fn vcf_info_field_refuses_a_value_that_is_not_an_info_key() {
+    let run = |value: &str| {
+        vep()
+            .args([
+                "--vcf_info_field",
+                value,
+                "-i",
+                "/nonexistent/input.vcf",
+                "--quiet",
+            ])
+            .stdin(Stdio::null())
+            .output()
+            .unwrap()
+    };
+    for value in ["", "0", "A;B", "1KG", "a b"] {
+        let output = run(value);
+        let stderr = text(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{value:?}: {stderr}");
+        assert!(
+            stderr.contains(&format!(
+                "error: invalid value '{value}' for '--vcf_info_field <VCF_INFO_FIELD>': a VCF \
+                 INFO key is expected: a letter or underscore, then letters, digits, underscores \
+                 or dots, or 1000G"
+            )),
+            "{value:?}: {stderr}"
+        );
+    }
+    for value in ["A.N", "1000G"] {
+        let output = run(value);
+        let stderr = text(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{value}: {stderr}");
+        assert!(stderr.starts_with("ERROR: ["), "{value}: {stderr}");
+    }
+}
+
 /// A warnings file that cannot be created fails the run with Ensembl VEP's text
 /// (BaseVEP.pm:894) under the output component, exit 1; under `--quiet` the
-/// error line is all that reaches standard error, no warning is echoed.
+/// error line is all that reaches standard error, no warning is echoed. The run
+/// ends after the batch that warned, its rows written (here the corpus is one
+/// batch, so every row of a run without the flag), and without `--quiet` each
+/// warning is echoed on standard error before the error line. Ensembl VEP 116.2
+/// dies inside the first warning, with the header alone written and no warning
+/// echoed, exit 2; `docs/cli/compatibility.md` states the difference.
 #[test]
 fn unwritable_warnings_file_fails_the_run() {
     let dir = tempfile::tempdir().unwrap();
@@ -2543,6 +2590,82 @@ fn unwritable_warnings_file_fails_the_run() {
     assert_eq!(
         text(&output.stderr).trim_end(),
         "ERROR: [output] Could not write to warnings file /nonexistent-dir/w.txt"
+    );
+    let row_count = data_lines(&std::fs::read_to_string(&out).unwrap()).len();
+    let plain = dir.path().join("plain.txt");
+    assert!(
+        run_control(&["-o", plain.to_str().unwrap(), "--quiet"], dir.path())
+            .status
+            .success()
+    );
+    assert_eq!(
+        row_count,
+        data_lines(&std::fs::read_to_string(&plain).unwrap()).len()
+    );
+
+    let output = run_control(
+        &[
+            "-o",
+            out.to_str().unwrap(),
+            "--warning_file",
+            "/nonexistent-dir/w.txt",
+        ],
+        dir.path(),
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = text(&output.stderr);
+    assert_eq!(
+        warning_lines(&stderr),
+        expected_warnings().lines().collect::<Vec<_>>(),
+        "{stderr}"
+    );
+    assert!(
+        stderr
+            .trim_end()
+            .ends_with("ERROR: [output] Could not write to warnings file /nonexistent-dir/w.txt"),
+        "{stderr}"
+    );
+}
+
+/// A comma-joined or trailing-comma value of a clap-enumerated `%VALID` flag is an
+/// argument syntax error (exit 2) in clap's words. Ensembl VEP 116.2 splits the
+/// value on commas before its `%VALID` test (Config.pm:946) and reads `b,` by its
+/// first letter (OutputFactory.pm:1808), annotating `SIFT=tolerated(0.19)` on
+/// `21 14216193 C G`; `docs/cli/compatibility.md` states the difference.
+#[test]
+fn a_comma_joined_enumerated_value_is_a_syntax_error() {
+    for (flag, value) in [
+        ("--sift", "b,"),
+        ("--polyphen", "b,p"),
+        ("--format", "vcf,"),
+    ] {
+        let output = vep()
+            .args([flag, value, "-i", "/nonexistent/input.vcf", "--quiet"])
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        let stderr = text(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{flag} {value}: {stderr}");
+        assert!(
+            stderr.contains(&format!("error: invalid value '{value}' for '{flag}")),
+            "{flag} {value}: {stderr}"
+        );
+    }
+}
+
+/// The `-o` value names the output file as given: `-o ' lead.txt'` writes a file
+/// named ` lead.txt`, where Ensembl VEP's two-argument `open` (BaseRunner.pm:226)
+/// strips the whitespace and writes `lead.txt`; `docs/cli/compatibility.md` states
+/// the difference.
+#[test]
+fn output_file_name_is_taken_as_given() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = run_control(&["-o", " lead.txt", "--quiet"], dir.path());
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    assert!(dir.path().join(" lead.txt").is_file());
+    assert!(!dir.path().join("lead.txt").exists());
+    assert!(
+        !data_lines(&std::fs::read_to_string(dir.path().join(" lead.txt")).unwrap()).is_empty()
     );
 }
 
