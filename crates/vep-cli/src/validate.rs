@@ -723,21 +723,11 @@ fn incomplete_deletion(variant: &InputVariant, so_term: &str, line: Option<&[u8]
     deletion_looks_incomplete(so_term, variant.start, variant.end, svlen_text, end_text)
 }
 
-/// The guard every test that writes to or configures the process-wide warning
-/// sink holds for its run, in this module and in the pipeline's, so such tests
-/// run in turn.
-#[cfg(test)]
-pub(crate) fn sink_test_guard() -> std::sync::MutexGuard<'static, ()> {
-    static SINK_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    SINK_TESTS
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::warnings::Target;
+    use crate::pipeline::report_to;
+    use crate::warnings::{Sink, Target};
     use std::path::Path;
 
     /// A FASTA of one record `21` whose bases 1 to 20 are `ACGTACGTACGTACGTACGT`,
@@ -774,7 +764,9 @@ mod tests {
     }
 
     /// Runs the rules over one record and returns the verdict with the warning
-    /// lines written for it.
+    /// lines written for it. The record reports to a sink of its own, so a
+    /// warning another test writes to the process-wide sink meanwhile is not
+    /// read as this record's.
     fn judge(
         rules: &SkipRules<'_>,
         first: &mut InputVariant,
@@ -782,21 +774,20 @@ mod tests {
     ) -> (bool, Vec<String>, AllelePatch) {
         let path = dir.join("w.txt");
         let _ = std::fs::remove_file(&path);
-        let sink = crate::warnings::global();
+        let sink = Sink::new();
         sink.configure(Target::File(path.clone()), true, false);
         let line = RecordLine {
             number: 7,
             columns: None,
             quoted: b"21\t100\tr1\tA\tG\t.\t.\t.",
         };
-        let mut report = crate::pipeline::report_to_sink;
+        let mut report = |reported: Reported<'_>| report_to(&sink, reported);
         let (kept, patch) = rules.validate(first, &line, &mut report);
         let lines = std::fs::read_to_string(&path)
             .unwrap_or_default()
             .lines()
             .map(str::to_string)
             .collect();
-        sink.configure(Target::Stderr, false, false);
         (kept, lines, patch)
     }
 
@@ -861,7 +852,6 @@ mod tests {
     /// record, as it keeps any record `validate_vf` refuses.
     #[test]
     fn chr_list_filters_and_chr_prefix_not_normalised() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let admitted = ChromosomeList::new(&["21".to_string()]);
@@ -897,7 +887,6 @@ mod tests {
     /// VEP's text, under `--dont_skip` too.
     #[test]
     fn start_gt_end_plus_one() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let rules = rules(&transcripts, &NO_CHECKS, true);
@@ -915,7 +904,6 @@ mod tests {
     /// trailing blank of the Perl concatenation kept; `--dont_skip` keeps it.
     #[test]
     fn insertion_needs_start_eq_end_plus_one() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let rules = rules(&transcripts, &NO_CHECKS, false);
@@ -941,7 +929,6 @@ mod tests {
     /// measured.
     #[test]
     fn ref_length_must_equal_span() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let rules = rules(&transcripts, &NO_CHECKS, false);
@@ -962,7 +949,6 @@ mod tests {
     /// the upper-cased string in Ensembl VEP's text; `--dont_skip` keeps it.
     #[test]
     fn allele_regex() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let rules = rules(&transcripts, &NO_CHECKS, false);
@@ -986,7 +972,6 @@ mod tests {
     /// multi-allelic string included; the class follows the upper-cased bases.
     #[test]
     fn uppercase() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let rules = rules(&transcripts, &NO_CHECKS, false);
@@ -1067,7 +1052,6 @@ mod tests {
     /// `:554` that refuses a kept record leaves it upper-cased.
     #[test]
     fn dont_skip_keeps_the_written_case_before_the_upper_casing() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let unlisted = rules(&transcripts, &NO_CHECKS, true);
@@ -1125,7 +1109,6 @@ mod tests {
     /// looked-up reference, on the first allele and through the patch.
     #[test]
     fn parser_named_records_take_no_allele_name() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let fasta = fasta_in(dir.path());
@@ -1154,7 +1137,6 @@ mod tests {
     /// does not hold writes the sub-slice line first.
     #[test]
     fn check_ref_mismatch_skips() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let fasta = fasta_in(dir.path());
@@ -1196,7 +1178,6 @@ mod tests {
     /// passes `check_ref` whatever the flanking bases.
     #[test]
     fn check_ref_insertion_passes() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let fasta = fasta_in(dir.path());
@@ -1214,7 +1195,6 @@ mod tests {
     /// (`sub_Slice` on the record's strand, Parser.pm:751).
     #[test]
     fn check_ref_case_insensitive() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let fasta = fasta_in(dir.path());
@@ -1246,7 +1226,6 @@ mod tests {
     /// `?`); an allele the reference does not equal keeps its row.
     #[test]
     fn lookup_ref_drops_an_alt_the_reference_now_equals() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let fasta = fasta_in(dir.path());
@@ -1324,7 +1303,6 @@ mod tests {
     /// row alone, the ALT dropped behind it.
     #[test]
     fn lookup_ref_keeps_the_reference_row() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let fasta = fasta_in(dir.path());
@@ -1377,7 +1355,6 @@ mod tests {
     /// new alleles.
     #[test]
     fn lookup_ref_replaces_ref() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let fasta = fasta_in(dir.path());
@@ -1429,7 +1406,6 @@ mod tests {
     /// Parser.pm:645), so `-/A` stays `-/A`.
     #[test]
     fn lookup_ref_restores_dash() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let fasta = fasta_in(dir.path());
@@ -1445,7 +1421,6 @@ mod tests {
     /// Parser.pm:596 and 635), as under `--safe`, which skips the pair check.
     #[test]
     fn check_ref_takes_precedence_over_lookup_ref() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let fasta = fasta_in(dir.path());
@@ -1492,7 +1467,6 @@ mod tests {
     /// database fallback is the documented exclusion.
     #[test]
     fn database_toplevel_transform_not_ported() {
-        let _guard = sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let transcripts = transcripts(dir.path());
         let rules = rules(&transcripts, &NO_CHECKS, false);

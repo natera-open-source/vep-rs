@@ -379,6 +379,18 @@ pub fn global() -> &'static Sink {
     &GLOBAL
 }
 
+/// The guard a test that reads the process-wide sink, or reserves its
+/// skipped-variants file, holds for its run, so such tests run in turn. A test
+/// that only reads what one record reports gives it a [`Sink`] of its own
+/// instead, which no other test can reach.
+#[cfg(test)]
+pub(crate) fn sink_test_guard() -> MutexGuard<'static, ()> {
+    static SINK_TESTS: Mutex<()> = Mutex::new(());
+    SINK_TESTS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// The `tracing` layer that hands every `WARN` event to the global sink as one
 /// line: the message, then every other field as ` name=value`.
 pub struct WarningLayer;

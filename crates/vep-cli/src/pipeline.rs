@@ -347,13 +347,18 @@ pub(crate) type SkipSink<'a> = dyn FnMut(Reported<'_>) + 'a;
 
 /// Reports one skip or warning to the run's warning sink at once.
 pub(crate) fn report_to_sink(reported: Reported<'_>) {
+    report_to(crate::warnings::global(), reported);
+}
+
+/// Reports one skip or warning to `sink` at once.
+pub(crate) fn report_to(sink: &crate::warnings::Sink, reported: Reported<'_>) {
     match reported {
         Reported::Skip {
             description,
             line_number,
             quoted,
-        } => crate::warnings::global().skipped_variant(description, Some(line_number), quoted),
-        Reported::Warning(text) => crate::warnings::global().warn(text),
+        } => sink.skipped_variant(description, Some(line_number), quoted),
+        Reported::Warning(text) => sink.warn(text),
     }
 }
 
@@ -3824,7 +3829,7 @@ mod tests {
     /// drops the allele (VariationFeatureOverlap.pm:469-481).
     #[test]
     fn minimal_splits_after_the_looked_up_reference() {
-        let _guard = crate::validate::sink_test_guard();
+        let _guard = crate::warnings::sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let fasta_path = dir.path().join("ref.fa");
         std::fs::write(&fasta_path, ">21\nACGTACGTACGTACGTACGT\n").unwrap();
@@ -4322,7 +4327,7 @@ mod tests {
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
         };
-        let _in_turn = crate::validate::sink_test_guard();
+        let _in_turn = crate::warnings::sink_test_guard();
         let dir = tempfile::tempdir().unwrap();
         let skipped_file = dir.path().join("skipped.txt");
         let sink = crate::warnings::global();
@@ -5160,7 +5165,7 @@ mod tests {
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
         };
-        let _in_turn = crate::validate::sink_test_guard();
+        let _in_turn = crate::warnings::sink_test_guard();
         let (tx, rx) = mpsc::sync_channel(64);
         let (reader, last_line) = LineCapture::new(Cursor::new(input.to_string()));
         let parser: Box<dyn vep_io::InputParser> =
@@ -5237,7 +5242,7 @@ mod tests {
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
         };
-        let _in_turn = crate::validate::sink_test_guard();
+        let _in_turn = crate::warnings::sink_test_guard();
         let (tx, rx) = mpsc::sync_channel(64);
         let (reader, last_line) = LineCapture::new(Cursor::new(input.to_string()));
         let parser: Box<dyn vep_io::InputParser> =
@@ -5320,7 +5325,7 @@ mod tests {
             prewarm_order: &[],
             checks: &checks,
         };
-        let _in_turn = crate::validate::sink_test_guard();
+        let _in_turn = crate::warnings::sink_test_guard();
         let (tx, rx) = mpsc::sync_channel(64);
         let (reader, last_line) = LineCapture::new(Cursor::new(input.to_string()));
         let parser: Box<dyn vep_io::InputParser> =
@@ -5401,7 +5406,7 @@ mod tests {
             prewarm_order: &[],
             checks: &checks,
         };
-        let _in_turn = crate::validate::sink_test_guard();
+        let _in_turn = crate::warnings::sink_test_guard();
         let (tx, rx) = mpsc::sync_channel(64);
         let (reader, last_line) = LineCapture::new(Cursor::new(input.to_string()));
         let parser: Box<dyn vep_io::InputParser> =
@@ -5471,7 +5476,7 @@ mod tests {
             0,
         );
         let input = "21\t10542404\t10542414\tGGGGGGGGGGA/GGGGGGGGGGT\t+\twide\n";
-        let _in_turn = crate::validate::sink_test_guard();
+        let _in_turn = crate::warnings::sink_test_guard();
         let read = |minimal: bool| {
             let cfg = ReaderConfig {
                 batch_size: 8,

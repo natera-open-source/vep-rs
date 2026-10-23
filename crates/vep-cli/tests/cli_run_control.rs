@@ -896,6 +896,66 @@ fn gencode_primary_assembly_warning_precedes_the_run() {
     );
 }
 
+/// A cache without variation data, asked for co-located variants, warns once
+/// that the co-location columns stay empty, where Ensembl VEP annotates
+/// silently (CacheDir.pm:179 attaches no variation source). The line is a
+/// warning of the run like any other (BaseVEP.pm:802-822): written to the
+/// warnings file and echoed on standard error, and under `--quiet` written to
+/// the file alone (`:821` drops the standard-error copy). The release corpus's
+/// cache holds transcripts and no variation files.
+#[test]
+fn cache_without_variation_data_warns_into_the_warnings_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let args = corpus_args();
+    let cache_flag = args.iter().position(|a| a == "--json_cache").unwrap();
+    let cache = &args[cache_flag + 1];
+    let warning = format!(
+        "WARNING: [cache] no variation data under {cache}: Existing_variation and the frequency \
+         columns stay empty"
+    );
+    let output = run_with(&args, &["--everything"], &out);
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let warnings = std::fs::read_to_string(dir.path().join("out.txt_warnings.txt")).unwrap();
+    assert!(
+        warnings.lines().any(|l| l == warning),
+        "the warnings file lacks the cache warning:\n{warnings}"
+    );
+    let stderr = text(&output.stderr);
+    assert_eq!(
+        warning_lines(&stderr)
+            .iter()
+            .filter(|l| **l == warning)
+            .count(),
+        1,
+        "{stderr}"
+    );
+    let mut echoed = warning_lines(&stderr);
+    echoed.sort_unstable();
+    let mut written: Vec<&str> = warnings.lines().collect();
+    written.sort_unstable();
+    assert_eq!(
+        echoed, written,
+        "every warning of the run is the warnings file's"
+    );
+
+    // A second output: a warnings file is created at a run's first warning, so
+    // a reused path could still hold the first run's file.
+    let quiet_out = dir.path().join("quiet.txt");
+    let quiet = run_with(&args, &["--everything", "--quiet"], &quiet_out);
+    assert_eq!(quiet.status.code(), Some(0), "{}", text(&quiet.stderr));
+    assert!(
+        warning_lines(&text(&quiet.stderr)).is_empty(),
+        "{}",
+        text(&quiet.stderr)
+    );
+    let warnings = std::fs::read_to_string(dir.path().join("quiet.txt_warnings.txt")).unwrap();
+    assert!(
+        warnings.lines().any(|l| l == warning),
+        "--quiet drops the standard-error copy alone:\n{warnings}"
+    );
+}
+
 /// `--warning_file` names the file; the literal `stderr` in any case
 /// (BaseVEP.pm:885 `/^stderr$/i`) keeps the warnings on standard error and
 /// writes no file: each warning twice, as `print $fh` (:819) then `warn` (:821)

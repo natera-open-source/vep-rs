@@ -190,7 +190,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A native cache built by an earlier release holds JSON variation files nothing reads; build it again with `vep-cache-builder` 0.5.0 for co-located variants and the 1000 Genomes columns. (#N)
   - A native cache lists `cds_start_NF` before `cds_end_NF` on every transcript carrying both, where the Ensembl cache's order puts `cds_end_NF` first on seven GRCh38 transcripts. (#N)
 - Co-located variants and frequencies
-  - Under `--check_existing` a cache without variation data warns once that `Existing_variation` and the frequency columns stay empty; Ensembl VEP annotates silently. (#N)
+  - Under `--check_existing` a cache without variation data warns once, in the warnings file and on standard error unless `--quiet`, that `Existing_variation` and the frequency columns stay empty; Ensembl VEP annotates silently. (#N)
   - `--check_existing` matches known variants by allele after trimming from either end, strand-aware and span-exact, in Ensembl VEP's order; structural variants are not co-located. (#N)
   - A co-located variant matched by allele prints only on the rows of the alleles it matched, so a multi-allelic record's rows differ as Ensembl VEP's do. (#N)
   - `CLIN_SIG`, `SOMATIC`, `PHENO` and `PUBMED` print as Ensembl VEP does: allele-specific ClinVar entries by default, one flag per variant with all-zero lists dropped, duplicates kept. (#N)

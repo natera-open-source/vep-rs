@@ -2716,8 +2716,8 @@ fn sql_ident(name: &str) -> String {
 /// `Config.pm:449-452`); otherwise the resolved cache's variation files, opened
 /// once [`check_gnomad_columns`] and [`check_frequency_filter`] pass on the
 /// cache's declared columns (`CacheDir.pm:188-207` runs both as it builds the
-/// variation source). A cache without variation data warns once, as Ensembl
-/// VEP would annotate silently (`CacheDir.pm:179`), unless `--quiet`.
+/// variation source). A cache without variation data warns once through the
+/// run's sink, where Ensembl VEP would annotate silently (`CacheDir.pm:179`).
 pub(crate) fn open_variation_source(
     config: &Config,
     cache: &ResolvedCache,
@@ -2741,9 +2741,7 @@ pub(crate) fn open_variation_source(
             Ok(Some(Arc::new(source)))
         }
         None => {
-            if !config.quiet {
-                eprintln!("{}", VariationSource::missing_warning(cache_dir));
-            }
+            crate::warnings::global().warn(&VariationSource::missing_warning(cache_dir));
             Ok(None)
         }
     }
