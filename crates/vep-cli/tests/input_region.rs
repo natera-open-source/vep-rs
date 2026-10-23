@@ -521,6 +521,33 @@ fn lines_outside_the_expression_are_warned_and_skipped() {
     }
 }
 
+/// A refused line that kept a `\r` is quoted without it: a line ending `\r\r\n`
+/// loses its `\r\n` and keeps one `\r` (ensembl-io TextParser.pm:138 replaces
+/// one `\r\n`, then `chomp`), which fails the expression; the skip warning
+/// quotes the line with every run of white space one space (BaseVEP.pm:849),
+/// the parser's refusal quotes it the same way, and no control byte reaches the
+/// warnings file. The record after it, ending `\r\n`, is annotated.
+#[test]
+fn a_kept_carriage_return_is_quoted_as_a_space() {
+    let dir = tempfile::tempdir().unwrap();
+    let region = write(
+        dir.path(),
+        "carriage.region.txt",
+        "21:14221107-14221107/A\r\r\n21:14221107-14221107/A\r\n",
+    );
+    let (rows, warnings) = annotate_with_warnings(dir.path(), &region, &["--format", "region"]);
+    assert!(
+        only_record_has_rows(&rows, "21:14221107-14221107/A"),
+        "{rows:?}"
+    );
+    assert_eq!(
+        warnings.lines().collect::<Vec<_>>(),
+        ["WARNING: line 1 skipped (21:14221107-14221107/A ): Unable to parse region '21:14221107-14221107/A ': expected chr:start-end[:strand]/allele"],
+        "{warnings}"
+    );
+    assert!(!warnings.contains('\r'), "{warnings:?}");
+}
+
 /// A span over `--max_sv_size` is skipped with the text Ensembl VEP's
 /// `validate_vf` skips it with (Parser.pm:491-499), the span being end minus
 /// start, before any reference is read for it: under a limit of 1000 the

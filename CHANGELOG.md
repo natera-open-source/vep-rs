@@ -304,6 +304,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A BGZF stream followed by a plain gzip member is read whole, as `gzip -dc` reads every member for Ensembl VEP. (#N)
   - An empty ALT between two others keeps its empty part in the record's working string (`C/G//T`) and its `-` allele. (#N)
   - A VCF record's one ALT is anchor-chopped whatever it carries, and a `*` the minimisation leaves writes no row, as in Ensembl VEP. (#N)
+  - A `*` the `--minimal` split's trim leaves in a multi-allelic record writes no row and keeps its allele number, as in Ensembl VEP. (#N)
+  - A refused region line is quoted with its white space collapsed, so a kept carriage return reaches the warning as a space. (#N)
 - HGVS, SPDI and identifiers
   - HGVSp and shifted codons of a moved insertion turn the allele as the record wrote it, unturned on a reverse-strand transcript when the shift exceeds its length. (#N)
   - `SHIFT_LENGTH` is written on sequence variants' transcript rows alone under `--shift_3prime 1 --shift_length`; a structural record's rows carry none, as in Ensembl VEP. (#N)
@@ -316,6 +318,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - An HGVS `c.`, `n.` or `p.` input naming a transcript the cache cannot read is refused under the `cache` component, not `input`. (#N)
   - `HGVSg` of a trimmed allele of a `--minimal` multi-allelic record is the record-level notation Ensembl VEP prints, where it printed nothing. (#N)
   - An SPDI deletion of length 0 is skipped naming the empty span, not `Sequence name ... not valid`; Ensembl VEP keeps a `/-` feature that writes no row. (#N)
+  - The `--format` help names the zero-length SPDI deletion skip and its warning beside the span-past-end skip. (#N)
 - Caches, reference FASTA and the cache tools
   - A cache whose chromosome directories are symlinks loads; it was refused as holding no transcript shards. (#N)
   - `vep-cache-builder` writes a `TSA=indel` variation record with the export's alleles at its position, so a left-aligned input co-locates with a native cache as Ensembl VEP co-locates it. (#N)

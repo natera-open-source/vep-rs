@@ -19,9 +19,9 @@
 //! chopped allele string and span as its originals (:694-697) and the `minimised`
 //! mark. At output the features are merged back (OutputFactory.pm:2272-2354): the
 //! record prints its own span and allele string, the alleles print trimmed, and
-//! an allele equal to the reference once trimmed writes no row
-//! (VariationFeatureOverlap.pm:481). A record none of whose alleles changed is
-//! left as it stands, with no mark.
+//! an allele that once trimmed equals the reference, or is a `*` or `<DEL:*>`,
+//! writes no row (VariationFeatureOverlap.pm:481, :484). A record none of whose
+//! alleles changed is left as it stands, with no mark.
 
 use std::sync::Arc;
 
@@ -34,8 +34,8 @@ pub enum MinimalSplit {
     Unchanged,
     /// The record split and this allele is annotated on its trimmed span.
     Trimmed,
-    /// The record split and this allele equals the reference once trimmed, so
-    /// Ensembl VEP writes no row for it.
+    /// The record split and this allele, once trimmed, equals the reference or
+    /// is a `*` or `<DEL:*>`, so Ensembl VEP writes no row for it.
     NoAllele,
 }
 
@@ -132,9 +132,13 @@ pub fn minimise_bi_allelic(variant: &mut InputVariant) {
 /// carrying a class already, a resolved identifier's stored one, keeps it, as
 /// `class_SO_term` keeps a set value, VariationFeature.pm:1117), its written
 /// position as its ALLELE_NUM (:684) and, after the first allele, the key prefix
-/// the rejoin sorts its rows by; an allele equal to the reference once trimmed is
-/// [`MinimalSplit::NoAllele`]. A structural record, a record with no allele to
-/// annotate and a bi-allelic record are left alone.
+/// the rejoin sorts its rows by; an allele that once trimmed equals the reference
+/// or is a `*` or `<DEL:*>` (`*C` against `C` leaves `-/*`) is
+/// [`MinimalSplit::NoAllele`]: Ensembl VEP builds the overlap alleles from the
+/// trimmed string and passes both over (VariationFeatureOverlap.pm:481, :484), the
+/// `*` numbered first, so the alleles after it keep their written positions. A
+/// structural record, a record with no allele to annotate and a bi-allelic record
+/// are left alone.
 pub fn apply_minimal_split(variant: &mut InputVariant, own: usize) -> MinimalSplit {
     if variant.is_structural || variant.no_allele {
         return MinimalSplit::Unchanged;
@@ -174,11 +178,18 @@ pub fn apply_minimal_split(variant: &mut InputVariant, own: usize) -> MinimalSpl
             .map(str::to_string);
     }
     variant.uploaded_allele_string = Some(Arc::clone(&working));
-    if trimmed_ref == trimmed_alt {
+    if rowless_trimmed_pair(&trimmed_ref, &trimmed_alt) {
         return MinimalSplit::NoAllele;
     }
     set_split_feature(variant, own, trimmed_ref, trimmed_alt, new_start, new_end);
     MinimalSplit::Trimmed
+}
+
+/// Whether the split feature of a pair [`trim_sequences`] left writes no row:
+/// the alleles equal (VariationFeatureOverlap.pm:481), or the alternate a `*`
+/// or `<DEL:*>` (:484).
+fn rowless_trimmed_pair(trimmed_ref: &[u8], trimmed_alt: &[u8]) -> bool {
+    trimmed_ref == trimmed_alt || matches!(trimmed_alt, b"*" | b"<DEL:*>")
 }
 
 /// The reference allele's row (`--process_ref_homs`) of one allele's split
@@ -244,15 +255,13 @@ pub fn rowless_first_feature(allele: &InputVariant) -> Option<InputVariant> {
 }
 
 /// Whether the split feature of `alt`, an alternate allele of a record's working
-/// string, writes no row: a `*` or `<DEL:*>` (VariationFeatureOverlap.pm:469-474,
-/// :484), or an allele equal to `reference` once the pair is trimmed (:481).
+/// string, writes no row: once the pair is trimmed (InputBuffer.pm:665), an allele
+/// equal to `reference` (VariationFeatureOverlap.pm:481) or a `*` or `<DEL:*>`,
+/// written so or left by the trim (`*C` against `C`) (:469-474, :484).
 pub fn rowless_alternate_allele(reference: &str, alt: &str) -> bool {
-    if matches!(alt, "*" | "<DEL:*>") {
-        return true;
-    }
     let (trimmed_ref, trimmed_alt, _, _, _) =
         trim_sequences(reference.as_bytes(), alt.as_bytes(), 0, 0);
-    trimmed_ref == trimmed_alt
+    rowless_trimmed_pair(&trimmed_ref, &trimmed_alt)
 }
 
 /// `variant`, an allele of a `--minimal` split record or the reference row leading
@@ -310,21 +319,21 @@ fn first_feature_class(working: &str) -> String {
 /// `ref_allele_string` was cached while the first allele's rows were built
 /// before the rejoin restored the record's string (OutputFactory.pm:1357 at
 /// :2289, VariationFeature.pm:1533-1539), so it is the first allele's trimmed
-/// reference, or the record's own when the first allele equals the reference once
-/// trimmed and so built no row to cache it; with `reference_rows`
+/// reference, or the record's own when the first allele writes no row
+/// ([`rowless_alternate_allele`]: equal to the reference once trimmed, or a `*`
+/// or `<DEL:*>`) and so built none to cache it; with `reference_rows`
 /// (`--process_ref_homs`, and the row not filtered away) that feature builds the
-/// reference allele's row, so its trimmed reference `-` is the one cached.
+/// reference allele's row, so its trimmed reference is the one cached.
 pub fn rejoined_reference(working: &str, reference_rows: bool) -> String {
     let mut parts = working.split('/');
     let reference = parts.next().unwrap_or("");
     let first = parts.next().unwrap_or("");
     let (trimmed_ref, trimmed_alt, _, _, _) =
         trim_sequences(reference.as_bytes(), first.as_bytes(), 0, 0);
-    if trimmed_ref == trimmed_alt && !reference_rows {
-        reference.to_string()
-    } else {
-        String::from_utf8_lossy(&trimmed_ref).into_owned()
+    if rowless_trimmed_pair(&trimmed_ref, &trimmed_alt) && !reference_rows {
+        return reference.to_string();
     }
+    String::from_utf8_lossy(&trimmed_ref).into_owned()
 }
 
 /// `variant` as the split feature of one allele: its trimmed pair over the
@@ -639,6 +648,72 @@ mod tests {
             MinimalSplit::Unchanged
         );
         assert!(rowless_first_feature(&unsplit).is_none());
+    }
+
+    /// A `*` the trim leaves writes no row: `21 10542415 x A *A,G` under `--minimal`
+    /// splits, as `*A` against `A` trims its shared last base to `-/*` at
+    /// 10542415-10542414 (a change, InputBuffer.pm:665-666, the end moving in by
+    /// the base trimmed), and Ensembl VEP numbers the feature's allele `*`
+    /// and passes it over as it does a `*` written so (VariationFeatureOverlap.pm:484).
+    /// So the first allele is [`MinimalSplit::NoAllele`], the `G` allele is `A/G`
+    /// at 10542415 numbered by its written position, 2 (`_base_allele_number`,
+    /// InputBuffer.pm:684), under the key prefix `A/G_`, with the first trimmed
+    /// pair's class, `sequence_alteration`, and the first feature no allele carries
+    /// is `-/*`. `REF_ALLELE` is the record's own `A`: the `*` feature built no
+    /// row to cache its `-` (OutputFactory.pm:1357 runs per row); under the
+    /// reference rows its reference row caches `-`. A `<DEL:*>` the trim leaves
+    /// is passed over the same way, and a longer allele with a `*` (`*AA`) is not.
+    #[test]
+    fn a_star_the_trim_leaves_writes_no_row() {
+        let working: Arc<str> = "A/*A/G".into();
+        let mut star = InputVariant::new(
+            "21".into(),
+            10542415,
+            10542415,
+            b"A".to_vec(),
+            b"*A".to_vec(),
+        );
+        star.record_allele_string_multi = Some(Arc::clone(&working));
+        assert_eq!(apply_minimal_split(&mut star, 0), MinimalSplit::NoAllele);
+        assert!(star.minimised);
+        assert_eq!(
+            (star.original_start, star.original_end),
+            (Some(10542415), Some(10542415))
+        );
+
+        let mut g = InputVariant::new(
+            "21".into(),
+            10542415,
+            10542415,
+            b"A".to_vec(),
+            b"G".to_vec(),
+        );
+        g.allele_index = 1;
+        g.record_allele_string_multi = Some(Arc::clone(&working));
+        assert_eq!(apply_minimal_split(&mut g, 1), MinimalSplit::Trimmed);
+        assert_eq!(
+            (g.start, g.end, g.allele_string.as_str()),
+            (10542415, 10542415, "A/G")
+        );
+        assert_eq!(g.allele_num, None);
+        assert_eq!(g.rejoin_key_prefix.as_deref(), Some("A/G_"));
+        assert_eq!(g.class_so_term(), "sequence_alteration");
+        assert_eq!(g.uploaded_allele_string.as_deref(), Some("A/*A/G"));
+        let first = rowless_first_feature(&g).unwrap();
+        assert_eq!(
+            (first.start, first.end, first.allele_string.as_str()),
+            (10542415, 10542414, "-/*")
+        );
+        assert_eq!(first.rejoin_key_prefix, None);
+
+        assert!(rowless_alternate_allele("A", "*A"));
+        assert!(rowless_alternate_allele("A", "*"));
+        assert!(rowless_alternate_allele("C", "<DEL:*>C"));
+        assert!(!rowless_alternate_allele("A", "*AA"));
+        assert!(!rowless_alternate_allele("A", "G"));
+        assert_eq!(rejoined_reference("A/*A/G", false), "A");
+        assert_eq!(rejoined_reference("A/*A/G", true), "-");
+        assert_eq!(rejoined_reference("A/*/AT", false), "A");
     }
 
     /// A record none of whose alleles trims (`G/T/C`) is left as it stands with no

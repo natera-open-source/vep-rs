@@ -360,6 +360,105 @@ fn a_split_record_rejoins_as_ensembl_vep_rejoins_it() {
     );
 }
 
+/// A `*` the split's trim leaves writes no row and keeps its number. The ALT `*A`
+/// of `21 10542415 star_embedded A *A,G` is exempt from the anchor chop
+/// (Parser/VCF.pm:315) and, under `--minimal`, trims against `A` to `-/*`
+/// (InputBuffer.pm:665), a change that splits the record; Ensembl VEP numbers
+/// the feature's allele `*` and passes it over (VariationFeatureOverlap.pm:484),
+/// as it does a `*` written so, and the `G` allele keeps its written position
+/// (`_base_allele_number`, InputBuffer.pm:684). So the record writes one row on
+/// ENST00000427445: the record's Location, Allele `G`, `ALLELE_NUM=2`,
+/// `UPLOADED_ALLELE=A/*A/G`, `MINIMISED=1` and the first feature's class,
+/// `sequence_alteration`, as `VARIANT_CLASS`; with the `*A` written second the
+/// `G` row is numbered 1 and the class is the first pair's `SNV`. `REF_ALLELE` is
+/// the record's own `A`, the `*` feature having built no row to cache its
+/// trimmed `-` (OutputFactory.pm:1357 runs per row). Without `--minimal` the
+/// record is not split and the allele `*A`, which is not `*`, writes its row,
+/// numbered 1.
+#[test]
+fn a_star_the_split_leaves_writes_no_row_and_keeps_its_number() {
+    let dir = tempfile::tempdir().unwrap();
+    let records = "21\t10542415\tstar_embedded\tA\t*A,G\t.\t.\t.\n\
+                   21\t10542415\tstar_second\tA\tG,*A\t.\t.\t.\n";
+    vep(
+        dir.path(),
+        records,
+        &[],
+        &["--minimal", "--uploaded_allele", "--variant_class"],
+    );
+    let lines = data_lines(dir.path());
+    let record = |lines: &[String], name: &str| -> Vec<Vec<String>> {
+        let prefix = format!("{name}\t");
+        let own: Vec<String> = lines
+            .iter()
+            .filter(|line| line.starts_with(&prefix))
+            .cloned()
+            .collect();
+        rows_on(&own, "ENST00000427445")
+    };
+    let embedded = record(&lines, "star_embedded");
+    assert_eq!(embedded.len(), 1, "{lines:?}");
+    assert_eq!(
+        &embedded[0][..6],
+        ["21:10542415", "G", "438", "86", "29", "missense_variant"]
+    );
+    for key in [
+        "ALLELE_NUM=2;",
+        "UPLOADED_ALLELE=A/*A/G;",
+        "VARIANT_CLASS=sequence_alteration;",
+        "MINIMISED=1",
+    ] {
+        assert!(embedded[0][6].contains(key), "{key}: {}", embedded[0][6]);
+    }
+    let second = record(&lines, "star_second");
+    assert_eq!(second.len(), 1, "{lines:?}");
+    assert_eq!(&second[0][..2], ["21:10542415", "G"]);
+    for key in ["ALLELE_NUM=1;", "VARIANT_CLASS=SNV;", "MINIMISED=1"] {
+        assert!(second[0][6].contains(key), "{key}: {}", second[0][6]);
+    }
+    assert!(
+        lines
+            .iter()
+            .all(|line| line.split('\t').nth(2) != Some("*")),
+        "{lines:?}"
+    );
+
+    vep(
+        dir.path(),
+        records,
+        &[],
+        &["--minimal", "--show_ref_allele"],
+    );
+    let lines = data_lines(dir.path());
+    let rows = rows_on(&lines, "ENST00000427445");
+    assert_eq!(rows.len(), 2, "{lines:?}");
+    for row in &rows {
+        assert!(row[6].contains("REF_ALLELE=A;"), "{}", row[6]);
+    }
+
+    vep(
+        dir.path(),
+        records,
+        &[],
+        &["--allele_number", "--uploaded_allele"],
+    );
+    let lines = data_lines(dir.path());
+    let embedded = record(&lines, "star_embedded");
+    assert_eq!(embedded.len(), 2, "{lines:?}");
+    assert_eq!(&embedded[0][..2], ["21:10542415", "*A"]);
+    assert!(
+        embedded[0][6].contains("ALLELE_NUM=1;"),
+        "{}",
+        embedded[0][6]
+    );
+    assert_eq!(&embedded[1][..2], ["21:10542415", "G"]);
+    assert!(
+        embedded[1][6].contains("ALLELE_NUM=2;"),
+        "{}",
+        embedded[1][6]
+    );
+}
+
 /// The attributes corpus: a chromosome 21 cache whose transcripts carry the
 /// miRNA structure attributes.
 fn attributes_corpus() -> PathBuf {

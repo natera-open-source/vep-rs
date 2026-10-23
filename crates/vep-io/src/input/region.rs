@@ -50,7 +50,7 @@ use vep_core::variant::InputVariant;
 use crate::error::IoError;
 
 use super::ensembl::structural_variant;
-use super::{minimise_alleles, InputParser, ParserContext};
+use super::{is_perl_space, minimise_alleles, InputParser, ParserContext};
 
 /// Parser for region format input, one region per line.
 pub struct RegionParser<R: BufRead> {
@@ -91,15 +91,20 @@ impl<R: BufRead> RegionParser<R> {
 
     /// Parse one line, its line end removed, into its variant.
     fn parse_record(&self, line: &str) -> Result<InputVariant, IoError> {
+        // A refusal quotes the line collapsed, not as written: a `\r` the line
+        // end left (`\r\r\n`), or a tab inside a chromosome name the expression
+        // admits, would carry a control byte into the warning.
         let region = match_region(line).ok_or_else(|| {
             IoError::SkippedLine(format!(
-                "Unable to parse region '{line}': expected chr:start-end[:strand]/allele"
+                "Unable to parse region '{}': expected chr:start-end[:strand]/allele",
+                collapse_space(line)
             ))
         })?;
         let coordinate = |digits: &str| {
             parse_coordinate(digits).ok_or_else(|| {
                 IoError::SkippedLine(format!(
-                    "Unable to parse region '{line}': a coordinate is over {MAX_COORD}"
+                    "Unable to parse region '{}': a coordinate is over {MAX_COORD}",
+                    collapse_space(line)
                 ))
             })
         };
@@ -216,6 +221,25 @@ fn minimised_span(start: u64, end: u64, allele: &[u8], minimal: bool) -> u64 {
     let trailing = rest.iter().rev().take_while(|&&b| b == b'N').count();
     let suffix = trailing.min((reference_len - prefix as u64).min(rest.len() as u64) as usize);
     span.saturating_sub((prefix + suffix) as u64)
+}
+
+/// `line` with every run of white space (Perl's `\s`) one space, as a skipped
+/// line is quoted (`s/\s+/ /g`, BaseVEP.pm:849).
+fn collapse_space(line: &str) -> String {
+    let mut collapsed = String::with_capacity(line.len());
+    let mut in_space = false;
+    for c in line.chars() {
+        if is_perl_space(c) {
+            if !in_space {
+                collapsed.push(' ');
+            }
+            in_space = true;
+        } else {
+            collapsed.push(c);
+            in_space = false;
+        }
+    }
+    collapsed
 }
 
 /// `(\d+)` opening `text`: the digits and the text after them.
@@ -509,7 +533,8 @@ mod tests {
     /// Every shape outside `_valid_region_regex` is refused: a position without
     /// its end, a missing allele, a multi-allelic string, an allele outside the
     /// two forms, a strand other than `1`, `+1` or `-1`, an empty chromosome, a
-    /// trailing blank and a VCF-shaped line. The warning names the line.
+    /// trailing blank and a VCF-shaped line. The warning names the line, each
+    /// tab of the VCF-shaped one a space.
     #[test]
     fn lines_outside_the_expression_are_refused() {
         for region in [
@@ -529,13 +554,44 @@ mod tests {
             "21\t100\t100\tA/G",
             "21:g.100A>G",
         ] {
+            let quoted = region.replace('\t', " ");
             assert_eq!(
                 refused(region),
                 format!(
-                    "Unable to parse region '{region}': expected chr:start-end[:strand]/allele"
+                    "Unable to parse region '{quoted}': expected chr:start-end[:strand]/allele"
                 )
             );
         }
+    }
+
+    /// A refused line is quoted with every run of white space one space, as the
+    /// skip warning quotes it (BaseVEP.pm:849): a line ending `\r\r\n` keeps one
+    /// `\r` once its line end is removed (ensembl-io TextParser.pm:138 replaces
+    /// one `\r\n`, then `chomp`), quoted as a trailing space, and a run of tabs
+    /// inside the line is one space; no control byte reaches the warning. The
+    /// coordinate refusal quotes the line the same way: `[^:]+` admits a tab in
+    /// the chromosome, so a line with one can match the expression and fail there.
+    #[test]
+    fn a_refused_line_is_quoted_with_its_white_space_collapsed() {
+        let past = MAX_COORD + 1;
+        let mut parser = parser(&format!(
+            "21:100-100/G\r\r\n21:100-100\t\t/G\n2\t1:{past}-{past}/G\n"
+        ));
+        assert_eq!(
+            parser.next_variant().unwrap().unwrap_err().to_string(),
+            "Unable to parse region '21:100-100/G ': expected chr:start-end[:strand]/allele"
+        );
+        assert_eq!(
+            parser.next_variant().unwrap().unwrap_err().to_string(),
+            "Unable to parse region '21:100-100 /G': expected chr:start-end[:strand]/allele"
+        );
+        assert_eq!(
+            parser.next_variant().unwrap().unwrap_err().to_string(),
+            format!(
+                "Unable to parse region '2 1:{past}-{past}/G': a coordinate is over {MAX_COORD}"
+            )
+        );
+        assert!(parser.next_variant().is_none());
     }
 
     /// `validate_vf`'s size test (Parser.pm:491-500) runs before the run of `N`
