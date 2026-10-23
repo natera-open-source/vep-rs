@@ -15,9 +15,10 @@
 //! VEP builds a missing index itself, while the FASTA reader here needs the
 //! `.fai`, and the `.gzi` of a compressed file, beside it). The chromosome
 //! synonyms are read from `--synonyms`, else from the cache's own
-//! `chr_synonyms.txt` (`CacheDir.pm:254`, `Runner.pm:131`). Every refusal is a
-//! [`CliError`]: the cache's under the `cache` component, an unreadable
-//! `--synonyms` file under `config`.
+//! `chr_synonyms.txt` (`CacheDir.pm:254`, `Runner.pm:131`), except under
+//! `--show_cache_info`, which prints before Ensembl VEP reads them. Every
+//! refusal is a [`CliError`]: the cache's under the `cache` component, an
+//! unreadable `--synonyms` file under `config`.
 //!
 //! The cache's checksum manifest (`CHECKSUMS.sha256`, [`CacheManifest`]) is
 //! read here, once, before `info.json`, and every cache file the run then reads
@@ -113,14 +114,21 @@ pub fn resolve(config: &Config) -> Result<ResolvedCache, CliError> {
     } else {
         detect_fasta(&dir)
     };
-    let synonyms = Arc::new(load_synonyms(config.synonyms.as_deref(), &dir, &manifest)?);
+    // Ensembl VEP reads the synonyms in `Runner::init` (Runner.pm:131), which a
+    // `--show_cache_info` run exits before (vep:39-43), so an unreadable file
+    // never stops the cache information from printing.
+    let synonyms = if config.show_cache_info {
+        ChromosomeSynonyms::new()
+    } else {
+        load_synonyms(config.synonyms.as_deref(), &dir, &manifest)?
+    };
     Ok(ResolvedCache {
         dir,
         manifest,
         info,
         assembly,
         fasta,
-        synonyms,
+        synonyms: Arc::new(synonyms),
     })
 }
 

@@ -220,6 +220,55 @@ fn bgzf_input_without_gz_suffix_is_read() {
     }
 }
 
+/// A file concatenating a BGZF stream, its end-of-file block included, and a
+/// plain gzip member (`cat records.vcf.bgz more.vcf.gz`) is read whole in either
+/// order, and so is one whose blocks resume after the plain member, under one
+/// decompression thread and several, as `gzip -dc` reads every member of a
+/// stream whatever its kind (Parser.pm:242, Utils.pm:441).
+#[test]
+fn bgzf_and_plain_gzip_members_of_one_stream_are_all_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut expected = reference_rows(dir.path());
+    expected.sort();
+    let records: Vec<&str> = RECORDS.lines().collect();
+    let first_two = format!("{}\n{}\n", records[0], records[1]);
+    let last_three = format!("{}\n{}\n{}\n", records[2], records[3], records[4]);
+    let streams = [
+        (
+            "blocks-then-member.vcf.gz",
+            [
+                bgzf(&format!("{VCF_HEADER}{first_two}")),
+                plain_gzip(&last_three),
+            ]
+            .concat(),
+        ),
+        (
+            "member-then-blocks.vcf.gz",
+            [
+                plain_gzip(&format!("{VCF_HEADER}{last_three}")),
+                bgzf(&first_two),
+            ]
+            .concat(),
+        ),
+        (
+            "blocks-member-blocks.vcf.gz",
+            [bgzf(VCF_HEADER), plain_gzip(&last_three), bgzf(&first_two)].concat(),
+        ),
+    ];
+    for (name, bytes) in &streams {
+        let path = write(dir.path(), name, bytes);
+        for threads in ["1", "4"] {
+            let mut rows = annotate(
+                dir.path(),
+                &["-i", path.to_str().unwrap()],
+                &["--decompression_threads", threads],
+            );
+            rows.sort();
+            assert_eq!(rows, expected, "{name} with {threads} threads");
+        }
+    }
+}
+
 /// A BGZF stream cut inside a block is a read failure, exit 1 with one line,
 /// under one decompression worker and under several: the block reader with
 /// workers would otherwise end the stream at the cut and the run would write
@@ -557,6 +606,21 @@ fn missing_input_file_is_fatal() {
     assert!(!out.exists());
 }
 
+/// An input name Perl reads as false, the empty string or `0`, is refused with
+/// the text of the parser's first test (Parser.pm:132 `die("ERROR: No input
+/// file given\n") unless $hashref->{file}`), which comes before the existence
+/// test (:239), and nothing is written.
+#[test]
+fn false_input_file_name_is_no_input_file() {
+    let dir = tempfile::tempdir().unwrap();
+    for name in ["", "0"] {
+        let out = output_path(dir.path());
+        let output = vep(&["-i", name], &out, &[]);
+        assert_refused(&output, "ERROR: [input] No input file given");
+        assert!(!out.exists(), "{name:?}");
+    }
+}
+
 /// A region input with no FASTA in reach (none named, none in the cache
 /// directory) is refused under the input component with Ensembl VEP's text
 /// (Parser/Region.pm:115), whether `--format region` names the format or the
@@ -765,5 +829,40 @@ fn full_cache_dir_keeps_its_own_key_in_the_command_line_header() {
                 "{source} {format:?}: the cache resolved"
             );
         }
+    }
+}
+
+/// Under `--full_cache_dir` with no `--assembly`, the JSON `assembly_name` is the
+/// cache's own, read from `info.json`. Ensembl VEP 116.2 prints `null` there:
+/// JSON.pm:242 reads the `assembly` parameter, set by `--assembly` or by the
+/// cache directory's name (CacheDir.pm:356), which the `--full_cache_dir` branch
+/// (:303) never reaches, or by `cache_assembly`, declared at JSON.pm:168 and set
+/// nowhere. The cache's assembly is the one the run annotates against, so it
+/// is printed rather than the unset parameter.
+#[test]
+fn full_cache_dir_json_names_the_caches_assembly_without_the_flag() {
+    let dir = tempfile::tempdir().unwrap();
+    let plain = write(dir.path(), "plain.vcf", vcf_text().as_bytes());
+    let info: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(cache().join("info.json")).unwrap()).unwrap();
+    let assembly = info["assembly"].as_str().unwrap();
+    assert!(!assembly.is_empty(), "{info}");
+    let out = output_path(dir.path());
+    let output = common::isolated_vep_anywhere()
+        .args(["-i", plain.to_str().unwrap(), "-o", out.to_str().unwrap()])
+        .args(["--full_cache_dir", cache().to_str().unwrap()])
+        .args(["--json", "--force_overwrite", "--no_stats", "--quiet"])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let records: Vec<serde_json::Value> = std::fs::read_to_string(&out)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(records.len(), 5, "one object per record");
+    for record in &records {
+        assert_eq!(record["assembly_name"], assembly, "{record}");
     }
 }

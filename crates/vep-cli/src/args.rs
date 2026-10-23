@@ -157,7 +157,9 @@ pub struct Args {
     #[arg(help_heading = "Input", long = "lookup_ref")]
     pub lookup_ref: bool,
 
-    /// Output file path (use "STDOUT" for standard output, in any case); the last of several wins
+    /// Output file path ("STDOUT" in any case is standard output, as is "-" unless
+    /// --compress_output writes a file, or Parquet a directory, of that name); the last of
+    /// several wins
     #[arg(
         help_heading = "Output",
         short = 'o',
@@ -247,7 +249,8 @@ pub struct Args {
 
     /// File the warnings of the run are written to, created at the first warning;
     /// default <output_file>_warnings.txt beside the output (STDOUT_warnings.txt in the
-    /// working directory for -o STDOUT). STDERR, in any case, keeps them on standard
+    /// working directory for -o STDOUT, vep_warnings.txt for an output named 0 or
+    /// empty). STDERR, in any case, keeps them on standard
     /// error, each written twice unless --quiet, as Ensembl VEP writes it. A warning
     /// is also echoed on standard error unless --quiet
     #[arg(help_heading = "Output", long = "warning_file", value_name = "FILE")]
@@ -1180,20 +1183,21 @@ pub struct Args {
 /// and dropped, so `.5`, `1e-2`, `+0.5` and `1_0` pass and `nan`, `inf` and `1.`
 /// are refused as the option's value.
 fn real_number(text: &str) -> Result<f64, String> {
+    const NOT_A_REAL_NUMBER: &str = "real number expected";
     let unsigned = text.strip_prefix(['+', '-']).unwrap_or(text);
     let mantissa = unsigned
         .split_once(['e', 'E'])
-        .map_or(unsigned, |(mantissa, _)| mantissa);
-    let shaped = mantissa.starts_with(|c: char| c.is_ascii_digit() || c == '.')
+        .map_or(unsigned, |(mantissa, _exponent)| mantissa);
+    let has_real_number_shape = mantissa.starts_with(|c: char| c.is_ascii_digit() || c == '.')
         && mantissa
             .split_once('.')
             .is_none_or(|(_, fraction)| !fraction.is_empty());
-    if !shaped {
-        return Err("real number expected".to_string());
+    if !has_real_number_shape {
+        return Err(NOT_A_REAL_NUMBER.to_string());
     }
     text.replace('_', "")
         .parse()
-        .map_err(|_| "real number expected".to_string())
+        .map_err(|_| NOT_A_REAL_NUMBER.to_string())
 }
 
 /// The `--pick_order` criteria as Ensembl VEP reads the option: the fields of
@@ -1945,9 +1949,12 @@ mod tests {
         assert!(args.allow_non_variant);
     }
 
-    /// `shift_hgvs=i` (Config.pm:201) takes a value, and only 0 or 1 is read as a
-    /// setting (BaseRunner.pm:498): the bare flag and any other value are syntax
-    /// errors, so neither can pass as a silent default.
+    /// `shift_hgvs=i` (Config.pm:201) takes any integer in Ensembl VEP, which
+    /// BaseRunner.pm:498 matches against `/(0|1)/` as a substring, so `2` runs
+    /// with the default and `10` sets the shifting variables to 10. Here `0` and
+    /// `1` alone are read: the bare flag and any other value are syntax errors,
+    /// so neither passes as a silent default, the departure the CLI reference's
+    /// compatibility page states.
     #[test]
     fn shift_hgvs_takes_0_or_1() {
         assert_eq!(

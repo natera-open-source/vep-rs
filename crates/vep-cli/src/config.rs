@@ -386,9 +386,11 @@ pub fn input_data_for(args: &Args) -> Option<&str> {
 
 /// Where a command line's warnings go: `--warning_file` when its value is true
 /// in Perl, else `<output_file>_warnings.txt` beside the last `-o` value as the
-/// user spelled it (BaseVEP.pm:890 `$file ||= ...`, so an empty value or `0` is
-/// no file); readable before the configuration is resolved, so the sink can take
-/// the warnings the resolution itself raises.
+/// user spelled it, or beside `vep` when that value is false in Perl
+/// (BaseVEP.pm:890 `$file ||= ($self->param('output_file') || 'vep')`, so an
+/// empty value or `0` names no file on either side); readable before the
+/// configuration is resolved, so the sink can take the warnings the resolution
+/// itself raises.
 pub fn warning_file_for(args: &Args) -> String {
     match args
         .warning_file
@@ -396,12 +398,14 @@ pub fn warning_file_for(args: &Args) -> String {
         .filter(|file| crate::argv::truthy(file))
     {
         Some(file) => file.to_string(),
-        None => crate::warnings::default_warning_file(
-            args.output_file
-                .last()
-                .map(String::as_str)
-                .unwrap_or("variant_effect_output.txt"),
-        ),
+        None => {
+            let output_file = match args.output_file.last().map(String::as_str) {
+                None => "variant_effect_output.txt",
+                Some(file) if crate::argv::truthy(file) => file,
+                Some(_) => "vep",
+            };
+            crate::warnings::default_warning_file(output_file)
+        }
     }
 }
 
@@ -3042,7 +3046,9 @@ mod tests {
 
     /// The warnings file is `--warning_file`, else `<output_file>_warnings.txt`
     /// with the output file as the user spelled it, `STDOUT` included
-    /// (BaseVEP.pm:890 reads the `output_file` parameter as given); a
+    /// (BaseVEP.pm:890 reads the `output_file` parameter as given), or
+    /// `vep_warnings.txt` for an output named `0`, which Perl reads as false
+    /// (`($self->param('output_file') || 'vep')`, the same line); a
     /// `--warning_file` that is false in Perl, the empty string or `0`, is no
     /// file and the default stands (`$file ||= ...`, the same line).
     #[test]
@@ -3063,6 +3069,7 @@ mod tests {
             config(&["vep", "-o", "a", "-o", "b"]).warning_file,
             "b_warnings.txt"
         );
+        assert_eq!(config(&["vep", "-o", "0"]).warning_file, "vep_warnings.txt");
         assert_eq!(
             config(&["vep", "-o", "x", "--warning_file", "w.txt"]).warning_file,
             "w.txt"

@@ -179,10 +179,15 @@ impl ReferenceSequence for FastaReference {
 }
 
 /// Refuses a named input file that is not there with Ensembl VEP's text
-/// (Parser.pm:239); `--input_data` and `STDIN` name no file to check.
+/// (Parser.pm:239), and a name Perl reads as false (the empty string, `0`) with
+/// the text of the test that comes first there (`:132`); `--input_data` and
+/// `STDIN` name no file to check.
 fn check_input_file_exists(config: &Config) -> Result<(), CliError> {
     if config.input_data.is_some() || config.input_file == "STDIN" {
         return Ok(());
+    }
+    if !crate::argv::truthy(&config.input_file) {
+        return Err(CliError::new("input", "No input file given"));
     }
     if Path::new(&config.input_file).exists() {
         return Ok(());
@@ -243,10 +248,12 @@ pub(crate) fn bgzf_block_size(header: &[u8]) -> Option<usize> {
 /// reports a frame its reader thread cannot complete (a file cut inside a block)
 /// as the end of the stream and holds the error for `finish`, so a plain read
 /// takes a truncated file for a short one. The first empty fill finishes the
-/// reader and returns that error; every later fill is empty, because the
-/// finished reader panics when read again.
+/// reader, returns that error or keeps the reader it read through in
+/// `finished`; every later fill is empty, because the finished reader panics
+/// when read again.
 struct CheckedBgzfReader<R: Read + Send + 'static> {
     inner: Option<bgzf::io::MultithreadedReader<R>>,
+    finished: Option<R>,
 }
 
 impl<R: Read + Send + 'static> Read for CheckedBgzfReader<R> {
@@ -266,7 +273,7 @@ impl<R: Read + Send + 'static> BufRead for CheckedBgzfReader<R> {
         };
         if empty {
             if let Some(mut finished) = self.inner.take() {
-                finished.finish()?;
+                self.finished = Some(finished.finish()?);
             }
             return Ok(&[]);
         }
@@ -295,9 +302,11 @@ impl<R: Read + Send + 'static> BufRead for CheckedBgzfReader<R> {
 /// header as a clean end of stream. Bytes after a complete block that open no
 /// gzip member end the stream, as `gzip -dc` ends it (Utils.pm:441 is how
 /// Ensembl VEP reads the file), so a file padded with zeros or followed by a
-/// text trailer is read whole; a gzip member that is not a BGZF block, and a
-/// block the stream ends inside its data, pass through unchanged to the block
-/// reader, which reports them in its own words.
+/// text trailer is read whole; a gzip member that is not a BGZF block ends the
+/// blocks too, and the stream from its first byte is kept for a gunzip to read
+/// ([`BgzfBlockGuard::into_unread_member`]), as `gzip -dc` reads every member
+/// whatever its kind; a block the stream ends inside its data passes through
+/// unchanged to the block reader, which reports it in its own words.
 struct BgzfBlockGuard {
     inner: Box<dyn BufRead + Send>,
     source: String,
@@ -310,6 +319,9 @@ struct BgzfBlockGuard {
     passthrough: bool,
     /// The stream ended at bytes that open no gzip member; the rest is unread.
     ended: bool,
+    /// The blocks ended at a gzip member that is not a BGZF block, whose header
+    /// bytes read so far are in `block`; no read hands them out.
+    member_follows: bool,
     /// The block in `block` was refused: its bytes stay there and no read hands
     /// them out.
     refused: bool,
@@ -325,8 +337,18 @@ impl BgzfBlockGuard {
             offset: 0,
             passthrough: false,
             ended: false,
+            member_follows: false,
             refused: false,
         }
+    }
+
+    /// The stream from the gzip member the blocks ended at, when they ended at
+    /// one: the member's header bytes read so far, then the rest of the stream.
+    fn into_unread_member(self) -> Option<Box<dyn BufRead + Send>> {
+        if !self.member_follows {
+            return None;
+        }
+        Some(Box::new(Cursor::new(self.block).chain(self.inner)))
     }
 
     fn malformed(&self) -> io::Error {
@@ -373,8 +395,9 @@ impl BgzfBlockGuard {
         Ok(())
     }
 
-    /// Reads the next block into `block`, checked, or switches to passing the
-    /// stream through when the bytes read do not open a whole block.
+    /// Reads the next block into `block`, checked; ends the blocks at a gzip
+    /// member that is not one, or at bytes that open no member; or switches to
+    /// passing the stream through when a block's bytes run out before its end.
     fn next_block(&mut self) -> io::Result<()> {
         self.offset += self.block.len() as u64;
         self.block.clear();
@@ -395,7 +418,7 @@ impl BgzfBlockGuard {
             .get(3)
             .is_none_or(|flags| flags & GZIP_FEXTRA != 0);
         if !opens_a_block {
-            self.passthrough = true;
+            self.member_follows = true;
             return Ok(());
         }
         // The block reader reads a header cut short as the end of the stream, so
@@ -409,7 +432,7 @@ impl BgzfBlockGuard {
             return Err(self.refuse());
         }
         let Some(block_size) = bgzf_block_size(&self.block) else {
-            self.passthrough = true;
+            self.member_follows = true;
             return Ok(());
         };
         if block_size < self.block.len() + GZIP_TRAILER_BYTES {
@@ -434,6 +457,9 @@ impl Read for BgzfBlockGuard {
         if self.refused {
             return Err(self.malformed());
         }
+        if self.member_follows {
+            return Ok(0);
+        }
         if self.at == self.block.len() {
             if self.ended {
                 return Ok(0);
@@ -442,6 +468,9 @@ impl Read for BgzfBlockGuard {
                 return self.inner.read(buf);
             }
             self.next_block()?;
+            if self.member_follows {
+                return Ok(0);
+            }
         }
         let n = (self.block.len() - self.at).min(buf.len());
         buf[..n].copy_from_slice(&self.block[self.at..self.at + n]);
@@ -514,24 +543,130 @@ fn another_member_follows(reader: &mut Box<dyn BufRead + Send>) -> io::Result<bo
     Ok(magic == GZIP_MAGIC[..2])
 }
 
-/// The dependency's BGZF block reader over `reader`: with `threads` above one
-/// the multithreaded reader with that many inflate workers, its end of input
-/// checked ([`CheckedBgzfReader`]); else the single-threaded one.
-fn bgzf_block_reader<R: Read + Send + 'static>(
-    reader: R,
-    threads: usize,
-) -> Box<dyn BufRead + Send> {
-    match std::num::NonZeroUsize::new(threads) {
-        // The multithreaded reader builds its inflate workers when it is built,
-        // so they carry the Linux thread name of the thread that opens the input,
-        // and starts its frame reader at the first read, so that one carries the
-        // name of whichever thread reads first.
-        Some(workers) if workers.get() > 1 => Box::new(CheckedBgzfReader {
-            inner: Some(bgzf::io::MultithreadedReader::with_worker_count(
-                workers, reader,
-            )),
-        }),
-        _ => Box::new(bgzf::io::Reader::new(reader)),
+/// [`MemberwiseGunzip`] over `reader`, buffered.
+fn gunzip_members(reader: Box<dyn BufRead + Send>) -> BufReader<MemberwiseGunzip> {
+    let gunzip = MemberwiseGunzip {
+        decoder: Some(flate2::bufread::GzDecoder::new(reader)),
+    };
+    BufReader::with_capacity(INPUT_BUFFER_BYTES, gunzip)
+}
+
+/// The dependency's BGZF block reader: the single-threaded one, or the
+/// multithreaded one with its end of input checked ([`CheckedBgzfReader`]).
+enum BlockReader<R: Read + Send + 'static> {
+    Single(bgzf::io::Reader<R>),
+    Multi(CheckedBgzfReader<R>),
+}
+
+impl<R: Read + Send + 'static> BlockReader<R> {
+    /// The block reader over `reader`: with `threads` above one the
+    /// multithreaded reader with that many inflate workers; else the
+    /// single-threaded one.
+    fn new(reader: R, threads: usize) -> Self {
+        match std::num::NonZeroUsize::new(threads) {
+            // The multithreaded reader builds its inflate workers when it is
+            // built, so they carry the Linux thread name of the thread that opens
+            // the input, and starts its frame reader at the first read, so that
+            // one carries the name of whichever thread reads first.
+            Some(workers) if workers.get() > 1 => BlockReader::Multi(CheckedBgzfReader {
+                inner: Some(bgzf::io::MultithreadedReader::with_worker_count(
+                    workers, reader,
+                )),
+                finished: None,
+            }),
+            _ => BlockReader::Single(bgzf::io::Reader::new(reader)),
+        }
+    }
+
+    /// The reader the blocks were read through, once the stream of blocks has
+    /// ended: `None` for the multithreaded reader before its first empty fill.
+    fn into_inner(self) -> Option<R> {
+        match self {
+            BlockReader::Single(reader) => Some(reader.into_inner()),
+            BlockReader::Multi(checked) => checked.finished,
+        }
+    }
+}
+
+impl<R: Read + Send + 'static> Read for BlockReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            BlockReader::Single(reader) => reader.read(buf),
+            BlockReader::Multi(checked) => checked.read(buf),
+        }
+    }
+}
+
+impl<R: Read + Send + 'static> BufRead for BlockReader<R> {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        match self {
+            BlockReader::Single(reader) => reader.fill_buf(),
+            BlockReader::Multi(checked) => checked.fill_buf(),
+        }
+    }
+
+    fn consume(&mut self, amt: usize) {
+        match self {
+            BlockReader::Single(reader) => reader.consume(amt),
+            BlockReader::Multi(checked) => checked.consume(amt),
+        }
+    }
+}
+
+/// The text of a BGZF input: the block reader's, then, when the blocks ended at
+/// a gzip member that is not a block, the gunzip of that member and of every
+/// member after it, so a BGZF stream with a plain gzip member appended is read
+/// whole, as `gzip -dc` reads it (Utils.pm:441).
+struct BlocksThenMembers {
+    /// The blocks, until they end; `None` from then on.
+    blocks: Option<BlockReader<BgzfBlockGuard>>,
+    /// The members after the blocks, once the blocks ended at one.
+    members: Option<BufReader<MemberwiseGunzip>>,
+}
+
+impl BlocksThenMembers {
+    /// Moves from the blocks to the members once the block reader is empty: the
+    /// guard the blocks were read through holds the member they ended at, if any.
+    fn end_the_blocks(&mut self) {
+        if let Some(blocks) = self.blocks.take() {
+            self.members = blocks
+                .into_inner()
+                .and_then(BgzfBlockGuard::into_unread_member)
+                .map(gunzip_members);
+        }
+    }
+}
+
+impl Read for BlocksThenMembers {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let mut available = self.fill_buf()?;
+        let read = available.read(buf)?;
+        self.consume(read);
+        Ok(read)
+    }
+}
+
+impl BufRead for BlocksThenMembers {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        if let Some(blocks) = self.blocks.as_mut() {
+            if blocks.fill_buf()?.is_empty() {
+                self.end_the_blocks();
+            }
+        }
+        // A second `fill_buf` with no `consume` between returns the same bytes.
+        match (self.blocks.as_mut(), self.members.as_mut()) {
+            (Some(blocks), _) => blocks.fill_buf(),
+            (None, Some(members)) => members.fill_buf(),
+            (None, None) => Ok(&[]),
+        }
+    }
+
+    fn consume(&mut self, amt: usize) {
+        match (self.blocks.as_mut(), self.members.as_mut()) {
+            (Some(blocks), _) => blocks.consume(amt),
+            (None, Some(members)) => members.consume(amt),
+            (None, None) => {}
+        }
     }
 }
 
@@ -542,7 +677,9 @@ fn bgzf_block_reader<R: Read + Send + 'static>(
 /// compressed input), else through a gunzip over every member. The flag says
 /// which: a BGZF file may have a tabix index beside it. Both bgzf readers are
 /// `BufRead` over their decompressed block and read the stream through the
-/// [`BgzfBlockGuard`], whose refusals name `source`; the gunzip is buffered here.
+/// [`BgzfBlockGuard`], whose refusals name `source`, and hand a gzip member
+/// that is not a block, with the rest of the stream, to the gunzip
+/// ([`BlocksThenMembers`]); the gunzip is buffered ([`gunzip_members`]).
 fn decompressed<R: BufRead + Send + 'static>(
     reader: R,
     threads: usize,
@@ -560,14 +697,14 @@ fn decompressed<R: BufRead + Send + 'static>(
         bgzf = bgzf_block_size(&header).is_some();
     }
     if !bgzf {
-        let gunzip = MemberwiseGunzip {
-            decoder: Some(flate2::bufread::GzDecoder::new(reader)),
-        };
-        let buffered = BufReader::with_capacity(INPUT_BUFFER_BYTES, gunzip);
-        return Ok((Box::new(buffered), false));
+        return Ok((Box::new(gunzip_members(reader)), false));
     }
     let guarded = BgzfBlockGuard::new(reader, source);
-    Ok((bgzf_block_reader(guarded, threads), true))
+    let text = BlocksThenMembers {
+        blocks: Some(BlockReader::new(guarded, threads)),
+        members: None,
+    };
+    Ok((Box::new(text), true))
 }
 
 /// The shape of the run's input: `--input_data` and standard input have none,
@@ -1605,7 +1742,14 @@ impl Runner {
         if parquet_intermediate_path.is_some() && self.config.output_file.is_empty() {
             return Err(unwritable("").into());
         }
-        let output: Box<dyn Write + Send> = if self.config.output_file == "STDOUT" {
+        // The plain output opens through Perl's two-argument `open` (:226), for
+        // which `>-` is standard output; the compressed output's shell
+        // redirection (:217) and the Parquet intermediate write a file named `-`.
+        let dash_is_stdout = self.config.output_file == "-"
+            && self.config.compress_output.is_none()
+            && parquet_intermediate_path.is_none();
+        let output_is_stdout = self.config.output_file == "STDOUT" || dash_is_stdout;
+        let output: Box<dyn Write + Send> = if output_is_stdout {
             Box::new(io::stdout())
         } else {
             let path = parquet_intermediate_path
@@ -3814,21 +3958,34 @@ mod tests {
             );
             assert_eq!(text, b"first block\n", "cut at {cut}, {threads} threads");
         }
-        // Trailing bytes that open no gzip member end the stream in the guard; a
-        // gzip member header cut short is the block reader's to read, and it reads
-        // fewer than a header's worth as the end of the stream: the blocks before
-        // either are delivered whole under both thread counts.
+        // Trailing bytes that open no gzip member end the stream in the guard: the
+        // blocks before them are delivered whole under both thread counts.
         for (tail, threads) in [
             (&b"\n\n\n\n"[..], 1),
             (&[0u8; 15][..], 1),
             (&b"\x1f\x8b\x00"[..], 4),
-            (&b"\x1f\x8b\x08\x00"[..], 1),
         ] {
             let bytes = [first.clone(), tail.to_vec()].concat();
             let (mut reader, _) = decompressed(Cursor::new(bytes), threads, "in.vcf.gz").unwrap();
             let mut text = Vec::new();
             reader.read_to_end(&mut text).unwrap();
             assert_eq!(text, b"first block\n", "tail {tail:?}, {threads} threads");
+        }
+        // A gzip member that is not a block, cut inside its header, is the
+        // gunzip's to read, and it reads a header cut short as a cut stream, as
+        // `gzip -dc` does: the blocks before it are delivered whole, then the
+        // read fails.
+        for threads in [1, 4] {
+            let bytes = [first.clone(), b"\x1f\x8b\x08\x00".to_vec()].concat();
+            let (mut reader, _) = decompressed(Cursor::new(bytes), threads, "in.vcf.gz").unwrap();
+            let mut text = Vec::new();
+            let error = reader.read_to_end(&mut text).unwrap_err();
+            assert_eq!(
+                error.kind(),
+                io::ErrorKind::UnexpectedEof,
+                "{threads} threads: {error}"
+            );
+            assert_eq!(text, b"first block\n", "{threads} threads");
         }
     }
 
@@ -3837,7 +3994,9 @@ mod tests {
     /// there, as `gzip -dc` ends it (the program Ensembl VEP reads a compressed
     /// file through, Utils.pm:441), under one decompression thread and several;
     /// the block reader alone would refuse the trailer as a frame. A gzip member
-    /// that is not a BGZF block still reaches the block reader, which refuses it.
+    /// that is not a BGZF block, with or without an extra field, and every member
+    /// after it, BGZF blocks included, are read as `gzip -dc` reads them, the
+    /// text whole; a trailer after them is ignored as after the blocks.
     #[test]
     fn bgzf_reads_every_block_and_ignores_a_trailer() {
         let mut writer = bgzf::io::Writer::new(Vec::new());
@@ -3862,11 +4021,36 @@ mod tests {
         let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
         encoder.write_all(b"a plain member\n").unwrap();
         let plain_member = encoder.finish().unwrap();
-        let bytes = [blocks.as_slice(), plain_member.as_slice()].concat();
-        let (mut reader, _) = decompressed(Cursor::new(bytes), 1, "in.vcf.gz").unwrap();
-        let mut text = Vec::new();
-        assert!(reader.read_to_end(&mut text).is_err());
-        assert_eq!(text, b"first block\nsecond block\n");
+        // The plain member with FEXTRA set and an extra field of another
+        // subfield (`XY`, two bytes), a gzip member that is no BGZF block either.
+        let mut with_extra_field = plain_member.clone();
+        with_extra_field[3] |= GZIP_FEXTRA;
+        with_extra_field.splice(10..10, [6, 0, b'X', b'Y', 2, 0, 1, 2]);
+        let after_blocks = bgzf_block(b"a block after the members\n");
+        for (members, expected) in [
+            (plain_member.clone(), "a plain member\n"),
+            (with_extra_field, "a plain member\n"),
+            (
+                [plain_member.as_slice(), after_blocks.as_slice()].concat(),
+                "a plain member\na block after the members\n",
+            ),
+        ] {
+            for trailer in [&b""[..], b"GARBAGE TRAILER\n"] {
+                for threads in [1, 4] {
+                    let bytes = [blocks.as_slice(), members.as_slice(), trailer].concat();
+                    let (mut reader, bgzf) =
+                        decompressed(Cursor::new(bytes), threads, "in.vcf.gz").unwrap();
+                    assert!(bgzf);
+                    let mut text = String::new();
+                    reader.read_to_string(&mut text).unwrap();
+                    assert_eq!(
+                        text,
+                        format!("first block\nsecond block\n{expected}"),
+                        "{expected:?} {trailer:?}, {threads} threads"
+                    );
+                }
+            }
+        }
     }
 
     /// A stream whose read fails once, inside the second block's header, hands
@@ -3921,7 +4105,7 @@ mod tests {
     /// can hold (ISIZE above 65536, SAM specification section 4.1) is an invalid
     /// data error from the single-threaded block reader and the multithreaded
     /// one alike, before any of its bytes are delivered. The readers are built
-    /// through [`bgzf_block_reader`] rather than `decompressed`, so no check
+    /// through [`BlockReader::new`] rather than `decompressed`, so no check
     /// placed ahead of them can satisfy the test: it pins the dependency's own
     /// check, the one the workspace manifest's `noodles-bgzf` floor was chosen for.
     #[test]
@@ -3934,7 +4118,7 @@ mod tests {
         let block_size = bgzf_block_size(&bytes).unwrap();
         bytes[block_size - 4..block_size].copy_from_slice(&65_537u32.to_le_bytes());
         for threads in [1, 4] {
-            let mut reader = bgzf_block_reader(Cursor::new(bytes.clone()), threads);
+            let mut reader = BlockReader::new(Cursor::new(bytes.clone()), threads);
             let mut text = Vec::new();
             let error = reader.read_to_end(&mut text).unwrap_err();
             assert_eq!(

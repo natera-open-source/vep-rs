@@ -100,9 +100,14 @@ fn tab_header(output_file: &Path) -> bool {
 }
 
 /// `VEP_<FLAG>=<value>` sets a flag the command line leaves unset
-/// (`Config.pm:1158`): `VEP_SHOW_CACHE_INFO=1` prints the cache information and
-/// exits 0 as `--show_cache_info` does; `VEP_DATABASE=1` reaches the refusal of
-/// `--database`; `VEP_TAB=1` selects the tab output.
+/// (`Config.pm:1158`): `VEP_DATABASE=1` reaches the refusal of `--database`;
+/// `VEP_TAB=1` selects the tab output; `VEP_SHOW_CACHE_INFO=1` prints the cache
+/// information and exits 0 as `--show_cache_info` does, the one flag the
+/// environment sets here and not in Ensembl VEP, whose driver reads it from the
+/// typed options alone (vep:39), as the CLI reference's compatibility page
+/// states. A value that is not UTF-8 is read, with the replacement character for
+/// the byte: `%ENV` holds bytes and Config.pm:1137 skips the empty value alone,
+/// so `VEP_PROTEIN` set to the byte `0xff` switches `--protein` on.
 #[test]
 fn vep_env_sets_unset_flag() {
     let home = tempfile::tempdir().unwrap();
@@ -135,6 +140,27 @@ fn vep_env_sets_unset_flag() {
         .unwrap();
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     assert!(tab_header(&out), "VEP_TAB=1 selects the tab output");
+
+    #[cfg(unix)]
+    {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        let protein = |value: Option<&OsStr>| -> bool {
+            let mut command = vep(home.path());
+            command.args(&args);
+            if let Some(value) = value {
+                command.env("VEP_PROTEIN", value);
+            }
+            let output = command.output().unwrap();
+            assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+            fs::read_to_string(&out).unwrap().contains("ENSP=")
+        };
+        assert!(!protein(None), "no ENSP without the flag");
+        assert!(
+            protein(Some(OsStr::from_bytes(b"\xff"))),
+            "VEP_PROTEIN set to a byte outside UTF-8 switches --protein on"
+        );
+    }
 }
 
 /// A flag the command line gives keeps the command line's value whatever the
@@ -543,7 +569,10 @@ fn long_option_case_is_folded() {
 
 /// `--config <file>` on the command line reads the file through the binary:
 /// its flags act (`offline 1`, `json_cache <dir>` and `show_cache_info 1` print
-/// the cache information); a key of an Ensembl VEP option this version lacks
+/// the cache information, the last a reading of this version's: Ensembl VEP's
+/// driver tests the typed flag alone, vep:39, so a file's `show_cache_info`
+/// prints nothing there, as the CLI reference's compatibility page states); a
+/// key of an Ensembl VEP option this version lacks
 /// (a switch of `@VEP_PARAMS` taken at run time) is refused as the flag is, exit
 /// 2 naming it, where a key no option has (`no_such_flag`) is dropped; and a file
 /// that cannot be opened is the one-line `config` error, exit 1 (`Config.pm:1075`).

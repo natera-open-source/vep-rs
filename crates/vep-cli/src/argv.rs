@@ -316,9 +316,13 @@ fn perl_arity(name: &str) -> Option<Arity> {
     Some(arity)
 }
 
-/// Whether Ensembl VEP declares the option's value as a number (`=i`, `=f`).
-fn perl_takes_a_number(name: &str) -> bool {
-    perl_value_spec(name).is_some_and(|spec| spec.ends_with(['i', 'f']))
+/// Whether Getopt::Long reads a token asking for the help or the version after
+/// the option as that, not as the option's value: the option is declared as a
+/// number (`=i`, `=f`), whose value a token that is not a number is pushed back
+/// from, or is no option of Ensembl VEP's, which `pass_through` leaves in
+/// `@ARGV` with the token after it unread.
+fn perl_leaves_a_usage_token_unread(name: &str) -> bool {
+    perl_value_spec(name).is_none_or(|spec| spec.ends_with(['i', 'f']))
 }
 
 /// Ensembl VEP's options as [`VEP_PARAMS`] declares them.
@@ -815,13 +819,16 @@ fn glued_short<'a, 'n>(body: &'n str, declared: &'a [Declared]) -> Option<(&'a D
 /// VEP's own name where that is an alias here ([`perl_alias_key`]); the token
 /// after an option that requires a value is that value, however it is spelled
 /// (`--input_file -cache` names the file `-cache`, as Getopt::Long reads it),
-/// except that an option Ensembl VEP declares as a number leaves a token asking
-/// for the help or the version unread, as Getopt::Long pushes back a value that
-/// is not a number (`--fork --help` asks for the help); a name that is a prefix
-/// of several options is written with two dashes, so clap refuses it; a short
-/// flag with its value attached is written as the long form; `--` ends the
-/// options. Anything else, a cluster of switches or a name no option has, is
-/// left for clap.
+/// except that an option Ensembl VEP declares as a number, or does not declare,
+/// leaves a token asking for the help or the version unread, as Getopt::Long
+/// pushes back a value that is not a number and passes an unknown option
+/// through (`--fork --help` and `--pipeline_depth --help` ask for the help); an
+/// option Ensembl VEP declares and the parser does not takes its value as
+/// `@VEP_PARAMS` declares it (`--gff --help` names the file `--help`), so the
+/// parser refuses it by name; a name that is a prefix of several options is
+/// written with two dashes, so clap refuses it; a short flag with its value
+/// attached is written as the long form; `--` ends the options. Anything else,
+/// a cluster of switches or a name no option has, is left for clap.
 fn spell(options: &[OsString], declared: &[Declared]) -> Vec<Token> {
     let known = known_options(declared);
     let perl = perl_options();
@@ -846,12 +853,15 @@ fn spell(options: &[OsString], declared: &[Declared]) -> Vec<Token> {
             let carrier = declared_by_name(declared, &option.canonical);
             let (long, arity) = match carrier {
                 Some(carrier) => (carrier.names.canonical.clone(), carrier.arity),
-                None => (option.canonical.clone(), Arity::Switch),
+                None => (
+                    option.canonical.clone(),
+                    perl_arity(&option.canonical).unwrap_or(Arity::Switch),
+                ),
             };
             let written = carrier
                 .and_then(|carrier| perl_alias_key(name, carrier, &perl))
                 .unwrap_or_else(|| long.clone());
-            let usage_token_pushed_back = perl_takes_a_number(&written)
+            let usage_token_pushed_back = perl_leaves_a_usage_token_unread(&written)
                 && iter
                     .peek()
                     .is_some_and(|next| asks_usage(next, &known, &perl));
@@ -1051,9 +1061,17 @@ where
     command.build();
     let declared = declared_options(&command);
     let perl = perl_canonicals();
+    // Read as bytes, as `%ENV` holds them (Config.pm:1137 skips the empty value
+    // alone); a byte that is not UTF-8 becomes the replacement character, as in
+    // a configuration file.
     let env: BTreeMap<String, String> = env
         .into_iter()
-        .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)))
+        .map(|(k, v)| {
+            (
+                k.to_string_lossy().into_owned(),
+                v.to_string_lossy().into_owned(),
+            )
+        })
         .collect();
     let home = env.get("HOME").map_or("", String::as_str);
 
@@ -1914,23 +1932,35 @@ mod tests {
     /// The token after an option Ensembl VEP declares as a number (`fork=i`,
     /// `freq_freq=f`) is left unread when it asks for the help or the version, as
     /// Getopt::Long pushes back a value that is not a number, so `--fork --help`
-    /// asks for the help and reads no source; a string option takes the token as
-    /// its value, as `=s` takes anything (`-i --help` names the file `--help`),
-    /// and a number is a number's value.
+    /// asks for the help and reads no source; so is the token after an option
+    /// Ensembl VEP lacks (`pipeline_depth`, `writer_strategy`), which
+    /// `pass_through` leaves in `@ARGV` with its would-be value unread; a string
+    /// option takes the token as its value, as `=s` takes anything (`-i --help`
+    /// names the file `--help`), an option of `@VEP_PARAMS` the parser lacks
+    /// included (`gff=s`, Config.pm:260), and a number is a number's value.
     #[test]
     fn a_numeric_option_leaves_a_usage_token_unread() {
         let dir = tempfile::tempdir().unwrap();
         let home = dir.path().to_str().unwrap();
-        let cases: [(&[&str], &[&str]); 6] = [
+        let cases: [(&[&str], &[&str]); 9] = [
             (&["--fork", "--help"], &["--fork", "--help"]),
             (&["--fork", "x", "--help"], &["--fork=x", "--help"]),
             (&["--freq_freq", "-V"], &["--freq_freq", "--version"]),
             (&["--buffer_size", "-help"], &["--buffer_size", "--help"]),
             (&["--fork", "4", "--help"], &["--fork=4", "--help"]),
             (
+                &["--pipeline_depth", "--help"],
+                &["--pipeline_depth", "--help"],
+            ),
+            (
+                &["--writer_strategy", "-V"],
+                &["--writer_strategy", "--version"],
+            ),
+            (
                 &["--input_file", "--help"],
                 &["--symbol", "--input_file=--help"],
             ),
+            (&["--gff", "--help"], &["--symbol", "--gff=--help"]),
         ];
         for (args, expected) in cases {
             let mut argv = vec!["vep"];

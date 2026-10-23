@@ -64,11 +64,22 @@ fn corpus_args() -> Vec<String> {
     args_for(&corpus_dir())
 }
 
-/// The golden corpus's arguments with `input` read in place of its own records.
-fn corpus_args_with_input(input: &Path) -> Vec<String> {
-    let mut args = corpus_args();
+/// A corpus's arguments with `input` read in place of its own records.
+fn with_input(mut args: Vec<String>, input: &Path) -> Vec<String> {
     let input_flag = args.iter().position(|a| a == "-i").unwrap();
     args[input_flag + 1] = input.display().to_string();
+    args
+}
+
+/// The golden corpus's arguments with `input` read in place of its own records.
+fn corpus_args_with_input(input: &Path) -> Vec<String> {
+    with_input(corpus_args(), input)
+}
+
+/// A corpus's arguments without `--force_overwrite`, for a run that must find
+/// an existing file in its way.
+fn without_force_overwrite(mut args: Vec<String>) -> Vec<String> {
+    args.retain(|a| a != "--force_overwrite");
     args
 }
 
@@ -109,6 +120,17 @@ fn run_control(extra: &[&str], cwd: &Path) -> Output {
         .args(args_for(&run_control_dir()))
         .args(extra)
         .current_dir(cwd)
+        .stdin(Stdio::null())
+        .output()
+        .unwrap()
+}
+
+/// Runs `vep` with `args` writing to `out`, standard input closed.
+fn run_with(args: &[String], extra: &[&str], out: &Path) -> Output {
+    vep()
+        .args(args)
+        .args(extra)
+        .args(["-o", out.to_str().unwrap()])
         .stdin(Stdio::null())
         .output()
         .unwrap()
@@ -173,11 +195,15 @@ fn empty_argv_prints_help_and_exits_0() {
 /// vep:30, under Getopt::Long's `pass_through`, Config.pm:62): `--help` beside a
 /// flag refused before parsing (`--af_exac`), an unknown flag, an option Ensembl
 /// VEP has and this version lacks (`--stats_html`), a bare word, a refused value
-/// (`--fork x`) or an integer option left without its value (`--fork --help`,
-/// whose `--help` Getopt::Long pushes back), in either order, exits 0 with the
-/// text of `--help` alone, as Ensembl VEP 116.2 prints its usage and exits 0 on
-/// each of these lines. `--help=1` is refused on both engines (vep:30; exit 2
-/// here, in clap's words).
+/// (`--fork x`), an integer option left without its value (`--fork --help`,
+/// whose `--help` Getopt::Long pushes back) or a value flag of this version's
+/// own left without its value (`--pipeline_depth --help`, which Ensembl VEP
+/// leaves in `@ARGV` whole and prints its usage after), in either order, exits 0
+/// with the text of `--help` alone, as Ensembl VEP 116.2 prints its usage and
+/// exits 0 on each of these lines. `--help=1` is refused on both engines
+/// (vep:30; exit 2 here, in clap's words), and so is `--gff --help`: `gff=s`
+/// (Config.pm:260) takes `--help` as its value on both engines, so no usage
+/// prints, and this version refuses the option by name (exit 2).
 #[test]
 fn help_and_version_win_over_a_flag_refused_before_parsing() {
     let expected = text(&vep().arg("--help").output().unwrap().stdout);
@@ -190,6 +216,8 @@ fn help_and_version_win_over_a_flag_refused_before_parsing() {
         &["--fork", "x", "--help"][..],
         &["--fork", "--help"][..],
         &["--buffer_size", "--help"][..],
+        &["--pipeline_depth", "--help"][..],
+        &["--writer_strategy", "--help"][..],
         &["--help", "--input_file"][..],
     ] {
         let output = vep().args(argv).output().unwrap();
@@ -201,9 +229,17 @@ fn help_and_version_win_over_a_flag_refused_before_parsing() {
         );
         assert_eq!(text(&output.stdout), expected, "{argv:?}");
     }
-    let output = vep().arg("--help=1").output().unwrap();
-    assert_eq!(output.status.code(), Some(2), "{}", text(&output.stderr));
-    assert!(text(&output.stderr).starts_with("error:"));
+    for argv in [&["--help=1"][..], &["--gff", "--help"][..]] {
+        let output = vep().args(argv).output().unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "{argv:?}: {}",
+            text(&output.stderr)
+        );
+        assert!(text(&output.stderr).starts_with("error:"), "{argv:?}");
+        assert!(output.stdout.is_empty(), "{argv:?}: no usage");
+    }
 }
 
 /// This version's own usage spellings, which Ensembl VEP 116.2 refuses or lacks
@@ -265,8 +301,9 @@ fn stdout_literal_is_case_insensitive() {
     let dir = tempfile::tempdir().unwrap();
     let upper = run_to(&["-o", "STDOUT", "--quiet"], dir.path());
     assert_eq!(upper.status.code(), Some(0), "{}", text(&upper.stderr));
-    let upper_rows = data_lines(&text(&upper.stdout)).len();
-    assert!(upper_rows > 30, "{upper_rows} rows");
+    let upper_stdout = text(&upper.stdout);
+    let upper_rows = data_lines(&upper_stdout);
+    assert!(upper_rows.len() > 30, "{} rows", upper_rows.len());
     for spelling in ["stdout", "StdOut", "Stdout"] {
         let output = run_to(&["-o", spelling, "--quiet"], dir.path());
         assert_eq!(
@@ -275,16 +312,64 @@ fn stdout_literal_is_case_insensitive() {
             "{spelling}: {}",
             text(&output.stderr)
         );
-        assert_eq!(
-            data_lines(&text(&output.stdout)),
-            data_lines(&text(&upper.stdout)),
-            "{spelling}"
-        );
+        let stdout = text(&output.stdout);
+        assert_eq!(data_lines(&stdout), upper_rows, "{spelling}");
         assert!(
             !dir.path().join(spelling).exists(),
             "{spelling}: a file was written instead"
         );
     }
+}
+
+/// `-o -` writes the annotation to standard output and no file, as Ensembl VEP's
+/// two-argument `open(">-")` does (BaseRunner.pm:226), while the warnings file is
+/// named after the value as spelled (`-_warnings.txt`, BaseVEP.pm:890); under
+/// `--compress_output` the shell redirection `>-` (BaseRunner.pm:217) writes a
+/// file named `-` on both engines.
+#[test]
+fn dash_output_file_is_standard_output_on_the_plain_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let reference = run_to(&["-o", "STDOUT", "--quiet"], dir.path());
+    assert_eq!(
+        reference.status.code(),
+        Some(0),
+        "{}",
+        text(&reference.stderr)
+    );
+    let reference_stdout = text(&reference.stdout);
+    let reference_rows = data_lines(&reference_stdout);
+    let output = run_to(&["-o", "-", "--quiet"], dir.path());
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let stdout = text(&output.stdout);
+    let rows = data_lines(&stdout);
+    assert_eq!(rows, reference_rows);
+    assert!(rows.len() > 30);
+    assert!(!dir.path().join("-").exists(), "a file was written instead");
+    assert!(dir.path().join("-_warnings.txt").is_file());
+
+    let compressed = run_to(
+        &["-o", "-", "--quiet", "--compress_output", "gzip"],
+        dir.path(),
+    );
+    assert_eq!(
+        compressed.status.code(),
+        Some(0),
+        "{}",
+        text(&compressed.stderr)
+    );
+    assert!(
+        compressed.stdout.is_empty(),
+        "the compressed output is a file"
+    );
+    let mut file_text = String::new();
+    flate2::read::MultiGzDecoder::new(std::fs::File::open(dir.path().join("-")).unwrap())
+        .read_to_string(&mut file_text)
+        .unwrap();
+    assert_eq!(
+        data_lines(&file_text),
+        reference_rows,
+        "the file named `-` holds the rows"
+    );
 }
 
 /// The existing-file check runs on the `-o` value as spelled, before it is read
@@ -297,12 +382,8 @@ fn output_file_named_stdout_is_checked_as_spelled() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("STDOUT");
     std::fs::write(&file, "kept\n").unwrap();
-    let without_force: Vec<String> = corpus_args()
-        .into_iter()
-        .filter(|a| a != "--force_overwrite")
-        .collect();
     let refused = vep()
-        .args(&without_force)
+        .args(without_force_overwrite(corpus_args()))
         .args(["-o", "STDOUT", "--quiet"])
         .current_dir(dir.path())
         .stdin(Stdio::null())
@@ -399,10 +480,8 @@ fn existing_output_is_refused_with_ensembl_veps_text() {
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("taken.txt");
     std::fs::write(&out, "kept\n").unwrap();
-    let mut args = corpus_args();
-    args.retain(|a| a != "--force_overwrite");
     let refused = vep()
-        .args(&args)
+        .args(without_force_overwrite(corpus_args()))
         .args(["-o", out.to_str().unwrap(), "--quiet"])
         .stdin(Stdio::null())
         .output()
@@ -626,11 +705,8 @@ fn show_cache_info_prints_info_json_and_exits_0() {
         .unwrap();
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     assert_eq!(text(&output.stdout), expected);
-    let mut args = corpus_args();
-    let input_flag = args.iter().position(|a| a == "-i").unwrap();
-    args[input_flag + 1] = "/no/such/input.vcf".to_string();
     let refused = vep()
-        .args(&args)
+        .args(corpus_args_with_input(Path::new("/no/such/input.vcf")))
         .args(["--show_cache_info", "--quiet"])
         .stdin(Stdio::null())
         .output()
@@ -693,6 +769,43 @@ fn show_cache_info_prints_info_json_and_exits_0() {
         "ERROR: [filter] No such operator \"equals\""
     );
     assert!(refused.stdout.is_empty());
+}
+
+/// `--show_cache_info` prints and exits 0 before the refusals of `Runner::init`
+/// (Runner.pm:109-140), which vep:39-43 exits ahead of: an unreadable
+/// `--synonyms` file (read at :131), a plugin that cannot be loaded under
+/// `--safe` (:125), a `--fasta` that is not there (:134) and an output path that
+/// cannot be written (opened in `run()`, BaseRunner.pm:226) stop a run and not
+/// the print.
+#[test]
+fn show_cache_info_prints_before_the_init_stage_refusals() {
+    let dir = tempfile::tempdir().unwrap();
+    let expected = text(&run_control(&["--show_cache_info"], dir.path()).stdout);
+    assert!(expected.lines().count() > 5, "{expected}");
+    for extra in [
+        &["--synonyms", "/no/such/synonyms.txt"][..],
+        &["--plugin", "NoSuchPlugin", "--safe"][..],
+        &["--fasta", "/no/such/reference.fa"][..],
+        &["-o", "/no/such/dir/out.txt"][..],
+    ] {
+        let mut with_info = extra.to_vec();
+        with_info.push("--show_cache_info");
+        let output = run_control(&with_info, dir.path());
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{extra:?}: {}",
+            text(&output.stderr)
+        );
+        assert_eq!(text(&output.stdout), expected, "{extra:?}");
+        let refused = run_control(extra, dir.path());
+        assert_eq!(
+            refused.status.code(),
+            Some(1),
+            "{extra:?} stops a run: {}",
+            text(&refused.stderr)
+        );
+    }
 }
 
 /// Parquet is a directory and cannot stream to STDOUT: the pair is refused
@@ -1315,11 +1428,8 @@ fn run_control_over(records: &str, columns: &str, extra: &[&str], dir: &Path) ->
     )
     .unwrap();
     let out = dir.join("out.txt");
-    let mut args = args_for(&run_control_dir());
-    let input_flag = args.iter().position(|a| a == "-i").unwrap();
-    args[input_flag + 1] = input.display().to_string();
     let output = vep()
-        .args(args)
+        .args(with_input(args_for(&run_control_dir()), &input))
         .args(["-o", out.to_str().unwrap()])
         .args(extra)
         .current_dir(dir)
@@ -1688,11 +1798,8 @@ fn decompression_threads_changes_no_output() {
     std::fs::write(&bgzf, writer.finish().unwrap()).unwrap();
     for threads in ["1", "4", "0"] {
         let out = dir.path().join(format!("out-{threads}.txt"));
-        let mut args = args_for(&run_control_dir());
-        let input_flag = args.iter().position(|a| a == "-i").unwrap();
-        args[input_flag + 1] = bgzf.display().to_string();
         let output = vep()
-            .args(&args)
+            .args(with_input(args_for(&run_control_dir()), &bgzf))
             .args([
                 "-o",
                 out.to_str().unwrap(),
@@ -1731,7 +1838,6 @@ const VAR_SYNONYMS_NOTICE: &str =
 /// its error alone: `Config.pm:769` refuses it before the runner's implication.
 #[test]
 fn var_synonyms_prints_the_notice_and_switches_check_existing_on() {
-    const NOTICE: &str = VAR_SYNONYMS_NOTICE;
     let colocated =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38-colocated");
     let dir = tempfile::tempdir().unwrap();
@@ -1750,7 +1856,7 @@ fn var_synonyms_prints_the_notice_and_switches_check_existing_on() {
     assert_eq!(implied.status.code(), Some(0), "{}", text(&implied.stderr));
     let stderr = text(&implied.stderr);
     assert!(
-        stderr.lines().any(|l| l == NOTICE),
+        stderr.lines().any(|l| l == VAR_SYNONYMS_NOTICE),
         "the notice is a line of its own:\n{stderr}"
     );
     let output = std::fs::read_to_string(&out).unwrap();
@@ -1774,7 +1880,7 @@ fn var_synonyms_prints_the_notice_and_switches_check_existing_on() {
     let lines: Vec<&str> = stderr.lines().collect();
     let notice_at = lines
         .iter()
-        .position(|l| *l == NOTICE)
+        .position(|l| *l == VAR_SYNONYMS_NOTICE)
         .unwrap_or_else(|| panic!("no var_synonyms notice:\n{stderr}"));
     let shift_at = lines
         .iter()
@@ -1827,6 +1933,14 @@ fn var_synonyms_prints_the_notice_and_switches_check_existing_on() {
 /// co-located variant.
 #[test]
 fn var_synonyms_zero_from_a_source_is_defined_but_false() {
+    #[derive(Debug, PartialEq)]
+    struct Observed {
+        notice: bool,
+        header: bool,
+        existing: BTreeSet<String>,
+        clinical: bool,
+        flag_printed: String,
+    }
     let colocated =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38-colocated");
     let dir = tempfile::tempdir().unwrap();
@@ -1879,17 +1993,21 @@ fn var_synonyms_zero_from_a_source_is_defined_but_false() {
             .map(|l| l.split('\t').nth(12).unwrap().to_string())
             .collect();
         let clinical = rows.iter().all(|l| l.contains("CLIN_SIG=benign;PHENO=1"));
-        (notice, header, existing, clinical, flag_printed)
+        Observed {
+            notice,
+            header,
+            existing,
+            clinical,
+            flag_printed,
+        }
     };
     let known = |name: &str| BTreeSet::from([name.to_string()]);
-    let defined_off = || {
-        (
-            true,
-            false,
-            known("rs139263261"),
-            true,
-            "--var_synonyms 0".to_string(),
-        )
+    let defined_off = || Observed {
+        notice: true,
+        header: false,
+        existing: known("rs139263261"),
+        clinical: true,
+        flag_printed: "--var_synonyms 0".to_string(),
     };
     let config = dir.path().join("flags.ini");
     std::fs::write(&config, "var_synonyms 0\n").unwrap();
@@ -1914,30 +2032,31 @@ fn var_synonyms_zero_from_a_source_is_defined_but_false() {
     std::fs::write(&config, "var_synonyms \"\"\n").unwrap();
     assert_eq!(
         run(&["--config", config.to_str().unwrap()], &[]),
-        (
-            true,
-            false,
-            known("rs139263261"),
-            true,
-            "--var_synonyms".to_string()
-        ),
+        Observed {
+            flag_printed: "--var_synonyms".to_string(),
+            ..defined_off()
+        },
         "a quoted empty value from the config file: defined, printed with no value"
     );
     std::fs::write(&config, "var_synonyms 1\n").unwrap();
     assert_eq!(
         run(&["--config", config.to_str().unwrap()], &[]),
-        (
-            true,
-            true,
-            known("rs139263261"),
-            true,
-            "--var_synonyms".to_string()
-        ),
+        Observed {
+            header: true,
+            flag_printed: "--var_synonyms".to_string(),
+            ..defined_off()
+        },
         "a 1 from the config file is the flag"
     );
     assert_eq!(
         run(&[], &[]),
-        (false, false, known("-"), false, String::new()),
+        Observed {
+            notice: false,
+            header: false,
+            existing: known("-"),
+            clinical: false,
+            flag_printed: String::new(),
+        },
         "no flag from any source"
     );
 }
@@ -1954,9 +2073,6 @@ fn var_synonyms_notice_precedes_a_failed_fasta_or_input_open() {
     let out = dir.path().join("out.txt");
     let missing_fasta = dir.path().join("absent.fa");
     let missing_input = dir.path().join("absent.vcf");
-    let mut absent_input_args = args_for(&colocated);
-    let input_flag = absent_input_args.iter().position(|a| a == "-i").unwrap();
-    absent_input_args[input_flag + 1] = missing_input.display().to_string();
     for (args, extra, error) in [
         (
             args_for(&colocated),
@@ -1967,7 +2083,7 @@ fn var_synonyms_notice_precedes_a_failed_fasta_or_input_open() {
             ),
         ),
         (
-            absent_input_args,
+            with_input(args_for(&colocated), &missing_input),
             vec!["--var_synonyms"],
             format!(
                 "ERROR: [input] File \"{}\" does not exist",
@@ -2308,10 +2424,8 @@ fn existing_skipped_file_is_refused_without_force() {
     let out = dir.path().join("out.txt");
     let skipped = dir.path().join("skipped.txt");
     std::fs::write(&skipped, "kept\n").unwrap();
-    let mut args = args_for(&run_control_dir());
-    args.retain(|a| a != "--force_overwrite");
     let refused = vep()
-        .args(&args)
+        .args(without_force_overwrite(args_for(&run_control_dir())))
         .args([
             "-o",
             out.to_str().unwrap(),
@@ -2469,17 +2583,6 @@ fn hgvs_corpus_args() -> Vec<String> {
     ]
 }
 
-/// Runs `vep` with `args` writing to `out`, standard input closed.
-fn run_with(args: &[String], extra: &[&str], out: &Path) -> Output {
-    vep()
-        .args(args)
-        .args(extra)
-        .args(["-o", out.to_str().unwrap()])
-        .stdin(Stdio::null())
-        .output()
-        .unwrap()
-}
-
 /// The line a run asking for HGVS notations with no FASTA ends with.
 const HGVS_REFUSAL: &str = "ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)";
 
@@ -2510,8 +2613,7 @@ fn hgvs_without_fasta_is_fatal() {
     }
 
     std::fs::write(&out, "kept\n").unwrap();
-    let mut args = corpus_args();
-    args.retain(|a| a != "--force_overwrite");
+    let args = without_force_overwrite(corpus_args());
     let refused = run_with(&args, &["--hgvs", "--quiet"], &out);
     assert_eq!(refused.status.code(), Some(1));
     assert_eq!(text(&refused.stderr).trim_end(), HGVS_REFUSAL);
@@ -2803,6 +2905,35 @@ fn manifest_runs_behave_as_expected() {
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
 
+/// The run-control corpus as `corpora` reads it, manifest included.
+fn run_control_corpus() -> Corpus {
+    corpora()
+        .into_iter()
+        .find(|c| c.name == "GRCh38-run-control")
+        .expect("the GRCh38-run-control corpus is committed")
+}
+
+/// `source` with `manifest` in place of its own.
+fn with_manifest(source: &Corpus, manifest: serde_json::Value) -> Corpus {
+    Corpus {
+        release: source.release.clone(),
+        name: source.name.clone(),
+        assembly: source.assembly.clone(),
+        dir: source.dir.clone(),
+        manifest,
+    }
+}
+
+/// The message of a caught panic: a formatted `panic!` carries a `String`, a
+/// literal one a `&str`; any other payload reads as empty.
+fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+    panic
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_default()
+}
+
 /// `manifest_runs` refuses the `runs` entries that would certify a manifest's
 /// `covers` with a run that expects nothing, or that are not the shape the
 /// helper documents, naming the entry and the reason: a name that is `default`,
@@ -2812,21 +2943,12 @@ fn manifest_runs_behave_as_expected() {
 /// nothing. The documented shape runs.
 #[test]
 fn manifest_runs_refuses_the_entries_that_expect_nothing_or_are_malformed() {
-    let source = corpora()
-        .into_iter()
-        .find(|c| c.name == "GRCh38-run-control")
-        .expect("the GRCh38-run-control corpus is committed");
+    let source = run_control_corpus();
     let label = format!("{}/{}", source.release, source.name);
     let with_runs = |runs: serde_json::Value| {
         let mut manifest = source.manifest.clone();
         manifest["runs"] = runs;
-        Corpus {
-            release: source.release.clone(),
-            name: source.name.clone(),
-            assembly: source.assembly.clone(),
-            dir: source.dir.clone(),
-            manifest,
-        }
+        with_manifest(&source, manifest)
     };
     let help = serde_json::json!({"exit": 0, "stdout_starts_with": "vep "});
     let named = |name: &str| serde_json::json!({"name": name, "argv": ["--help"], "expect": help});
@@ -2933,11 +3055,7 @@ fn manifest_runs_refuses_the_entries_that_expect_nothing_or_are_malformed() {
         }));
         let message = match &outcome {
             Ok(count) => format!("accepted, {count} runs"),
-            Err(panic) => panic
-                .downcast_ref::<String>()
-                .cloned()
-                .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
-                .unwrap_or_default(),
+            Err(panic) => panic_message(panic.as_ref()),
         };
         if message != reason {
             wrong.push(format!("{runs}: expected {reason:?}, got {message:?}"));
@@ -2962,10 +3080,7 @@ fn manifest_runs_refuses_the_entries_that_expect_nothing_or_are_malformed() {
 /// `null` included, is refused with the corpus named rather than read as either.
 #[test]
 fn cache_layout_selects_the_cache_directory_and_refuses_another_value() {
-    let source = corpora()
-        .into_iter()
-        .find(|c| c.name == "GRCh38-run-control")
-        .expect("the GRCh38-run-control corpus is committed");
+    let source = run_control_corpus();
     let with_layout = |layout: Option<serde_json::Value>| {
         let mut manifest = source.manifest.clone();
         match layout {
@@ -2974,13 +3089,7 @@ fn cache_layout_selects_the_cache_directory_and_refuses_another_value() {
                 manifest.as_object_mut().unwrap().remove("cache_layout");
             }
         }
-        Corpus {
-            release: source.release.clone(),
-            name: source.name.clone(),
-            assembly: source.assembly.clone(),
-            dir: source.dir.clone(),
-            manifest,
-        }
+        with_manifest(&source, manifest)
     };
     let root = source.dir.join("cache_root");
     let ensembl = with_layout(Some(serde_json::json!("ensembl")));
@@ -3018,7 +3127,7 @@ fn cache_layout_selects_the_cache_directory_and_refuses_another_value() {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| corpus.cache_args()));
         let message = outcome
             .err()
-            .and_then(|panic| panic.downcast_ref::<String>().cloned())
+            .map(|panic| panic_message(panic.as_ref()))
             .unwrap_or_default();
         assert_eq!(
             message,

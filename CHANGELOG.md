@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Input formats and records
   - `--delimiter` splits an Ensembl-format or VCF input's columns (a tab, a space, runs of spaces, `\s+`, literal text or a regular expression); under `--format guess` the detected one applies. (#N)
   - `--check_ref` skips a record whose reference allele differs from the FASTA, `--lookup_ref` replaces it from the FASTA, and `CHECK_REF` prints `failed` on a kept record, as Ensembl VEP does. (#N)
-  - `--chr` restricts the run to the chromosomes listed, matched against the input's own spelling, with Ensembl VEP's `1-5,10,MT` range grammar. (#N)
+  - `--chr` restricts the run to the chromosomes listed, matched against the input's own spelling, and reads the `1-5,10,MT` range grammar Ensembl VEP's help shows but its parser does not split. (#N)
   - Every input record passes Ensembl VEP's `validate_vf` checks before annotation: a bad coordinate, allele string, insertion or reference-allele length skips it with Ensembl VEP's warning text. (#N)
   - `--allow_non_variant` keeps a VCF record whose ALT is `.` in every output format: its line in the VCF output, one object in the JSON output, no row elsewhere. (#N)
   - Region input needs `--fasta`, is refused with `--check_ref`, and reads its reference allele from the FASTA, as Ensembl VEP's region parser does. (#N)
@@ -290,6 +290,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - An `--individual` copy of a lower-case record with a Perl-false ID prints its own alleles as written in the default and tab `Uploaded_variation`, as Ensembl VEP names it. (#N)
   - A deletion whose INFO/END is no coordinate warns `deletion looks incomplete` only when Perl's number for the text lies below the start, as Ensembl VEP compares it. (#N)
   - The `--individual` refusal names the header's samples as Ensembl VEP lists them, one per name in column order, a trailing tab naming no sample. (#N)
+  - `-i ""` and `-i 0` are refused as `No input file given`, Ensembl VEP's text for a name Perl reads as false. (#N)
+  - A BGZF stream followed by a plain gzip member is read whole, as `gzip -dc` reads every member for Ensembl VEP. (#N)
 - HGVS, SPDI and identifiers
   - HGVSp and shifted codons of a moved insertion turn the allele as the record wrote it, unturned on a reverse-strand transcript when the shift exceeds its length. (#N)
   - `SHIFT_LENGTH` is written on sequence variants' transcript rows alone under `--shift_3prime 1 --shift_length`; a structural record's rows carry none, as in Ensembl VEP. (#N)
@@ -357,6 +359,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The existing-output check reads the `-o` value as spelled, so a file named `STDOUT` refuses `-o STDOUT` without `--force_overwrite`. (#N)
   - `--input_data` given as empty or `0` beside `-i` reads the file and reports a skipped record as `variant skipped`, without a line number. (#N)
   - A `var_synonyms 0` from a `--config` file, `vep.ini` or `VEP_VAR_SYNONYMS` switches `check_existing` on with the notice, without synonyms, as Ensembl VEP reads a defined `0`. (#N)
+  - `--help` after a flag Ensembl VEP lacks prints the usage, and after `--gff`, `--gtf` or `--bam` is that option's value, as Getopt::Long reads it. (#N)
+  - A `VEP_*` variable whose value is not UTF-8 sets its flag with the replacement character for the byte, where it was dropped. (#N)
+  - `-o 0` writes its warnings to `vep_warnings.txt`, the file Ensembl VEP names for an output Perl reads as false. (#N)
+  - `-o -` writes the annotation to standard output, as Ensembl VEP's two-argument open does, except under `--compress_output`. (#N)
+  - `--show_cache_info` prints the cache information before an unreadable `--synonyms` file is refused, as Ensembl VEP reads the file only in a run. (#N)
 - Warnings and skipped variants
   - A refused Ensembl-format line or identifier mapping is skipped with the reason alone; the warning opened with `VCF parse error:`. (#N)
   - `--warning_file STDERR` carries each warning twice unless `--quiet`, as `print $fh` then `warn` write it; an empty or `0` value is the default file. (#N)

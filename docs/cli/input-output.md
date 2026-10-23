@@ -26,7 +26,7 @@ These flags name the input file and how it is read, and the output file, its for
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--output_file`, `-o` | String (repeatable) | `variant_effect_output.txt` | Output file path (use "STDOUT" for standard output, in any case); the last of several wins |
+| `--output_file`, `-o` | String (repeatable) | `variant_effect_output.txt` | Output file path ("STDOUT" in any case is standard output, as is "-" unless `--compress_output` writes a file, or Parquet a directory, of that name); the last of several wins |
 | `--output_format` | `vep`, `ensembl`, `vcf`, `json`, `tab`, `parquet` | `vep` | Output format, matched in any case; `ensembl` is another name for the default `vep` format. `parquet` is vep-rs's own: it writes a TSV intermediate and post-processes it to Parquet through a `duckdb` CLI subprocess; the `duckdb` binary must be on PATH |
 | `--parquet_shape` | `nested`, `flat` | `nested` | Parquet row shape (only effective when `--output_format=parquet`). nested (default): one row per variant, CSQ subfields are LIST\<T\>. flat: one row per (variant × transcript-consequence) tuple, CSQ subfields are scalar |
 | `--keep_intermediate` (hidden) | bool | false | Keep the Parquet intermediate TSV after DuckDB finalize succeeds. Debug aid: normally the intermediate is deleted once the Parquet directory is written |
@@ -38,7 +38,7 @@ These flags name the input file and how it is read, and the output file, its for
 | `--force_overwrite`, `--force` | bool | false | Overwrite output file if it already exists |
 | `--no_headers` | bool | false | Suppress header lines in output |
 | `--mask_header_cache_path` | bool | false | Print the cache directory in the output headers as [PATH]/\<leaf\> |
-| `--warning_file` | String | none | File the warnings of the run are written to, created at the first warning; default \<output\_file\>\_warnings.txt beside the output (STDOUT\_warnings.txt in the working directory for -o STDOUT). STDERR, in any case, keeps them on standard error, each written twice unless `--quiet`, as Ensembl VEP writes it. A warning is also echoed on standard error unless `--quiet` |
+| `--warning_file` | String | none | File the warnings of the run are written to, created at the first warning; default \<output\_file\>\_warnings.txt beside the output (STDOUT\_warnings.txt in the working directory for -o STDOUT, vep\_warnings.txt for an output named 0 or empty). STDERR, in any case, keeps them on standard error, each written twice unless `--quiet`, as Ensembl VEP writes it. A warning is also echoed on standard error unless `--quiet` |
 | `--skipped_variants_file` | String | none | File listing every input record the run skipped: a header line naming the input, then one line per record with its line number, the record's first 40 characters and the reason. An existing file is refused before the run without `--force_overwrite`; the file is written when the run ends |
 | `--fields` | String (comma-separated) | none | The columns of the `--tab` output and the subfields of the VCF CSQ entry, comma-separated, in this order and replacing the whole default list; any field name a flag or a plugin produces is valid, and a name nothing produces prints `-` (tab) or an empty subfield (VCF) under Ensembl VEP's description of the name, or `?` where it has none. The default and JSON formats ignore it; `--output_format` parquet refuses it |
 | `--vcf_info_field` | String | `CSQ` | VCF INFO field name for VEP annotation |

@@ -852,13 +852,33 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          - A `--config` path that is a directory, or cannot be read for any reason, is the \
          `config` error; Ensembl VEP's `open` succeeds on a directory and reads nothing from \
          it. A `vep.ini` that is a directory is read as nothing here too. A byte outside UTF-8 \
-         in a value becomes the replacement character, where Ensembl VEP passes the byte.\n\
+         in a value from a file or the environment becomes the replacement character, where \
+         Ensembl VEP passes the byte.\n\
          - A flag read from a file or the environment acts exactly as if typed, refusals \
-         included. The status lines Ensembl VEP prints under `--verbose` while reading the \
-         sources (`Read configuration from <file>`, `Set '<flag>=<value>' from environment \
-         variable <VAR>`, `Config.pm:1107, 1145-1164`) are not printed.\n\
-         - A leading `~` in `--config`, `--dir` and a file's `dir` is expanded to the home \
-         directory, which Ensembl VEP leaves to the shell.\n\
+         included. So `show_cache_info` from a file or the environment prints the cache \
+         information and exits 0. Ensembl VEP's driver reads the typed flag alone (vep:39), \
+         and a lower source's value runs the annotation there instead. The status lines \
+         Ensembl VEP prints under `--verbose` while reading the sources (`Read configuration \
+         from <file>`, `Set '<flag>=<value>' from environment variable <VAR>`, `Config.pm:1107, \
+         1145-1164`) are not printed.\n\
+         - A leading `~` in `--config`, `--dir`, `--dir_cache`, `--cache <dir>`, \
+         `--json_cache`, `--synonyms`, `--check_svs` and a file's `dir` is expanded to the \
+         home directory. Ensembl VEP leaves the expansion to the shell. A `~/` the shell did \
+         not expand (quoted, or from a file or the environment) in `--config`, `--dir`, \
+         `--dir_cache`, `--cache`, `--synonyms` or `--full_cache_dir` (`--json_cache` here) is \
+         passed on as typed there and names no configuration file, cache directory or \
+         synonyms file. The plugins directory under `--dir` alone is globbed there \
+         (`Runner.pm:908`). `--check_svs` takes no value there (`Config.pm:125`).\n\
+         - `--freq_gt_lt` takes `gt` or `lt` and `--freq_filter` `exclude` or `include`; any \
+         other word is an argument syntax error (exit 2). Ensembl VEP declares both as `=s` \
+         (`Config.pm:137, 139`) and checks neither: an unknown direction passes no allele \
+         (`BaseCacheVariation.pm:467-468`), and any filter but `include` reads as `exclude` \
+         (`:319`).\n\
+         - `--shift_hgvs` takes `0` or `1`; any other value is an argument syntax error \
+         (exit 2). Ensembl VEP's `shift_hgvs=i` (`Config.pm:201`) takes any integer and \
+         `BaseRunner.pm:498` matches it against `/(0|1)/` as a substring. So `2` leaves the \
+         default shift on, and `10` sets the shifting variables to 10, which shifts HGVSc and \
+         HGVSp (tested against `0`) and not HGVSg (tested against `1`).\n\
          - `-V` is the version, where Getopt::Long's `ignore_case` reads it as `-v`, and an \
          upper-case short names no flag here. A short with its value attached (`-ofile.txt`) \
          and a cluster of switches (`-qv`) are clap's readings, where Getopt::Long refuses the \
@@ -929,8 +949,9 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
         "`{ENV_PREFIX}<FLAG>=<value>` sets `--<flag>`, the name lower-cased, when the value is \
          not empty. The name is read as a configuration file's key is: a name that is no option \
          of Ensembl VEP's or of this version is ignored, and one of an Ensembl VEP option this \
-         version lacks is refused as the flag is (exit 2). The variables are read in name \
-         order.\n"
+         version lacks is refused as the flag is (exit 2). One of a flag this version refuses \
+         reaches that refusal (`{ENV_PREFIX}DATABASE=1` is the `--database` error, exit 1). \
+         The variables are read in name order.\n"
     )
     .unwrap();
     out.push_str(
@@ -1010,7 +1031,11 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          flag, a prefix of several flags, a missing value, a value outside an enumeration.\n\
          - A compressed input cut inside a gzip member is a `run` failure, exit 1 with nothing \
          past the header written, where Ensembl VEP writes the records before the cut and \
-         exits 0 ([the divergence page](../divergences/compressed-input.md)).\n\n",
+         exits 0 ([the divergence page](../divergences/compressed-input.md)).\n\
+         - A directory named as the input is a `run` failure, exit 1 with no output written, \
+         where Ensembl VEP passes the existence test (`Parser.pm:239`), leaves the directory \
+         uncompressed (`:242` tests `-f`), opens it, reads nothing from it and exits 0 with the \
+         header alone written.\n\n",
     );
     let rows: Vec<Vec<String>> = COMPONENTS
         .iter()
@@ -1022,8 +1047,10 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          stand before a `--` (vep:29 before vep:30 under Getopt::Long's `pass_through`, \
          Config.pm:62); `--help=1` and a `--help` behind `--` are refused. A `--help` or \
          `--version` that is the token after a flag taking a string is that value (`-i \
-         --help` names the file) on both engines; after a flag taking a number it is the \
-         help or the version.\n\n",
+         --help` names the file) on both engines, an Ensembl VEP option this version lacks \
+         included (`--gff --help` is refused as `--gff`, exit 2). After a flag taking a \
+         number it is the help or the version, as it is after a flag of this version's own, \
+         which Ensembl VEP leaves in `@ARGV` (`--pipeline_depth --help`).\n\n",
     );
     out.push_str(
         "A panic aborts the process with the panic's own status. Ensembl VEP's own exit codes \

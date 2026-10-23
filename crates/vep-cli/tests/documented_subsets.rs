@@ -766,3 +766,47 @@ fn spdi_input_format_exclusion_is_documented() {
         ],
     );
 }
+
+/// `dir_cache`, `cache`, `json_cache`, `synonyms`, `check_svs`: a leading `~`
+/// in the path is expanded here, where Ensembl VEP passes the value as typed
+/// (AnnotationSourceAdaptor.pm:127 hands `dir_cache` to CacheDir.pm, whose `:318`
+/// finds no directory named `~`; `check_svs` takes no value there, Config.pm:125).
+#[test]
+fn tilde_expansion_exclusion_is_documented() {
+    assert_page_states(
+        "cli/compatibility.md",
+        &[
+            "A leading `~` in `--config`, `--dir`, `--dir_cache`, `--cache <dir>`, \
+             `--json_cache`, `--synonyms`, `--check_svs` and a file's `dir` is expanded to the \
+             home directory",
+            "Ensembl VEP leaves the expansion to the shell",
+            "A `~/` the shell did not expand (quoted, or from a file or the environment) in \
+             `--config`, `--dir`, `--dir_cache`, `--cache`, `--synonyms` or `--full_cache_dir` \
+             (`--json_cache` here) is passed on as typed there and names no configuration \
+             file, cache directory or synonyms file",
+            "The plugins directory under `--dir` alone is globbed there (`Runner.pm:908`)",
+            "`--check_svs` takes no value there (`Config.pm:125`)",
+        ],
+    );
+}
+
+/// `shift_hgvs`: `--shift_hgvs` takes `0` or `1`, where Ensembl VEP's `=i`
+/// (Config.pm:201) takes any integer and BaseRunner.pm:498 matches it against
+/// `/(0|1)/` as a substring, so `2` runs with the default and `10` shifts
+/// HGVSc and HGVSp (TranscriptVariationAllele.pm:1441 tests `!= 0`) but not
+/// HGVSg (VariationFeature.pm:1986 tests `== 1`).
+#[test]
+fn shift_hgvs_exclusion_is_documented() {
+    assert_page_states(
+        "cli/compatibility.md",
+        &[
+            "`--shift_hgvs` takes `0` or `1`; any other value is an argument syntax error \
+             (exit 2)",
+            "Ensembl VEP's `shift_hgvs=i` (`Config.pm:201`) takes any integer and \
+             `BaseRunner.pm:498` matches it against `/(0|1)/` as a substring",
+            "So `2` leaves the default shift on, and `10` sets the shifting variables to 10, \
+             which shifts HGVSc and HGVSp (tested against `0`) and not HGVSg (tested against \
+             `1`)",
+        ],
+    );
+}
