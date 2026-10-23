@@ -56,7 +56,7 @@ Planned for the next release, 0.6.0.
 
 ## 1000 Genomes pilot coordinates
 
-`--gp` is refused with an error naming it, which begins `ERROR: [cli] --gp is not supported: it reads 1000 Genomes pilot coordinates from INFO/GP`. In Ensembl VEP the flag reads a record's chromosome and position from the `GP` field of its INFO column, the convention of the 1000 Genomes pilot VCFs, and skips a record without that field (`Config.pm` line 120, `Parser/VCF.pm` lines 271-285). Not planned.
+`--gp` is refused with an error naming it, which begins `ERROR: [cli] --gp is not supported: it reads a GRCh37 chr:pos from the INFO/GP field that some 1000 Genomes VCFs carry`. In Ensembl VEP the flag reads a record's chromosome and position from the `GP` field of its INFO column, the convention of the 1000 Genomes pilot VCFs, and skips a record without that field (`Config.pm` line 120, `Parser/VCF.pm` lines 271-285). Not planned.
 
 ## Very long lines
 
