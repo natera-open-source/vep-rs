@@ -79,9 +79,8 @@ use crate::validate::{
 use crate::variation_matcher::{self, ColocationRules};
 use crate::variation_source::{ReadFailure, VariationSource};
 use crate::vcf_parser::{
-    non_variant_record, parse_vcf_line_with, parse_vcf_line_with_max_sv_size, record_splits,
-    sample_columns, split_minimal_record, tandem_repeat_warnings, vcf_columns,
-    vcf_line_is_non_variant, SampleColumns, VcfParse,
+    parse_data_line, parse_vcf_line_with_max_sv_size, record_splits, sample_columns,
+    split_minimal_record, vcf_line_is_non_variant, ParsedRecord, SampleColumns, VcfParse,
 };
 use vep_core::coordinate::parse_pos;
 use vep_core::minimal::{
@@ -89,7 +88,8 @@ use vep_core::minimal::{
 };
 use vep_core::sv_record::StructuralRecordError;
 use vep_core::sv_routing::{
-    joined, perl_true, sv_so_term_and_class, sv_type_abbreviation, sv_type_string, written_alts,
+    joined, perl_true, sv_so_term_and_class, sv_type_abbreviation, sv_type_string, variant_alts,
+    written_alts,
 };
 use vep_core::sv_span::{end_text_before_start, structural_end, SpanClass, SpanError};
 use vep_core::synonyms::ChromosomeSynonyms;
@@ -2275,8 +2275,8 @@ fn retain_alleles(units: &mut Vec<Unit>, variants: &mut Vec<InputVariant>, keep:
     dropped
 }
 
-/// The alleles parsed from one data line; `None` for a passthrough item.
-type ParsedLine = Option<anyhow::Result<Vec<InputVariant>>>;
+/// The record parsed from one data line; `None` for a passthrough item.
+type ParsedLine = Option<ParsedRecord>;
 
 /// What every data line of a run is parsed with.
 #[derive(Clone, Copy)]
@@ -2288,23 +2288,23 @@ struct LineParse<'a> {
 }
 
 impl LineParse<'_> {
-    /// The alleles of one data line, each carrying the line as the JSON `input`
-    /// prints it when the run captures lines, and the line's bytes when the
-    /// line is not UTF-8, for the VCF output to write as read.
-    fn parse(&self, line: &[u8]) -> anyhow::Result<Vec<InputVariant>> {
+    /// The record of one data line ([`parse_data_line`]), its alleles each
+    /// carrying the line as the JSON `input` prints it when the run captures
+    /// lines, and the line's bytes when the line is not UTF-8, for the VCF output
+    /// to write as read.
+    fn parse(&self, line: &[u8]) -> ParsedRecord {
         // The parser reads text: a line that is not UTF-8 is read with each invalid
         // sequence replaced, so its identifiers and INFO values may print the
         // replacement character where Ensembl VEP prints the bytes.
         let text = String::from_utf8_lossy(line);
-        let mut alleles = if vcf_line_is_non_variant(&text) {
-            non_variant_record(&text, &self.parse)?
-        } else {
-            parse_vcf_line_with(&text, &self.parse)?
+        let mut record = parse_data_line(&text, &self.parse);
+        let Ok(alleles) = &mut record.alleles else {
+            return record;
         };
         let line_is_not_utf8 = matches!(text, Cow::Owned(_));
         if self.parse.capture_raw_input && line_is_not_utf8 {
             let bytes: Arc<[u8]> = Arc::from(line);
-            for allele in &mut alleles {
+            for allele in alleles.iter_mut() {
                 allele.raw_input_bytes = Some(Arc::clone(&bytes));
             }
         }
@@ -2318,11 +2318,11 @@ impl LineParse<'_> {
                 .unwrap_or(&text)
                 .replace('\t', join)
                 .into();
-            for allele in &mut alleles {
+            for allele in alleles.iter_mut() {
                 allele.raw_input = Some(Arc::clone(&input));
             }
         }
-        Ok(alleles)
+        record
     }
 }
 
@@ -2392,7 +2392,7 @@ fn parse_lines(
 /// cannot diverge.
 fn place_parsed_line(
     item: &Item,
-    result: anyhow::Result<Vec<InputVariant>>,
+    record: ParsedRecord,
     text: &[u8],
     rules: &SkipRules<'_>,
     units: &mut Vec<Unit>,
@@ -2407,17 +2407,14 @@ fn place_parsed_line(
     else {
         unreachable!("a passthrough item has no parse");
     };
-    let columns = String::from_utf8_lossy(&text[span.clone()]);
     // Ensembl VEP's tandem-repeat branch writes its warnings as it reads the record
     // (Parser/VCF.pm:502-527), before `validate_vf` runs and before any refusal, so
     // they are reported ahead of the parse result, through the same path as the
     // record's skips, and keep record order.
-    if let Ok(parsed) = vcf_columns(&columns) {
-        for warning in tandem_repeat_warnings(&parsed.fixed, rules.checks.fasta.is_some()) {
-            report(Reported::Warning(&warning));
-        }
+    for warning in &record.warnings {
+        report(Reported::Warning(warning));
     }
-    match result {
+    match record.alleles {
         Ok(mut alleles) => {
             for variant in &mut alleles {
                 variant.input_record = *line_number;
@@ -2486,6 +2483,7 @@ fn place_parsed_line(
             // drops a record on another chromosome before `validate_vf` speaks
             // (Parser.pm:470-472), so its `validate_vf` skips are silent for a
             // line the list leaves out unless `--dont_skip` would have kept it.
+            let columns = String::from_utf8_lossy(&text[span.clone()]);
             let quoted = String::from_utf8_lossy(&text[quoted.clone()]);
             let refusal = refused_record(&e, &columns);
             let chromosome = columns.split('\t').next().unwrap_or("");
@@ -2885,9 +2883,8 @@ fn split_parsed(parsed: ParsedBatch, chunk_units: usize) -> Vec<TaskInput> {
 
 /// The chromosomes a line batch's records touch, as the cache names them: each
 /// record's CHROM ([`record_chr_name`]), and the mate chromosome of each
-/// breakend ([`cache_chr_name`]), read by parsing the lines whose REF and ALT
-/// are not a run of `ACGT`, the only lines `Parser/VCF.pm:237-245` routes to the
-/// structural path, which alone names a mate.
+/// breakend ([`cache_chr_name`]), read by parsing the lines whose columns can
+/// name one ([`may_name_a_breakend_mate`]).
 fn batch_chromosomes(
     lines: &LineBatch,
     max_sv_size: Option<u64>,
@@ -2904,22 +2901,15 @@ fn batch_chromosomes(
         let Item::Data { span, .. } = item else {
             continue;
         };
-        let line = String::from_utf8_lossy(&lines.text[span.clone()]);
-        let mut columns = line.split('\t');
-        push(record_chr_name(
-            columns.next().unwrap_or(&line),
-            synonyms,
-            transcripts,
-        ));
+        let line = &lines.text[span.clone()];
+        let mut columns = line.split(|&b| b == b'\t');
+        let chrom = String::from_utf8_lossy(columns.next().unwrap_or(line));
+        push(record_chr_name(&chrom, synonyms, transcripts));
         let (reference, alt) = (columns.nth(2), columns.next());
-        let plain_acgt = reference
-            .into_iter()
-            .chain(alt)
-            .flat_map(str::bytes)
-            .all(|b| matches!(b, b'A' | b'C' | b'G' | b'T' | b','));
-        if plain_acgt {
+        if !may_name_a_breakend_mate(reference.unwrap_or(b""), alt.unwrap_or(b"")) {
             continue;
         }
+        let line = String::from_utf8_lossy(line);
         if let Ok(variants) = parse_vcf_line_with_max_sv_size(&line, false, max_sv_size) {
             for mate in variants.iter().filter_map(|v| v.mate_chr.as_deref()) {
                 push(cache_chr_name(mate, synonyms, transcripts));
@@ -2927,6 +2917,41 @@ fn batch_chromosomes(
         }
     }
     chrs
+}
+
+/// Whether a VCF record with the columns `reference` and `alt` can name a
+/// breakend mate, decided without reading its INFO fields. A mate is a bracket
+/// part of a breakpoint record's allele string, the reference base included
+/// (`_parse_breakends`, StructuralVariationFeature.pm:1276), or the part INFO/CHR2
+/// adds to one (Parser/VCF.pm:491-497), and a record is a breakpoint when its type
+/// abbreviation is `BND`: the abbreviation `sv_type_abbreviation` derives from the
+/// ALTs, or any abbreviation at all when INFO/SVTYPE stands in for them
+/// (`sv_type_string`, the ALTs opening outside the VCF 4.4 forms). The ALTs are
+/// read as written, every `<NON_REF>` block kept as under a true SVTYPE, and
+/// again with the blocks dropped as `variant_alts` reads them under a false one,
+/// where a trailing block hides the `.` that closes a single breakend:
+/// `<DEL>,N.,<NON_REF>` is `DEL/N./NON_REF` whole and `BND` without the block. A
+/// record whose REF and ALTs are each a run of `ACGT`, the ALT column's commas
+/// aside, is a sequence record (Parser/VCF.pm:237-245) and names none.
+fn may_name_a_breakend_mate(reference: &[u8], alt: &[u8]) -> bool {
+    let acgt = |b: &u8| matches!(b, b'A' | b'C' | b'G' | b'T');
+    if reference.iter().all(acgt) && alt.iter().all(|b| acgt(b) || *b == b',') {
+        return false;
+    }
+    let alt_field = String::from_utf8_lossy(alt);
+    let mut alts = written_alts(&alt_field);
+    // No column holds a tab, so the abbreviation is the sentinel exactly when a
+    // true INFO/SVTYPE stands in for the joined ALTs, and the record's own otherwise.
+    let names_a_breakpoint = |alts: &[(usize, &str)]| {
+        let abbreviation = sv_type_abbreviation(&joined(alts, "/"), Some("\t"));
+        abbreviation == "BND" || abbreviation == "\t"
+    };
+    if names_a_breakpoint(&alts) {
+        return true;
+    }
+    let written = alts.len();
+    variant_alts(&mut alts, None);
+    alts.len() < written && names_a_breakpoint(&alts)
 }
 
 /// Parses the data lines of `items` as [`parse_lines`] does, into units and
@@ -3835,6 +3860,118 @@ mod tests {
             batch_chromosomes(&batch, Some(10_000_000), &synonyms, &transcripts),
             ["21", "22", "2", "MT", "X", "9", "1"]
         );
+    }
+
+    /// The REF and ALT columns the scan never parses for a mate: a run of `ACGT`
+    /// and the VCF 4.4 symbolic forms, whose type the ALT alone names, a `<NON_REF>`
+    /// block behind one and a bracket in REF beside one included, whatever INFO
+    /// carries.
+    const COLUMNS_NAMING_NO_MATE: [(&str, &str); 13] = [
+        ("A", "G"),
+        ("A", "G,T"),
+        ("N", "<DEL>"),
+        ("N", "<DUP>"),
+        ("N", "<DUP:TANDEM>"),
+        ("N", "<INS:ME:ALU>"),
+        ("N", "<INV>"),
+        ("N", "<CNV>"),
+        ("N", "<CNV:TR>"),
+        ("N", "<CN0>"),
+        ("N", "<DEL>,<DUP>"),
+        ("N", "<DEL>,<NON_REF>"),
+        ("N[2:5[", "<DEL>"),
+    ];
+
+    /// The REF and ALT columns the scan parses for a mate: a bracket among the ALTs,
+    /// a dot-bounded breakend, a `<NON_REF>` block behind one included, `BND` with
+    /// or without angle brackets around its letters, an ALT outside the VCF 4.4
+    /// forms (`<CPX>`, a lowercase `<del>` or `<bnd>`, a bare `N`, a `<NON_REF>`
+    /// block ahead of a form) for which INFO/SVTYPE names the type, or a REF that
+    /// is no run of `ACGT` (a comma in it included) beside such an ALT.
+    const COLUMNS_THAT_MAY_NAME_A_MATE: [(&str, &str); 16] = [
+        ("N", "N[2:1000["),
+        ("N", "]2:1000]N"),
+        ("N", "<DEL>,N[2:1000["),
+        ("N", "<BND>"),
+        ("N", "<BND:1>"),
+        ("N", "<B<N>D"),
+        ("N", ".N"),
+        ("N", "N."),
+        ("N", "<DEL>,N.,<NON_REF>"),
+        ("N", "DEL.,<non_ref>"),
+        ("N", "<CPX>"),
+        ("N", "<del>"),
+        ("N", "<bnd>"),
+        ("N", "N"),
+        ("A,C", "G"),
+        ("N", "<NON_REF>,<DEL>"),
+    ];
+
+    /// The scan's decision over [`COLUMNS_NAMING_NO_MATE`], never parsed, and
+    /// [`COLUMNS_THAT_MAY_NAME_A_MATE`], parsed for their mates.
+    #[test]
+    fn a_line_is_parsed_for_mates_only_when_its_columns_can_name_one() {
+        for (reference, alt) in COLUMNS_NAMING_NO_MATE {
+            assert!(
+                !may_name_a_breakend_mate(reference.as_bytes(), alt.as_bytes()),
+                "{reference} {alt}"
+            );
+        }
+        for (reference, alt) in COLUMNS_THAT_MAY_NAME_A_MATE {
+            assert!(
+                may_name_a_breakend_mate(reference.as_bytes(), alt.as_bytes()),
+                "{reference} {alt}"
+            );
+        }
+    }
+
+    /// Every line whose parse names a mate is one the scan parses: a mate the
+    /// scan missed would leave its chromosome unwarmed, and the task would fail
+    /// in `ensure_materialized`. Under INFO/CHR2 and END, with `SVTYPE=BND` and
+    /// with no SVTYPE (the parse keeps a `<NON_REF>` block under the first and
+    /// drops it under the second), the parse names a mate for none of the columns
+    /// the scan never parses, and for every breakpoint record it does: a `<BND>`
+    /// without a bracket and a REF that is no run of `ACGT` beside a bare `G`
+    /// under `SVTYPE=BND`, and a block behind a single breakend without it.
+    #[test]
+    fn the_scan_parses_every_line_whose_parse_names_a_mate() {
+        const WITH_SVTYPE: &str = "SVTYPE=BND;CHR2=2;END=100";
+        const WITHOUT_SVTYPE: &str = "CHR2=2;END=100";
+        let mates = |reference: &str, alt: &str, info: &str| -> Vec<String> {
+            let line = format!("21\t100\tx\t{reference}\t{alt}\t.\t.\t{info}");
+            let max_sv_size = Some(vep_core::sv_record::DEFAULT_MAX_SV_SIZE);
+            parse_vcf_line_with_max_sv_size(&line, false, max_sv_size)
+                .map(|variants| variants.into_iter().filter_map(|v| v.mate_chr).collect())
+                .unwrap_or_default()
+        };
+        for info in [WITH_SVTYPE, WITHOUT_SVTYPE] {
+            for (reference, alt) in COLUMNS_NAMING_NO_MATE {
+                assert!(
+                    mates(reference, alt, info).is_empty(),
+                    "{reference} {alt} {info}"
+                );
+            }
+        }
+        for (reference, alt, info) in [
+            ("N", "<BND>", WITH_SVTYPE),
+            ("N", "<bnd>", WITH_SVTYPE),
+            ("A,C", "G", WITH_SVTYPE),
+            ("N", "N[3:50[", WITH_SVTYPE),
+            ("N", "<NON_REF>,<DEL>", WITH_SVTYPE),
+            ("N", "<B<N>D", WITH_SVTYPE),
+            ("N", "<DEL>,N.,<NON_REF>", WITHOUT_SVTYPE),
+            ("N", "DEL.,<non_ref>", WITHOUT_SVTYPE),
+            ("N[2:5[", "<DEL>,N.,<NON_REF>", WITHOUT_SVTYPE),
+        ] {
+            assert!(
+                mates(reference, alt, info).contains(&"2".to_string()),
+                "{reference} {alt} {info}"
+            );
+            assert!(
+                may_name_a_breakend_mate(reference.as_bytes(), alt.as_bytes()),
+                "{reference} {alt}"
+            );
+        }
     }
 
     /// The streaming scan warms the chromosome a bare `M` record is annotated

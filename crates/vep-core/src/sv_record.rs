@@ -22,7 +22,7 @@ use crate::sv_span::{
     SpanClass, SpanError,
 };
 use crate::variant::{InputVariant, VariantClass};
-use crate::vcf_info::{info_value, info_value_written};
+use crate::vcf_info::InfoFields;
 
 /// Ensembl VEP's default `--max_sv_size` (`Config.pm:315`), in bases.
 pub const DEFAULT_MAX_SV_SIZE: u64 = 10_000_000;
@@ -58,22 +58,23 @@ impl From<SpanError> for StructuralRecordError {
 }
 
 /// The variants of a structural record at VCF position `pos` on `chr`: `written` are
-/// the record's ALTs with their written positions (`sv_routing::written_alts`) and `id`
-/// the ID column when it names the record. One variant per ALT that names an allele
-/// under the record's class after the gVCF rule (`sv_routing::variant_alts`), or under
-/// its own class with the `vep_skip` mark for a type `%SO_TERMS` lacks; a breakpoint
-/// record with parsed mates writes its own breakend and one variant per mate instead,
-/// at its first ALT. The record's allele strings keep every written ALT. The caller
-/// sets what the record's line adds (`id`, `raw_input`, `input_line_name`).
+/// the record's ALTs with their written positions (`sv_routing::written_alts`), `info`
+/// the record's INFO column and `id` the ID column when it names the record. One
+/// variant per ALT that names an allele under the record's class after the gVCF rule
+/// (`sv_routing::variant_alts`), or under its own class with the `vep_skip` mark for a
+/// type `%SO_TERMS` lacks; a breakpoint record with parsed mates writes its own
+/// breakend and one variant per mate instead, at its first ALT. The record's allele
+/// strings keep every written ALT. The caller sets what the record's line adds (`id`,
+/// `raw_input`, `input_line_name`).
 pub fn structural_variants(
     chr: &str,
     pos: u64,
     ref_allele: &str,
     written: &[(usize, &str)],
-    info_field: &str,
+    info: &InfoFields<'_>,
     id: Option<&str>,
 ) -> Result<Vec<InputVariant>, StructuralRecordError> {
-    let svtype = info_value(info_field, "SVTYPE").filter(|v| perl_true(v));
+    let svtype = info.value("SVTYPE").filter(|v| perl_true(v));
     let mut alts = written.to_vec();
     variant_alts(&mut alts, svtype);
     let mut variants = Vec::with_capacity(alts.len());
@@ -96,7 +97,7 @@ pub fn structural_variants(
     // INFO/CHR2 names and, as the record's string, the reference base in front
     // (`:491-499`).
     let breakpoint = (record_class == Some(VariantClass::Translocation))
-        .then(|| breakend_record(ref_allele, written, info_field));
+        .then(|| breakend_record(ref_allele, written, info));
     let uploaded: Arc<str> = breakpoint
         .as_ref()
         .map_or_else(|| joined(written, "/"), |record| record.alts.clone())
@@ -116,10 +117,10 @@ pub fn structural_variants(
     // record whose only ALT is `.` never reaches here (`vcf_parser.rs` reads it as a
     // non-variant record first).
     let classes = per_alt_classes(&alts, record_class, svtype);
-    let svlen_text = info_value_written(info_field, "SVLEN");
-    let end_text = info_value_written(info_field, "END");
-    let ci_pos = parse_ci_field(info_value(info_field, "CIPOS"));
-    let ci_end = parse_ci_field(info_value(info_field, "CIEND"));
+    let svlen_text = info.value_written("SVLEN");
+    let end_text = info.value_written("END");
+    let ci_pos = parse_ci_field(info.value("CIPOS"));
+    let ci_end = parse_ci_field(info.value("CIEND"));
 
     for (k, &(allele_idx, alt, sv_class)) in classes.iter().enumerate() {
         // SVLEN=0 or END=POS leaves the pair `start = POS + 1, end = POS` Perl carries
@@ -183,7 +184,7 @@ pub fn structural_variants(
             // base and gets no allele of its own.
             Some(record) => {
                 if k == 0 {
-                    mark_paired_breakend_record(&mut variant, chr, info_field, id);
+                    mark_paired_breakend_record(&mut variant, chr, info, id);
                     variant.allele_num = Some(0);
                     variants.push(own_breakend(&variant, ref_allele, &record.own));
                     for (number, mate) in (1..).zip(&record.mates) {
@@ -258,7 +259,11 @@ struct BreakendRecord {
     mates: Vec<BreakendMate>,
 }
 
-fn breakend_record(ref_allele: &str, alts: &[(usize, &str)], info: &str) -> BreakendRecord {
+fn breakend_record(
+    ref_allele: &str,
+    alts: &[(usize, &str)],
+    info: &InfoFields<'_>,
+) -> BreakendRecord {
     let mut parts: Vec<(Option<usize>, String)> = alts
         .iter()
         .map(|&(idx, alt)| (Some(idx), alt.to_string()))
@@ -267,10 +272,11 @@ fn breakend_record(ref_allele: &str, alts: &[(usize, &str)], info: &str) -> Brea
     // keeps the empty field) and fails for a bare `CHR2`; the position is END2 when
     // Perl reads it as true (not empty, not `0`), else END as written, empty or `0`
     // included.
-    if let Some(chr2) = info_value_written(info, "CHR2") {
-        let mate_pos = info_value(info, "END2")
+    if let Some(chr2) = info.value_written("CHR2") {
+        let mate_pos = info
+            .value("END2")
             .filter(|end2| perl_true(end2))
-            .or_else(|| info_value_written(info, "END"));
+            .or_else(|| info.value_written("END"));
         if let Some(mate_pos) = mate_pos {
             let (allele_index, lone_bnd) = match parts.as_slice() {
                 [(idx, alt)] if is_bare_bnd_alt(alt) => (*idx, true),
@@ -384,11 +390,12 @@ fn single_breakend_base(part: &str) -> Option<&str> {
 fn mark_paired_breakend_record(
     variant: &mut InputVariant,
     chr: &str,
-    info: &str,
+    info: &InfoFields<'_>,
     id: Option<&str>,
 ) {
-    let mate_id = info_value(info, "MATEID")
-        .or_else(|| info_value(info, "PARID"))
+    let mate_id = info
+        .value("MATEID")
+        .or_else(|| info.value("PARID"))
         .or(id)
         .map_or_else(|| format!("{}:{}", chr, variant.start), str::to_string);
     variant.mate_id = Some(mate_id);
@@ -412,12 +419,12 @@ fn mark_paired_breakend_record(
 /// is an empty part (`RN=0,1` gives `REF//<repeats>`), which the reader of the string
 /// takes as a `-` allele (VariationFeatureOverlap.pm:466).
 pub fn tandem_repeat_allele_string(
-    info: &str,
+    info: &InfoFields<'_>,
     alleles: usize,
     max_sv_size: Option<u64>,
     reference: &str,
 ) -> Option<String> {
-    let value = |key: &str| info_value(info, key).filter(|v| perl_true(v));
+    let value = |key: &str| info.value(key).filter(|v| perl_true(v));
     // The lists as Perl's `split` reads the values (`:395-400`): a trailing empty
     // field is no field, so `RUC=,` is a true value whose list is empty, and the
     // record then counts by RB (`:401`, `:414`).
@@ -534,7 +541,7 @@ mod tests {
         let record = breakend_record(
             "N",
             &written_alts("<BND>"),
-            "SVTYPE=BND;CHR2=21;END2=30425700=5",
+            &InfoFields::new("SVTYPE=BND;CHR2=21;END2=30425700=5"),
         );
         assert_eq!(record.alts, "N[21:30425700[");
         assert_eq!(record.mates.len(), 1);
@@ -543,7 +550,7 @@ mod tests {
         let spaced = breakend_record(
             "N",
             &written_alts("<BND>"),
-            "SVTYPE=BND;CHR2= 21;END2=30425700",
+            &InfoFields::new("SVTYPE=BND;CHR2= 21;END2=30425700"),
         );
         assert_eq!(spaced.alts, "N[ 21:30425700[");
         assert_eq!(
@@ -553,7 +560,7 @@ mod tests {
             ),
             ("21", 30425700)
         );
-        let dot = breakend_record("N", &written_alts(".N"), "SVTYPE=BND");
+        let dot = breakend_record("N", &written_alts(".N"), &InfoFields::new("SVTYPE=BND"));
         assert!(!dot.reference_prefixed);
     }
 
@@ -567,7 +574,7 @@ mod tests {
             30425600,
             "N",
             &written_alts("N[chrM:100["),
-            "SVTYPE=BND",
+            &InfoFields::new("SVTYPE=BND"),
             None,
         )
         .unwrap();
@@ -581,7 +588,7 @@ mod tests {
             30425600,
             "N",
             &written_alts("<BND>"),
-            "SVTYPE=BND;CHR2=chrX;END2=50000000",
+            &InfoFields::new("SVTYPE=BND;CHR2=chrX;END2=50000000"),
             None,
         )
         .unwrap();
@@ -604,12 +611,14 @@ mod tests {
     fn repeat_counts_are_read_as_perl_numifies_them() {
         // The parts as Perl's `split` reads the string: a trailing empty part is none.
         let alleles = |info: &str, alleles: usize| {
-            tandem_repeat_allele_string(info, alleles, Some(10_000_000), "R").map(|s| {
-                crate::sv_routing::perl_split(&s, &['/'])
-                    .skip(1)
-                    .map(str::to_string)
-                    .collect::<Vec<_>>()
-            })
+            tandem_repeat_allele_string(&InfoFields::new(info), alleles, Some(10_000_000), "R").map(
+                |s| {
+                    crate::sv_routing::perl_split(&s, &['/'])
+                        .skip(1)
+                        .map(str::to_string)
+                        .collect::<Vec<_>>()
+                },
+            )
         };
         let one = |info: &str| alleles(info, 1);
         assert_eq!(one("RUS=AGC;RUC=2abc"), Some(vec!["AGCAGC".into()]));
@@ -677,7 +686,7 @@ mod tests {
     fn tandem_repeat_allele_string_follows_the_perl_expansion() {
         let run = "TCATCATCA";
         let expand = |info: &str, alleles: usize, max: Option<u64>| {
-            tandem_repeat_allele_string(info, alleles, max, run)
+            tandem_repeat_allele_string(&InfoFields::new(info), alleles, max, run)
         };
         let default = Some(DEFAULT_MAX_SV_SIZE);
         let four = Some("TCATCATCA/TCATCATCATCA".to_string());
@@ -746,7 +755,7 @@ mod tests {
         let record = breakend_record(
             "N",
             &written_alts("<BND>"),
-            "SVTYPE=BND;CHR2=21;END2=\u{ff13}\u{ff10}",
+            &InfoFields::new("SVTYPE=BND;CHR2=21;END2=\u{ff13}\u{ff10}"),
         );
         assert!(record.mates.is_empty());
         assert_eq!(record.alts, "N[21:\u{ff13}\u{ff10}[");
@@ -761,7 +770,7 @@ mod tests {
             30425650,
             "N",
             &written_alts("<DEL>,"),
-            "SVTYPE=DEL;END=30425949",
+            &InfoFields::new("SVTYPE=DEL;END=30425949"),
             None,
         )
         .unwrap();
@@ -787,7 +796,7 @@ mod tests {
                 30289183,
                 "C",
                 &written_alts(alts),
-                "SVTYPE=DEL;END=30289190",
+                &InfoFields::new("SVTYPE=DEL;END=30289190"),
                 Some("x"),
             )
             .unwrap()
@@ -832,7 +841,7 @@ mod tests {
             30425650,
             "N",
             &written_alts("N[21:30425700[,<NON_REF>"),
-            ".",
+            &InfoFields::new("."),
             None,
         )
         .unwrap();
@@ -851,7 +860,7 @@ mod tests {
             30425650,
             "N",
             &written_alts("<DEL>,<NON_REF>"),
-            "END=30425949",
+            &InfoFields::new("END=30425949"),
             Some("site"),
         )
         .unwrap();
@@ -871,7 +880,14 @@ mod tests {
     #[test]
     fn a_first_base_past_the_ceiling_fails_the_record() {
         let at = |pos: u64, alt: &str, info: &str| {
-            structural_variants("21", pos, "N", &written_alts(alt), info, None)
+            structural_variants(
+                "21",
+                pos,
+                "N",
+                &written_alts(alt),
+                &InfoFields::new(info),
+                None,
+            )
         };
         for (alt, info) in [("<DEL>", "SVTYPE=DEL;SVLEN=-300"), ("<BND>", "SVTYPE=BND")] {
             let error = at(MAX_COORD, alt, info).unwrap_err();

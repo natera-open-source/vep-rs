@@ -31,7 +31,7 @@ use vep_core::sv_span::{structural_end, structural_start, SpanClass, SpanError};
 use vep_core::variant::{
     first_vcf_id, id_names_record, so_variation_class, InputVariant, VariantClass,
 };
-use vep_core::vcf_info::{info_value, info_value_written};
+use vep_core::vcf_info::InfoFields;
 use vep_fasta::IndexedFasta;
 
 use crate::individuals::{add_reference_allele_row, RecordAlleles, RecordReading};
@@ -116,6 +116,51 @@ pub fn parse_vcf_line_with_max_sv_size(
 /// [`parse_vcf_line`] under the run's settings.
 pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<Vec<InputVariant>> {
     let columns = vcf_columns(line)?;
+    parse_columns(&columns, &columns.info(), line, parse)
+}
+
+/// What the reader gets from one data line: the record's alleles, or the parse
+/// error Ensembl VEP reports as a refused record, and the warnings Ensembl VEP's
+/// tandem-repeat branch writes as it reads the record (Parser/VCF.pm:502-527),
+/// ahead of `validate_vf` and of any refusal, so the reader reports them before
+/// the alleles' skips.
+pub(crate) struct ParsedRecord {
+    pub alleles: anyhow::Result<Vec<InputVariant>>,
+    pub warnings: Vec<String>,
+}
+
+/// One data line read once: its columns split once, its INFO column split by the
+/// first lookup and read by every other, the tandem-repeat warnings, then the
+/// record as [`non_variant_record`] reads a line whose first ALT is `.`
+/// ([`vcf_line_is_non_variant`]) and as [`parse_vcf_line_with`] reads any other.
+/// A line of fewer than five columns is the parse error alone.
+pub(crate) fn parse_data_line(line: &str, parse: &VcfParse<'_>) -> ParsedRecord {
+    let columns = match vcf_columns(line) {
+        Ok(columns) => columns,
+        Err(error) => {
+            return ParsedRecord {
+                alleles: Err(error),
+                warnings: Vec::new(),
+            }
+        }
+    };
+    let info = columns.info();
+    let warnings = tandem_repeat_warnings(&columns, &info, parse.fasta.is_some());
+    let alleles = if columns_are_non_variant(&columns, &info) {
+        non_variant_columns(&columns, &info, line, parse)
+    } else {
+        parse_columns(&columns, &info, line, parse)
+    };
+    ParsedRecord { alleles, warnings }
+}
+
+/// [`parse_vcf_line_with`] over the line's columns and INFO view.
+fn parse_columns(
+    columns: &VcfColumns<'_>,
+    info: &InfoFields<'_>,
+    line: &str,
+    parse: &VcfParse<'_>,
+) -> anyhow::Result<Vec<InputVariant>> {
     let fields = columns.fixed;
 
     let chr = fields[0].to_string();
@@ -128,8 +173,7 @@ pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<V
         bail!("No alternate allele");
     }
 
-    let info_field = fields[7];
-    let svtype = info_value(info_field, "SVTYPE").filter(|v| perl_true(v));
+    let svtype = info.value("SVTYPE").filter(|v| perl_true(v));
 
     // The ALT column as Perl's list-context `split` reads it, a gVCF variant site read
     // as its real alleles (`variant_alts`), each ALT keeping its written position.
@@ -158,7 +202,7 @@ pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<V
     let structural = routes_to_structural(ref_allele, &alts, svtype);
     let raw_input: Option<Arc<str>> = parse
         .capture_raw_input
-        .then(|| stored_line(&columns, line, structural));
+        .then(|| stored_line(columns, line, structural));
     let record_id = first_vcf_id(id).map(str::to_string);
     let explicit_id = record_id.as_deref().filter(|id| id_names_record(id));
     let line_name: Arc<str> = input_line_name(&chr, pos, ref_allele, alt_field).into();
@@ -185,7 +229,7 @@ pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<V
             Some(alleles),
         )
     } else if let Some(expanded) =
-        tandem_repeat_record(&chr, pos, ref_allele, &alts, info_field, parse)
+        tandem_repeat_record(&chr, pos, ref_allele, &alts, svtype, info, parse)
     {
         // The expansion's own strings are the record's alleles as given.
         let expanded_alts: Vec<(usize, &str)> = expanded
@@ -213,7 +257,7 @@ pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<V
         (expansion, None)
     } else {
         (
-            structural_variants(&chr, pos, ref_allele, &written, info_field, explicit_id)?,
+            structural_variants(&chr, pos, ref_allele, &written, info, explicit_id)?,
             None,
         )
     };
@@ -227,7 +271,7 @@ pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<V
     Ok(match alleles {
         Some(alleles) => parse
             .reading
-            .finish_record(variants, &alleles, &columns, parse.minimal),
+            .finish_record(variants, &alleles, columns, parse.minimal),
         None => variants,
     })
 }
@@ -249,12 +293,22 @@ pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<V
 /// mark on it), so such a record is read as a sequence record for its copies.
 pub fn non_variant_record(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<Vec<InputVariant>> {
     let columns = vcf_columns(line)?;
-    let [chr, pos_text, id, reference, alt_field, _, _, info] = columns.fixed;
-    let svtype = info_value(info, "SVTYPE").filter(|v| perl_true(v));
+    non_variant_columns(&columns, &columns.info(), line, parse)
+}
+
+/// [`non_variant_record`] over the line's columns and INFO view.
+fn non_variant_columns(
+    columns: &VcfColumns<'_>,
+    info: &InfoFields<'_>,
+    line: &str,
+    parse: &VcfParse<'_>,
+) -> anyhow::Result<Vec<InputVariant>> {
+    let [chr, pos_text, id, reference, alt_field, _, _, _] = columns.fixed;
+    let svtype = info.value("SVTYPE").filter(|v| perl_true(v));
     let mut alts = written_alts(alt_field);
     variant_alts(&mut alts, svtype);
     if parse.reading.reads_copies() && alts.iter().any(|(_, alt)| *alt != "." && *alt != "*") {
-        return parse_vcf_line_with(line, parse);
+        return parse_columns(columns, info, line, parse);
     }
     let pos = parse_pos(pos_text).with_context(|| format!("Invalid POS: '{pos_text}'"))?;
     let mut variant =
@@ -265,7 +319,7 @@ pub fn non_variant_record(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<Ve
     variant.sv_type = svtype.map(str::to_string);
     variant.raw_input = parse.capture_raw_input.then(|| {
         stored_line(
-            &columns,
+            columns,
             line,
             routes_to_structural(reference, &alts, svtype),
         )
@@ -279,7 +333,7 @@ pub fn non_variant_record(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<Ve
     };
     Ok(parse
         .reading
-        .finish_record(vec![variant], &alleles, &columns, parse.minimal))
+        .finish_record(vec![variant], &alleles, columns, parse.minimal))
 }
 
 /// [`RecordAlleles`] of a sequence record: the reference and every written ALT,
@@ -616,10 +670,9 @@ pub(crate) fn split_minimal_record(mut alleles: Vec<InputVariant>) -> Vec<InputV
 
 /// Whether a VCF record is one Ensembl VEP's tandem-repeat branch reads
 /// (`$so_term =~ /tandem/`, Parser/VCF.pm:502): its type abbreviation, from the
-/// ALTs joined by `/` with a Perl-true INFO/SVTYPE standing in for a string
-/// outside the VCF 4.4 forms, names a tandem repeat or a tandem duplication.
-fn is_tandem_record(alts: &[(usize, &str)], info_field: &str) -> bool {
-    let svtype = info_value(info_field, "SVTYPE").filter(|v| perl_true(v));
+/// ALTs joined by `/` with `svtype`, the Perl-true INFO/SVTYPE, standing in for a
+/// string outside the VCF 4.4 forms, names a tandem repeat or a tandem duplication.
+fn is_tandem_record(alts: &[(usize, &str)], svtype: Option<&str>) -> bool {
     matches!(
         sv_so_term_and_class(&sv_type_abbreviation(&joined(alts, "/"), svtype)),
         Some((
@@ -630,24 +683,28 @@ fn is_tandem_record(alts: &[(usize, &str)], info_field: &str) -> bool {
 }
 
 /// The warnings Ensembl VEP's tandem-repeat branch writes for a record
-/// (Parser/VCF.pm:502-527, 382-388), in its order, for the VCF columns `fixed` of
-/// a line the reader parsed: that the largest of several SVLEN values is used
-/// (`:507-510`, the values compared as written); without a FASTA, once per run
-/// through the sink's deduplication, that the calculation is less precise
+/// (Parser/VCF.pm:502-527, 382-388), in its order, for the columns of a line the
+/// reader parsed and their INFO view: that the largest of several SVLEN values
+/// is used (`:507-510`, the values compared as written); without a FASTA, once per
+/// run through the sink's deduplication, that the calculation is less precise
 /// (`:521-524`); and with one, when the record carries RUS and RUC or RB, that
 /// CIRUC and CIRB are ignored (`:387-388`). Empty for any other record: one the
 /// structural routing (`:237-245`) leaves on the sequence path, INFO/SVTYPE included,
 /// or one of another structural class.
-pub(crate) fn tandem_repeat_warnings(fixed: &[&str; 8], fasta_present: bool) -> Vec<String> {
-    let (ref_allele, alt_field, info_field) = (fixed[3], fixed[4], fixed[7]);
-    let svtype = info_value(info_field, "SVTYPE").filter(|v| perl_true(v));
+fn tandem_repeat_warnings(
+    columns: &VcfColumns<'_>,
+    info: &InfoFields<'_>,
+    fasta_present: bool,
+) -> Vec<String> {
+    let (ref_allele, alt_field) = (columns.fixed[3], columns.fixed[4]);
+    let svtype = info.value("SVTYPE").filter(|v| perl_true(v));
     let mut alts = written_alts(alt_field);
     variant_alts(&mut alts, svtype);
-    if !routes_to_structural(ref_allele, &alts, svtype) || !is_tandem_record(&alts, info_field) {
+    if !routes_to_structural(ref_allele, &alts, svtype) || !is_tandem_record(&alts, svtype) {
         return Vec::new();
     }
     let mut warnings = Vec::new();
-    if let Some(svlen) = info_value_written(info_field, "SVLEN") {
+    if let Some(svlen) = info.value_written("SVLEN") {
         // `uniq(split(/,/, $info->{SVLEN}))` (`:505`): a trailing empty value is no
         // value, so `SVLEN=9,` is one reference.
         let mut values = perl_split(svlen, &[',']);
@@ -658,7 +715,7 @@ pub(crate) fn tandem_repeat_warnings(fixed: &[&str; 8], fasta_present: bool) -> 
             ));
         }
     }
-    let has_units = |key: &str| info_value(info_field, key).is_some_and(perl_true);
+    let has_units = |key: &str| info.value(key).is_some_and(perl_true);
     if !fasta_present {
         warnings.push(
             "could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta"
@@ -694,11 +751,12 @@ fn tandem_repeat_record(
     pos: u64,
     ref_allele: &str,
     alts: &[(usize, &str)],
-    info_field: &str,
+    svtype: Option<&str>,
+    info: &InfoFields<'_>,
     parse: &VcfParse<'_>,
 ) -> Option<Chopped> {
     let fasta = parse.fasta?;
-    if !is_tandem_record(alts, info_field) {
+    if !is_tandem_record(alts, svtype) {
         return None;
     }
     let start = structural_start(pos, VariantClass::TandemRepeat);
@@ -707,8 +765,8 @@ fn tandem_repeat_record(
     }
     let end = match structural_end(
         pos,
-        info_value_written(info_field, "SVLEN"),
-        info_value_written(info_field, "END"),
+        info.value_written("SVLEN"),
+        info.value_written("END"),
         SpanClass::Tandem,
     ) {
         Ok(end) => end,
@@ -729,12 +787,10 @@ fn tandem_repeat_record(
     // string (`() = $type =~ /CNV:TR/g`, Parser/VCF.pm:397), which is INFO/SVTYPE
     // when the ALTs open outside the VCF 4.4 forms (`:473-474`) and is matched
     // case-sensitively where `get_SO_term` matches the type without case.
-    let svtype = info_value(info_field, "SVTYPE").filter(|v| perl_true(v));
     let tandem_alts = sv_type_string(&joined(alts, "/"), svtype)
         .matches("CNV:TR")
         .count();
-    let expanded =
-        tandem_repeat_allele_string(info_field, tandem_alts, parse.max_sv_size, &run_bases)?;
+    let expanded = tandem_repeat_allele_string(info, tandem_alts, parse.max_sv_size, &run_bases)?;
     // The string as Perl's `split` reads it (a trailing empty part is no part), an
     // empty part the `-` allele `_raw_allele_hashes` makes of it
     // (VariationFeatureOverlap.pm:466).
@@ -824,6 +880,12 @@ pub struct VcfColumns<'a> {
 }
 
 impl<'a> VcfColumns<'a> {
+    /// The INFO column as the view every lookup of the record reads
+    /// ([`InfoFields`]), split by the first of them.
+    fn info(&self) -> InfoFields<'a> {
+        InfoFields::new(self.fixed[7])
+    }
+
     /// The sample columns in their written order (ensembl-io BaseVCF4.pm:928-956 reads
     /// a genotype per sample from them under `--individual`).
     pub fn samples(&self) -> impl Iterator<Item = &'a str> + 'a {
@@ -900,14 +962,18 @@ pub fn sample_columns(header_line: &str) -> SampleColumns {
 /// (`:237-245`), so `.,<DEL>` is a structural record. A lone `.` under a true
 /// INFO/SVTYPE stays a non-variant here ([`non_variant_record`]).
 pub(crate) fn vcf_line_is_non_variant(line: &str) -> bool {
-    let mut fields = line.split('\t');
-    let reference = fields.nth(3).unwrap_or("");
-    let alt_field = fields.next().unwrap_or("");
+    let alt_field = line.split('\t').nth(4).unwrap_or("");
+    perl_split(alt_field, &[',']).next() == Some(".")
+        && vcf_columns(line).is_ok_and(|columns| columns_are_non_variant(&columns, &columns.info()))
+}
+
+/// [`vcf_line_is_non_variant`] over the line's columns and INFO view.
+fn columns_are_non_variant(columns: &VcfColumns<'_>, info: &InfoFields<'_>) -> bool {
+    let (reference, alt_field) = (columns.fixed[3], columns.fixed[4]);
     if perl_split(alt_field, &[',']).next() != Some(".") {
         return false;
     }
-    let info = fields.nth(2).unwrap_or("");
-    let svtype = info_value(info, "SVTYPE").filter(|v| perl_true(v));
+    let svtype = info.value("SVTYPE").filter(|v| perl_true(v));
     let mut alts = written_alts(alt_field);
     variant_alts(&mut alts, svtype);
     alts.len() == 1 || !routes_to_structural(reference, &alts, svtype)
@@ -1276,6 +1342,13 @@ mod tests {
             },
         )
         .unwrap()
+    }
+
+    /// The tandem-repeat warnings the reader writes for `line`, with or without a
+    /// FASTA ([`tandem_repeat_warnings`] over the line's columns).
+    fn line_warnings(line: &str, fasta_present: bool) -> Vec<String> {
+        let columns = vcf_columns(line).unwrap();
+        tandem_repeat_warnings(&columns, &columns.info(), fasta_present)
     }
 
     /// `(location, allele string, variant class, structural)` of each variant.
@@ -4474,28 +4547,19 @@ mod tests {
                 ),
             ]
         );
-        let columns = vcf_columns(line).unwrap();
         assert_eq!(
-            tandem_repeat_warnings(&columns.fixed, true),
+            line_warnings(line, true),
             ["found tandem repeats with different references per alternative allele: SVLEN=9,6; only using reference with largest size"]
         );
-        let ciruc =
-            vcf_columns("21\t10\tx\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4;CIRUC=3,5")
-                .unwrap();
+        let ciruc = "21\t10\tx\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4;CIRUC=3,5";
         assert_eq!(
-            tandem_repeat_warnings(&ciruc.fixed, true),
+            line_warnings(ciruc, true),
             ["CIRUC and CIRB INFO fields are ignored when calculating alternative alleles in tandem repeats"]
         );
-        assert!(tandem_repeat_warnings(&ciruc.fixed, false)
+        assert!(line_warnings(ciruc, false)
             .iter()
             .any(|w| w.starts_with("could not fetch sequence for tandem repeats;")));
-        assert!(tandem_repeat_warnings(
-            &vcf_columns("21\t10\tx\tG\t<DEL>\t.\t.\tSVLEN=-9")
-                .unwrap()
-                .fixed,
-            false
-        )
-        .is_empty());
+        assert!(line_warnings("21\t10\tx\tG\t<DEL>\t.\t.\tSVLEN=-9", false).is_empty());
     }
 
     /// The warnings follow Ensembl VEP's routing (Parser/VCF.pm:237-245, :473-474):
@@ -4507,9 +4571,7 @@ mod tests {
     /// for the first two records and three `tandem_repeat` rows for each.
     #[test]
     fn tandem_warnings_follow_the_structural_routing() {
-        let warns = |line: &str| {
-            !tandem_repeat_warnings(&vcf_columns(line).unwrap().fixed, false).is_empty()
-        };
+        let warns = |line: &str| !line_warnings(line, false).is_empty();
         assert!(warns(
             "21\t13620283\tx\tN\tN\t.\t.\tSVTYPE=CNV:TR;SVLEN=9;RN=1;RUS=TCA;RUC=4"
         ));
@@ -4532,7 +4594,7 @@ mod tests {
         let svlen_warning = |svlen: &str| {
             let line =
                 format!("21\t13620283\tx\tG\t<CNV:TR>\t.\t.\tSVLEN={svlen};RN=1;RUS=TCA;RUC=4");
-            tandem_repeat_warnings(&vcf_columns(&line).unwrap().fixed, true)
+            line_warnings(&line, true)
                 .iter()
                 .any(|w| w.starts_with("found tandem repeats with different references"))
         };
@@ -5984,6 +6046,64 @@ mod tests {
         assert_eq!(repeated[1].zygosity().as_deref(), Some("HOM"));
         assert_eq!(repeated[1].genotype, ["G", "G"]);
         assert!(repeated[2].no_allele);
+    }
+
+    /// The record read once ([`parse_data_line`]) is the record the line's own
+    /// reader builds, a non-variant line's included, with the tandem-repeat
+    /// warnings Ensembl VEP writes before `validate_vf` (Parser/VCF.pm:502-527):
+    /// written for a tandem record whose POS the parser then refuses, and not for a
+    /// sequence record, a non-variant record or a line of fewer than five columns,
+    /// whose parse error is the line's whole reading.
+    #[test]
+    fn the_record_read_once_is_the_readers_record_with_its_warnings() {
+        let parse = VcfParse::default_run(true);
+        let alleles = |variants: &[InputVariant]| -> Vec<(String, String, bool)> {
+            variants
+                .iter()
+                .map(|v| (v.location(), v.allele_string.clone(), v.no_allele))
+                .collect()
+        };
+        let tandem = "21\t500\tx\tG\t<CNV:TR>,<CNV:TR>\t.\t.\tSVLEN=9,6;RN=1,1;RUS=TCA,TCA;RUC=4,2";
+        let record = parse_data_line(tandem, &parse);
+        assert_eq!(
+            alleles(&record.alleles.unwrap()),
+            alleles(&parse_vcf_line_with(tandem, &parse).unwrap())
+        );
+        assert_eq!(record.warnings, line_warnings(tandem, false));
+        assert_eq!(record.warnings.len(), 2);
+        let refused = parse_data_line(
+            "21\tbad\tx\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4",
+            &parse,
+        );
+        assert_eq!(
+            refused.alleles.unwrap_err().to_string(),
+            "Invalid POS: 'bad'"
+        );
+        assert_eq!(refused.warnings.len(), 1);
+        for line in [
+            "21\t100\tx\tA\tG,T\t.\t.\tSVTYPE=CNV:TR;RUS=TCA;RUC=4",
+            "21\t100\tx\tTG\t.,TA\t.\t.\t.",
+            "21\t100\tx\tTG\t.,TA\t.\t.\tSVTYPE=DEL;END=200",
+        ] {
+            let record = parse_data_line(line, &parse);
+            assert!(record.warnings.is_empty(), "{line}");
+            let own = if vcf_line_is_non_variant(line) {
+                non_variant_record(line, &parse)
+            } else {
+                parse_vcf_line_with(line, &parse)
+            };
+            assert_eq!(
+                alleles(&record.alleles.unwrap()),
+                alleles(&own.unwrap()),
+                "{line}"
+            );
+        }
+        let short = parse_data_line("21\t100\tx\tTG", &parse);
+        assert_eq!(
+            short.alleles.unwrap_err().to_string(),
+            "VCF line has fewer than 5 fields"
+        );
+        assert!(short.warnings.is_empty());
     }
 
     /// `Parser/VCF.pm:259` tests the first comma-separated ALT alone (ensembl-io
