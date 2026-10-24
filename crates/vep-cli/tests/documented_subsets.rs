@@ -47,18 +47,25 @@ fn assert_flag_row_states(path: &str, flag: &str, phrases: &[&str]) {
 /// the sub-slice and mismatch warnings, where BaseVEP.pm:424-434 gives such a
 /// contig a one-base placeholder slice reading `N` (FastaSequence.pm:597-600), so
 /// Parser.pm:614 passes a one-base record at position 1 written `N` and :624-631
-/// refuses any other with the mismatch line alone.
+/// refuses any other with the mismatch line alone; an insertion names no
+/// reference base, so Parser.pm:600-602 (`--check_ref`) and :636 (`--lookup_ref`)
+/// pass it, as vep-rs does.
 #[test]
 fn check_ref_exclusion_is_documented() {
     assert_page_states(
         "cache-setup.md",
         &[
             "Under `--check_ref` the same contig skips the record at every position with the \
-             sub-slice warning and then the mismatch warning",
+             sub-slice warning and then the mismatch warning; an insertion, naming no reference \
+             base, passes under either flag in both engines (`Parser.pm` lines 600-602 and 636)",
             "Ensembl VEP annotates a one-base record there whose reference is written `N`, and \
              refuses one written otherwise with the mismatch warning alone (`Parser.pm` lines \
              614-631)",
         ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &["under the first two flags, an insertion excepted in both engines"],
     );
 }
 
@@ -351,7 +358,10 @@ fn config_file_exclusion_is_documented() {
 }
 
 /// `dont_skip`: four refused shapes are skipped under the flag, where
-/// Parser.pm:189 returns a record whatever `validate_vf` returned.
+/// Parser.pm:189 returns a record whatever `validate_vf` returned; and a `#`
+/// line of the list-based formats counts toward the line numbers, as Ensembl
+/// VEP numbers the record it reads there (Parser/Region.pm:167), a region or
+/// HGVS `#` line with no other word character an empty line (Parser.pm:273-275).
 #[test]
 fn dont_skip_exclusion_is_documented() {
     assert_page_states(
@@ -365,6 +375,11 @@ fn dont_skip_exclusion_is_documented() {
             "a start past the end plus one",
             "a line with too few columns to name a variant, or one the parser refuses for its \
              shape",
+            "It reads an Ensembl-format, region or HGVS line opening with `#` as a comment, \
+             counted toward the line numbers that follow, as Ensembl VEP counts the record it \
+             reads there, and otherwise skipped without a word",
+            "A region or HGVS `#` line with no other word character is an empty line to both \
+             engines (`Parser.pm` lines 273-275), counted and warned about as one",
             "a region, SPDI or HGVS transcript record whose span exceeds `--max_sv_size`",
         ],
     );
@@ -903,7 +918,7 @@ fn hgvs_genomic_input_exclusion_is_documented() {
         "--format",
         &[
             "an HGVS genomic (g., m.) span past the last base with `The reference FASTA has no bases at <name>:<start>-<end>`",
-            "A sequence name is matched whole, in any letter case, against the cache's chromosomes, the FASTA's records and their synonyms, never as a prefix, so a version-less accession (`NC_000021`) is skipped, in SPDI with `Sequence name <name> not valid` and in HGVS with `The reference FASTA has no sequence named <name>`, where Ensembl VEP's slice adaptor resolves the name as a prefix of a synonym (`NC_000021.9`) and annotates the record",
+            "An SPDI or HGVS sequence name is matched whole, in any letter case, against the cache's chromosomes, the FASTA's records and their synonyms, never as a prefix, so a version-less accession (`NC_000021`) is skipped, in SPDI with `Sequence name <name> not valid` and in HGVS with `The reference FASTA has no sequence named <name>`, where Ensembl VEP's slice adaptor resolves the name as a prefix of a synonym (`NC_000021.9`) and annotates the record",
         ],
     );
 }
@@ -1366,6 +1381,45 @@ fn cache_without_a_transcript_shard_refusal_is_documented() {
              `intergenic_variant`, exit 0; vep-rs refuses the cache before the input is read, \
              `ERROR: [cache] no transcript shards under <dir>/transcripts (serialiser_type \
              <type>)`, exit 1",
+        ],
+    );
+}
+
+/// `hgvs`: under `--hgvs` a contig the FASTA lacks gives no HGVSc for a
+/// substitution or a deletion, whose reference bases cannot be read, where
+/// Ensembl VEP reads the transcript's slice as `N` per base
+/// (FastaSequence.pm:597-601, `return 'N' x (($end - $start) + 1)`), hands that
+/// sequence to `hgvs_variant_notation` as the reference
+/// (TranscriptVariationAllele.pm:1474-1476) and cuts the reference allele from
+/// it (Sequence.pm:526), so its substitution names `N` (`c.764N>T` for the
+/// genome's `c.764G>T`) and its deletion reads as over the genome (`c.632del`);
+/// an insertion's `c.307_308insC` and HGVSp agree, and neither engine warns
+/// (`a_contig_the_fasta_lacks_gives_no_hgvsc_for_a_substitution_or_deletion` in
+/// `input_hgvs.rs` runs the vep-rs side).
+#[test]
+fn hgvs_exclusion_is_documented() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "Under `--hgvs` the same contig gives these notations; neither engine warns:",
+            "| Record on the contig under `--hgvs` | Ensembl VEP, whose transcript slice reads \
+             `N` per base there (`Utils/FastaSequence.pm` lines 597-601) | vep-rs, which reads no \
+             reference base there |",
+            "| A substitution | `c.764N>T`, the `N` standing for the genome's `G` | no HGVSc |",
+            "| A deletion | `c.632del`, as over the genome | no HGVSc |",
+            "| An insertion | `c.307_308insC` | `c.307_308insC` |",
+            "| HGVSp | as over the genome | as over the genome |",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "[A contig the FASTA lacks under `--check_ref`, `--lookup_ref` or \
+             `--hgvs`](cache-setup.md#reference-fasta)",
+            "under `--hgvs` it reads a transcript's slice there as `N` per base and prints an \
+             HGVSc whose reference base is `N` (`c.764N>T`)",
+            "under `--hgvs` prints no HGVSc for a substitution or a deletion, where an \
+             insertion's notation and HGVSp agree",
         ],
     );
 }

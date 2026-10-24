@@ -1757,3 +1757,62 @@ fn dont_skip_reference_length_mismatch_is_annotated_over_its_span() {
         "21:30282169-30282170\tT\tENSG00000188694\tENST00000340345\tTranscript\tstop_lost\t781-782\t763-764\t255\t*/X\tTGa/Aa\t-\tIMPACT=HIGH;STRAND=-1"
     );
 }
+
+/// Under `--check_ref` and `--lookup_ref` a contig the FASTA lacks skips a
+/// record that names a reference base, and an insertion, which names none,
+/// passes in both engines: Parser.pm:600-602 sets `$ok = 1` for an empty
+/// `$ref_allele` before any slice is read, and :636 reads the slice for a
+/// non-empty one alone (`$ref_allele eq '' ? '' : $self->_get_ref_allele($vf)`).
+/// The substitution and the deletion are skipped with the sub-slice then the
+/// mismatch warning under `--check_ref` (:607-610, :624-631) and with the
+/// could-not-fetch warning under `--lookup_ref` (:638-641), each over the
+/// trimmed span. `docs/cache-setup.md` states the shape.
+#[test]
+fn an_insertion_on_a_contig_the_fasta_lacks_passes_the_reference_checks() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = cache_with_chromosomes(dir.path(), &["21"], &[]);
+    // Chromosome 22 alone, 60 bases on one line.
+    let fa = dir.path().join("other.fa");
+    std::fs::write(&fa, format!(">22\n{}\n", "ACGT".repeat(15))).unwrap();
+    std::fs::write(dir.path().join("other.fa.fai"), "22\t60\t4\t60\t61\n").unwrap();
+    let records = "21\t100\tsnv\tC\tA\t.\t.\t.\n\
+                   21\t100\tins\tC\tCG\t.\t.\t.\n\
+                   21\t100\tdel\tCT\tC\t.\t.\t.\n";
+    for (flag, expected_warnings) in [
+        (
+            "--check_ref",
+            vec![
+                "WARNING: line 1 skipped (21 100 snv C A . . .): Could not fetch sub-slice from 21:100-100(1)",
+                "WARNING: line 1 skipped (21 100 snv C A . . .): Specified reference allele C does not match Ensembl reference allele",
+                "WARNING: line 3 skipped (21 100 del CT C . . .): Could not fetch sub-slice from 21:101-101(1)",
+                "WARNING: line 3 skipped (21 100 del CT C . . .): Specified reference allele T does not match Ensembl reference allele",
+            ],
+        ),
+        (
+            "--lookup_ref",
+            vec![
+                "WARNING: line 1 skipped (21 100 snv C A . . .): Could not fetch reference allele for 21:100-100(1)",
+                "WARNING: line 3 skipped (21 100 del CT C . . .): Could not fetch reference allele for 21:101-101(1)",
+            ],
+        ),
+    ] {
+        let run = tempfile::tempdir().unwrap();
+        let (output, written, warnings) = run_vcf_against_cache(
+            run.path(),
+            &cache,
+            records,
+            &[flag, "--fasta", fa.to_str().unwrap()],
+        );
+        assert_eq!(output.status.code(), Some(0), "{flag}: {}", text(&output.stderr));
+        assert_eq!(
+            record_names(&written),
+            ["ins"].into_iter().collect(),
+            "{flag}: {written}"
+        );
+        assert!(
+            rows_of(&written, "ins")[0].starts_with("21:100-101\tG\t-\t-\t-\tintergenic_variant\t"),
+            "{flag}: {written}"
+        );
+        assert_eq!(warning_lines(&warnings), expected_warnings, "{flag}");
+    }
+}

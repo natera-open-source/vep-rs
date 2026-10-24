@@ -122,7 +122,7 @@ vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
 
 ## Reference FASTA
 
-`--fasta` takes a plain FASTA with its `samtools faidx` `.fai`, or a `bgzip`-compressed FASTA with the `.fai` and `.gzi` `samtools faidx` writes for it, the shape of Ensembl's `dna_index/` files. No index is built (Ensembl VEP builds one). Three files are refused at open, each with its line below. A gzip file that is not BGZF: its `.fai` offsets need the whole file inflated. A `.gzi` that does not match the file's blocks: recompressed, not re-indexed. An `.fai` naming more bases than the file holds, plain or inflated.
+`--fasta` takes a plain FASTA with its `samtools faidx` `.fai`, or a `bgzip`-compressed FASTA with the `.fai` and `.gzi` `samtools faidx` writes for it, the shape of Ensembl's `dna_index/` files. No index is built (Ensembl VEP builds one). Three files are refused at open: a gzip file that is not BGZF, whose `.fai` offsets need the whole file inflated; a `.gzi` that does not match the file's blocks, recompressed and not re-indexed; an `.fai` naming more bases than the file holds.
 
 | Condition | Line printed |
 | --- | --- |
@@ -143,13 +143,22 @@ The redirect is armed by the assembly the cache resolves to, its `info.json` fir
 
 Two files tied on both preferences are ordered by name, the first taken, where Ensembl VEP's sort on the two preferences alone keeps the directory listing's order (`BaseVEP.pm` lines 500-509), so on such a directory the two engines can read different files.
 
-`--hgvs` or `--hgvsg` with no FASTA in reach exits 1 with Ensembl VEP's offline refusal. `--everything` without a FASTA instead prints the INFO line on standard error (withheld under `--quiet`) and drops the HGVS notations it switched on, as Ensembl VEP does; an explicit `--hgvsg` beside it is still refused. `--use_transcript_ref` without a FASTA exits 1, since a non-coding transcript's cDNA is read from the FASTA.
+The table's `ERROR:` lines exit 1; `--use_transcript_ref` needs the FASTA for a non-coding transcript's cDNA. `--everything` without a FASTA instead prints its INFO line on standard error (withheld under `--quiet`) and drops the HGVS notations it switched on, as Ensembl VEP does; an explicit `--hgvsg` beside it is still refused.
 
-Under `--lookup_ref` a contig the FASTA lacks skips the record at every position with the could-not-fetch warning, where Ensembl VEP's one-base placeholder slice (`BaseVEP.pm` lines 424-434) gives a one-base record at position 1 the reference `N`. Under `--check_ref` the same contig skips the record at every position with the sub-slice warning and then the mismatch warning. That placeholder reads `N` at position 1, so Ensembl VEP annotates a one-base record there whose reference is written `N`, and refuses one written otherwise with the mismatch warning alone (`Parser.pm` lines 614-631).
+Under `--lookup_ref` a contig the FASTA lacks skips the record at every position with the could-not-fetch warning, where Ensembl VEP's one-base placeholder slice (`BaseVEP.pm` lines 424-434) gives a one-base record at position 1 the reference `N`. Under `--check_ref` the same contig skips the record at every position with the sub-slice warning and then the mismatch warning; an insertion, naming no reference base, passes under either flag in both engines (`Parser.pm` lines 600-602 and 636). That placeholder reads `N` at position 1, so Ensembl VEP annotates a one-base record there whose reference is written `N`, and refuses one written otherwise with the mismatch warning alone (`Parser.pm` lines 614-631).
+
+Under `--hgvs` the same contig gives these notations; neither engine warns:
+
+| Record on the contig under `--hgvs` | Ensembl VEP, whose transcript slice reads `N` per base there (`Utils/FastaSequence.pm` lines 597-601) | vep-rs, which reads no reference base there |
+| --- | --- | --- |
+| A substitution | `c.764N>T`, the `N` standing for the genome's `G` | no HGVSc |
+| A deletion | `c.632del`, as over the genome | no HGVSc |
+| An insertion | `c.307_308insC` | `c.307_308insC` |
+| HGVSp | as over the genome | as over the genome |
 
 ### A `Y` read on a FASTA without `X`
 
-With the pseudoautosomal redirect in force and no `X` in the FASTA, a `Y` read's bases inside the region are `N`, as Ensembl VEP reads them (ensembl-variation `Utils/FastaSequence.pm` lines 597-601). The bases outside the region come from `Y`, so the read has the length asked for. Ensembl VEP returns the region's `N`s alone for a read that straddles the region's edge, two bases for a four-base request. Neither engine warns on the read: Ensembl VEP's `FASTA does not contain sequence for X` (line 599) is raised at warning level 2000, above the verbosity of 1999 a run sets (`BaseRunner.pm` line 491).
+With the pseudoautosomal redirect in force and no `X` in the FASTA, a `Y` read's bases inside the region are `N`, as Ensembl VEP reads them (`Utils/FastaSequence.pm` lines 597-601). The bases outside the region come from `Y`, so the read has the length asked for. Ensembl VEP returns the region's `N`s alone for a read that straddles the region's edge, two bases for a four-base request. Neither engine warns on the read: Ensembl VEP's `FASTA does not contain sequence for X` (line 599) is raised at warning level 2000, above the verbosity of 1999 a run sets (`BaseRunner.pm` line 491).
 
 ## Chromosome names
 

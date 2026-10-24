@@ -51,7 +51,10 @@ use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
 
-use super::{is_perl_space, minimise_alleles, InputParser, ParserContext, ReferenceSequence};
+use super::{
+    has_word_character, is_perl_space, minimise_alleles, InputParser, ParserContext,
+    ReferenceSequence,
+};
 
 /// Parser for SPDI notation, one notation per line.
 pub struct SpdiParser<R: BufRead> {
@@ -343,11 +346,7 @@ fn is_bases(text: &str) -> bool {
 
 /// Perl's `^\w+$` on a non-empty string of bytes: ASCII letters, digits and `_`.
 fn is_word(text: &str) -> bool {
-    !text.is_empty() && text.chars().all(is_word_char)
-}
-
-fn is_word_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || c == '_'
+    !text.is_empty() && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 impl<R: BufRead + Send> InputParser for SpdiParser<R> {
@@ -362,7 +361,7 @@ impl<R: BufRead + Send> InputParser for SpdiParser<R> {
             let line = String::from_utf8_lossy(&self.line_buf);
             // `skip_empty_lines` reads past a record with no word character
             // (Parser.pm:273), so `:::` counts as an empty line too.
-            if !line.contains(is_word_char) {
+            if !has_word_character(&line) {
                 self.empty_lines += 1;
                 continue;
             }

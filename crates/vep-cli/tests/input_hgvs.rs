@@ -7,7 +7,8 @@
 //! skipped with its warning, a gene name as the reference is warned about, a
 //! transcript cache a notation's lookup cannot read stops the run under the
 //! `cache` component, and `--max_sv_size` bounds the span a genomic notation
-//! may describe.
+//! may describe. Over the same corpus, the HGVSc `--hgvs` writes for a record
+//! on a chromosome the FASTA lacks.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -451,8 +452,9 @@ fn a_span_past_the_last_base_is_skipped_with_the_fastas_refusal() {
 /// whole name up, in any letter case, among the records and their aliases
 /// (`record_name` in vep-fasta, the synonym table's `NC_000021.9` among them), so
 /// `NC_000021:g.30282169C>A` is skipped with the FASTA's refusal and writes no
-/// row, while `NC_000021.9:g.30282169C>A` annotates as `21:30282169 A`. Ensembl
-/// VEP 116.2 fetches the slice through `fetch_by_region('chromosome',
+/// row, while `NC_000021.9:g.30282169C>A` and its lower-case spelling
+/// `nc_000021.9:g.30282169C>A` each annotate as `21:30282169 A`, named as written.
+/// Ensembl VEP 116.2 fetches the slice through `fetch_by_region('chromosome',
 /// $reference) || fetch_by_region(undef, $reference)`
 /// (`VariationFeatureAdaptor.pm:1889`), whose synonym lookup retries the name as
 /// a prefix (`SliceAdaptor.pm:2870-2884`, `"$escaped_seq_region_name%"`), so there
@@ -464,16 +466,24 @@ fn a_version_less_accession_is_skipped_with_the_fastas_refusal() {
     let input = write(
         dir.path(),
         "accession.hgvs",
-        "NC_000021:g.30282169C>A\nNC_000021.9:g.30282169C>A\n",
+        "NC_000021:g.30282169C>A\nNC_000021.9:g.30282169C>A\nnc_000021.9:g.30282169C>A\n",
     );
     let out = dir.path().join("accession.txt");
     let rows = annotate(dir.path(), &input, &out, &["--format", "hgvs"]);
-    assert!(!rows.is_empty());
+    let placed: BTreeMap<&str, Vec<&str>> = rows_by_name(&rows)
+        .into_iter()
+        .map(|(notation, rows)| (notation, rows.iter().map(|row| after_name(row)).collect()))
+        .collect();
+    assert_eq!(
+        placed.keys().copied().collect::<Vec<_>>(),
+        ["NC_000021.9:g.30282169C>A", "nc_000021.9:g.30282169C>A"]
+    );
+    assert_eq!(
+        placed["NC_000021.9:g.30282169C>A"],
+        placed["nc_000021.9:g.30282169C>A"]
+    );
     for row in &rows {
-        assert!(
-            row.starts_with("NC_000021.9:g.30282169C>A\t21:30282169\tA\t"),
-            "{row}"
-        );
+        assert!(after_name(row).starts_with("21:30282169\tA\t"), "{row}");
     }
     let warnings = std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap();
     assert_eq!(
@@ -752,5 +762,119 @@ fn a_hash_line_counts_toward_the_line_numbers() {
     assert_eq!(
         std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap(),
         format!("WARNING: Skipped 1 empty line from line 2\n{refusal}")
+    );
+}
+
+/// Under `--hgvs` a record on a chromosome the FASTA has no sequence for gets no
+/// HGVSc when its reference bases cannot be read, a substitution and a deletion,
+/// while an insertion, which reads no base, keeps its notation and HGVSp is
+/// unchanged on every row; no warning is written. Over the corpus reference the
+/// same records print `c.764G>T`, `c.307_308insC`, `c.632del` and `c.196_197del`,
+/// the notations Ensembl VEP 116.2 prints over the GRCh38 primary assembly.
+/// Over a FASTA holding chromosome 22 alone Ensembl VEP 116.2 reads the
+/// transcript's slice as `N` per base (`Utils/FastaSequence.pm:597-601`, `return
+/// 'N' x (($end - $start) + 1)`), hands it to `hgvs_variant_notation` as the
+/// reference (`TranscriptVariationAllele.pm:1474-1476`) and cuts the reference
+/// allele from it (`Utils/Sequence.pm:526`), so it prints
+/// `ENST00000340345.6:c.764N>T`, `ENST00000416044.1:c.307_308insC`,
+/// `ENST00000360542.5:c.632del` and `ENST00000334160.6:c.196_197del` with the
+/// same HGVSp and no warning. `docs/cache-setup.md` states the difference.
+#[test]
+fn a_contig_the_fasta_lacks_gives_no_hgvsc_for_a_substitution_or_deletion() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write(
+        dir.path(),
+        "stops.vcf",
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+         21\t30282169\tsnv_fwd\tC\tA\t.\t.\t.\n\
+         21\t30289183\tstop_ins1_lost_rev\tC\tCG\t.\t.\t.\n\
+         21\t30319403\tstop_del1_kept_rev\tTC\tT\t.\t.\t.\n\
+         21\t30348409\tstop_del2_lost_rev\tCTA\tC\t.\t.\t.\n",
+    );
+    // Chromosome 22 alone, 120 bases over two lines.
+    let other = write(
+        dir.path(),
+        "other.fa",
+        &format!(">22\n{}\n{}\n", "ACGT".repeat(15), "ACGT".repeat(15)),
+    );
+    write(dir.path(), "other.fa.fai", "22\t120\t4\t60\t61\n");
+    let fields = "Uploaded_variation,Feature,HGVSc,HGVSp";
+    let notations = |rows: &[String]| -> BTreeMap<String, (String, String)> {
+        rows.iter()
+            .map(|row| {
+                let columns: Vec<&str> = row.split('\t').collect();
+                (
+                    format!("{} {}", columns[0], columns[1]),
+                    (columns[2].to_string(), columns[3].to_string()),
+                )
+            })
+            .collect()
+    };
+    let protein = [
+        (
+            "snv_fwd ENST00000340345",
+            "ENSP00000339238.4:p.Ter255LeuextTer21",
+        ),
+        (
+            "stop_ins1_lost_rev ENST00000416044",
+            "ENSP00000398619.1:p.Ter103delinsSerTer",
+        ),
+        (
+            "stop_del1_kept_rev ENST00000360542",
+            "ENSP00000353742.3:p.Ter211%3D",
+        ),
+        (
+            "stop_del2_lost_rev ENST00000334160",
+            "ENSP00000346536.3:p.Ter66%3D",
+        ),
+    ];
+    let expected = |coding: [&str; 4]| -> BTreeMap<String, (String, String)> {
+        protein
+            .iter()
+            .zip(coding)
+            .map(|((row, hgvsp), hgvsc)| (row.to_string(), (hgvsc.to_string(), hgvsp.to_string())))
+            .collect()
+    };
+
+    let out = dir.path().join("genome.txt");
+    let genome_rows = annotate(
+        dir.path(),
+        &input,
+        &out,
+        &["--hgvs", "--tab", "--fields", fields],
+    );
+    assert_eq!(
+        notations(&genome_rows),
+        expected([
+            "ENST00000340345.6:c.764G>T",
+            "ENST00000416044.1:c.307_308insC",
+            "ENST00000360542.5:c.632del",
+            "ENST00000334160.6:c.196_197del",
+        ])
+    );
+
+    let out = dir.path().join("other.txt");
+    let output = vep(
+        dir.path(),
+        &input,
+        &out,
+        false,
+        &[
+            "--fasta",
+            other.to_str().unwrap(),
+            "--hgvs",
+            "--tab",
+            "--fields",
+            fields,
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        notations(&rows(&out)),
+        expected(["-", "ENST00000416044.1:c.307_308insC", "-", "-"])
+    );
+    assert!(
+        !std::fs::exists(format!("{}_warnings.txt", out.display())).unwrap(),
+        "no warning is written"
     );
 }

@@ -41,7 +41,10 @@ use vep_core::coordinate::Strand;
 use vep_core::variant::{so_variation_class, InputVariant};
 
 use super::ensembl::sequence_variants;
-use super::{empty_lines_warning, is_perl_space, read_until_bounded, InputParser, LineTooLong};
+use super::{
+    empty_lines_warning, has_word_character, is_perl_space, read_until_bounded, InputParser,
+    LineTooLong,
+};
 use crate::error::IoError;
 
 /// One genomic mapping of a known variant, as a variation file records it:
@@ -114,14 +117,11 @@ impl IdParser {
                 break;
             }
             line_number += 1;
-            let has_word_character = line
-                .iter()
-                .any(|byte| byte.is_ascii_alphanumeric() || *byte == b'_');
-            if !has_word_character {
+            let text = String::from_utf8_lossy(&line);
+            if !has_word_character(&text) {
                 empty_lines_before += 1;
                 continue;
             }
-            let text = String::from_utf8_lossy(&line);
             let name: String = text.chars().filter(|c| !is_perl_space(*c)).collect();
             let text = text.trim_end_matches(['\n', '\r']);
             entries.push(Entry {

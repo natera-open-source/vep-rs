@@ -171,6 +171,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--max_sv_size` measures every record as Ensembl VEP does; a negative tandem length is refused as `start > end+1`; a structural insertion past its own flank writes no row. (#N)
   - The region, `--chr` and HGVS transcript pages state an unsupported structural word's run end, a chromosome literally named `1-5`, and the four transcript readings, each with a test. (#N)
   - A VCF record's INFO column is split into its fields once per record, and every lookup on the record reads that split rather than scanning the column again. (#N)
+  - The `--dont_skip` page states that a `#` line in region, Ensembl or HGVS input counts toward the line numbers, a bare one an empty line. (#N)
 - HGVS, SPDI and identifiers
   - `--hgvsg` writes each row's HGVS genomic notation as Ensembl VEP's `hgvs_genomic` does; it needs a reference FASTA and exits with Ensembl VEP's error without one. (#N)
   - `--hgvs` or `--hgvsg` without a FASTA stops with Ensembl VEP's message; `--everything` drops HGVS with its `INFO` line; `--shift_3prime 1` without one is refused. (#N)
@@ -181,6 +182,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--shift_3prime` takes a value, `0` or `1`, as Ensembl VEP's option does; the bare switch of 0.4.0 is refused with the value list, exit 2. (#N)
   - The SPDI page and the `--format` help state that a version-less accession in an HGVS genomic notation is skipped, where Ensembl VEP resolves it as a synonym prefix. (#N)
   - The region page's `UPLOADED_ALLELE` section covers HGVS, SPDI and identifier records, whose second `--minimal` pass prints the once-trimmed string in Ensembl VEP (`TCA>TG`: `CA/G`). (#N)
+  - The `--format` help scopes the any-case whole-name match to SPDI and HGVS input. (#N)
 - Caches, reference FASTA and the cache tools
   - `--dir_cache`, `--species`, `--cache_version`, `--refseq` and `--merged` select the cache in Ensembl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout; a run with no cache exits 1 before reading input. (#N)
   - `--assembly` must equal the cache directory's and `info.json`'s assembly (`hg19` and `hg38` read as `GRCh37` and `GRCh38`); the cache's assembly feeds headers and plugins. (#N)
@@ -197,6 +199,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The cache page states the `--fasta_dir` tie order, the assembly that arms the pseudoautosomal redirect, a non-UTF-8 `--synonyms` file and a two-hop synonym admitted after a miss, with tests. (#N)
   - The cache page names the FASTA record aliases vep-rs builds in (`MT`, `M`, `chrM`, `chrMT`, `chr` variants), which Ensembl VEP lacks, and the warning neither engine prints. (#N)
   - A cache holding no transcript shard has a divergence section and index row: refused here, run to the end by Ensembl VEP with every record `intergenic_variant`. (#N)
+  - The cache page tabulates `--hgvs` over a chromosome the FASTA lacks: Ensembl VEP prints `N` as the reference base, vep-rs no HGVSc. (#N)
+  - The cache page states that an insertion on a contig the FASTA lacks passes `--check_ref` and `--lookup_ref` in both engines. (#N)
 - Co-located variants and frequencies
   - Under `--check_existing` a cache without variation data warns once, in the warnings file and on standard error unless `--quiet`, that `Existing_variation` and the frequency columns stay empty; Ensembl VEP annotates silently. (#N)
   - `--check_existing` matches known variants by allele after trimming from either end, strand-aware and span-exact, in Ensembl VEP's order; structural variants are not co-located. (#N)
