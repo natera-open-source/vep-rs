@@ -63,7 +63,7 @@ vep-rs annotates the first three kinds, a [documented divergence](../divergences
 - the VCF output carries the line of an oversize or unsupported record without CSQ;
 - the JSON output writes an unsupported record as an `input`-only object and omits an oversize one.
 
-A `<DEL>` with neither `END` nor `SVLEN`, or whose start exceeds its end, is warned `deletion looks incomplete` and written in no format, as Ensembl VEP writes it in none. `--dont_skip` keeps it on both engines, read as a deletion of the base after POS ([Defect C](../divergences/defect-c.md)). The golden corpora record the rows only vep-rs writes for the other three kinds under the manifest class `reference_skipped_record`.
+A `<DEL>` with neither `END` nor `SVLEN`, or whose start exceeds its end, is warned `deletion looks incomplete` and written in no format, as Ensembl VEP writes it in none. `--dont_skip` keeps it on both engines, read as a deletion of the base after POS ([Defect C](../divergences/defect-c.md)). A `SVLEN` of `NaN` is the exception: vep-rs reads it as 0 and drops the record, where Ensembl VEP annotates it with the end `NaN` ([Defect K](../divergences/defect-k.md)). The golden corpora record the rows only vep-rs writes for the other three kinds under the manifest class `reference_skipped_record`.
 
 A `<NON_REF>` gVCF reference-confidence block is not a variant allele. It is annotated against no transcript and appears in the default and tab formats as one `intergenic_variant` row spanning the block, with a warning per record.
 

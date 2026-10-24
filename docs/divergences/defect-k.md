@@ -6,7 +6,7 @@ It takes `INFO/END`, `SVLEN` and POS as the text they are written in.
 
 **Why this is a defect.** `END`, `SVLEN` and POS are integers in the VCF specification, and a coordinate is a base position: a half base or a floating-point notation names none. A Location such as `21:30425651-30425949.5` or `21:30425651-NaN` describes no interval of the genome, and the `NaN` record's JSON object carries an end that is not a JSON value.
 
-**What vep-rs does instead.** vep-rs refuses a non-integer `END`, which names no base, and reports the line. It reads `SVLEN` as Perl numifies a length (`300.7` is 300 bases, `NaN` is 0 and gives a two-base interval) and a POS by the integer its text denotes, so those records are annotated at the number where Ensembl VEP prints the text.
+**What vep-rs does instead.** vep-rs refuses a non-integer `END`, which names no base, and reports the line. It reads `SVLEN` as Perl numifies a length (`300.7` is 300 bases, `NaN` is 0) and a POS by the integer its text denotes, so those records are annotated at the number where Ensembl VEP prints the text. The `NaN` deletion, zero bases long, is dropped as incomplete with its warning unless `--dont_skip` keeps its two-base interval.
 
 **Where it is in Ensembl VEP's source** (`ensembl-io` and `ensembl-vep`):
 - `ensembl-io`, `BaseVCF4.pm`, `get_end`, lines 307-308: `INFO/END` is returned as the string it is; lines 302-305: a `SVLEN` end is `$start + abs($svlen) - 1`, so `300.7` gives the end `30425950.7` and `NaN` the end `NaN`.
@@ -25,7 +25,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 `INFO/END` and `SVLEN` are integers in the VCF specification, and so is POS. Ensembl VEP takes each value as written, checks only that the start and end look like numbers, and annotates the record with the text in its Location and a fractional `DISTANCE`. The text may be an `END` of `30425949.5`, a `SVLEN` of `300.7` (end `30425950.7`) or `NaN` (end `NaN`), or on the sequence path a POS of `30425949.0`, which denotes an integer but is printed as its text.
 
-vep-rs refuses a non-integer `END`, which names no base, and reports the line. It reads `SVLEN` as Perl numifies a length (`300.7` is 300 bases, `NaN` is 0 and gives a two-base interval) and a POS by the integer its text denotes, so the record is annotated at the number where Ensembl VEP prints the text.
+vep-rs refuses a non-integer `END`, which names no base, and reports the line. It reads `SVLEN` as Perl numifies a length (`300.7` is 300 bases, `NaN` is 0) and a POS by the integer its text denotes, so the record is annotated at the number where Ensembl VEP prints the text. The `NaN` deletion, zero bases long, is dropped as incomplete unless `--dont_skip` keeps its two-base interval.
 
 ### 18.2 The record
 
@@ -93,7 +93,7 @@ Ensembl VEP 116.2 writes two rows for each of the two `END` records, one per fea
 | Feature_type | `Transcript` |  |
 | Consequence | `feature_truncation,coding_sequence_variant,5_prime_UTR_variant` |  |
 
-For the `SVLEN` and POS records, Ensembl VEP 116.2 prints the text too (the `NaN` record's JSON object carries `"start":30425651,"end":nan`, which is not a JSON value), five rows. For these three records vep-rs writes the rows of the same record at the number: `21:30425651-30425950` for `SVLEN=300.7`, the two-base interval `21:30425650-30425651` for `SVLEN=NaN` (two transcript rows, `coding_sequence_variant` on ENST00000390690, where the reference wrote one intergenic row), and `21:30425949` for the POS. One table per Ensembl VEP row; the vep-rs column points to that sentence.
+For the `SVLEN` and POS records, Ensembl VEP 116.2 prints the text too (the `NaN` record's JSON object carries `"start":30425651,"end":nan`, which is not a JSON value), five rows. For two of these records vep-rs writes the rows of the same record at the number: `21:30425651-30425950` for `SVLEN=300.7` and `21:30425949` for the POS. The `SVLEN=NaN` record, a zero-length deletion once numified, is dropped by default with the warning `deletion looks incomplete`, where the reference wrote one intergenic row; `--dont_skip` keeps it at the two-base interval `21:30425650-30425651` (two transcript rows, `coding_sequence_variant` on ENST00000390690). One table per Ensembl VEP row; the vep-rs column points to these sentences.
 
 `del_svlen_float` on ENST00000334068:
 
@@ -166,7 +166,7 @@ On the sequence path POS is kept as its text by `get_start` (lines 255-275, whic
 
 ### 18.5 Why vep-rs's output is the correct one
 
-A coordinate is a base position; a half base or a floating-point notation names none. vep-rs reads `END` as an integer coordinate and refuses the record otherwise, as it refuses a negative one. `SVLEN` is a length, not a coordinate, and vep-rs reads it as Perl numifies a length, so `300.7` is 300 bases and `NaN` is 0, a two-base interval, where Ensembl VEP prints an end that is not a position. A POS whose text denotes an integer (`30425949.0`, `3e7`) is read as that integer, which is what Ensembl VEP's own structural path makes of it.
+A coordinate is a base position; a half base or a floating-point notation names none. vep-rs reads `END` as an integer coordinate and refuses the record otherwise, as it refuses a negative one. `SVLEN` is a length, not a coordinate, and vep-rs reads it as Perl numifies a length, so `300.7` is 300 bases and `NaN` is 0, where Ensembl VEP prints an end that is not a position. The zero-length deletion is dropped as incomplete, or kept at a two-base interval under `--dont_skip`. A POS whose text denotes an integer (`30425949.0`, `3e7`) is read as that integer, which is what Ensembl VEP's own structural path makes of it.
 
 ### 18.6 Try it yourself
 
@@ -180,6 +180,8 @@ vep -i float.vcf -o float.vep-rs.txt --offline --json_cache tests/golden/116/GRC
 
 ### 18.7 How the comparator treats this class
 
-The class is `non_integer_end_annotated` in the 116.2 registry of both comparators, set aside: the reference's rows whose Location carries a coordinate that is not an integer. The structural-variant comparator, which reads the input, also sets aside vep-rs's rows of the same record where vep-rs read the value as a number, so that neither side is charged and the skipped-record cross-check does not stop on them. Those are the rows at the numified end for a fractional `SVLEN`, `21:30425651-30425950`, at the two-base interval for `SVLEN=NaN`, `21:30425650-30425651`, and at the integer for a POS text, `21:30425949`. The SNP/indel comparator reads no input, locates no vep-rs row of the record, and sets aside the reference's text rows alone.
+The class is `non_integer_end_annotated` in the 116.2 registry of both comparators, set aside: the reference's rows whose Location carries a coordinate that is not an integer. The structural-variant comparator, which reads the input, also sets aside vep-rs's rows of the same record where vep-rs read the value as a number, so that neither side is charged and the skipped-record cross-check does not stop on them.
+
+Those are the rows at the numified end for a fractional `SVLEN`, `21:30425651-30425950`, at the integer for a POS text, `21:30425949`, and, under `--dont_skip`, at the two-base interval for `SVLEN=NaN`, `21:30425650-30425651`; by default vep-rs writes no row for that record. The SNP/indel comparator reads no input, locates no vep-rs row of the record, and sets aside the reference's text rows alone.
 
 A Location whose coordinates are integers written with a sign or leading zeros is not the class: both comparators read such a coordinate as its number before comparing, so those rows agree with vep-rs's.

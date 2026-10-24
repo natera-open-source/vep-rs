@@ -28,6 +28,8 @@ In the VCF output the line of an oversize or unsupported record is carried witho
 
 A `<DEL>` with neither `END` nor `SVLEN`, and one whose start exceeds its end (`END` at POS, `SVLEN=0`, a `SVLEN` that is not a number), is warned `deletion looks incomplete` and written in no format, as Ensembl VEP writes it in none. `--dont_skip` keeps it on both engines, read as a deletion of the base after POS or as the pair `POS-(POS+1)` with an insertion's positions (`21:30425650-30425651 deletion` for `21 30425650 x N <DEL> . . SVTYPE=DEL;END=30425650`). Its VCF line is carried without consequences and its JSON object is `input`-only.
 
+A `SVLEN` of `NaN` is the exception: Ensembl VEP's end is `NaN`, which no `start > end` test catches, so it writes the record's intergenic row at `21:30425651-NaN` ([Defect K](defect-k.md)); vep-rs reads the length as 0 and drops the record as incomplete.
+
 Under the flag the default and tab outputs can differ. Ensembl VEP loads no transcript region for a marked record (`AnnotationSource.pm` line 238) and annotates it against whatever regions its batch-mates loaded: one `intergenic_variant` row for a record alone in its region, and transcript rows beside a neighbour. vep-rs annotates the kept record against the transcripts it overlaps whatever the batch holds. The pair `POS-(POS+1)` then carries `feature_truncation` on Ensembl VEP's side and not on vep-rs's, as the same pair written in the Ensembl format (`21 30165851 30165850 DEL +`), which neither engine marks, does without the flag.
 
 vep-rs takes `--max_sv_size` too, with the same default, and `--max_sv_size -1` lifts the cap on both engines.

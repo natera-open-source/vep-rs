@@ -1011,6 +1011,57 @@ fn warning_file_stderr_literal() {
     }
 }
 
+/// A `--warning_file` or `--skipped_variants_file` value is a file name as
+/// given (`target_for` in `warnings.rs` builds a `PathBuf` from every value but
+/// `stderr`, `reserve_skipped_variants_file` from every value): `-`, ` sp.txt`
+/// and `>pw.txt` are created under those names in the working directory, the
+/// file whose name follows the `>` is left alone and nothing reaches standard
+/// output. Ensembl VEP opens both with Perl's two-argument `open` (BaseVEP.pm:894
+/// `$fh->open(">".$file)`, BaseRunner.pm:344 `$fh->open(">$file_name")`), which
+/// sends `-` to standard output, writes `' sp.txt'` to `sp.txt` and appends
+/// `'>pw.txt'` to `pw.txt`, the readings `docs/cli/compatibility.md` states.
+#[test]
+fn warning_file_and_skipped_file_values_are_file_names_as_given() {
+    for flag in ["--warning_file", "--skipped_variants_file"] {
+        for value in ["-", " sp.txt", ">pw.txt"] {
+            let dir = tempfile::tempdir().unwrap();
+            let out = dir.path().join("out.txt");
+            std::fs::write(dir.path().join("pw.txt"), "kept\n").unwrap();
+            let output = run_control(
+                &["-o", out.to_str().unwrap(), flag, value, "--quiet"],
+                dir.path(),
+            );
+            let case = format!("{flag} {value:?}");
+            assert_eq!(
+                output.status.code(),
+                Some(0),
+                "{case}: {}",
+                text(&output.stderr)
+            );
+            assert_eq!(text(&output.stdout), "", "{case}: standard output");
+            let written = std::fs::read_to_string(dir.path().join(value))
+                .unwrap_or_else(|e| panic!("{case}: no file named as given: {e}"));
+            if flag == "--warning_file" {
+                assert_eq!(written, expected_warnings(), "{case}");
+            } else {
+                assert!(
+                    written.starts_with("[VEP skipped the following variants from "),
+                    "{case}: {written}"
+                );
+            }
+            assert_eq!(
+                std::fs::read_to_string(dir.path().join("pw.txt")).unwrap(),
+                "kept\n",
+                "{case}: the file named after the `>` is left alone"
+            );
+            assert!(
+                !dir.path().join("sp.txt").exists(),
+                "{case}: no file under the trimmed name"
+            );
+        }
+    }
+}
+
 /// A `--warning_file` whose value is false in Perl, the empty string or `0`,
 /// is no file: `$file ||= ...'_warnings.txt'` (BaseVEP.pm:890) falls back to
 /// the default beside the output, and nothing named `0` is written.
@@ -1039,6 +1090,50 @@ fn warning_file_false_value_is_the_default_file() {
             "{value:?}: a file `0` was written"
         );
     }
+}
+
+/// A `--skipped_variants_file` value that is false in Perl is a file name here
+/// (`reserve_skipped_variants_file` in `warnings.rs` reserves every value): `0`
+/// is written as a file named `0` and the empty value fails the run's end with
+/// `Could not write to skipped variants file` (exit 1), where Ensembl VEP's
+/// `$self->dump_skipped_variants if $self->param('skipped_variants_file')`
+/// (Runner.pm:176) writes no file for either and exits 0, the reading
+/// `docs/cli/compatibility.md` states.
+#[test]
+fn skipped_variants_file_false_value_is_a_file_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let zero = run_control(
+        &[
+            "-o",
+            out.to_str().unwrap(),
+            "--skipped_variants_file",
+            "0",
+            "--quiet",
+        ],
+        dir.path(),
+    );
+    assert_eq!(zero.status.code(), Some(0), "{}", text(&zero.stderr));
+    assert!(std::fs::read_to_string(dir.path().join("0"))
+        .unwrap()
+        .starts_with("[VEP skipped the following variants from "));
+
+    let empty = run_control(
+        &[
+            "-o",
+            out.to_str().unwrap(),
+            "--skipped_variants_file",
+            "",
+            "--quiet",
+        ],
+        dir.path(),
+    );
+    assert_eq!(empty.status.code(), Some(1));
+    assert_eq!(
+        text(&empty.stderr),
+        "ERROR: [output] Could not write to skipped variants file \n",
+        "the empty name follows the message's trailing space"
+    );
 }
 
 /// A warning seen before is written once (BaseVEP.pm:810-813): the same unknown

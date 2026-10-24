@@ -74,7 +74,7 @@
   - [A transcript shard the cache cannot read](divergences/damaged-cache-shard.md)
   - [An individual carrying two alternate alleles](divergences/individual-allele-order.md)
   - [The ZYG list order under `--individual_zyg`](divergences/individual-zyg-order.md)
-  - [An individual's copy of a record `--minimal` trims past the anchor chop](divergences/individual-trimmable-indel.md)
+  - [An individual's copy of a record trimmed past the anchor chop](divergences/individual-trimmable-indel.md)
   - [A JSON summary row with no consequence](divergences/json-summary-without-term.md)
   - [Two `--minimal` alleles that trim to the same allele string](divergences/minimal-same-trimmed-allele.md)
   - [A repeated alternate allele the looked-up reference equals](divergences/minimal-lookup-ref-repeated-allele.md)
@@ -96,6 +96,7 @@
   - [Two region notations: `UPLOADED_ALLELE` under `--minimal`, and a `BND` word](divergences/region-input.md)
   - [The `HGNC_ID` of a gene named outside HGNC](divergences/hgnc-id-copy.md)
   - [A VCF input without its `#CHROM` line](divergences/vcf-without-chrom-line.md)
+  - [A `#` line after the `#CHROM` line](divergences/vcf-hash-line-after-chrom.md)
   - [Reproducing the examples](divergences/reproducing.md)
 - [Divergence classes against 116.2](concordance-provenance/116.2-divergence-classes.md)
 

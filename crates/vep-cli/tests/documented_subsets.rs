@@ -45,7 +45,7 @@ fn assert_flag_row_states(path: &str, flag: &str, phrases: &[&str]) {
 
 /// `check_ref`: a contig the FASTA lacks skips the record at every position with
 /// the sub-slice and mismatch warnings, where BaseVEP.pm:424-434 gives such a
-/// contig a one-base placeholder slice reading `N` (FastaSequence.pm:597-600), so
+/// contig a one-base placeholder slice reading `N` (FastaSequence.pm:597-601), so
 /// Parser.pm:614 passes a one-base record at position 1 written `N` and :624-631
 /// refuses any other with the mismatch line alone; an insertion names no
 /// reference base, so Parser.pm:600-602 (`--check_ref`) and :636 (`--lookup_ref`)
@@ -638,7 +638,7 @@ fn anchor_chopped_indel_with_non_numeric_pos_is_refused() {
 
 /// `lookup_ref`: a contig the FASTA lacks skips the record at every position,
 /// where BaseVEP.pm:424-434 gives such a contig a placeholder slice of length 1,
-/// so FastaSequence.pm:597-600 returns `N` for a one-base record at position 1
+/// so FastaSequence.pm:597-601 returns `N` for a one-base record at position 1
 /// and Parser.pm:645 annotates it as `N/<alt>`.
 #[test]
 fn lookup_ref_exclusion_is_documented() {
@@ -1075,20 +1075,35 @@ fn hgvs_transcript_input_exclusion_is_documented() {
 }
 
 /// `individual_zyg`, `individual` and `individual-modes`: an individual's copy of
-/// a bi-allelic record `--minimal` trims past the anchor chop at either end
-/// (`GA/GT`, `AG/TG`), the indel class included, is compared chopped against
-/// chopped (`CalledGenotype::read` in `individuals.rs`), so a `0/0` sample is
+/// a bi-allelic record trimmed past the anchor chop, an indel whose written
+/// alleles differ in length (Parser.pm:860-881, `elsif
+/// (length($ref_allele_string) != length($alt)) { $is_non_minimised_indel = 1;`
+/// at :876-877, with or without `--minimal`) or under `--minimal` a same-length
+/// record (`GA/GT`, `AG/TG`; Parser.pm:852), is compared chopped against chopped
+/// (`CalledGenotype::read` in `individuals.rs`), so a `0/0` sample is
 /// reference-homozygous and `--individual_zyg` prints its reference row
 /// (`zygosity_record`), where Parser/VCF.pm:691-692 take the minimised `A` as
 /// `$ref` and :716 and :720 compare the chop-level `GA` with it (`grep {$_ ne
 /// $ref && $_ !~ /\*/} @bits`), so Ensembl VEP prints the alternate row with
-/// `ZYG=S1:HOM`.
+/// `ZYG=S1:HOM`. `--individual` refuses `--minimal` (Config.pm:626 `individual
+/// => [qw(minimal individual_zyg)]`), so the page and the index name the record
+/// shape, not the flag, as the trigger.
 #[test]
 fn individual_minimal_trimmed_record_exclusion_is_documented() {
     assert_page_states(
         "divergences/individual-trimmable-indel.md",
         &[
-            "An individual's copy of a record `--minimal` trims past the anchor chop",
+            "An individual's copy of a record trimmed past the anchor chop",
+            "A difference in the alleles annotated for an individual, on a record shape no \
+             measured per-individual run reads; nothing is set aside",
+            "The shape is a bi-allelic indel whose anchor-chopped alleles still share a base, \
+             which Ensembl VEP trims again with or without `--minimal` (`Parser.pm` lines \
+             860-881), or a same-length record such as `GA/GT` under `--minimal`",
+            "Ensembl VEP minimises a bi-allelic indel after the anchor chop whatever the flags \
+             (`Parser.pm` lines 860-881, which pass a record whose written alleles differ in \
+             length to `minimise_alleles`: `ACAC/AC` becomes `AC/-` two bases on)",
+            "`--individual` refuses `--minimal` unless `--safe` lifts the check (`Config.pm` \
+             lines 626 and 961), so that pass alone trims the records it copies",
             "Under `--minimal` it minimises every bi-allelic record whose alleles still share a \
              base at either end (line 852: `GA/GT` becomes `A/T` a base on, `AG/TG` becomes \
              `A/T` at the written position)",
@@ -1103,16 +1118,20 @@ fn individual_minimal_trimmed_record_exclusion_is_documented() {
     assert_page_states(
         "intended-divergences.md",
         &[
-            "Ensembl VEP builds an individual's copy of a bi-allelic record `--minimal` trims \
-             past the anchor chop at either end, an indel such as `ACAC/AC` or a same-length \
-             record such as `GA/GT`, from the chopped alleles against the minimised reference",
+            "Ensembl VEP builds an individual's copy of a bi-allelic record it trims past the \
+             anchor chop, an indel such as `ACAC/AC` with or without `--minimal` or a \
+             same-length record such as `GA/GT` under it, from the chopped alleles against the \
+             minimised reference",
+            "nothing: no measured per-individual run reads such a record",
+            "[An individual's copy of a record trimmed past the anchor chop]\
+             (divergences/individual-trimmable-indel.md)",
         ],
     );
     assert_page_states(
         "output-formats.md",
         &[
-            "an indel such as `ACAC/AC` with or without the flag and a same-length record such \
-             as `GA/GT` under it",
+            "an indel such as `ACAC/AC` with or without `--minimal` and a same-length record \
+             such as `GA/GT` under it",
             "The reading above of a record trimmed past the anchor chop, an indel or under \
              `--minimal` a same-length record such as `GA/GT`, applies to the list too. Ensembl \
              VEP reads a `0/0` sample of it as `HOM` and keeps the alternate allele's rows, where \
@@ -1420,6 +1439,199 @@ fn hgvs_exclusion_is_documented() {
              HGVSc whose reference base is `N` (`c.764N>T`)",
             "under `--hgvs` prints no HGVSc for a substitution or a deletion, where an \
              insertion's notation and HGVSp agree",
+        ],
+    );
+}
+
+/// `warning_file`, `skipped_variants_file`: both values are file names as given,
+/// `-`, surrounding whitespace and a `>`-led value included (`target_for` in
+/// `warnings.rs` builds a `PathBuf` from any value but `stderr`;
+/// `reserve_skipped_variants_file` likewise), where Ensembl VEP's two-argument
+/// `open` for writing, BaseVEP.pm:894 `$fh->open(">".$file) or throw(...)` and
+/// BaseRunner.pm:344 `$fh->open(">$file_name") or`, sends `-` to standard
+/// output, trims the whitespace and appends a `>`-led value to the file it names
+/// (`warning_file_and_skipped_file_values_are_file_names_as_given` in
+/// `cli_run_control.rs` runs the vep-rs side). A false `--skipped_variants_file`
+/// value, `0` or empty, is a file name here too, where Runner.pm:176
+/// `$self->dump_skipped_variants if $self->param('skipped_variants_file');`
+/// writes nothing (`skipped_variants_file_false_value_is_a_file_name`).
+#[test]
+fn warning_file_as_given_exclusion_is_documented() {
+    assert_page_states(
+        "cli/compatibility.md",
+        &[
+            "The `--warning_file` and `--skipped_variants_file` values name their files as given \
+             likewise, `-`, surrounding whitespace and a `>`-led value included",
+            "Ensembl VEP opens each for writing with the two-argument `open` (`BaseVEP.pm:894`, \
+             `BaseRunner.pm:344`), which sends `-` to standard output, trims the whitespace and \
+             appends a `>`-led value to the file it names",
+            "So `--warning_file -` prints the warnings on standard output there and writes a file \
+             named `-` here, `--warning_file ' sp.txt'` writes `sp.txt` there and ` sp.txt` here, \
+             and `--skipped_variants_file '>skipped.txt'` appends to `skipped.txt` there and \
+             writes `>skipped.txt` here",
+            "A `--skipped_variants_file` value Perl reads as false, `0` or the empty value, leaves \
+             the flag unset there (`Runner.pm:176`), so no file is written. vep-rs writes a file \
+             named `0`, and the empty value fails the run as it ends, the output written, with \
+             `Could not write to skipped variants file` (exit 1). A false `--warning_file` value \
+             is the default warnings file in both engines (`BaseVEP.pm:890`)",
+        ],
+    );
+}
+
+/// `force_overwrite`, `skipped_variants_file`: an existing skipped-variants file
+/// is refused before the run (`reserve_skipped_variants_file` in `warnings.rs`),
+/// where Ensembl VEP makes the check inside `finish` after the output is written
+/// (BaseRunner.pm:337 `if(-e $file_name && !$self->param('force_overwrite')) {`,
+/// reached from Runner.pm:176 `$self->dump_skipped_variants if
+/// $self->param('skipped_variants_file');`), and both engines write the file as
+/// the run ends (BaseRunner.pm:364-380).
+#[test]
+fn skipped_variants_file_timing_exclusion_is_documented() {
+    assert_flag_row_states(
+        "cli/input-output.md",
+        "--skipped_variants_file",
+        &[
+            "An existing file is refused before the run without `--force_overwrite`, where \
+             Ensembl VEP checks when the run ends; both engines write the file as the run ends",
+        ],
+    );
+}
+
+/// `individual`, `individual-modes`, `individual_zyg`: the sample names come from
+/// the `#CHROM` line alone (`pipeline.rs`, `line.starts_with(b"#CHROM")` under
+/// `cfg.individuals.is_some()`), where ensembl-io takes the header's last
+/// single-`#` line (BaseVCF4.pm:96-97 `elsif ($line =~ /^#\s*(.+)$/) {
+/// $self->{'metadata'}->{'header'} = [split("\t",$1)];`), so a `#note` line after
+/// `#CHROM` empties Ensembl VEP's sample list: `--individual all` writes no row
+/// where vep-rs writes the 28 rows of the `hb_multi` record
+/// (`individual_all_reads_the_chrom_line_when_a_hash_line_follows_it` in
+/// `individuals.rs`).
+#[test]
+fn hash_line_after_chrom_exclusion_is_documented() {
+    assert_page_states(
+        "divergences/vcf-hash-line-after-chrom.md",
+        &[
+            "Ensembl VEP reads a VCF header through ensembl-io, which takes every single-`#` line \
+             as the column line in turn, so the last one stands (`BaseVCF4.pm` lines 96-97",
+            "so a header whose `#CHROM` line is followed by `#note` names none",
+            "Under `--individual all` the run writes no row and exits 0; under a list it stops \
+             with Ensembl VEP's unknown-sample error, which names the list against an empty header \
+             (`Parser/VCF.pm` lines 612-617); under `--individual_zyg all` every row is written \
+             without `ZYG`",
+            "The VCF output copies the `#CHROM` line among the meta lines and prints `#note` where \
+             the column line belongs (`OutputFactory/VCF.pm` line 224)",
+            "vep-rs reads the sample names from the `#CHROM` line alone and writes a single-`#` \
+             line after it nowhere",
+            "Under `--individual all` vep-rs writes the 28 rows the header without the stray line \
+             gets, under `--individual S1` S1's four",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "Fifty-three differences lie outside every class",
+            "Ensembl VEP takes a VCF header's last single-`#` line as its column line, so a `#` \
+             line after the `#CHROM` line leaves its sample list empty: `--individual all` writes \
+             no row, a list is refused, `--individual_zyg` writes no `ZYG`, and the VCF output \
+             prints that line where the column line belongs; vep-rs reads the samples from the \
+             `#CHROM` line and writes the stray line nowhere",
+        ],
+    );
+    assert_flag_row_states(
+        "cli/input-output.md",
+        "--individual",
+        &[
+            "a single-`#` line after that line is ignored, where Ensembl VEP takes the header's \
+             last single-`#` line as the column line and so names no sample",
+        ],
+    );
+}
+
+/// `incomplete-del`: `SVLEN=NaN` numifies to 0 (`perl_numeric_f64` in
+/// `sv_span.rs`), the deletion's end lands before its start and
+/// `deletion_looks_incomplete` drops the record with its warning unless
+/// `--dont_skip` keeps it at `21:30425650-30425651`, where Ensembl VEP's end is
+/// `NaN` (ensembl-io BaseVCF4.pm:304-305 `$end = $self->get_start +
+/// abs($svlen) - 1;`), its `$start > $end` test (Parser/VCF.pm:555) is false,
+/// and it writes the Defect K row `21:30425651-NaN deletion - - -
+/// intergenic_variant`.
+#[test]
+fn svlen_nan_deletion_exclusion_is_documented() {
+    assert_page_states(
+        "divergences/defect-k.md",
+        &[
+            "The `NaN` deletion, zero bases long, is dropped as incomplete with its warning unless \
+             `--dont_skip` keeps its two-base interval",
+            "The `NaN` deletion, zero bases long, is dropped as incomplete unless `--dont_skip` \
+             keeps its two-base interval",
+            "The `SVLEN=NaN` record, a zero-length deletion once numified, is dropped by default \
+             with the warning `deletion looks incomplete`, where the reference wrote one \
+             intergenic row; `--dont_skip` keeps it at the two-base interval `21:30425650-30425651` \
+             (two transcript rows, `coding_sequence_variant` on ENST00000390690)",
+            "The zero-length deletion is dropped as incomplete, or kept at a two-base interval \
+             under `--dont_skip`",
+            "and, under `--dont_skip`, at the two-base interval for `SVLEN=NaN`, \
+             `21:30425650-30425651`; by default vep-rs writes no row for that record",
+        ],
+    );
+    assert_page_states(
+        "divergences/defect-c.md",
+        &[
+            "A `SVLEN` of `NaN` is the exception: Ensembl VEP's end is `NaN`, which no `start > \
+             end` test catches, so it writes the record's intergenic row at `21:30425651-NaN` \
+             ([Defect K](defect-k.md)); vep-rs reads the length as 0 and drops the record as \
+             incomplete",
+        ],
+    );
+    assert_page_states(
+        "output/structural-variants.md",
+        &[
+            "A `SVLEN` of `NaN` is the exception: vep-rs reads it as 0 and drops the record, where \
+             Ensembl VEP annotates it with the end `NaN` ([Defect K](../divergences/defect-k.md))",
+        ],
+    );
+}
+
+/// `spdi`, `regulatory`: on a regulatory-only record's intergenic row under
+/// `--regulatory`, Ensembl VEP's SPDI names the chromosome as the cache does,
+/// since AnnotationType/RegFeat.pm:126 `$vf->{slice} ||= $slice;` hands the
+/// variation feature the regulatory feature's slice before InputBuffer.pm:518
+/// builds one from the FASTA, where vep-rs (`reference_name` in
+/// `vep-effects/src/spdi.rs`) has no regulatory slice and names an intergenic
+/// row's chromosome as the FASTA does.
+#[test]
+fn regulatory_spdi_chromosome_name_exclusion_is_documented() {
+    assert_page_states(
+        "divergences/regulatory-rows.md",
+        &[
+            "When the FASTA names a chromosome unlike the cache, such a record's intergenic row \
+             under `--spdi` names it as the cache does in Ensembl VEP and as the FASTA does here, \
+             `21:30234968:A:G` against `chr21:30234968:A:G`",
+            "The regulatory feature hands the variant its slice there (`AnnotationType/RegFeat.pm` \
+             line 126), a slice vep-rs never has",
+        ],
+    );
+}
+
+/// `fasta`: the three refusals at open the page's sentence counts each have a
+/// table row, the `.gzi` one included (`checked_gzi` in `vep-fasta`, whose
+/// `FastaError::GziMismatch` prints `BGZF index {gzi} does not describe {fasta}
+/// ({reason}): index the file again with samtools faidx`).
+#[test]
+fn fasta_open_refusals_are_each_tabulated() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "Three files are refused at open: a gzip file that is not BGZF, whose `.fai` offsets \
+             need the whole file inflated; a `.gzi` that does not match the file's blocks, \
+             recompressed and not re-indexed; an `.fai` naming more bases than the file holds",
+            "| A gzip file that is not BGZF | `ERROR: [fasta] <file> is gzip but not BGZF: \
+             recompress with bgzip and index with samtools faidx` |",
+            "| A `.gzi` that does not describe the file's blocks | `ERROR: [fasta] BGZF index \
+             <file>.gzi does not describe <file> (<the first disagreement>): index the file again \
+             with samtools faidx` |",
+            "| An `.fai` naming bases past the file's end | `ERROR: [fasta] FASTA index names <n> \
+             bases beyond the end of <file>` |",
         ],
     );
 }

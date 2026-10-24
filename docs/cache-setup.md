@@ -127,6 +127,7 @@ vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
 | Condition | Line printed |
 | --- | --- |
 | A gzip file that is not BGZF | `ERROR: [fasta] <file> is gzip but not BGZF: recompress with bgzip and index with samtools faidx` |
+| A `.gzi` that does not describe the file's blocks | `ERROR: [fasta] BGZF index <file>.gzi does not describe <file> (<the first disagreement>): index the file again with samtools faidx` |
 | An `.fai` naming bases past the file's end | `ERROR: [fasta] FASTA index names <n> bases beyond the end of <file>` |
 | `--hgvs` or `--hgvsg` with no FASTA in reach | `ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)` |
 | `--use_transcript_ref` without a FASTA | `ERROR: [fasta] Cannot use transcript reference sequences (--use_transcript_ref) without a FASTA file (see --fasta); you may wish to use --use_given_ref` |

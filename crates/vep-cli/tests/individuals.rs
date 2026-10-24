@@ -6,7 +6,8 @@
 //! `--individual_zyg all|list` writes each record once with the `ZYG` list;
 //! `--process_ref_homs` adds the reference allele's row to every feature; an
 //! unknown sample name is Ensembl VEP's error; a VCF without a `#CHROM` line
-//! writes nothing under `all`; `--phased` changes nothing.
+//! writes nothing under `all`; a `#` line after the `#CHROM` line is ignored;
+//! `--phased` changes nothing.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -1816,4 +1817,80 @@ fn parquet_rows_of_a_per_individual_run_equal_the_tab_rows() {
         .filter(|l| l.contains("\tS1\t") || l.contains("\tS2\t"))
         .count();
     assert!(copies >= 2, "{expected:?}");
+}
+
+/// The sample names come from the `#CHROM` line alone (`pipeline.rs`,
+/// `line.starts_with(b"#CHROM")` under `cfg.individuals.is_some()`), and a
+/// single-`#` line after it is written nowhere, where ensembl-io takes the
+/// header's last single-`#` line as the column line (BaseVCF4.pm:96-97 `elsif
+/// ($line =~ /^#\s*(.+)$/) { $self->{'metadata'}->{'header'} =
+/// [split("\t",$1)];`) and names its samples from that line (`:805-808`). With
+/// the eight-sample header of the GRCh38-individual corpus, a `#note` line and
+/// its `hb_multi` record, Ensembl VEP 116.2 names no sample: `--individual all`
+/// writes 0 rows (exit 0), `--individual S1` dies `Sample IDs given (S1) do not
+/// match samples from VCF ()` (Parser/VCF.pm:612-617), `--individual_zyg all`
+/// writes the eight rows without `ZYG`, and its VCF output prints `#note` where
+/// the column line belongs (OutputFactory/VCF.pm:224). vep-rs writes the 28 rows
+/// the header without the stray line gets, S1's four, the eight rows with the
+/// seven called samples' `ZYG` entries, and the `#CHROM` line as the column line
+/// (`docs/divergences/vcf-hash-line-after-chrom.md`).
+#[test]
+fn individual_all_reads_the_chrom_line_when_a_hash_line_follows_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let corpus =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38-individual");
+    let variants = std::fs::read_to_string(corpus.join("variants.vcf")).unwrap();
+    let header: String = variants
+        .lines()
+        .take_while(|l| l.starts_with('#'))
+        .map(|line| format!("{line}\n"))
+        .collect();
+    assert!(header.ends_with("\tS8\n"), "{header}");
+    let record = variants
+        .lines()
+        .find(|l| column(l, 2) == "hb_multi")
+        .unwrap();
+    let control = write_input(dir.path(), "control.vcf", &format!("{header}{record}\n"));
+    let stray = write_input(
+        dir.path(),
+        "stray.vcf",
+        &format!("{header}#note\n{record}\n"),
+    );
+    let cache = corpus.join("json_cache");
+
+    let (expected, stderr, ok) =
+        run_with_cache(dir.path(), &control, &cache, &["--individual", "all"]);
+    assert!(ok, "{stderr}");
+    assert_eq!(body(&expected).len(), 28);
+    let (text, stderr, ok) = run_with_cache(dir.path(), &stray, &cache, &["--individual", "all"]);
+    assert!(ok, "{stderr}");
+    assert_eq!(body(&text), body(&expected));
+
+    let (text, stderr, ok) = run_with_cache(dir.path(), &stray, &cache, &["--individual", "S1"]);
+    assert!(ok, "{stderr}");
+    let rows = body(&text);
+    assert_eq!(rows.len(), 4);
+    assert!(rows.iter().all(|row| extra_value(row, "IND") == Some("S1")));
+
+    let (text, stderr, ok) =
+        run_with_cache(dir.path(), &stray, &cache, &["--individual_zyg", "all"]);
+    assert!(ok, "{stderr}");
+    let rows = body(&text);
+    assert_eq!(rows.len(), 8);
+    assert!(
+        rows.iter().all(|row| extra_value(row, "ZYG")
+            == Some("S1:HET,S2:HET,S3:HOMREF,S4:HOM,S5:HET,S6:HOM,S7:HOM")),
+        "{rows:?}"
+    );
+
+    let (text, stderr, ok) = run_with_cache(dir.path(), &stray, &cache, &["--vcf"]);
+    assert!(ok, "{stderr}");
+    let header_lines: Vec<&str> = text.lines().filter(|l| l.starts_with('#')).collect();
+    assert!(
+        header_lines
+            .last()
+            .is_some_and(|l| l.starts_with("#CHROM\tPOS\tID\tREF\tALT\tQUAL")),
+        "{header_lines:?}"
+    );
+    assert!(!header_lines.contains(&"#note"), "{header_lines:?}");
 }

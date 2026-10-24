@@ -904,7 +904,21 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          two-argument `open` (`BaseVEP.pm:644`) reads `-` as standard input, trims the \
          whitespace, and opens a `>`-led value for writing, emptying the file it names and \
          reading an empty table. A value Perl reads as false leaves the flag unset there, so \
-         the cache's own file is read (`CacheDir.pm:254`).\n\n",
+         the cache's own file is read (`CacheDir.pm:254`).\n\
+         - The `--warning_file` and `--skipped_variants_file` values name their files as \
+         given likewise, `-`, surrounding whitespace and a `>`-led value included. Ensembl \
+         VEP opens each for writing with the two-argument `open` (`BaseVEP.pm:894`, \
+         `BaseRunner.pm:344`), which sends `-` to standard output, trims the whitespace and \
+         appends a `>`-led value to the file it names. So `--warning_file -` prints the \
+         warnings on standard output there and writes a file named `-` here, \
+         `--warning_file ' sp.txt'` writes `sp.txt` there and ` sp.txt` here, and \
+         `--skipped_variants_file '>skipped.txt'` appends to `skipped.txt` there and writes \
+         `>skipped.txt` here.\n\
+         - A `--skipped_variants_file` value Perl reads as false, `0` or the empty value, \
+         leaves the flag unset there (`Runner.pm:176`), so no file is written. vep-rs writes a \
+         file named `0`, and the empty value fails the run as it ends, the output written, with \
+         `Could not write to skipped variants file` (exit 1). A false `--warning_file` value is \
+         the default warnings file in both engines (`BaseVEP.pm:890`).\n\n",
     );
 
     out.push_str("## Configuration sources\n\n");

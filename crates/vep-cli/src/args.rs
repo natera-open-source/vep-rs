@@ -94,9 +94,11 @@ pub struct Args {
     pub phased: bool,
 
     /// Annotate a VCF record once per individual, `all` for every sample column or a comma-separated list
-    /// of sample names from the #CHROM header line; an unknown name exits with Ensembl VEP's error naming
-    /// both lists, checked before the first record, where Ensembl VEP checks it at its first
-    /// sequence record and so annotates a VCF of structural records alone. Each row of the copy
+    /// of sample names from the #CHROM header line; a single-`#` line after that line is ignored, where
+    /// Ensembl VEP takes the header's last single-`#` line as the column line and so names no sample. An
+    /// unknown name exits with Ensembl VEP's error naming both lists, checked before the first record,
+    /// where Ensembl VEP checks it at its first sequence record and so annotates a VCF of structural
+    /// records alone. Each row of the copy
     /// carries IND and ZYG (HET when the genotype holds more than one
     /// distinct allele, else HOM, with REF appended for a reference-homozygous individual); a copy carries
     /// the alleles its genotype names, so `./1` and a haploid `1` annotate the one allele as HOM, `1/2` both
@@ -261,7 +263,8 @@ pub struct Args {
     /// File listing every input record the run skipped: a header line naming the
     /// input, then one line per record with its line number, the record's first 40
     /// characters and the reason. An existing file is refused before the run without
-    /// --force_overwrite; the file is written when the run ends
+    /// --force_overwrite, where Ensembl VEP checks when the run ends; both engines write
+    /// the file as the run ends
     #[arg(
         help_heading = "Output",
         long = "skipped_variants_file",

@@ -172,6 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The region, `--chr` and HGVS transcript pages state an unsupported structural word's run end, a chromosome literally named `1-5`, and the four transcript readings, each with a test. (#N)
   - A VCF record's INFO column is split into its fields once per record, and every lookup on the record reads that split rather than scanning the column again. (#N)
   - The `--dont_skip` page states that a `#` line in region, Ensembl or HGVS input counts toward the line numbers, a bare one an empty line. (#N)
+  - The Defect K, Defect C and structural-variant pages give `SVLEN=NaN` its default reading: dropped as incomplete, the two-base interval only under `--dont_skip`. (#N)
 - HGVS, SPDI and identifiers
   - `--hgvsg` writes each row's HGVS genomic notation as Ensembl VEP's `hgvs_genomic` does; it needs a reference FASTA and exits with Ensembl VEP's error without one. (#N)
   - `--hgvs` or `--hgvsg` without a FASTA stops with Ensembl VEP's message; `--everything` drops HGVS with its `INFO` line; `--shift_3prime 1` without one is refused. (#N)
@@ -183,6 +184,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The SPDI page and the `--format` help state that a version-less accession in an HGVS genomic notation is skipped, where Ensembl VEP resolves it as a synonym prefix. (#N)
   - The region page's `UPLOADED_ALLELE` section covers HGVS, SPDI and identifier records, whose second `--minimal` pass prints the once-trimmed string in Ensembl VEP (`TCA>TG`: `CA/G`). (#N)
   - The `--format` help scopes the any-case whole-name match to SPDI and HGVS input. (#N)
+  - The regulatory page states that a regulatory-only record's intergenic `SPDI` names the chromosome as the cache does in Ensembl VEP and as the FASTA does here. (#N)
 - Caches, reference FASTA and the cache tools
   - `--dir_cache`, `--species`, `--cache_version`, `--refseq` and `--merged` select the cache in Ensembl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout; a run with no cache exits 1 before reading input. (#N)
   - `--assembly` must equal the cache directory's and `info.json`'s assembly (`hg19` and `hg38` read as `GRCh37` and `GRCh38`); the cache's assembly feeds headers and plugins. (#N)
@@ -201,6 +203,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A cache holding no transcript shard has a divergence section and index row: refused here, run to the end by Ensembl VEP with every record `intergenic_variant`. (#N)
   - The cache page tabulates `--hgvs` over a chromosome the FASTA lacks: Ensembl VEP prints `N` as the reference base, vep-rs no HGVSc. (#N)
   - The cache page states that an insertion on a contig the FASTA lacks passes `--check_ref` and `--lookup_ref` in both engines. (#N)
+  - The FASTA refusal table lists the `.gzi` that does not describe its file, the third refusal at open. (#N)
 - Co-located variants and frequencies
   - Under `--check_existing` a cache without variation data warns once, in the warnings file and on standard error unless `--quiet`, that `Existing_variation` and the frequency columns stay empty; Ensembl VEP annotates silently. (#N)
   - `--check_existing` matches known variants by allele after trimming from either end, strand-aware and span-exact, in Ensembl VEP's order; structural variants are not co-located. (#N)
@@ -247,6 +250,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A record Ensembl VEP skips (unknown chromosome, invalid alleles, unsupported or oversize SV, incomplete deletion) gets its `line N skipped` warning, N the record ordinal. (#N)
   - A skipped record's warning quotes its input line in every input format, as Ensembl VEP's `line N skipped (...)` does. (#N)
   - A skipped record of the Ensembl, HGVS, SPDI or region format is numbered counting the empty lines before it, as Ensembl VEP numbers it. (#N)
+  - The `--warning_file` and `--skipped_variants_file` values are file names as given; the compatibility page states Ensembl VEP's `-`, whitespace, `>` and false-value readings. (#N)
+  - The `--skipped_variants_file` help names Ensembl VEP's end-of-run check of an existing file beside the before-the-run refusal here. (#N)
 - Plugins
   - `--dir_plugins` defaults to `<--dir>/Plugins`; a directory that does not exist is a warnings-file line when `--plugin` names a plugin. (#N)
   - Tabix-indexed VCF data reads a record's end from its INFO `END`, as `tabix -p vcf` indexes it, so a long record is found from every position it spans. (#N)
@@ -267,6 +272,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--output_format parquet` needs DuckDB 1.3.2 or newer, the first release whose Parquet `COPY` accepts `WRITE_BLOOM_FILTER`; the check compares the patch version. (#N)
 - Per-sample genotype modes
   - The per-individual trimmed-record page covers every bi-allelic record `--minimal` trims past the anchor chop (`GA/GT`), where a `0/0` sample reads `HOM` in Ensembl VEP and `HOMREF` here. (#N)
+  - A `#` line after the `#CHROM` line is ignored, where Ensembl VEP reads it as the header and names no sample; a new page states it. (#N)
+  - The per-individual trimmed-record page names the record shape as the trigger: an indel trimmed past the anchor chop with or without `--minimal`. (#N)
 
 ### Removed
 
