@@ -107,7 +107,7 @@ When one directory of that version exists, it is the cache and its assembly is r
 
 Every failure to resolve a cache exits 1 before the input is opened with one `ERROR: [cache] ...` line, in Ensembl VEP's words where it has them. Those words are `Cache directory <dir> not found`, `No cache found for homo_sapiens, version 116` and `Multiple assemblies found for cache version 116 ...`, the assemblies listed in name order. The metadata mismatch names `info.json`, the file a JSON cache carries where a Storable cache has `info.txt`.
 
-`--json_cache <dir>` (alias `--full_cache_dir`) names the cache directory itself instead, whatever `--dir_cache`, `--species` and `--cache_version` say; only `--assembly` is checked against its `info.json`. Either way the directory must hold `transcripts/` and `info.json`, so a Storable cache or a mistyped path fails rather than annotating nothing.
+`--json_cache <dir>` (alias `--full_cache_dir`) names the cache directory itself instead, whatever `--dir_cache`, `--species` and `--cache_version` say; only `--assembly` is checked against its `info.json`. Either way the directory must hold `transcripts/` and `info.json`, so a Storable cache or a mistyped path fails rather than annotating nothing. `transcripts/` must also hold a shard under some chromosome directory: a cache with none is refused, where Ensembl VEP writes every record as `intergenic_variant` ([A cache holding no transcript shard](divergences/damaged-cache-shard.md#a-cache-holding-no-transcript-shard)).
 
 `--assembly` is compared exactly and case-sensitively, as Ensembl VEP compares it, with one addition: `hg19` and `hg38` are read as `GRCh37` and `GRCh38`. When `--fasta` is absent, the first `.fa` or `.fa.gz` by name inside the cache directory that has its indexes beside it is used as the reference, unless `--no_fasta` is given. An unindexed file there is not read (Ensembl VEP builds a missing index itself). `--show_cache_info` resolves the cache by the same flags, refuses a named input file that does not exist as Ensembl VEP does, prints the cache's source versions as `<key>\t<value>` lines sorted by key, and exits without reading the input.
 
@@ -149,7 +149,7 @@ Under `--lookup_ref` a contig the FASTA lacks skips the record at every position
 
 ### A `Y` read on a FASTA without `X`
 
-With the pseudoautosomal redirect in force and no `X` in the FASTA, a `Y` read's bases inside the region are `N`, as Ensembl VEP reads them (ensembl-variation `Utils/FastaSequence.pm` lines 597-601). The bases outside the region come from `Y`, so the read has the length asked for. Ensembl VEP returns the region's `N`s alone for a read that straddles the region's edge, two bases for a four-base request, and warns `FASTA does not contain sequence for X` on every redirected read; vep-rs warns nothing.
+With the pseudoautosomal redirect in force and no `X` in the FASTA, a `Y` read's bases inside the region are `N`, as Ensembl VEP reads them (ensembl-variation `Utils/FastaSequence.pm` lines 597-601). The bases outside the region come from `Y`, so the read has the length asked for. Ensembl VEP returns the region's `N`s alone for a read that straddles the region's edge, two bases for a four-base request. Neither engine warns on the read: Ensembl VEP's `FASTA does not contain sequence for X` (line 599) is raised at warning level 2000, above the verbosity of 1999 a run sets (`BaseRunner.pm` line 491).
 
 ## Chromosome names
 
@@ -168,6 +168,8 @@ The synonyms come from the cache's `chr_synonyms.txt`, the file the Ensembl VEP 
 
 A file that cannot be read is `ERROR: [config] Could not read synonyms file <file>: <reason>` for a `--synonyms` file and `ERROR: [cache] ...` for the cache's own (a directory included, which Ensembl VEP opens as an empty table, `BaseVEP.pm` line 644). A file holding a byte that is not UTF-8 is refused the same way, the reason `stream did not contain valid UTF-8`, where Ensembl VEP reads the file as bytes.
 
+The `--synonyms` value is a file name as given (`-`, `0`, an empty value, surrounding whitespace, a leading `>` or `|`), where Ensembl VEP's two-argument `open` reads `-` as standard input, trims the whitespace and takes a false value as unset ([compatibility page](cli/compatibility.md#where-configpm-is-not-followed)).
+
 A cache without the file (a native build without `--core-dumps`, or a conversion by an earlier converter) resolves no synonym, so there `chrM` and an accession are skipped, as Ensembl VEP does on such a cache. Convert the cache again, or pass `--synonyms`.
 
 Three cases differ from Ensembl VEP, which checks a record against the cache's names widened by their synonyms, a set it widens again in place at every miss (`Parser.pm` line 782), and then looks the unwidened name up one hop. Each passes its check there and annotates as intergenic; in vep-rs a bare `M` resolves to `MT` and every other such name is skipped as not found, whatever record came before it.
@@ -175,6 +177,8 @@ Three cases differ from Ensembl VEP, which checks a record against the cache's n
 The first is a bare `M` on a cache whose file links `chrM` but not `M`. The second is a name that reaches the cache only through a synonym of its `chr`-stripped or `chr`-prefixed spelling (`chrNC_000021.9`). The third is a name two hops from a cache chromosome under a `--synonyms` table whose lines chain or open with whitespace (`21 ALPHA` then `ALPHA BETA`: `BETA`), admitted once an earlier record missed.
 
 A reference FASTA whose records are named by accession is read under the cache's names through the same table, so `--fasta` may name a RefSeq or GenBank assembly file beside an Ensembl cache.
+
+Beyond the table, a record is reached by its name with the prefix `chr` added or removed and, for a record named `MT`, `M`, `chrM` or `chrMT`, by any of the four names, matched in any letter case: aliases vep-rs builds in. Ensembl VEP tries the exact name, a synonym and the `chr` variants alone (`BaseVEP.pm` lines 413 and 689-738, `Utils/FastaSequence.pm` lines 380-389), so a cache's `MT` over a FASTA record named `chrM`, with no synonym linking the two, reaches no sequence there. That chromosome gets the one-base placeholder slice described above (`BaseVEP.pm` lines 425-426), so under `--check_ref` a record such as `MT 3308 T G` is skipped with the sub-slice and mismatch warnings, where vep-rs annotates it.
 
 ## What `info.json` carries
 

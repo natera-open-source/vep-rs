@@ -2353,7 +2353,12 @@ mod tests {
     }
 
     /// The whole-cache refusal counts shards, not chromosome directories: a
-    /// cache whose only shard sits in a dot-prefixed directory holds none.
+    /// cache whose only shard sits in a dot-prefixed directory holds none. The
+    /// refusal is this engine's own: Ensembl VEP lists every non-dot directory as
+    /// a valid chromosome whatever it holds (`CacheDir.pm:431`), reads a region's
+    /// file only `if -e $file` (`BaseSerialized.pm:263`) and runs such a cache
+    /// to the end, every record `intergenic_variant`, exit 0, as
+    /// `docs/divergences/damaged-cache-shard.md` states.
     #[test]
     fn cache_with_shards_only_in_a_dot_directory_is_refused() {
         let dir = tempfile::Builder::new()

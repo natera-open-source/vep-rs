@@ -1,6 +1,6 @@
 # Two region notations: `UPLOADED_ALLELE` under `--minimal`, and a `BND` word
 
-Two differences on region input (`--format region`), a format no measured dataset uses; nothing is set aside. The first is in the text of one field, the second in which records are written.
+Two differences on region input (`--format region`), a format no measured dataset uses; nothing is set aside. The first is in the text of one field and reaches every input format but VCF, the second in which records are written.
 
 ## `UPLOADED_ALLELE` of a region record `--minimal` trims
 
@@ -8,7 +8,7 @@ A region record's reference is a placeholder of one `N` per base of the span (`P
 
 vep-rs keeps the string as parsed, so under `--minimal --uploaded_allele` it prints `UPLOADED_ALLELE=NNN/NA`, and every other column of the 17 rows agrees with Ensembl VEP's, `MINIMISED=1` included. Without `--minimal` both engines print `NNN/NA`. The placeholder is the record as uploaded, and `--minimal`'s trim is not an upload, so the string the input named is the one vep-rs prints.
 
-An Ensembl-format record behaves the same way. For `21 10542414 10542417 ATGC/AG +` under `--minimal --uploaded_allele`, Ensembl VEP prints `TGC/G` and vep-rs `ATGC/AG`. VCF input is immune in both engines: the VCF parser sets the untrimmed string first (`Parser/VCF.pm` line 343), which the second pass keeps.
+An Ensembl-format, HGVS, SPDI or identifier record behaves the same way: its parser hands the record to the same pass (`Parser/HGVS.pm` line 248, `Parser/SPDI.pm` line 204, `Parser/ID.pm` line 196, `Parser/VEP_input.pm` line 167) and sets no untrimmed string. For `21 10542414 10542417 ATGC/AG +` under `--minimal --uploaded_allele`, Ensembl VEP prints `TGC/G` and vep-rs `ATGC/AG`; for `21:g.30282168_30282170TCA>TG`, the same feature built from a notation, `CA/G` and `TCA/TG`, both `MINIMISED=1`, and without `--minimal` both engines print `TCA/TG`. VCF input is immune in both engines: the VCF parser sets the untrimmed string first (`Parser/VCF.pm` line 343), which the second pass keeps.
 
 ## A `BND` word
 

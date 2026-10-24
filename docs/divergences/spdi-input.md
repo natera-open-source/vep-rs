@@ -23,6 +23,14 @@ notation 'NC_000021:10538884:A:C': Sequence name NC_000021 not valid
 
 Ensembl VEP annotates it as it annotates `NC_000021.9:10538884:A:C`, which both engines write as nine rows on ENSG00000274391 at `21:10538885`, Allele `C`, each `intron_variant` (two with `NMD_transcript_variant` beside it), named by the notation as written.
 
+An HGVS genomic notation reads the same way: `fetch_by_hgvs_notation` fetches its slice through the same adaptor (`VariationFeatureAdaptor.pm` line 1889), so Ensembl VEP annotates `NC_000021:g.30282169C>A` as it annotates `NC_000021.9:g.30282169C>A`, a `stop_lost` at `21:30282169`, named as written. vep-rs matches the whole name, in any letter case, against the FASTA's records and their aliases, never a prefix, and skips the notation:
+
+```
+WARNING: line 1 skipped (NC_000021:g.30282169C>A): Unable to parse HGVS
+notation 'NC_000021:g.30282169C>A': The reference FASTA has no sequence named
+NC_000021
+```
+
 ## A span past the end of the chromosome
 
 Ensembl VEP fetches the whole-sequence slice before it reads the shape (line 2533) and tests no coordinate against the sequence's length. An insertion reads no sequence at all (lines 2545-2549). A deletion by length reads a slice the slice adaptor builds past the end with no bounds test (`SliceAdaptor.pm` lines 430-438), which under `--fasta` is filled with `N` (`Utils/FastaSequence.pm` lines 619-639, one `N` for a start past the end). The record checks (`Parser.pm` lines 457-649) test no sequence length either, so the record is annotated at a coordinate the chromosome lacks. Chromosome 21 of GRCh38 ends at 46709983; run on the equivalent VCF records, Ensembl VEP 116.2 writes one intergenic row for each:

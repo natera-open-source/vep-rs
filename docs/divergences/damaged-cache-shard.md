@@ -1,6 +1,6 @@
 # A transcript shard the cache cannot read
 
-A difference in which records are written, on a cache state no measured run has: a transcript file of the cache cut short after its header; nothing is set aside.
+Two differences in which records are written, on cache states no measured run has: a transcript file of the cache cut short after its header, and a cache holding no transcript file at all; nothing is set aside.
 
 Ensembl VEP's transcript cache holds one Storable file per 1 Mb region, gzip-compressed. A region's file is opened as a region is first asked for, through `PerlIO::gzip`, the `gzip` binary or `Compress::Zlib` (`AnnotationSource/Cache/BaseSerialized.pm` lines 134, 140 and 146), and a file that cannot be opened ends the run with the open's error. The bytes are then handed to Storable's `fd_retrieve` (lines 135, 141 and 155), which dies on a stream whose header is not Storable's, so a file of foreign bytes ends the run too.
 
@@ -18,3 +18,18 @@ ERROR: [cache] Cannot read the transcript cache for chr21: Failed to inflate
 The line is wrapped here and is one line on standard error. A `c.`, `n.` or `p.` notation whose lookup reaches the shard first gives the same refusal after `Cannot read the transcript cache for HGVS input: `. A cache that carries its [checksum manifest](../cache-checksums.md) refuses the cut shard earlier, as a checksum mismatch, before any byte of it is inflated.
 
 To reproduce in Ensembl VEP 116.2: copy the GRCh38 cache and cut one region file of chromosome 21 short with `head -c` to half its bytes. Run [the command of the closing section](reproducing.md#reproducing-these-examples) over a record more than 5,000 bases inside that region; the record is written as `intergenic_variant`. In vep-rs: copy a JSON cache without its `CHECKSUMS.sha256`, cut one shard of chromosome 21 the same way, and run any record on chromosome 21 over the copy.
+
+## A cache holding no transcript shard
+
+Ensembl VEP's valid chromosomes are the cache's directories whose names do not start with a dot, whatever they hold (`CacheDir.pm` line 431), and a region whose file does not exist yields no feature (`AnnotationSource/Cache/BaseSerialized.pm` line 263, `if -e $file`). So a cache none of whose chromosome directories holds a transcript file runs to the end: every record on a directory's name is written as `intergenic_variant`, exit 0, and nothing reports the cache empty.
+
+vep-rs lists the shards of every chromosome directory as the cache opens, before the input is read, and refuses a cache that holds none, a dot-prefixed directory's files not counted:
+
+```
+ERROR: [cache] no transcript shards under <cache>/transcripts (serialiser_type
+storable)
+```
+
+The line is one line on standard error, exit 1, and names the serialiser `info.json` declares (`storable` when it declares none). One directory holding no shard beside others that do is a chromosome with no transcripts in both engines, and a record on it is `intergenic_variant` in both.
+
+To reproduce in Ensembl VEP 116.2: a cache directory holding `info.txt` and an empty `21/`; [the command of the closing section](reproducing.md#reproducing-these-examples) writes any record on chromosome 21 as `intergenic_variant`. In vep-rs: a cache directory holding `info.json` and an empty `transcripts/21/`.

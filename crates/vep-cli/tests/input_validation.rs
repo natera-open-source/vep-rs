@@ -1531,6 +1531,70 @@ fn check_ref_reads_a_y_pseudoautosomal_record_from_x() {
     );
 }
 
+/// With a cache naming `MT`, a FASTA whose record is `chrM` and a `--synonyms`
+/// table that links nothing, `--check_ref` reads the record's base through the
+/// alias set vep-fasta builds in (`contig_aliases` in vep-fasta's `lib.rs`: a
+/// record named `MT`, `M`, `chrM` or `chrMT` is reached by any of the four
+/// names, the lookup matched in any letter case) and annotates `MT 3308 T G` as
+/// `intergenic_variant`, exit 0. Ensembl
+/// VEP 116.2 reaches a FASTA record by the name, a synonym of it, or the name
+/// with `chr` added or removed alone, at the slice (BaseVEP.pm:413 through
+/// `get_source_chr_name`, :689-738) and at the read (FastaSequence.pm:380-389,
+/// `'chr'.$sr_name, 'CHR'.$sr_name` and their synonyms), so `MT` never reaches
+/// `chrM`: the chromosome gets the one-base placeholder slice (BaseVEP.pm:425-426,
+/// `my $length = $fa_length && $fa_length > 0 ? $fa_length : 1;`), the sub-slice
+/// at 3308 fails (Parser.pm:607-610, `Could not fetch sub-slice from
+/// MT:3308-3308(1)`) and the record is skipped with the mismatch warning
+/// (:624-631, `Specified reference allele T does not match Ensembl reference
+/// allele`), 0 rows. A FASTA record named `chrMT` is reached by the input `MT` in
+/// both engines, through the `chr` rule. `docs/cache-setup.md` states the
+/// difference.
+#[test]
+fn check_ref_reaches_a_chrm_record_through_the_built_in_mt_alias() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = cache_with_chromosomes(dir.path(), &["MT"], &[]);
+    let synonyms = dir.path().join("no_synonyms.txt");
+    std::fs::write(&synonyms, "").unwrap();
+    // `chrM` is `T` throughout, long enough to hold 3308.
+    let length = 3_400;
+    let bases_per_line = 60;
+    let mut fasta = b">chrM\n".to_vec();
+    let fai = format!(
+        "chrM\t{length}\t{}\t{bases_per_line}\t{}\n",
+        fasta.len(),
+        bases_per_line + 1
+    );
+    for line in vec![b'T'; length].chunks(bases_per_line) {
+        fasta.extend_from_slice(line);
+        fasta.push(b'\n');
+    }
+    let fa = dir.path().join("mito.fa");
+    std::fs::write(&fa, &fasta).unwrap();
+    std::fs::write(dir.path().join("mito.fa.fai"), fai).unwrap();
+    let records = "MT\t3308\tmt_rec\tT\tG\t.\t.\t.\n";
+    let (output, written, warnings) = run_vcf_against_cache(
+        dir.path(),
+        &cache,
+        records,
+        &[
+            "--check_ref",
+            "--fasta",
+            fa.to_str().unwrap(),
+            "--synonyms",
+            synonyms.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    let record_rows = rows_of(&written, "mt_rec");
+    assert_eq!(record_rows.len(), 1, "{written}");
+    assert!(
+        record_rows[0].starts_with("MT:3308\tG\t-\t-\t-\tintergenic_variant\t"),
+        "{}",
+        record_rows[0]
+    );
+    assert!(warnings.is_empty(), "{warnings}");
+}
+
 /// `--check_ref`, `--lookup_ref` and `--use_transcript_ref` each need a FASTA
 /// (Runner.pm:760-762), the first two cannot be combined (Config.pm:627), and
 /// a region input, whose records name no reference allele, refuses

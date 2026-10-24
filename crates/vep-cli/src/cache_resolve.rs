@@ -884,7 +884,9 @@ mod tests {
     /// refused with the system's reason, under the component of whoever named the
     /// file. A missing file is Ensembl VEP's refusal too (`BaseVEP.pm:644`); a
     /// directory is refused here alone, where that two-argument `open` succeeds
-    /// and loads an empty table.
+    /// and loads an empty table, and so is `-`, a file name here, which that
+    /// `open` reads as standard input (`docs/cache-setup.md` states the
+    /// difference).
     #[test]
     fn synonyms_come_from_the_flag_else_the_cache_file() {
         let dir = tempfile::tempdir().unwrap();
@@ -924,6 +926,10 @@ mod tests {
                 "ERROR: [config] Could not read synonyms file {}: No such file or directory",
                 absent.display()
             )
+        );
+        assert_eq!(
+            error(&["--json_cache", path, "--synonyms", "-"]),
+            "ERROR: [config] Could not read synonyms file -: No such file or directory"
         );
         fs::remove_file(dir.path().join("chr_synonyms.txt")).unwrap();
         fs::create_dir(dir.path().join("chr_synonyms.txt")).unwrap();

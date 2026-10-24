@@ -862,7 +862,14 @@ fn tab_column_order_exclusion_is_documented() {
 
 /// `hgvs-genomic-input`: a `g.` or `m.` span past the sequence's last base is
 /// skipped, where Ensembl VEP's slice read pads the missing bases with `N`
-/// (SequenceAdaptor.pm:148-152, :222-233) and annotates an intergenic row.
+/// (SequenceAdaptor.pm:148-152, :222-233) and annotates an intergenic row; and a
+/// version-less accession (`NC_000021:g.30282169C>A`) is skipped by the exact
+/// record lookup of `genomic.rs` (`reference.record_name`, the FASTA's records
+/// and their aliases), where VariationFeatureAdaptor.pm:1889
+/// (`fetch_by_region('chromosome', $reference) || fetch_by_region(undef,
+/// $reference)`) reaches the slice adaptor's synonym retry with the name as a
+/// prefix (SliceAdaptor.pm:2870-2884, `"$escaped_seq_region_name%"`) and
+/// annotates the record as `NC_000021.9`'s.
 #[test]
 fn hgvs_genomic_input_exclusion_is_documented() {
     assert_page_states(
@@ -874,12 +881,30 @@ fn hgvs_genomic_input_exclusion_is_documented() {
             "vep-rs reads the genome before it reads the shape and skips each with `Unable to \
              parse HGVS notation '<notation>': The reference FASTA has no bases at \
              21:46709984-46709984`",
+            "An HGVS genomic notation reads the same way: `fetch_by_hgvs_notation` fetches its \
+             slice through the same adaptor (`VariationFeatureAdaptor.pm` line 1889), so Ensembl \
+             VEP annotates `NC_000021:g.30282169C>A` as it annotates \
+             `NC_000021.9:g.30282169C>A`",
+            "vep-rs matches the whole name, in any letter case, against the FASTA's records and \
+             their aliases, never a prefix, and skips the notation",
+            "Unable to parse HGVS notation 'NC_000021:g.30282169C>A': The reference FASTA has no \
+             sequence named NC_000021",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "resolves a version-less accession as a synonym prefix, in an HGVS genomic notation \
+             (`NC_000021:g.30282169C>A`) as in an SPDI one",
         ],
     );
     assert_flag_row_states(
         "cli/input-output.md",
         "--format",
-        &["an HGVS genomic (g., m.) span past the last base with `The reference FASTA has no bases at <name>:<start>-<end>`"],
+        &[
+            "an HGVS genomic (g., m.) span past the last base with `The reference FASTA has no bases at <name>:<start>-<end>`",
+            "A sequence name is matched whole, in any letter case, against the cache's chromosomes, the FASTA's records and their synonyms, never as a prefix, so a version-less accession (`NC_000021`) is skipped, in SPDI with `Sequence name <name> not valid` and in HGVS with `The reference FASTA has no sequence named <name>`, where Ensembl VEP's slice adaptor resolves the name as a prefix of a synonym (`NC_000021.9`) and annotates the record",
+        ],
     );
 }
 
@@ -1182,6 +1207,21 @@ fn chromosome_synonyms_two_hop_exclusion_is_documented() {
 /// from `--assembly` alone, which CacheDir.pm:356 fills in the `--dir_cache` scan
 /// alone, so `--offline --full_cache_dir` without `--assembly` leaves it unarmed
 /// there (FastaSequence.pm:550 `$Bio::EnsEMBL::Slice::_fasta_PARs &&`).
+///
+/// A FASTA record is also reached through the aliases `contig_aliases` in
+/// vep-fasta's `lib.rs` builds in (`chr` added or removed, and the
+/// `MT`/`M`/`chrM`/`chrMT` set, matched after `to_ascii_lowercase`), where
+/// BaseVEP.pm:413 maps a chromosome onto the FASTA's record names through
+/// `get_source_chr_name` (:689-738: the name, a synonym, `chr` added or removed)
+/// and FastaSequence.pm:380-389 retries the same three at the read, so `MT`
+/// never reaches `chrM` there; the unreached name gets the one-base placeholder
+/// of BaseVEP.pm:425-426 and `--check_ref` skips its records (Parser.pm:607-610,
+/// :624-631).
+///
+/// The redirected `Y` read on a FASTA without `X` warns in neither engine:
+/// FastaSequence.pm:599 calls `warning(...)` at the default level 2000 while
+/// BaseRunner.pm:491 sets `Bio::EnsEMBL::Utils::Exception::verbose(1999)` for
+/// the run, and `warning` returns when the verbosity is below the level.
 #[test]
 fn fasta_exclusion_is_documented() {
     assert_page_states(
@@ -1195,6 +1235,19 @@ fn fasta_exclusion_is_documented() {
              `--dir_cache` alone (`CacheDir.pm` line 356)",
             "So there Ensembl VEP reads a `Y` span inside the region as written and vep-rs reads \
              `X`",
+            "Beyond the table, a record is reached by its name with the prefix `chr` added or \
+             removed and, for a record named `MT`, `M`, `chrM` or `chrMT`, by any of the four \
+             names, matched in any letter case: aliases vep-rs builds in",
+            "Ensembl VEP tries the exact name, a synonym and the `chr` variants alone \
+             (`BaseVEP.pm` lines 413 and 689-738, `Utils/FastaSequence.pm` lines 380-389), so a \
+             cache's `MT` over a FASTA record named `chrM`, with no synonym linking the two, \
+             reaches no sequence there",
+            "That chromosome gets the one-base placeholder slice described above (`BaseVEP.pm` \
+             lines 425-426), so under `--check_ref` a record such as `MT 3308 T G` is skipped \
+             with the sub-slice and mismatch warnings, where vep-rs annotates it",
+            "Neither engine warns on the read: Ensembl VEP's `FASTA does not contain sequence \
+             for X` (line 599) is raised at warning level 2000, above the verbosity of 1999 a run \
+             sets (`BaseRunner.pm` line 491)",
         ],
     );
     assert_page_states(
@@ -1205,6 +1258,14 @@ fn fasta_exclusion_is_documented() {
              reads to `X` is not armed",
             "vep-rs takes the assembly the cache's `info.json` names, as it does under \
              `--json_cache`, prints it and arms the redirect from it",
+            "on the FASTA side vep-rs also reaches a record by the name with the prefix `chr` \
+             added or removed or, for a record named `MT`, `M`, `chrM` or `chrMT`, by any of the \
+             four names in any letter case, where Ensembl VEP tries the exact name, a synonym \
+             and the `chr` variants alone, so a record such as `MT 3308 T G` on a cache's `MT` \
+             over a FASTA record named `chrM`, with no synonym linking them, annotates here under \
+             `--check_ref` and is skipped there",
+            "vep-rs returns the flanking `Y` bases with the `N`s, and neither engine prints a \
+             warning for the read",
         ],
     );
 }
@@ -1213,7 +1274,14 @@ fn fasta_exclusion_is_documented() {
 /// (`ChromosomeSynonyms::load_from_file` in vep-core's `synonyms.rs` reads it
 /// with `read_to_string`, worded `Could not read synonyms file <file>: stream
 /// did not contain valid UTF-8`, exit 1), where Ensembl VEP reads the file as
-/// bytes.
+/// bytes; and the flag's value is a file name as given (`load_synonyms` in
+/// `cache_resolve.rs` opens it as a path, so `-`, `0`, an empty value, a
+/// padded path and a `>`-led value are refused when no such file exists), where
+/// BaseVEP.pm:643-644 (`if ($file) { open IN, $file or throw(...)`) reads `-` as
+/// standard input, trims the whitespace and opens a `>`-led value for writing
+/// through Perl's two-argument `open`, and a false value (`0`, empty) reads as
+/// the flag unset at CacheDir.pm:254, which fills it with the cache's
+/// `chr_synonyms.txt` before that `open` runs (Runner.pm:128, then :131).
 #[test]
 fn synonyms_file_encoding_exclusion_is_documented() {
     assert_page_states(
@@ -1221,6 +1289,22 @@ fn synonyms_file_encoding_exclusion_is_documented() {
         &[
             "A file holding a byte that is not UTF-8 is refused the same way, the reason \
              `stream did not contain valid UTF-8`, where Ensembl VEP reads the file as bytes",
+            "The `--synonyms` value is a file name as given (`-`, `0`, an empty value, \
+             surrounding whitespace, a leading `>` or `|`), where Ensembl VEP's two-argument \
+             `open` reads `-` as standard input, trims the whitespace and takes a false value as \
+             unset",
+        ],
+    );
+    assert_page_states(
+        "cli/compatibility.md",
+        &[
+            "The `--synonyms` value names its file as given too, `-`, `0`, the empty value, a \
+             value with surrounding whitespace and a `>`-led value included",
+            "Ensembl VEP's two-argument `open` (`BaseVEP.pm:644`) reads `-` as standard input, \
+             trims the whitespace, and opens a `>`-led value for writing, emptying the file it \
+             names and reading an empty table",
+            "A value Perl reads as false leaves the flag unset there, so the cache's own file is \
+             read (`CacheDir.pm:254`)",
         ],
     );
 }
@@ -1236,6 +1320,52 @@ fn chr_literal_range_name_exclusion_is_documented() {
         &[
             "A chromosome literally named `1-5`, which Ensembl VEP admits under that token, is \
              refused silently here, as a record `--chr` leaves out is in both engines",
+        ],
+    );
+}
+
+/// `cache-valid-chromosomes`: a cache none of whose chromosome directories holds
+/// a transcript shard is refused as it opens (`enumerate_transcript_shards` in
+/// `json_cache.rs`, `ERROR: [cache] no transcript shards under <dir>
+/// (serialiser_type <type>)`, exit 1), where Ensembl VEP lists every non-dot
+/// directory as a valid chromosome whatever it holds (CacheDir.pm:431 `sort grep
+/// {!/^\./ && -d $self->dir.'/'.$_} readdir DIR`), reads a region's file only
+/// `if -e $file` (BaseSerialized.pm:261-263) and so writes every record as
+/// `intergenic_variant`, exit 0.
+#[test]
+fn cache_without_a_transcript_shard_refusal_is_documented() {
+    assert_page_states(
+        "divergences/damaged-cache-shard.md",
+        &[
+            "Ensembl VEP's valid chromosomes are the cache's directories whose names do not start \
+             with a dot, whatever they hold (`CacheDir.pm` line 431), and a region whose file \
+             does not exist yields no feature (`AnnotationSource/Cache/BaseSerialized.pm` line \
+             263, `if -e $file`)",
+            "So a cache none of whose chromosome directories holds a transcript file runs to the \
+             end: every record on a directory's name is written as `intergenic_variant`, exit 0, \
+             and nothing reports the cache empty",
+            "vep-rs lists the shards of every chromosome directory as the cache opens, before \
+             the input is read, and refuses a cache that holds none, a dot-prefixed directory's \
+             files not counted",
+            "ERROR: [cache] no transcript shards under <cache>/transcripts (serialiser_type \
+             storable)",
+        ],
+    );
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "`transcripts/` must also hold a shard under some chromosome directory: a cache with \
+             none is refused, where Ensembl VEP writes every record as `intergenic_variant`",
+        ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &[
+            "Ensembl VEP runs a cache none of whose chromosome directories holds a transcript \
+             file, reads no feature from any region, and writes every record as \
+             `intergenic_variant`, exit 0; vep-rs refuses the cache before the input is read, \
+             `ERROR: [cache] no transcript shards under <dir>/transcripts (serialiser_type \
+             <type>)`, exit 1",
         ],
     );
 }

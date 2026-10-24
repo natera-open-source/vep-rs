@@ -178,6 +178,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - An HGVS notation whose reference allele the genome contradicts, a repeat, an unknown shape or a variant `validate_vf` refuses is skipped with Ensembl VEP's warning. (#N)
   - HGVS input needs `--fasta`, is named by the notation in `Uploaded_variation` and the JSON `id`, and prints an accession or `chr` spelling under the FASTA's chromosome name. (#N)
   - `--shift_3prime` takes a value, `0` or `1`, as Ensembl VEP's option does; the bare switch of 0.4.0 is refused with the value list, exit 2. (#N)
+  - The SPDI page and the `--format` help state that a version-less accession in an HGVS genomic notation is skipped, where Ensembl VEP resolves it as a synonym prefix. (#N)
+  - The region page's `UPLOADED_ALLELE` section covers HGVS, SPDI and identifier records, whose second `--minimal` pass prints the once-trimmed string in Ensembl VEP (`TCA>TG`: `CA/G`). (#N)
 - Caches, reference FASTA and the cache tools
   - `--dir_cache`, `--species`, `--cache_version`, `--refseq` and `--merged` select the cache in Ensembl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout; a run with no cache exits 1 before reading input. (#N)
   - `--assembly` must equal the cache directory's and `info.json`'s assembly (`hg19` and `hg38` read as `GRCh37` and `GRCh38`); the cache's assembly feeds headers and plugins. (#N)
@@ -192,6 +194,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A native cache built by an earlier release holds JSON variation files nothing reads; build it again with `vep-cache-builder` 0.5.0 for co-located variants and the 1000 Genomes columns. (#N)
   - A native cache lists `cds_start_NF` before `cds_end_NF` on every transcript carrying both, where the Ensembl cache's order puts `cds_end_NF` first on seven GRCh38 transcripts. (#N)
   - The cache page states the `--fasta_dir` tie order, the assembly that arms the pseudoautosomal redirect, a non-UTF-8 `--synonyms` file and a two-hop synonym admitted after a miss, with tests. (#N)
+  - The cache page names the FASTA record aliases vep-rs builds in (`MT`, `M`, `chrM`, `chrMT`, `chr` variants), which Ensembl VEP lacks, and the warning neither engine prints. (#N)
+  - A cache holding no transcript shard has a divergence section and index row: refused here, run to the end by Ensembl VEP with every record `intergenic_variant`. (#N)
 - Co-located variants and frequencies
   - Under `--check_existing` a cache without variation data warns once, in the warnings file and on standard error unless `--quiet`, that `Existing_variation` and the frequency columns stay empty; Ensembl VEP annotates silently. (#N)
   - `--check_existing` matches known variants by allele after trimming from either end, strand-aware and span-exact, in Ensembl VEP's order; structural variants are not co-located. (#N)
@@ -233,6 +237,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The pipeline streams by default (the hidden `--pipeline_mode batched` restores whole-batch passes); the hidden `--pipeline_depth`, `--render_task_records`, `--writer_strategy` and `--output_buffer_size` knobs write the same bytes at every setting. (#N)
   - `--buffer_size 0` annotates every record, where Ensembl VEP writes the header alone; a negative or underscored value is an argument syntax error (exit 2). (#N)
   - The compatibility page states Ensembl VEP's reading of a repeatable `--config` key alone on its line and of `--sift 0`, `--polyphen 0` and `--nearest 0`, with tests. (#N)
+  - The compatibility and cache pages state the `--synonyms` value is a file name as given, where Ensembl VEP's two-argument `open` reads `-` as standard input and `0` as unset. (#N)
 - Warnings and skipped variants
   - A record Ensembl VEP skips (unknown chromosome, invalid alleles, unsupported or oversize SV, incomplete deletion) gets its `line N skipped` warning, N the record ordinal. (#N)
   - A skipped record's warning quotes its input line in every input format, as Ensembl VEP's `line N skipped (...)` does. (#N)
@@ -296,7 +301,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Region input under `--minimal` measures `--max_sv_size` on every record's trimmed alleles, so a same-length allele with shared `N`s is kept as Ensembl VEP keeps it. (#N)
   - An HGVS notation naming no alternate bases (`DUP` under `--lookup_ref`, `ins` with no letters) annotates nothing, as Ensembl VEP's feature holds the reference alone. (#N)
   - An HGVS notation under `--minimal` is trimmed in its written case before upper-casing, so `delinsGGa` keeps its `A/a` pair as Ensembl VEP keeps it. (#N)
-  - An HGVS notation prints `UPLOADED_ALLELE` as the pair it builds, before the trim and the upper-casing, as Ensembl VEP prints the record it carries. (#N)
+  - An HGVS notation prints `UPLOADED_ALLELE` as the pair it builds, before trim and upper-casing, as Ensembl VEP does when the first trim leaves equal lengths or a `-`. (#N)
   - An `--individual` copy of a lower-case record with a Perl-false ID prints its own alleles as written in the default and tab `Uploaded_variation`, as Ensembl VEP names it. (#N)
   - A deletion whose INFO/END is no coordinate warns `deletion looks incomplete` only when Perl's number for the text lies below the start, as Ensembl VEP compares it. (#N)
   - The `--individual` refusal names the header's samples as Ensembl VEP lists them, one per name in column order, a trailing tab naming no sample. (#N)

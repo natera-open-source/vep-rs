@@ -898,7 +898,13 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          two-argument `open` (`BaseRunner.pm:226`), which strips surrounding whitespace and \
          reads a leading `>` as the append mode, so `-o ' lead.txt'` writes `lead.txt` there \
          and ` lead.txt` here, and `-o '>out.txt'` appends to `out.txt` there and writes \
-         `>out.txt` here.\n\n",
+         `>out.txt` here.\n\
+         - The `--synonyms` value names its file as given too, `-`, `0`, the empty value, a \
+         value with surrounding whitespace and a `>`-led value included. Ensembl VEP's \
+         two-argument `open` (`BaseVEP.pm:644`) reads `-` as standard input, trims the \
+         whitespace, and opens a `>`-led value for writing, emptying the file it names and \
+         reading an empty table. A value Perl reads as false leaves the flag unset there, so \
+         the cache's own file is read (`CacheDir.pm:254`).\n\n",
     );
 
     out.push_str("## Configuration sources\n\n");

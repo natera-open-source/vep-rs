@@ -447,6 +447,42 @@ fn a_span_past_the_last_base_is_skipped_with_the_fastas_refusal() {
     );
 }
 
+/// A version-less accession names no FASTA record: the genomic resolver looks the
+/// whole name up, in any letter case, among the records and their aliases
+/// (`record_name` in vep-fasta, the synonym table's `NC_000021.9` among them), so
+/// `NC_000021:g.30282169C>A` is skipped with the FASTA's refusal and writes no
+/// row, while `NC_000021.9:g.30282169C>A` annotates as `21:30282169 A`. Ensembl
+/// VEP 116.2 fetches the slice through `fetch_by_region('chromosome',
+/// $reference) || fetch_by_region(undef, $reference)`
+/// (`VariationFeatureAdaptor.pm:1889`), whose synonym lookup retries the name as
+/// a prefix (`SliceAdaptor.pm:2870-2884`, `"$escaped_seq_region_name%"`), so there
+/// the version-less notation annotates as the versioned one does.
+/// `docs/divergences/spdi-input.md` states the difference.
+#[test]
+fn a_version_less_accession_is_skipped_with_the_fastas_refusal() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write(
+        dir.path(),
+        "accession.hgvs",
+        "NC_000021:g.30282169C>A\nNC_000021.9:g.30282169C>A\n",
+    );
+    let out = dir.path().join("accession.txt");
+    let rows = annotate(dir.path(), &input, &out, &["--format", "hgvs"]);
+    assert!(!rows.is_empty());
+    for row in &rows {
+        assert!(
+            row.starts_with("NC_000021.9:g.30282169C>A\t21:30282169\tA\t"),
+            "{row}"
+        );
+    }
+    let warnings = std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap();
+    assert_eq!(
+        warnings,
+        "WARNING: line 1 skipped (NC_000021:g.30282169C>A): Unable to parse HGVS notation \
+         'NC_000021:g.30282169C>A': The reference FASTA has no sequence named NC_000021\n"
+    );
+}
+
 /// A notation whose alternate names no bases builds a feature with the reference
 /// alone: `21:g.30282172DUP` under `--lookup_ref` keeps `get_hgvs_alleles`'s `-`
 /// (`_hgvs_from_components` tests `/dup/` in lower case only,
@@ -523,8 +559,21 @@ fn placed_by_name(rows: &[String]) -> BTreeMap<&str, (&str, &str, &str)> {
 /// `TCA/GGa` and `TCA/TCg`, the `original_allele_string` the trim records
 /// (:1008) before the upper-casing. Without `--minimal` the same-length
 /// `TCA>TCg` prints its upper-cased working pair, `TCA/TCG`, since no trim
-/// records the pair as built, and the indel `TCA>TC` prints `TCA/TC`, recorded
-/// by the trim every indel goes through (:862-881).
+/// records the pair as built, and the indels `TCA>TC` and `TCA>TG` print
+/// `TCA/TC` and `TCA/TG`, recorded by the trim every indel goes through
+/// (:862-881), which places `TCA>TG` as `G` over `21:30282169-30282170` with or
+/// without the flag.
+///
+/// `TCA>TG`, whose first trim leaves `CA/G` with the lengths still unequal, is
+/// where the engines part: Ensembl VEP's second pass (:881, `$vf =
+/// ${$self->minimise_alleles([$vf])}[0] if $is_non_minimised_indel;`) reads the
+/// trimmed string as the uploaded one, since only the VCF parser sets
+/// `nontrimmed_allele_string` (Parser/VCF.pm:343) and the HGVS parser hands its
+/// records to the same `post_process_vfs` (Parser/HGVS.pm:248), so there
+/// `UPLOADED_ALLELE` prints `CA/G` (OutputFactory.pm:1360), the value Ensembl
+/// VEP prints for the identical feature built from the Ensembl-format record
+/// `21 30282168 30282170 TCA/TG +`; here it prints `TCA/TG`, the string as
+/// parsed, and `docs/divergences/region-input.md` states the difference.
 #[test]
 fn minimal_trims_a_notation_in_its_written_case() {
     let dir = tempfile::tempdir().unwrap();
@@ -532,7 +581,7 @@ fn minimal_trims_a_notation_in_its_written_case() {
         dir.path(),
         "minimal.hgvs",
         "21:g.30282168_30282170TCA>TCG\n21:g.30282168_30282170delinsGGa\n\
-         21:g.30282168_30282170TCA>TCg\n",
+         21:g.30282168_30282170TCA>TCg\n21:g.30282168_30282170TCA>TG\n",
     );
     let out = dir.path().join("minimal.txt");
     let rows = annotate(
@@ -556,12 +605,23 @@ fn minimal_trims_a_notation_in_its_written_case() {
                 "21:g.30282168_30282170TCA>TCg",
                 ("21:30282170", "G", "TCA/TCg")
             ),
+            (
+                "21:g.30282168_30282170TCA>TG",
+                ("21:30282169-30282170", "G", "TCA/TG")
+            ),
         ])
+    );
+    assert!(
+        rows.iter()
+            .filter(|row| name(row) == "21:g.30282168_30282170TCA>TG")
+            .all(|row| row.contains("MINIMISED=1")),
+        "{rows:?}"
     );
     let input = write(
         dir.path(),
         "plain.hgvs",
-        "21:g.30282168_30282170TCA>TCg\n21:g.30282168_30282170TCA>TC\n",
+        "21:g.30282168_30282170TCA>TCg\n21:g.30282168_30282170TCA>TC\n\
+         21:g.30282168_30282170TCA>TG\n",
     );
     let rows = annotate(
         dir.path(),
@@ -580,8 +640,37 @@ fn minimal_trims_a_notation_in_its_written_case() {
                 "21:g.30282168_30282170TCA>TC",
                 ("21:30282170", "-", "TCA/TC")
             ),
+            (
+                "21:g.30282168_30282170TCA>TG",
+                ("21:30282169-30282170", "G", "TCA/TG")
+            ),
         ])
     );
+}
+
+/// `docs/divergences/region-input.md` states the `UPLOADED_ALLELE` difference
+/// `minimal_trims_a_notation_in_its_written_case` shows on `TCA>TG`: under
+/// `--minimal` Ensembl VEP prints the trimmed `CA/G` and vep-rs the parsed
+/// `TCA/TG`, in every input format but VCF.
+#[test]
+fn region_input_page_states_the_minimal_uploaded_allele_difference() {
+    let page = std::fs::read_to_string(format!(
+        "{}/../../docs/divergences/region-input.md",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap()
+    .split_whitespace()
+    .collect::<Vec<_>>()
+    .join(" ");
+    for sentence in [
+        "An Ensembl-format, HGVS, SPDI or identifier record behaves the same way: its parser hands \
+         the record to the same pass (`Parser/HGVS.pm` line 248, `Parser/SPDI.pm` line 204, \
+         `Parser/ID.pm` line 196, `Parser/VEP_input.pm` line 167) and sets no untrimmed string.",
+        "for `21:g.30282168_30282170TCA>TG`, the same feature built from a notation, `CA/G` and \
+         `TCA/TG`, both `MINIMISED=1`, and without `--minimal` both engines print `TCA/TG`",
+    ] {
+        assert!(page.contains(sentence), "region-input.md lacks {sentence:?}");
+    }
 }
 
 /// The span a genomic notation describes must be shorter than `--max_sv_size`
