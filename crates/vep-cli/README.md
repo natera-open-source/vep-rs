@@ -28,11 +28,13 @@ data line is appended to the current `LineBatch` with its line number, and the f
 a new chromosome asks a helper thread to warm that chromosome's transcript index and the next
 one in the input's tabix contig order. The coordinator, the calling thread, has the batch's
 lines parsed on the pool, by its streaming tasks or as one pass of the batched mode (both
-below): `parse_vcf_line_with` routes the record through `vep-core`'s structural-variant
-rules (a `<CNV:TR>` record expanded to explicit alleles when a FASTA is given) and splits
-a sequence record into one `InputVariant` per alternate allele, alleles trimmed, a
-bi-allelic record's from both ends under `--minimal`; the record then passes the
-reference checks of `validate`, after which `split_minimal_record` trims each allele of a
+below): `parse_data_line` reads the record once (its columns, its `INFO` view and its
+tandem-repeat warnings), routes it through `vep-core`'s structural-variant rules (a
+`<CNV:TR>` record expanded to explicit alleles when a FASTA is given) and splits a sequence
+record into one `InputVariant` per alternate allele, alleles trimmed, a bi-allelic record's
+from both ends under `--minimal`; the record then passes the checks of `validate`, its
+deletion test reading the record's parsed `INFO` (the view, or a copy of the column for a
+line that is not UTF-8), after which `split_minimal_record` trims each allele of a
 multi-allelic record under `--minimal`. Under `--check_frequency` the coordinator
 co-locates the batch first and `frequency_filter` drops each allele and record that the
 population's frequencies rule out, as Ensembl VEP's variation source filters its buffer

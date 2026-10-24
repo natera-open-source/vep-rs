@@ -27,11 +27,11 @@ use vep_core::sv_span::deletion_looks_incomplete;
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{classify_variant, InputVariant};
 use vep_core::variation::{perl_number_string, perl_numeric};
-use vep_core::vcf_info::info_value_written;
 use vep_fasta::IndexedFasta;
 
 use crate::pipeline::{Reported, SkipSink};
 use crate::transcript_index::LazyTranscriptIndexes;
+use crate::vcf_parser::RecordInfo;
 
 /// The reference-sequence checks of a run and the `--chr` list.
 pub(crate) struct ReferenceChecks<'a> {
@@ -195,12 +195,12 @@ pub(crate) struct SkipRules<'a> {
 }
 
 /// The input record as the skip rules read it: `number` Ensembl VEP's count of
-/// the records read, `columns` the VCF columns (INFO complete for a structural
-/// record; `None` for a format the reader does not split) and `quoted` the
-/// bytes a skip warning quotes.
-pub(crate) struct RecordLine<'a> {
+/// the records read, `info` the record's INFO column as the VCF reader parsed
+/// it (`None` for a format with no INFO column) and `quoted` the bytes a skip
+/// warning quotes.
+pub(crate) struct RecordLine<'a, 'i> {
     pub number: u64,
-    pub columns: Option<&'a [u8]>,
+    pub info: Option<&'a RecordInfo<'i>>,
     pub quoted: &'a [u8],
 }
 
@@ -323,7 +323,7 @@ impl SkipRules<'_> {
     pub(crate) fn validate(
         &self,
         first: &mut InputVariant,
-        line: &RecordLine<'_>,
+        line: &RecordLine<'_, '_>,
         report: &mut SkipSink<'_>,
     ) -> (bool, AllelePatch) {
         let mut patch = AllelePatch {
@@ -361,7 +361,7 @@ impl SkipRules<'_> {
                 Some(term) => term.clone(),
                 None => sv_type_string(joined_alts, svtype),
             };
-            incomplete = incomplete_deletion(first, &so_term, line.columns);
+            incomplete = incomplete_deletion(first, &so_term, line.info);
             if incomplete {
                 skip("deletion looks incomplete");
             }
@@ -700,33 +700,33 @@ fn without_dashes(allele: &[u8]) -> Vec<u8> {
 
 /// Parser/VCF.pm:555: a VCF record whose type reads as a deletion (`/del/i` on the
 /// term `so_term`) is incomplete when its start lies past its end or its INFO
-/// carries neither SVLEN nor END; the INFO is read from the line when the reader
-/// kept it, and a line that stops before INFO carries neither key. The test is the
-/// VCF parser's alone: a record of another format (`line` is `None`) carries no
+/// carries neither SVLEN nor END, read from the column as the reader parsed it
+/// (`info`); a line that stops before INFO carries neither key. The test is the
+/// VCF parser's alone: a record of another format (`info` is `None`) carries no
 /// INFO and Ensembl VEP's other parsers make no such test (Parser/VEP_input.pm:136-148
 /// builds a structural feature from a `DEL` word as written).
-fn incomplete_deletion(variant: &InputVariant, so_term: &str, line: Option<&[u8]>) -> bool {
-    let Some(line) = line else {
+fn incomplete_deletion(
+    variant: &InputVariant,
+    so_term: &str,
+    info: Option<&RecordInfo<'_>>,
+) -> bool {
+    let Some(info) = info else {
         return false;
     };
-    let info = line
-        .split(|&b| b == b'\t')
-        .nth(7)
-        .map(String::from_utf8_lossy);
-    let (svlen_text, end_text) = match info.as_deref() {
-        Some(info) => (
-            info_value_written(info, "SVLEN"),
-            info_value_written(info, "END"),
-        ),
-        None => (None, None),
-    };
-    deletion_looks_incomplete(so_term, variant.start, variant.end, svlen_text, end_text)
+    deletion_looks_incomplete(
+        so_term,
+        variant.start,
+        variant.end,
+        info.value_written("SVLEN"),
+        info.value_written("END"),
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::pipeline::report_to;
+    use crate::vcf_parser::{parse_data_line, VcfParse};
     use crate::warnings::{Sink, Target};
     use std::path::Path;
 
@@ -778,7 +778,7 @@ mod tests {
         sink.configure(Target::File(path.clone()), true, false);
         let line = RecordLine {
             number: 7,
-            columns: None,
+            info: None,
             quoted: b"21\t100\tr1\tA\tG\t.\t.\t.",
         };
         let mut report = |reported: Reported<'_>| report_to(&sink, reported);
@@ -1483,15 +1483,19 @@ mod tests {
         );
     }
 
-    /// The incomplete-deletion test is the VCF parser's (Parser/VCF.pm:555-558): a
-    /// `<DEL>` line with neither SVLEN nor END, or with an END at POS, is incomplete,
-    /// one with an END past POS is not, and a line that stops before INFO carries
-    /// neither key; a deletion of another format (`columns` None), an Ensembl-format
-    /// `21 30165851 30165850 DEL + x` whose start is its end plus one, is never
-    /// incomplete, since Ensembl VEP 116.2 annotates it (`feature_truncation` on
-    /// ENST00000286808) and Parser/VEP_input.pm:136-148 makes no such test.
+    /// The incomplete-deletion test is the VCF parser's (Parser/VCF.pm:555-558),
+    /// read from the INFO column as the reader parsed the record: a `<DEL>` line
+    /// with neither SVLEN nor END, or with an END at POS, is incomplete, one with
+    /// an END past POS is not, a line that stops before INFO carries neither key,
+    /// and the column copied out of a line read through a replacement copy
+    /// answers as the parse's view does. A deletion of another format (`info`
+    /// None), an Ensembl-format `21 30165851 30165850 DEL + x` whose start is its
+    /// end plus one, is never incomplete, since Ensembl VEP 116.2 annotates it
+    /// (`feature_truncation` on ENST00000286808) and Parser/VEP_input.pm:136-148
+    /// makes no such test.
     #[test]
     fn the_incomplete_deletion_test_reads_a_vcf_line_alone() {
+        let parse = VcfParse::default_run(false);
         let mut deletion = variant("21", 30165851, 30165851, "N", "<DEL>");
         deletion.is_structural = true;
         let line = |info: &str| format!("21\t30165850\tx\tN\t<DEL>\t.\t.\t{info}");
@@ -1501,22 +1505,32 @@ mod tests {
             ("deletion", "SVLEN=-1", false),
             ("duplication", "SVTYPE=DUP", false),
         ] {
-            assert_eq!(
-                incomplete_deletion(&deletion, so_term, Some(line(info).as_bytes())),
-                incomplete,
-                "{so_term} {info}"
-            );
+            let text = line(info);
+            let split = parse_data_line(&text, &parse);
+            assert!(matches!(split.info, Some(RecordInfo::Split(_))));
+            let copied = parse_data_line(&text, &parse).with_info_copied(&text);
+            assert!(matches!(copied.info, Some(RecordInfo::Copied(_))));
+            for record in [&split, &copied] {
+                assert_eq!(
+                    incomplete_deletion(&deletion, so_term, record.info.as_ref()),
+                    incomplete,
+                    "{so_term} {info}"
+                );
+            }
         }
+        let short = parse_data_line("21\t30165850\tx\tN\t<DEL>", &parse);
         assert!(incomplete_deletion(
             &deletion,
             "deletion",
-            Some(b"21\t30165850\tx\tN\t<DEL>")
+            short.info.as_ref()
         ));
         let pair = variant("21", 30165851, 30165850, "N", "<DEL>");
+        let end_at_pos_text = line("END=30165850");
+        let end_at_pos = parse_data_line(&end_at_pos_text, &parse);
         assert!(incomplete_deletion(
             &pair,
             "deletion",
-            Some(line("END=30165850").as_bytes())
+            end_at_pos.info.as_ref()
         ));
         assert!(!incomplete_deletion(&pair, "deletion", None));
         assert!(!incomplete_deletion(&deletion, "deletion", None));

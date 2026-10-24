@@ -1617,7 +1617,7 @@ fn read_parsed(
                     let quoted = last_line_read(last_line);
                     let line = RecordLine {
                         number: parser.record_line_number().unwrap_or(record_count),
-                        columns: None,
+                        info: None,
                         quoted: &quoted,
                     };
                     let (kept, patch) = rules.validate(&mut variant, &line, &mut report);
@@ -2276,7 +2276,7 @@ fn retain_alleles(units: &mut Vec<Unit>, variants: &mut Vec<InputVariant>, keep:
 }
 
 /// The record parsed from one data line; `None` for a passthrough item.
-type ParsedLine = Option<ParsedRecord>;
+type ParsedLine<'a> = Option<ParsedRecord<'a>>;
 
 /// What every data line of a run is parsed with.
 #[derive(Clone, Copy)]
@@ -2292,12 +2292,17 @@ impl LineParse<'_> {
     /// carrying the line as the JSON `input` prints it when the run captures
     /// lines, and the line's bytes when the line is not UTF-8, for the VCF output
     /// to write as read.
-    fn parse(&self, line: &[u8]) -> ParsedRecord {
+    fn parse<'l>(&self, line: &'l [u8]) -> ParsedRecord<'l> {
         // The parser reads text: a line that is not UTF-8 is read with each invalid
         // sequence replaced, so its identifiers and INFO values may print the
-        // replacement character where Ensembl VEP prints the bytes.
+        // replacement character where Ensembl VEP prints the bytes. That copy ends
+        // here, so the record's INFO view over it is replaced by a copy of the
+        // column.
         let text = String::from_utf8_lossy(line);
-        let mut record = parse_data_line(&text, &self.parse);
+        let mut record = match &text {
+            Cow::Borrowed(text) => parse_data_line(text, &self.parse),
+            Cow::Owned(text) => parse_data_line(text, &self.parse).with_info_copied(text),
+        };
         let Ok(alleles) = &mut record.alleles else {
             return record;
         };
@@ -2341,7 +2346,7 @@ fn parse_lines(
         individuals,
     } = lines;
     let line_parse = c.line_parse(individuals.as_deref());
-    let parsed: Vec<ParsedLine> = c.pool.install(|| {
+    let parsed: Vec<ParsedLine<'_>> = c.pool.install(|| {
         items
             .par_iter()
             .map(|item| match item {
@@ -2392,7 +2397,7 @@ fn parse_lines(
 /// cannot diverge.
 fn place_parsed_line(
     item: &Item,
-    record: ParsedRecord,
+    record: ParsedRecord<'_>,
     text: &[u8],
     rules: &SkipRules<'_>,
     units: &mut Vec<Unit>,
@@ -2407,14 +2412,19 @@ fn place_parsed_line(
     else {
         unreachable!("a passthrough item has no parse");
     };
+    let ParsedRecord {
+        alleles,
+        warnings,
+        info,
+    } = record;
     // Ensembl VEP's tandem-repeat branch writes its warnings as it reads the record
     // (Parser/VCF.pm:502-527), before `validate_vf` runs and before any refusal, so
     // they are reported ahead of the parse result, through the same path as the
     // record's skips, and keep record order.
-    for warning in &record.warnings {
+    for warning in &warnings {
         report(Reported::Warning(warning));
     }
-    match record.alleles {
+    match alleles {
         Ok(mut alleles) => {
             for variant in &mut alleles {
                 variant.input_record = *line_number;
@@ -2423,7 +2433,7 @@ fn place_parsed_line(
             }
             let line = RecordLine {
                 number: *line_number,
-                columns: Some(&text[span.clone()]),
+                info: info.as_ref(),
                 quoted: &text[quoted.clone()],
             };
             // Each individual's copy of the record is a feature of its own:
@@ -3241,7 +3251,7 @@ fn write_stage(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vcf_parser::parse_vcf_line;
+    use crate::vcf_parser::{parse_vcf_line, RecordInfo};
     use std::io::{BufReader, Cursor};
 
     /// Which parser refusals the `--chr` list silences: every refusal of an
@@ -4175,6 +4185,92 @@ mod tests {
                     Some(unknown_chr.to_string())
                 ),
                 (parse_error, 8, Some(malformed.to_string())),
+            ]
+        );
+    }
+
+    /// A line that is not UTF-8 is parsed through a copy with its invalid bytes
+    /// replaced, which ends with the parse, so its record carries a copy of its
+    /// INFO column in place of the parse's view and the skip rules read either
+    /// alike: a `<DEL>` with neither SVLEN nor END is skipped as
+    /// `deletion looks incomplete` (Parser/VCF.pm:555-558) whether or not its ID
+    /// holds a byte that is not UTF-8, and one with an END is kept.
+    #[test]
+    fn a_line_that_is_not_utf8_carries_its_info_column_to_the_skip_rules() {
+        let transcripts = LazyTranscriptIndexes::from_indexes(std::collections::HashMap::from([(
+            "21".to_string(),
+            crate::transcript_index::TranscriptIndex::new(Vec::new(), 5_000, 5_000),
+        )]));
+        let synonyms = ChromosomeSynonyms::new();
+        let rules = SkipRules {
+            transcripts: &transcripts,
+            synonyms: &synonyms,
+            max_sv_size: Some(10_000_000),
+            dont_skip: false,
+            checks: &crate::validate::NO_CHECKS,
+            minimal: false,
+        };
+        let line_parse = LineParse {
+            parse: VcfParse::default_run(false),
+            json_input_join: None,
+        };
+        let mut batch = LineBatch::new(0, LineBuffers::default(), None);
+        batch.push_data(b"21\t100\tx\tN\t<DEL>\t.\t.\tSVTYPE=DEL", b"", None, 1);
+        batch.push_data(b"21\t100\t\xff\tN\t<DEL>\t.\t.\tSVTYPE=DEL", b"", None, 2);
+        batch.push_data(b"21\t100\tx\tN\t<DEL>\t.\t.\tEND=200", b"", None, 3);
+        batch.push_data(b"21\t100\t\xff\tN\t<DEL>\t.\t.\tEND=200", b"", None, 4);
+        let mut units = Vec::new();
+        let mut variants = Vec::new();
+        let mut skips = Vec::new();
+        let mut report = |reported: Reported<'_>| skips.push(reported.owned());
+        for item in &batch.items {
+            let Item::Data { span, .. } = item else {
+                unreachable!("every item is a data line");
+            };
+            let line = &batch.text[span.clone()];
+            let record = line_parse.parse(line);
+            assert_eq!(
+                matches!(record.info, Some(RecordInfo::Copied(_))),
+                std::str::from_utf8(line).is_err(),
+                "{span:?}"
+            );
+            place_parsed_line(
+                item,
+                record,
+                &batch.text,
+                &rules,
+                &mut units,
+                &mut variants,
+                &mut report,
+            )
+            .unwrap();
+        }
+        let skipped: Vec<(String, u64)> = skips
+            .iter()
+            .filter_map(|skip| match skip {
+                SkipReport::Skip {
+                    description,
+                    line_number,
+                    ..
+                } => Some((description.clone(), *line_number)),
+                SkipReport::Warning(_) => None,
+            })
+            .collect();
+        assert_eq!(
+            skipped,
+            [
+                ("deletion looks incomplete".to_string(), 1),
+                ("deletion looks incomplete".to_string(), 2),
+            ]
+        );
+        assert_eq!(
+            variants
+                .iter()
+                .map(|v| (v.input_record, v.id.clone()))
+                .collect::<Vec<_>>(),
+            [
+                (3, Some("x".to_string())),
+                (4, Some("\u{FFFD}".to_string()))
             ]
         );
     }

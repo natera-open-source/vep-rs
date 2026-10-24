@@ -31,7 +31,7 @@ use vep_core::sv_span::{structural_end, structural_start, SpanClass, SpanError};
 use vep_core::variant::{
     first_vcf_id, id_names_record, so_variation_class, InputVariant, VariantClass,
 };
-use vep_core::vcf_info::InfoFields;
+use vep_core::vcf_info::{info_value_written, InfoFields};
 use vep_fasta::IndexedFasta;
 
 use crate::individuals::{add_reference_allele_row, RecordAlleles, RecordReading};
@@ -120,27 +120,67 @@ pub fn parse_vcf_line_with(line: &str, parse: &VcfParse<'_>) -> anyhow::Result<V
 }
 
 /// What the reader gets from one data line: the record's alleles, or the parse
-/// error Ensembl VEP reports as a refused record, and the warnings Ensembl VEP's
+/// error Ensembl VEP reports as a refused record, the warnings Ensembl VEP's
 /// tandem-repeat branch writes as it reads the record (Parser/VCF.pm:502-527),
 /// ahead of `validate_vf` and of any refusal, so the reader reports them before
-/// the alleles' skips.
-pub(crate) struct ParsedRecord {
+/// the alleles' skips, and the record's INFO column for the lookups the skip
+/// rules make on it after the parse (`None` for a line of fewer than five
+/// columns, which has no record).
+pub(crate) struct ParsedRecord<'a> {
     pub alleles: anyhow::Result<Vec<InputVariant>>,
     pub warnings: Vec<String>,
+    pub info: Option<RecordInfo<'a>>,
+}
+
+/// One parsed record's INFO column, read after the parse by the skip rules.
+pub(crate) enum RecordInfo<'a> {
+    /// The view the parse split, borrowing the line.
+    Split(InfoFields<'a>),
+    /// The column copied out of a line the parser read through a copy with its
+    /// invalid UTF-8 replaced ([`ParsedRecord::with_info_copied`]).
+    Copied(String),
+}
+
+impl RecordInfo<'_> {
+    /// The value of `key` when the column writes it `key=value`
+    /// ([`InfoFields::value_written`]), a copied column scanned for the one key.
+    pub(crate) fn value_written(&self, key: &str) -> Option<&str> {
+        match self {
+            RecordInfo::Split(fields) => fields.value_written(key),
+            RecordInfo::Copied(text) => info_value_written(text, key),
+        }
+    }
+}
+
+impl ParsedRecord<'_> {
+    /// The record with its INFO column copied out of `line`, the text it was
+    /// parsed from, in place of the view over that text: for a reader whose
+    /// text ends before the skip rules read the record.
+    pub(crate) fn with_info_copied<'b>(self, line: &str) -> ParsedRecord<'b> {
+        ParsedRecord {
+            alleles: self.alleles,
+            warnings: self.warnings,
+            info: vcf_columns(line)
+                .ok()
+                .map(|columns| RecordInfo::Copied(columns.fixed[7].to_string())),
+        }
+    }
 }
 
 /// One data line read once: its columns split once, its INFO column split by the
 /// first lookup and read by every other, the tandem-repeat warnings, then the
 /// record as [`non_variant_record`] reads a line whose first ALT is `.`
-/// ([`vcf_line_is_non_variant`]) and as [`parse_vcf_line_with`] reads any other.
-/// A line of fewer than five columns is the parse error alone.
-pub(crate) fn parse_data_line(line: &str, parse: &VcfParse<'_>) -> ParsedRecord {
+/// ([`vcf_line_is_non_variant`]) and as [`parse_vcf_line_with`] reads any other,
+/// the INFO view carried with the record. A line of fewer than five columns is
+/// the parse error alone.
+pub(crate) fn parse_data_line<'a>(line: &'a str, parse: &VcfParse<'_>) -> ParsedRecord<'a> {
     let columns = match vcf_columns(line) {
         Ok(columns) => columns,
         Err(error) => {
             return ParsedRecord {
                 alleles: Err(error),
                 warnings: Vec::new(),
+                info: None,
             }
         }
     };
@@ -151,7 +191,11 @@ pub(crate) fn parse_data_line(line: &str, parse: &VcfParse<'_>) -> ParsedRecord 
     } else {
         parse_columns(&columns, &info, line, parse)
     };
-    ParsedRecord { alleles, warnings }
+    ParsedRecord {
+        alleles,
+        warnings,
+        info: Some(RecordInfo::Split(info)),
+    }
 }
 
 /// [`parse_vcf_line_with`] over the line's columns and INFO view.
@@ -6071,6 +6115,16 @@ mod tests {
         );
         assert_eq!(record.warnings, line_warnings(tandem, false));
         assert_eq!(record.warnings.len(), 2);
+        let info = record.info.as_ref().unwrap();
+        assert_eq!(info.value_written("SVLEN"), Some("9,6"));
+        assert_eq!(info.value_written("END"), None);
+        let copied = parse_data_line(tandem, &parse).with_info_copied(tandem);
+        let info = copied.info.as_ref().unwrap();
+        assert!(
+            matches!(info, RecordInfo::Copied(column) if column == "SVLEN=9,6;RN=1,1;RUS=TCA,TCA;RUC=4,2")
+        );
+        assert_eq!(info.value_written("SVLEN"), Some("9,6"));
+        assert_eq!(info.value_written("END"), None);
         let refused = parse_data_line(
             "21\tbad\tx\tG\t<CNV:TR>\t.\t.\tSVLEN=9;RN=1;RUS=TCA;RUC=4",
             &parse,
@@ -6098,12 +6152,18 @@ mod tests {
                 "{line}"
             );
         }
-        let short = parse_data_line("21\t100\tx\tTG", &parse);
+        let short = "21\t100\tx\tTG";
+        let record = parse_data_line(short, &parse);
+        assert!(record.warnings.is_empty());
+        assert!(record.info.is_none());
         assert_eq!(
-            short.alleles.unwrap_err().to_string(),
+            record.alleles.unwrap_err().to_string(),
             "VCF line has fewer than 5 fields"
         );
-        assert!(short.warnings.is_empty());
+        assert!(parse_data_line(short, &parse)
+            .with_info_copied(short)
+            .info
+            .is_none());
     }
 
     /// `Parser/VCF.pm:259` tests the first comma-separated ALT alone (ensembl-io
