@@ -62,10 +62,11 @@ fn run(argv: Vec<OsString>) -> i32 {
         }
     };
 
-    // vep:32 warns before anything else and whatever --quiet says.
+    // vep:32 warns before anything else and whatever --quiet says; its line
+    // ends with a space before the newline.
     if let [_, .., last] = parsed.args.output_file.as_slice() {
         eprintln!(
-            "WARNING: More than one output file command-line flag provided. Using the last value provided: '{last}'"
+            "WARNING: More than one output file command-line flag provided. Using the last value provided: '{last}' "
         );
     }
 

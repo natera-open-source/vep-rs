@@ -481,9 +481,10 @@ fn lower_case_alleles_annotate_as_upper_case() {
 /// of Ensembl VEP's `skip_empty_lines` (Parser.pm:284), whose line is
 /// `$ln - $skipped + 1` (`:287`): `line_number` advances once per empty line
 /// read past (`:273-277`), so the number is the first empty line's place in a
-/// count that takes the empty lines as records, here 2 after one record.
-/// Ensembl VEP's own Ensembl-format parser dies on such a line
-/// (Parser/VEP_input.pm:136). A `#` line is read past without a warning.
+/// count that takes the empty lines as records, here 3 after a `#` line and one
+/// record. Ensembl VEP's own Ensembl-format parser dies on such a line
+/// (Parser/VEP_input.pm:136). A `#` line is read past without a warning and
+/// counted, as Ensembl VEP counts the record it reads there (`:119`).
 #[test]
 fn empty_lines_are_skipped_with_a_warning() {
     let dir = tempfile::tempdir().unwrap();
@@ -503,7 +504,7 @@ fn empty_lines_are_skipped_with_a_warning() {
     assert!(output.status.success(), "{}", stderr(&output));
     let warnings = stderr(&output);
     assert!(
-        warnings.contains("Skipped 2 empty lines from line 2"),
+        warnings.contains("Skipped 2 empty lines from line 3"),
         "{warnings}"
     );
     assert_eq!(warnings.matches("Skipped").count(), 1, "{warnings}");
@@ -732,4 +733,55 @@ fn tandem_notation_allele_gets_its_expanded_spdi() {
             "{row}"
         );
     }
+}
+
+/// A `#` line counts toward the line numbers that follow, as Ensembl VEP
+/// counts the record it reads there: ensembl-io's VEP_input parser has no
+/// metadata lines (VEP_input.pm:61, `sub is_metadata { return; }`), so
+/// `create_VariationFeatures` numbers the line (Parser/VEP_input.pm:119,
+/// `$self->line_number($self->line_number + 1);`) and reads its columns as a
+/// record. For `#chr start end allele strand id`, a record and
+/// `21 1 20000000 C/A 1 big`, Ensembl VEP 116.2 writes `WARNING: line 1 skipped
+/// (#chr start end allele strand id): allele is not a supported structural
+/// variant type`, `WARNING: line 1 skipped (#chr start end allele strand id):
+/// Invalid start 'start' or end 'end' coordinate` and `WARNING: line 3 skipped
+/// (21 1 20000000 C/A 1 big): variant size (19999999) is bigger than
+/// --max_sv_size (10000000)`; here the `#` line is a comment, passed over
+/// without a word, and the third line is line 3 all the same.
+#[test]
+fn a_hash_line_counts_toward_the_line_numbers() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write(
+        dir.path(),
+        "hash.txt",
+        &format!(
+            "#chr\tstart\tend\tallele\tstrand\tid\n{}\n21\t1\t20000000\tC/A\t1\tbig\n",
+            ENSEMBL_RECORDS.lines().next().unwrap()
+        ),
+    );
+    let out = output_path(dir.path());
+    let output = vep(
+        dir.path(),
+        &input,
+        &out,
+        &["--format", "ensembl", "--warning_file", "STDERR"],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        stderr(&output)
+            .lines()
+            .filter(|l| l.starts_with("WARNING"))
+            .collect::<Vec<_>>(),
+        ["WARNING: line 3 skipped (21 1 20000000 C/A 1 big): variant size (19999999) is bigger than --max_sv_size (10000000)"]
+    );
+    let plain = write(dir.path(), "plain.txt", ENSEMBL_RECORDS);
+    let plain_rows = annotate(dir.path(), &plain, &["--format", "ensembl"]);
+    let snv = |rows: &[String]| -> Vec<String> {
+        rows.iter()
+            .filter(|r| r.starts_with("snv_fwd\t"))
+            .cloned()
+            .collect()
+    };
+    assert!(!snv(&plain_rows).is_empty());
+    assert_eq!(snv(&rows(&out)), snv(&plain_rows));
 }

@@ -37,11 +37,14 @@
 //! [`IoError::SkippedLine`] carrying that text and the exception's message on one
 //! line, for the caller to warn about and skip. The record is named by
 //! the notation as written without its whitespace (`:237, 242`), which is what
-//! `Uploaded_variation`, the JSON `id` and the JSON `input` print. Ensembl
-//! VEP's list parser has no comment lines, so a `#` line is a notation it
-//! cannot parse and warns about; here a `#` line is a comment, and an empty or
-//! whitespace-only line is counted for the caller's `skip_empty_lines`
-//! warning.
+//! `Uploaded_variation`, the JSON `id` and the JSON `input` print. The lines
+//! are numbered as Ensembl VEP numbers them (`LineCount`): a line with no
+//! word character is an empty line, warned about in `skip_empty_lines`'s words
+//! and counted (Parser.pm:273), and any other `#` line is a comment here,
+//! counted toward the line numbers that follow and otherwise passed over
+//! without a word, where ensembl-io's list parser has no comment lines
+//! (ListBasedParser.pm:60) and Ensembl VEP warns about the notation it cannot
+//! parse (`:204-216`).
 
 mod components;
 pub mod genomic;
@@ -55,7 +58,10 @@ use vep_core::variant::InputVariant;
 
 use crate::error::IoError;
 
-use super::{is_perl_space, InputParser, ParserContext, ReferenceSequence, TranscriptSource};
+use super::{
+    has_word_character, is_perl_space, InputParser, LineCount, ParserContext, ReferenceSequence,
+    TranscriptSource,
+};
 use components::ReadFlags;
 
 /// Parser for HGVS notation input.
@@ -76,9 +82,10 @@ pub struct HgvsParser<R: BufRead> {
     /// the span being end minus start), `None` for no bound.
     max_sv_size: Option<u64>,
     line_buf: Vec<u8>,
-    /// Empty lines read since the last [`InputParser::take_empty_lines`].
-    empty_lines: u64,
-    /// Warnings since the last [`InputParser::take_warnings`].
+    /// Ensembl VEP's line number over the lines read, and the empty-line
+    /// warnings it raises.
+    lines: LineCount,
+    /// The notations' own warnings since the last [`InputParser::take_warnings`].
     warnings: Vec<String>,
 }
 
@@ -98,7 +105,7 @@ impl<R: BufRead> HgvsParser<R> {
             },
             max_sv_size: context.max_sv_size,
             line_buf: Vec::new(),
-            empty_lines: 0,
+            lines: LineCount::default(),
             warnings: Vec::new(),
         }
     }
@@ -395,31 +402,39 @@ impl<R: BufRead + Send> InputParser for HgvsParser<R> {
         loop {
             self.line_buf.clear();
             match self.reader.read_until(b'\n', &mut self.line_buf) {
-                Ok(0) => return None,
+                Ok(0) => {
+                    self.lines.end_of_input();
+                    return None;
+                }
                 Ok(_) => {}
                 Err(e) => return Some(Err(IoError::Io(e))),
             }
             let text = String::from_utf8_lossy(&self.line_buf);
+            // `skip_empty_lines` reads a line with no word character past, a
+            // bare `#` included (Parser.pm:273), before the parser sees it.
+            if !has_word_character(&text) {
+                self.lines.empty_line();
+                continue;
+            }
+            self.lines.record_line();
             if text.starts_with('#') {
                 continue;
             }
             // `s/\s+//g` (Parser/HGVS.pm:156): the line end goes with every
             // other blank.
             let hgvs: String = text.chars().filter(|c| !is_perl_space(*c)).collect();
-            if hgvs.is_empty() {
-                self.empty_lines += 1;
-                continue;
-            }
             return Some(self.read_notation(&hgvs));
         }
     }
 
-    fn take_empty_lines(&mut self) -> u64 {
-        std::mem::take(&mut self.empty_lines)
+    fn take_warnings(&mut self) -> Vec<String> {
+        let mut warnings = self.lines.take_warnings();
+        warnings.append(&mut self.warnings);
+        warnings
     }
 
-    fn take_warnings(&mut self) -> Vec<String> {
-        std::mem::take(&mut self.warnings)
+    fn record_line_number(&self) -> Option<u64> {
+        Some(self.lines.line())
     }
 }
 
@@ -592,18 +607,36 @@ mod tests {
     /// record is named by the notation without it, so `21:g.30282169 C>A`
     /// annotates as `21:g.30282169C>A` does and prints that name (Ensembl VEP
     /// 116.2 prints `21:g.30282169C>A` in `Uploaded_variation` for the spaced
-    /// line); a `#` line is passed over and an empty line counted.
+    /// line). Every line counts toward Ensembl VEP's line number
+    /// (Parser/HGVS.pm:151 per record, Parser.pm:275 per empty line): a `#` line
+    /// with a word character is a comment here, counted and passed over without
+    /// a warning, where ensembl-io's list parser reads it as a record
+    /// (ListBasedParser.pm:60) that `fetch_by_hgvs_notation` refuses
+    /// (`:204-216`); a line with no word character, blank or a bare `#`, is an
+    /// empty line (Parser.pm:273), warned about in `skip_empty_lines`'s words
+    /// when its run ends, at the next record or the end of the input (Ensembl
+    /// VEP refuses the format offline, Parser/HGVS.pm:104, so these are its
+    /// source's numbers, not a run's).
     #[test]
     fn whitespace_is_removed_and_the_record_named_by_the_notation() {
-        let mut parser = parser("# a comment\n\n  \n21:g.30282169 C>A\r\n");
+        let mut parser = parser("# a comment\n\n  \n21:g.30282169 C>A\r\n#\n\n");
         let v = parser.next_variant().unwrap().unwrap();
-        assert_eq!(parser.take_empty_lines(), 2);
+        assert_eq!(parser.record_line_number(), Some(4));
+        assert_eq!(
+            parser.take_warnings(),
+            ["Skipped 2 empty lines from line 2"]
+        );
         assert_eq!(v.id.as_deref(), Some("21:g.30282169C>A"));
         assert_eq!(v.raw_input.as_deref(), Some("21:g.30282169C>A"));
         assert_eq!(v.uploaded_variation(), "21:g.30282169C>A");
         assert_eq!(v.variation_name(), "21:g.30282169C>A");
         assert!(v.input_line_name.is_none());
         assert!(parser.next_variant().is_none());
+        assert_eq!(
+            parser.take_warnings(),
+            ["Skipped 2 empty lines from line 5"]
+        );
+        assert_eq!(parser.take_empty_lines(), 0);
     }
 
     /// A notation with a `[` or `]` is skipped with the parser's own warning,

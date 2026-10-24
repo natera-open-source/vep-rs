@@ -109,10 +109,12 @@ pub trait InputParser: Send {
 
     /// Ensembl VEP's line number for the record last yielded, from a parser
     /// whose format counts its lines other than by the records read: the
-    /// identifier parser counts every line of its list, empty lines and names
-    /// the cache lacks included, and gives every mapping of a name the name's
-    /// line (Parser/ID.pm:148, Parser.pm:275). `None` from a parser whose
-    /// records the caller numbers by its own count of them.
+    /// region, Ensembl and HGVS readers count every line of the input, empty
+    /// lines and `#` lines included (`LineCount`), and the identifier parser
+    /// counts every line of its list, names the cache lacks included, and
+    /// gives every mapping of a name the name's line (Parser/ID.pm:148,
+    /// Parser.pm:275). `None` from a parser whose records the caller numbers
+    /// by its own count of them.
     fn record_line_number(&self) -> Option<u64> {
         None
     }
@@ -123,6 +125,74 @@ pub trait InputParser: Send {
 pub fn empty_lines_warning(skipped: u64, from_line: u64) -> String {
     let plural = if skipped > 1 { "s" } else { "" };
     format!("Skipped {skipped} empty line{plural} from line {from_line}")
+}
+
+/// Perl's `/\w+/` on `text`: whether it holds an ASCII letter, digit or `_`.
+/// `skip_empty_lines` reads past a record without one (Parser.pm:273).
+pub(crate) fn has_word_character(text: &str) -> bool {
+    text.chars().any(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Ensembl VEP's line count over a list-based input, kept by the parser that
+/// reads it. `line_number` advances once per record (Parser/Region.pm:167 and
+/// its twins in `Parser/HGVS.pm:151` and `Parser/VEP_input.pm:119`) and once
+/// per empty line read past (Parser.pm:275), so every line of the input
+/// counts, a `#` line included: ensembl-io's list parser has no metadata lines
+/// (ListBasedParser.pm:60, VEP_input.pm:61), so such a line is a record that
+/// builds no feature. A run of empty lines is warned about in
+/// `skip_empty_lines`'s words when the run ends, at the next line that counts
+/// as a record or at the end of the input (Parser.pm:273-290), the warning
+/// naming the run's first line.
+#[derive(Debug, Default)]
+pub(crate) struct LineCount {
+    /// Lines read so far: the number of the last line read.
+    line: u64,
+    /// The run of empty lines the last lines read make up.
+    empty_run: u64,
+    /// The empty-line warnings since the last `take_warnings`, in the order the
+    /// runs ended.
+    warnings: Vec<String>,
+}
+
+impl LineCount {
+    /// An empty line read past.
+    pub(crate) fn empty_line(&mut self) {
+        self.line += 1;
+        self.empty_run += 1;
+    }
+
+    /// A line read as a record, a `#` line included: ends any run of empty
+    /// lines before it.
+    pub(crate) fn record_line(&mut self) {
+        self.end_empty_run();
+        self.line += 1;
+    }
+
+    /// The end of the input: ends a run of empty lines the input closes on.
+    pub(crate) fn end_of_input(&mut self) {
+        self.end_empty_run();
+    }
+
+    /// Warns about the run of empty lines the last lines read make up, when
+    /// there is one, naming the run's first line.
+    fn end_empty_run(&mut self) {
+        if self.empty_run == 0 {
+            return;
+        }
+        let run = std::mem::take(&mut self.empty_run);
+        self.warnings
+            .push(empty_lines_warning(run, self.line - run + 1));
+    }
+
+    /// The number of the last line read, 0 before the first.
+    pub(crate) fn line(&self) -> u64 {
+        self.line
+    }
+
+    /// The empty-line warnings since the last call.
+    pub(crate) fn take_warnings(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.warnings)
+    }
 }
 
 /// A reference genome a parser reads bases from: the run's `--fasta`, which a

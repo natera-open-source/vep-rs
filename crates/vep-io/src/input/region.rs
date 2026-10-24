@@ -32,14 +32,20 @@
 //! through ([`minimise_alleles`]).
 //!
 //! A line the expression does not match, or whose structural class `%SO_TERMS`
-//! lacks, builds no feature in Ensembl VEP (`:171, 206`), which ends its run at
-//! that line; here such a line fails with [`IoError::SkippedLine`], carrying
-//! `get_SO_term`'s warning for the class (Parser.pm:725) or this parser's own
-//! text, for the caller to warn about and skip. A span over `--max_sv_size` is
-//! refused with the text `validate_vf` refuses it with (Parser.pm:491-500)
-//! before its run of `N` is built. A `#` line is a comment, and a line with no
-//! word character counts as empty for the caller's `skip_empty_lines` warning
-//! (Parser.pm:273).
+//! lacks, builds no feature in Ensembl VEP (`:171, 206`), which ends the buffer
+//! fill at that line (InputBuffer.pm:212) and the run itself when the line
+//! opens a fill (Runner.pm:424), the lines after it unread; here such a line
+//! fails with [`IoError::SkippedLine`], carrying `get_SO_term`'s warning for
+//! the class (Parser.pm:725) or this parser's own text, for the caller to warn
+//! about and skip, and the lines after it are read. A span over
+//! `--max_sv_size` is refused with the text `validate_vf` refuses it with
+//! (Parser.pm:491-500) before its run of `N` is built. The lines are numbered
+//! as Ensembl VEP numbers them (`LineCount`): a line with no word character is
+//! an empty line, warned about in `skip_empty_lines`'s words and counted
+//! (Parser.pm:273), and any other `#` line is a comment here, counted toward
+//! the line numbers that follow and otherwise passed over without a word,
+//! where ensembl-io's list parser reads it as a record (ListBasedParser.pm:60)
+//! that the expression refuses, with the consequences above.
 
 use std::io::BufRead;
 
@@ -50,7 +56,9 @@ use vep_core::variant::InputVariant;
 use crate::error::IoError;
 
 use super::ensembl::structural_variant;
-use super::{is_perl_space, minimise_alleles, InputParser, ParserContext};
+use super::{
+    has_word_character, is_perl_space, minimise_alleles, InputParser, LineCount, ParserContext,
+};
 
 /// Parser for region format input, one region per line.
 pub struct RegionParser<R: BufRead> {
@@ -62,8 +70,9 @@ pub struct RegionParser<R: BufRead> {
     /// measured on every sequence record's trimmed alleles.
     minimal: bool,
     line_buf: Vec<u8>,
-    /// Empty lines read since the last [`InputParser::take_empty_lines`].
-    empty_lines: u64,
+    /// Ensembl VEP's line number over the lines read, and the empty-line
+    /// warnings it raises.
+    lines: LineCount,
 }
 
 /// A line's parts as `_valid_region_regex` captures them, each as written.
@@ -85,7 +94,7 @@ impl<R: BufRead> RegionParser<R> {
             max_sv_size: context.max_sv_size,
             minimal: context.minimal,
             line_buf: Vec::new(),
-            empty_lines: 0,
+            lines: LineCount::default(),
         }
     }
 
@@ -284,7 +293,10 @@ impl<R: BufRead + Send> InputParser for RegionParser<R> {
         loop {
             self.line_buf.clear();
             match self.reader.read_until(b'\n', &mut self.line_buf) {
-                Ok(0) => return None,
+                Ok(0) => {
+                    self.lines.end_of_input();
+                    return None;
+                }
                 Ok(_) => {}
                 Err(e) => return Some(Err(IoError::Io(e))),
             }
@@ -297,19 +309,26 @@ impl<R: BufRead + Send> InputParser for RegionParser<R> {
                     .unwrap_or(without_newline),
                 None => &text,
             };
-            if line.starts_with('#') {
+            // `skip_empty_lines` reads a `#` line with no word character past as
+            // an empty line (Parser.pm:273), before the parser sees it.
+            if !has_word_character(line) {
+                self.lines.empty_line();
                 continue;
             }
-            if !line.chars().any(|c| c.is_ascii_alphanumeric() || c == '_') {
-                self.empty_lines += 1;
+            self.lines.record_line();
+            if line.starts_with('#') {
                 continue;
             }
             return Some(self.parse_record(line));
         }
     }
 
-    fn take_empty_lines(&mut self) -> u64 {
-        std::mem::take(&mut self.empty_lines)
+    fn take_warnings(&mut self) -> Vec<String> {
+        self.lines.take_warnings()
+    }
+
+    fn record_line_number(&self) -> Option<u64> {
+        Some(self.lines.line())
     }
 }
 
@@ -682,21 +701,56 @@ mod tests {
         assert_eq!(minimised_span(5, 4, b"NNN", true), 0);
     }
 
-    /// A line with no word character, blank or `-/-`, is an empty line counted
-    /// for the caller's warning (Parser.pm:273); a `#` line is a comment; the `\r`
-    /// of a `\r\n` line end is removed with the `\n`, and a last line without a
-    /// line end is read whole.
+    /// Every line counts toward Ensembl VEP's line number (Parser/Region.pm:167
+    /// per record, Parser.pm:275 per empty line). A line with no word
+    /// character, blank, `-/-` or a bare `#`, is an empty line (Parser.pm:273),
+    /// warned about in `skip_empty_lines`'s words when its run ends, at the
+    /// next record (`:273-290`, the run's first line named) or at the end of
+    /// the input; a `#` line with a word character is a comment, counted and
+    /// passed over without a warning, where ensembl-io's list parser reads it
+    /// as a record (ListBasedParser.pm:60) the expression refuses
+    /// (Parser/Region.pm:171). The `\r` of a `\r\n` line end is removed with
+    /// the `\n`, and a last line without a line end is read whole. Ensembl VEP
+    /// 116.2 numbers `21:14221107-14221107/A`, `# c`, `#`, `  `,
+    /// `21:1-20000000/A` as `Skipped 2 empty lines from line 3` and
+    /// `line 5 skipped`.
     #[test]
-    fn empty_lines_counted_and_hash_lines_skipped() {
-        let mut parser = parser("\n   \n-/-\n# a comment\n21:100-100/G\r\n\n21:200-200/T");
+    fn every_line_is_counted_and_empty_runs_warned() {
+        let mut parser =
+            parser("\n   \n-/-\n# a comment\n21:100-100/G\r\n\n#\n# c\n\n21:200-200/T");
         let first = parser.next_variant().unwrap().unwrap();
         assert_eq!(first.uploaded_variation(), "21:100-100/G");
-        assert_eq!(parser.take_empty_lines(), 3);
+        assert_eq!(parser.record_line_number(), Some(5));
+        assert_eq!(
+            parser.take_warnings(),
+            ["Skipped 3 empty lines from line 1"]
+        );
         let second = parser.next_variant().unwrap().unwrap();
         assert_eq!(second.uploaded_variation(), "21:200-200/T");
-        assert_eq!(parser.take_empty_lines(), 1);
+        assert_eq!(parser.record_line_number(), Some(10));
+        assert_eq!(
+            parser.take_warnings(),
+            [
+                "Skipped 2 empty lines from line 6",
+                "Skipped 1 empty line from line 9"
+            ]
+        );
         assert!(parser.next_variant().is_none());
+        assert!(parser.take_warnings().is_empty());
         assert_eq!(parser.take_empty_lines(), 0);
+
+        // A run the input closes on is warned about at the end of the input,
+        // and a `#` line before any record is line 1.
+        let mut trailing = parser_in(&ParserContext::default(), "# c\n21:100-100/G\n\n\n");
+        let only = trailing.next_variant().unwrap().unwrap();
+        assert_eq!(only.uploaded_variation(), "21:100-100/G");
+        assert_eq!(trailing.record_line_number(), Some(2));
+        assert!(trailing.take_warnings().is_empty());
+        assert!(trailing.next_variant().is_none());
+        assert_eq!(
+            trailing.take_warnings(),
+            ["Skipped 2 empty lines from line 3"]
+        );
     }
 
     /// A coordinate is read up to `MAX_COORD`; a start or end past it is a line

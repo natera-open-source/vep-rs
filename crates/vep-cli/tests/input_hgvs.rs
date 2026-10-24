@@ -615,3 +615,53 @@ fn max_sv_size_bounds_the_span_of_a_notation() {
          Region requested must be smaller than 10. This value can be adjusted with --max_sv_size.\n"
     );
 }
+
+/// A `#` line counts toward the line numbers that follow, as Ensembl VEP counts
+/// the record it reads there: ensembl-io's list parser has no metadata lines
+/// (ListBasedParser.pm:60, `sub is_metadata { return; }`), so
+/// `create_VariationFeatures` numbers the line (Parser/HGVS.pm:151,
+/// `$self->line_number($self->line_number + 1);`) and hands its text to the
+/// resolver, which refuses it (`:204-216`, `WARNING: Unable to parse HGVS
+/// notation '#c'` with the resolver's message, and the next record is read);
+/// here such a line is a comment, passed over without a word. A `#` line with no
+/// word character is an empty line to `skip_empty_lines` (Parser.pm:273,
+/// `$parser->{record} !~ /\w+/`), warned about and counted as one. So for
+/// `21:g.30282169C>A`, `# c`, `21:g.30282169G>A` the refusal names line 3, and
+/// for `21:g.30282169C>A`, `#`, `21:g.30282169G>A` the empty line is line 2 and
+/// the refusal names line 3 (Ensembl VEP refuses the format offline,
+/// Parser/HGVS.pm:104, so these are its source's numbers, not a run's).
+#[test]
+fn a_hash_line_counts_toward_the_line_numbers() {
+    let dir = tempfile::tempdir().unwrap();
+    let refusal = "WARNING: line 3 skipped (21:g.30282169G>A): Unable to parse HGVS notation \
+                   '21:g.30282169G>A': Reference allele extracted from 21:30282169-30282169 (C) \
+                   does not match reference allele given by HGVS notation 21:g.30282169G>A (G)\n";
+    let comment = write(
+        dir.path(),
+        "comment.hgvs",
+        "21:g.30282169C>A\n# c\n21:g.30282169G>A\n",
+    );
+    let out = dir.path().join("comment.txt");
+    let rows = annotate(dir.path(), &comment, &out, &["--format", "hgvs"]);
+    assert!(
+        rows.iter().all(|row| name(row) == "21:g.30282169C>A"),
+        "{rows:?}"
+    );
+    assert!(!rows.is_empty());
+    assert_eq!(
+        std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap(),
+        refusal
+    );
+    let bare = write(
+        dir.path(),
+        "bare.hgvs",
+        "21:g.30282169C>A\n#\n21:g.30282169G>A\n",
+    );
+    let out = dir.path().join("bare.txt");
+    let bare_rows = annotate(dir.path(), &bare, &out, &["--format", "hgvs"]);
+    assert_eq!(bare_rows, rows);
+    assert_eq!(
+        std::fs::read_to_string(format!("{}_warnings.txt", out.display())).unwrap(),
+        format!("WARNING: Skipped 1 empty line from line 2\n{refusal}")
+    );
+}

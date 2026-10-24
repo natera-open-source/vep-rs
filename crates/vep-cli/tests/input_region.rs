@@ -485,12 +485,17 @@ fn an_unsupported_structural_word_on_the_first_line_is_skipped_and_the_run_goes_
 }
 
 /// A line outside Ensembl VEP's region expression (Utils/VEP.pm:391) builds no
-/// feature in Ensembl VEP and ends its run; here it is warned about and skipped,
-/// the run going on: a position without its end, a trailing blank, a strand
-/// other than `1`, `+1` or `-1`, and a multi-allelic string. A `#` line is a
-/// comment, and an empty line is warned about and counted into the line
-/// numbers that follow, as Ensembl VEP's `skip_empty_lines` counts it
-/// (Parser.pm:266-293, the record after one empty line being line 3). The same
+/// feature in Ensembl VEP, which ends its buffer fill there and, when the line
+/// opens a fill as this file's first line does, its run (InputBuffer.pm:212,
+/// Runner.pm:424: Ensembl VEP 116.2 writes no row and no warning for this
+/// file); here it is warned about and skipped, the run going on: a position
+/// without its end, a trailing blank, a strand other than `1`, `+1` or `-1`,
+/// and a multi-allelic string. A `#` line is a comment, counted into the line
+/// numbers that follow as Ensembl VEP counts the record it reads there
+/// (Parser/Region.pm:167, over ensembl-io's list parser, which has no metadata
+/// lines, ListBasedParser.pm:60), so the line after it is line 2; an empty line
+/// is warned about and counted too, as `skip_empty_lines` counts it
+/// (Parser.pm:266-293, the record after one empty line being line 4). The same
 /// lines are skipped under `--dont_skip`, which has no feature to keep.
 #[test]
 fn lines_outside_the_expression_are_warned_and_skipped() {
@@ -509,15 +514,93 @@ fn lines_outside_the_expression_are_warned_and_skipped() {
             only_record_has_rows(&rows, "21:14221107-14221107/A"),
             "{extra:?}: {rows:?}"
         );
-        for expected in [
-            "WARNING: line 1 skipped (21:14221107/A): Unable to parse region '21:14221107/A': expected chr:start-end[:strand]/allele",
-            "WARNING: Skipped 1 empty line from line 2",
-            "WARNING: line 3 skipped (21:14221107-14221107/A ): Unable to parse region '21:14221107-14221107/A ': expected chr:start-end[:strand]/allele",
-            "WARNING: line 4 skipped (21:14221107-14221107:2/A): Unable to parse region '21:14221107-14221107:2/A': expected chr:start-end[:strand]/allele",
-            "WARNING: line 5 skipped (21:14221107-14221107/A/G): Unable to parse region '21:14221107-14221107/A/G': expected chr:start-end[:strand]/allele",
-        ] {
-            assert!(warnings.contains(expected), "{extra:?}: {expected}\n--\n{warnings}");
-        }
+        assert_eq!(
+            warnings.lines().collect::<Vec<_>>(),
+            [
+                "WARNING: line 2 skipped (21:14221107/A): Unable to parse region '21:14221107/A': expected chr:start-end[:strand]/allele",
+                "WARNING: Skipped 1 empty line from line 3",
+                "WARNING: line 4 skipped (21:14221107-14221107/A ): Unable to parse region '21:14221107-14221107/A ': expected chr:start-end[:strand]/allele",
+                "WARNING: line 5 skipped (21:14221107-14221107:2/A): Unable to parse region '21:14221107-14221107:2/A': expected chr:start-end[:strand]/allele",
+                "WARNING: line 6 skipped (21:14221107-14221107/A/G): Unable to parse region '21:14221107-14221107/A/G': expected chr:start-end[:strand]/allele",
+            ],
+            "{extra:?}: {warnings}"
+        );
+    }
+}
+
+/// A `#` line with a word character counts toward the line numbers that
+/// follow, as Ensembl VEP counts it: ensembl-io's list parser has no metadata
+/// lines (ListBasedParser.pm:60, `sub is_metadata { return; }`), so the line is
+/// a record `create_VariationFeatures` numbers (Parser/Region.pm:167,
+/// `$self->line_number($self->line_number + 1);`) and then builds no feature for
+/// (`:171`, `return [] unless $region =~ &_valid_region_regex();`), which ends
+/// the buffer fill there and reads on with the next fill (InputBuffer.pm:212)
+/// unless the line opened the fill; here it is passed over without a word. For
+/// `21:14221107-14221107/A`, `# c`, `21:1-20000000/A`, Ensembl VEP 116.2 writes
+/// `WARNING: line 3 skipped (21:1-20000000/A): variant size (19999999) is
+/// bigger than --max_sv_size (10000000)` and the first record's 17 rows, as
+/// here.
+#[test]
+fn a_hash_line_counts_toward_the_line_numbers() {
+    let dir = tempfile::tempdir().unwrap();
+    let region = write(
+        dir.path(),
+        "hash.region.txt",
+        "21:14221107-14221107/A\n# c\n21:1-20000000/A\n",
+    );
+    let (rows, warnings) = annotate_with_warnings(dir.path(), &region, &["--format", "region"]);
+    assert_eq!(rows.len(), 17, "{rows:?}");
+    assert!(
+        only_record_has_rows(&rows, "21:14221107-14221107/A"),
+        "{rows:?}"
+    );
+    assert_eq!(
+        warnings.lines().collect::<Vec<_>>(),
+        ["WARNING: line 3 skipped (21:1-20000000/A): variant size (19999999) is bigger than --max_sv_size (10000000)"],
+        "{warnings}"
+    );
+}
+
+/// A `#` line with no word character is an empty line to `skip_empty_lines`
+/// (Parser.pm:273, `$parser->{record} !~ /\w+/`), warned about and counted as
+/// one: for `21:14221107-14221107/A`, `#`, `21:1-20000000/A`, Ensembl VEP 116.2
+/// writes `WARNING: Skipped 1 empty line from line 2` and `WARNING: line 3
+/// skipped (21:1-20000000/A): variant size (19999999) is bigger than
+/// --max_sv_size (10000000)`. A `#` line with a word character before such a
+/// run is the record that ends the run before it and starts the count of the
+/// next: for `21:14221107-14221107/A`, `# c`, `#`, `  `, `21:1-20000000/A`,
+/// Ensembl VEP 116.2 writes `WARNING: Skipped 2 empty lines from line 3` and
+/// `WARNING: line 5 skipped (21:1-20000000/A): ...`. 17 rows each.
+#[test]
+fn a_bare_hash_line_is_an_empty_line() {
+    let dir = tempfile::tempdir().unwrap();
+    for (name, text, expected_warnings) in [
+        (
+            "bare.region.txt",
+            "21:14221107-14221107/A\n#\n21:1-20000000/A\n",
+            [
+                "WARNING: Skipped 1 empty line from line 2",
+                "WARNING: line 3 skipped (21:1-20000000/A): variant size (19999999) is bigger than --max_sv_size (10000000)",
+            ],
+        ),
+        (
+            "after-comment.region.txt",
+            "21:14221107-14221107/A\n# c\n#\n  \n21:1-20000000/A\n",
+            [
+                "WARNING: Skipped 2 empty lines from line 3",
+                "WARNING: line 5 skipped (21:1-20000000/A): variant size (19999999) is bigger than --max_sv_size (10000000)",
+            ],
+        ),
+    ] {
+        let region = write(dir.path(), name, text);
+        let (rows, warnings) =
+            annotate_with_warnings(dir.path(), &region, &["--format", "region"]);
+        assert_eq!(rows.len(), 17, "{name}: {rows:?}");
+        assert_eq!(
+            warnings.lines().collect::<Vec<_>>(),
+            expected_warnings,
+            "{name}: {warnings}"
+        );
     }
 }
 

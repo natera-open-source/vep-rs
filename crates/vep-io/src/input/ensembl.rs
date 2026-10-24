@@ -27,11 +27,15 @@
 //!
 //! Ensembl VEP dies on a line of fewer than four columns or an empty line
 //! (`:136`: its parser has no allele string to read) and reads a `#` line as a
-//! record (ensembl-io's VEP_input parser has no metadata lines), so a `#`
-//! header of four columns is skipped with a coordinate warning and a shorter
-//! one dies. Here a `#` line is a comment, an empty or whitespace-only line is
-//! counted for the caller's `skip_empty_lines` warning, and a short line is a
-//! parse error the caller warns about and skips.
+//! record (ensembl-io's VEP_input parser has no metadata lines,
+//! VEP_input.pm:61), so a `#` header of four columns is skipped with a
+//! coordinate warning and a shorter one dies; either way the line counts
+//! toward the line numbers that follow (Parser/VEP_input.pm:119). Here a `#`
+//! line is a comment, counted the same way and otherwise passed over without
+//! a word (`LineCount`); an empty or whitespace-only line is counted and
+//! warned about in `skip_empty_lines`'s words, as the list formats' lines are
+//! (Parser.pm:273-290), where Ensembl VEP's own parser dies; and a short line
+//! is a parse error the caller warns about and skips.
 
 use std::io::BufRead;
 use std::sync::Arc;
@@ -43,7 +47,7 @@ use vep_core::variant::{classify_variant, InputVariant, VariantClass};
 
 use crate::error::IoError;
 
-use super::{is_perl_space, minimise_alleles, Delimiter, InputParser, ParserContext};
+use super::{is_perl_space, minimise_alleles, Delimiter, InputParser, LineCount, ParserContext};
 
 /// Parser for Ensembl VEP's default input format.
 pub struct EnsemblParser<R: BufRead> {
@@ -54,8 +58,9 @@ pub struct EnsemblParser<R: BufRead> {
     line_buf: Vec<u8>,
     /// Buffer for multi-allelic variants from a single line.
     buffer: Vec<InputVariant>,
-    /// Empty lines read since the last [`InputParser::take_empty_lines`].
-    empty_lines: u64,
+    /// Ensembl VEP's line number over the lines read, and the empty-line
+    /// warnings it raises.
+    lines: LineCount,
 }
 
 impl<R: BufRead> EnsemblParser<R> {
@@ -66,7 +71,7 @@ impl<R: BufRead> EnsemblParser<R> {
             minimal: context.minimal,
             line_buf: Vec::new(),
             buffer: Vec::new(),
-            empty_lines: 0,
+            lines: LineCount::default(),
         }
     }
 
@@ -279,7 +284,10 @@ impl<R: BufRead + Send> InputParser for EnsemblParser<R> {
         loop {
             self.line_buf.clear();
             match self.reader.read_until(b'\n', &mut self.line_buf) {
-                Ok(0) => return None,
+                Ok(0) => {
+                    self.lines.end_of_input();
+                    return None;
+                }
                 Ok(_) => {}
                 Err(e) => return Some(Err(IoError::Io(e))),
             }
@@ -293,11 +301,12 @@ impl<R: BufRead + Send> InputParser for EnsemblParser<R> {
                     .unwrap_or(without_newline),
                 None => &text,
             };
-            if line.starts_with('#') {
+            if line.trim_matches(is_perl_space).is_empty() {
+                self.lines.empty_line();
                 continue;
             }
-            if line.trim_matches(is_perl_space).is_empty() {
-                self.empty_lines += 1;
+            self.lines.record_line();
+            if line.starts_with('#') {
                 continue;
             }
             let mut variants = match self.parse_record(line) {
@@ -311,8 +320,12 @@ impl<R: BufRead + Send> InputParser for EnsemblParser<R> {
         }
     }
 
-    fn take_empty_lines(&mut self) -> u64 {
-        std::mem::take(&mut self.empty_lines)
+    fn take_warnings(&mut self) -> Vec<String> {
+        self.lines.take_warnings()
+    }
+
+    fn record_line_number(&self) -> Option<u64> {
+        Some(self.lines.line())
     }
 }
 
@@ -769,18 +782,36 @@ mod tests {
         assert_eq!(v[0].id, None);
     }
 
-    /// Comment lines are read past; empty and whitespace-only lines are read
-    /// past and counted for the caller's warning, the count handed over once.
+    /// Every line counts toward Ensembl VEP's line number (Parser/VEP_input.pm:119
+    /// per record read, a `#` line and an empty line included, as ensembl-io's
+    /// VEP_input parser has no metadata lines, VEP_input.pm:61): a `#` line is a
+    /// comment here, counted and passed over without a warning (Ensembl VEP
+    /// 116.2 numbers `#chr start end allele strand id`, a record, an oversize
+    /// record as `line 1 skipped` twice and `line 3 skipped`); an empty or
+    /// whitespace-only line, which Ensembl VEP's own parser dies on
+    /// (Parser/VEP_input.pm:136), is counted and warned about here in
+    /// `skip_empty_lines`'s words (Parser.pm:273-290) when its run ends, at the
+    /// next record or the end of the input; a multi-allelic line's alleles share
+    /// its number.
     #[test]
-    fn comments_are_skipped_and_empty_lines_counted() {
-        let mut parser = parser("# comment\n\n  \t\n21\t25585733\t25585733\tA/G\t1\trs699\n\n");
-        assert_eq!(parser.take_empty_lines(), 0);
+    fn every_line_is_counted_and_empty_runs_warned() {
+        let mut parser =
+            parser("# comment\n\n  \t\n21\t25585733\t25585733\tA/G/T\t1\trs699\n# c\n\n");
+        assert!(parser.take_warnings().is_empty());
         let v = parser.next_variant().unwrap().unwrap();
-        assert_eq!(v.chr, "21");
-        assert_eq!(parser.take_empty_lines(), 2);
-        assert_eq!(parser.take_empty_lines(), 0);
+        assert_eq!((v.chr.as_str(), v.allele_index), ("21", 0));
+        assert_eq!(parser.record_line_number(), Some(4));
+        assert_eq!(
+            parser.take_warnings(),
+            ["Skipped 2 empty lines from line 2"]
+        );
+        let second = parser.next_variant().unwrap().unwrap();
+        assert_eq!(second.allele_index, 1);
+        assert_eq!(parser.record_line_number(), Some(4));
+        assert!(parser.take_warnings().is_empty());
         assert!(parser.next_variant().is_none());
-        assert_eq!(parser.take_empty_lines(), 1);
+        assert_eq!(parser.take_warnings(), ["Skipped 1 empty line from line 6"]);
+        assert_eq!(parser.take_empty_lines(), 0);
     }
 
     #[test]

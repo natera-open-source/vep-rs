@@ -404,16 +404,17 @@ fn output_file_named_stdout_is_checked_as_spelled() {
 }
 
 /// `-o` given twice keeps the last value and warns, as the `vep` script does
-/// (vep:32-33: `WARNING: More than one output file command-line flag provided.
-/// Using the last value provided`), under `--quiet` too, since the script warns
-/// before any option is read; the first path is never written.
+/// (vep:32-33: `warn("WARNING: More than one output file command-line flag
+/// provided. Using the last value provided: '...' \n")`, a space before the
+/// newline), under `--quiet` too, since the script warns before any option is
+/// read; the first path is never written.
 #[test]
 fn repeated_output_file_keeps_last_with_warning() {
     let dir = tempfile::tempdir().unwrap();
     let first = dir.path().join("first.txt");
     let second = dir.path().join("second.txt");
     let warning = format!(
-        "WARNING: More than one output file command-line flag provided. Using the last value provided: '{}'",
+        "WARNING: More than one output file command-line flag provided. Using the last value provided: '{}' \n",
         second.display()
     );
     for quiet in [&[][..], &["--quiet"][..]] {
@@ -428,7 +429,10 @@ fn repeated_output_file_keeps_last_with_warning() {
         assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
         assert!(second.is_file() && !first.exists());
         let stderr = text(&output.stderr);
-        assert!(stderr.lines().any(|l| l == warning), "{quiet:?}: {stderr}");
+        assert!(
+            stderr.starts_with(&warning),
+            "{quiet:?}: expected stderr to open with {warning:?}, got {stderr:?}"
+        );
         std::fs::remove_file(&second).unwrap();
     }
     let once = run_to(&["-o", first.to_str().unwrap()], dir.path());
