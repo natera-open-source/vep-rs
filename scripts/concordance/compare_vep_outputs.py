@@ -939,10 +939,11 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
             "equal to the reference run (`RN=.`, a RUC that is not a positive number, a RUC "
             "times unit length equal to SVLEN), is expanded to an allele string with no "
             "alternate and the reference writes nothing for it, without a warning; vep-rs "
-            "writes the symbolic rows over the run, as the reference does without a FASTA. "
-            "vep-rs's rows are set aside by the structural-variant comparator when the "
-            "input record has the shape and the reference wrote nothing at or beside the "
-            "run; the SNP/indel comparator does not judge it."
+            "with a FASTA writes nothing for it either, and without one writes the symbolic "
+            "rows over the run, as the reference does without one. vep-rs's rows are set "
+            "aside by the structural-variant comparator when the input record has the shape "
+            "and the reference wrote nothing at or beside the run; the SNP/indel comparator "
+            "does not judge it."
         ),
         excludes=False,
         excludes_with_cache=True,
@@ -1083,14 +1084,15 @@ class ReferenceRecordScope:
     outside the test (`_TANDEM_REPEAT_ALLELE`). Every vep-rs row at an absent Location is
     then set aside whatever its allele, a sequence allele beside the symbolic one of a
     mixed ALT list included, because the reference skips the line whole. This is the
-    output-only rule: this comparator reads no input VCF. The structural-variant
-    comparator reads the input and names the record from it (`skipped_record_rows`:
-    the reference's own skip routes over the ALT and INFO, confirmed by the reference's
-    absence under the record's own Location start and alleles), so a kept record
-    sharing a start or a Location string with a skipped one is told apart there. The
-    merge visits keys in sorted order and every key of one Location shares the prefix
-    ``Location<TAB>``, so a Location's rows from both streams are contiguous and the
-    group closes when the Location changes.
+    output-only rule: the ``absent`` test reads no input VCF, and this comparator opens
+    one only under `--input-dir` or `--input-vcf`, to recognise gVCF variant sites by
+    their shape (``gvcf_sites`` below). The structural-variant comparator reads the input
+    and names the record from it (`skipped_record_rows`: the reference's own skip routes
+    over the ALT and INFO, confirmed by the reference's absence under the record's own
+    Location start and alleles), so a kept record sharing a start or a Location string
+    with a skipped one is told apart there. The merge visits keys in sorted order and
+    every key of one Location shares the prefix ``Location<TAB>``, so a Location's rows
+    from both streams are contiguous and the group closes when the Location changes.
 
     ``breakends``: for every (file, Location) at which either engine wrote a breakend
     allele, the alleles each side wrote and the mate chromosomes its bracket alleles

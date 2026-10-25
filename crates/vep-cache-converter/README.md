@@ -85,7 +85,7 @@ The unit tests cover `parse_region_filename`, `variation_file_kind`, `split_flat
 
 - [`vep-builtins`](../vep-builtins/README.md): `tabix::TabixRecord`, `binary_store::BinaryStoreWriter` and `binary_store::BinaryAnnotator`, the types the plugin-data path writes and reads back through; its plugins read the `.vpd` store.
 - [`vep-cli`](../vep-cli/README.md): enumerates the `transcripts/<chr>/<start>-<end>.json` shards the cache mode writes. Declared in `Cargo.toml`, not imported by `main.rs`.
-- [`vep-core`](../vep-core/README.md): declared in `Cargo.toml`, not imported by `main.rs`.
+- [`vep-core`](../vep-core/README.md): `cache_manifest::CacheManifest`, whose `write` lists every file of the output directory in `CHECKSUMS.sha256`, and `coordinate::is_cache_path_component`, the check that a chromosome taken from a region file's stem or a `variations/` entry can name one directory of the output.
 - [`vep-cache-builder`](../vep-cache-builder/README.md): writes the per-chromosome layout directly, so a natively built cache needs no conversion.
 - [docs/cache-setup.md](../../docs/cache-setup.md): the routes to the per-chromosome JSON transcript cache the flat copy targets.
 - [docs/plugins/data-files.md § Tabix indexes and `.vpd` stores](../../docs/plugins/data-files.md#tabix-indexes-and-vpd-stores): how a plugin finds a `.vpd` store beside its data file.

@@ -188,9 +188,9 @@ if [[ -f "$HARNESS" ]]; then
     # The guard above is only load-bearing if the function RETURNS on failure. An
     # `exit` inside measure_p1 bypasses the `||` entirely and kills the run, so
     # the fastvep-normalizer fail-closed path must use `return 1`. Scoped to the
-    # function body: seven legitimate `exit 1` calls live outside it (argument
-    # parsing and setup), where aborting is correct. Comments are stripped so the
-    # rationale comment beside the guard cannot itself trip this.
+    # function body: the `exit 1` calls outside it, in argument parsing and setup,
+    # are where aborting is correct. Comments are stripped so the rationale
+    # comment beside the guard cannot itself trip this.
     p1_exits=$(sed -n '/^measure_p1() {/,/^}/p' "$HARNESS" |
         grep -vE '^[[:space:]]*#' | grep -c 'exit 1') || p1_exits=0
     [[ "$p1_exits" -eq 0 ]] &&

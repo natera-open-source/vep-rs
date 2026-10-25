@@ -19,11 +19,11 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ## 19. An empty or unchanged `<CNV:TR>` expansion dropped without a row
 
-**In short.** With a FASTA, Ensembl VEP expands a `<CNV:TR>` record to a literal allele string. When the expansion yields no alternate allele or an allele identical to the reference run, the record passes through the parser without a feature to annotate: no row and no warning. vep-rs writes the symbolic `tandem_repeat` rows over the run, with or without a FASTA, as Ensembl VEP itself does without one.
+**In short.** With a FASTA, Ensembl VEP expands a `<CNV:TR>` record to a literal allele string. When the expansion yields no alternate allele or an allele identical to the reference run, the record passes through the parser without a feature to annotate: no row and no warning. Without a FASTA vep-rs writes the symbolic `tandem_repeat` rows over the run, as Ensembl VEP itself does without one; with a FASTA it follows Ensembl VEP's expansion and writes what Ensembl VEP writes.
 
 ### 19.1 What a reader needs to know first
 
-With a FASTA, Ensembl VEP expands a `<CNV:TR>` record to a literal allele string ([12.4](cnv-tr.md#124-why-ensembl-vep-writes-that)). The record's `RN`, `RUS`, `RUC` and `RB` fields are explained on [the `<CNV:TR>` page](cnv-tr.md#121-what-a-reader-needs-to-know-first). The expansion may yield no alternate allele (`RN=.` on the only allele, a `RUC` that is not a positive number) or an allele identical to the reference run (`RUC` times the unit length equal to `SVLEN`). The allele string then has no alternate, and the record passes through the parser without a feature to annotate: no row in any format, and no warning. Without a FASTA the same record is a symbolic `tandem_repeat` with rows, and vep-rs writes those rows with or without a FASTA.
+With a FASTA, Ensembl VEP expands a `<CNV:TR>` record to a literal allele string ([12.4](cnv-tr.md#124-why-ensembl-vep-writes-that)). The record's `RN`, `RUS`, `RUC` and `RB` fields are explained on [the `<CNV:TR>` page](cnv-tr.md#121-what-a-reader-needs-to-know-first). The expansion may yield no alternate allele (`RN=.` on the only allele, a `RUC` that is not a positive number) or an allele identical to the reference run (`RUC` times the unit length equal to `SVLEN`). The allele string then has no alternate, and the record passes through the parser without a feature to annotate: no row in any format, and no warning. Without a FASTA both engines write the symbolic `tandem_repeat` rows; with one, vep-rs expands the record as Ensembl VEP does and writes what Ensembl VEP writes.
 
 ### 19.2 The record
 
@@ -102,4 +102,4 @@ The input record is a single `<CNV:TR>` of one of three shapes: its `RN` is `.`;
 
 `RUC=3.5` on a three-unit run is included, as is an unchanged expansion over several repeat sequences, `RN=3;RUS=AGC,AGC,AGC;RUC=1,1,1` or `RN=2;RUS=AGC,AG;RUC=3,0` on the nine-base run, and a count in fullwidth digits, `RUC=４`, which Perl numifies to 0. A unit of no bases repeats nothing under `RUC`, `"" x n` being the empty expansion, and is set aside like `RN=.`. Under `RB` it divides by zero in Perl, which stops Ensembl VEP with no output, so no reference holds such a record.
 
-The SNP/indel comparator reads no input and does not judge the class.
+The SNP/indel comparator, which opens the input only to recognise gVCF variant sites under `--input-dir` or `--input-vcf`, does not judge the class.

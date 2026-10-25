@@ -79,7 +79,7 @@ class ReleaseFromProvenanceTests(unittest.TestCase):
                  "cache_version": 116, "prefix": "population_r116.2_c116_fixture"}
         self.assertEqual(release_from_provenance(block), "116.2")
         self.assertEqual(release_from_provenance({"prefix": "population_r116.2_c116_fixture", "cache_version": 115}), "116.2")
-        self.assertEqual(release_from_provenance({"perl_reference_prefix": "population_r115.2_c115_20260930"}), "115.2")
+        self.assertEqual(release_from_provenance({"perl_reference_prefix": "population_r115.2_c115_fixture"}), "115.2")
         self.assertEqual(release_from_provenance({"cache_version": 116}), "116.2")
         with self.assertRaises(ValueError):
             release_from_provenance({"digest": "sha256:abc"})
@@ -94,7 +94,7 @@ class ReleaseFromProvenanceTests(unittest.TestCase):
         """A golden corpus records its reference as a digest-only image and a command line;
         the command's --cache_version names the release, and it must be the release the
         corpus directory is named for (`tests/golden/<major>/`). Skipped in a tree without
-        the corpora (they are read from the public tree there)."""
+        the corpora."""
         corpora = sorted((HERE.parent.parent / "tests" / "golden").glob("*/GRCh37/provenance.json"))
         if not corpora:
             self.skipTest("no golden corpus is in this tree")

@@ -28,7 +28,7 @@ body:
     id: platform
     attributes:
       label: Platform
-      description: OS and CPU. Release builds need AVX2 on x86_64; an illegal-instruction crash on an older CPU is covered under "CPU floor" in the README.
+      description: OS and CPU. The measured Linux archives need AVX2 on x86_64 and SVE on aarch64; the generic archives and the container image's multi-platform tags run on almost any 64-bit CPU. An illegal-instruction crash on an older CPU is covered under [CPU floor](https://github.com/natera-open-source/vep-rs/blob/main/docs/getting-started/installation.md#cpu-floor) on the Installation page.
       placeholder: Ubuntu 24.04, x86_64
     validations:
       required: true

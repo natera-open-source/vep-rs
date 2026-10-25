@@ -27,9 +27,10 @@
 #   fastvep  SV: same annotate form, per-VCF loop; concordance is best-effort
 #                  and is skipped when the loop produces no non-empty output.
 #   perl   both: docker run ... vep -i <in> -o <out> --offline --cache \
-#                  --dir_cache /work/cache --cache_version <ver> --fork 16 \
-#                  --fasta /work/ref.fa --buffer_size 5000 --no_headers \
-#                  --no_stats --quiet --force_overwrite
+#                  --dir_cache /work/cache --cache_version <ver> \
+#                  --species homo_sapiens --assembly <asm> --format vcf \
+#                  --buffer_size 5000 --fork 16 --fasta /work/ref.fa \
+#                  --no_headers --no_stats --quiet --force_overwrite
 #                Perl is the ground truth, so it has no concordance branch and
 #                its scratch output is deleted. It contributes wall time only.
 #
@@ -692,7 +693,7 @@ measure_p1() {
 	# ground truth that names no release fails the cell before any annotation is timed.
 	# Only a cell that will compare derives it: the Perl engine has no comparator, a
 	# sample-scaling suite (`*m`) has no ground truth, and a ground truth that is absent
-	# altogether is reported by ground_truth_ready after the runs as before.
+	# altogether is reported by ground_truth_ready after the runs.
 	local reference_release=""
 	if [[ "$WALLTIME_ONLY" != "true" && "$ENGINE" != "perl" && "$suite_id" != *m && -f "$gt_dir/output.txt" ]]; then
 		reference_release=$(reference_release_for "$gt_dir") || {

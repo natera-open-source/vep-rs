@@ -13,7 +13,9 @@
 //! `tmp/concordance/cache_json/` under the workspace root. `$VEP_BENCH_CHR`
 //! (default `21`) names the chromosome the per-chromosome benchmark parses,
 //! which is the unit `LazyTranscriptIndexes::prewarm` loads at run time.
-//! Benchmarks are silently skipped if the cache is not available.
+//! Without the cache, the per-chromosome benchmark prints a `SKIP:` line on
+//! stderr and the other two return without one; a cache lacking the chromosome
+//! or a `variations/` directory also prints a `SKIP:` line.
 
 use std::path::Path;
 use std::time::Duration;
