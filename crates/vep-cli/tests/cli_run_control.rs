@@ -3572,3 +3572,75 @@ fn fasta_false_value_is_a_path() {
         assert!(!out.exists(), "{value:?}: an output was written");
     }
 }
+
+/// `--fasta_dir` filters its candidates on the assembly the cache resolves to
+/// (`fasta_source` in `runner.rs` passes the resolved cache's assembly, here the
+/// corpus `info.json`'s `GRCh37`), so under `--json_cache` or its alias
+/// `--full_cache_dir` with no `--assembly`, a directory holding a GRCh38-named
+/// `toplevel` file beside the GRCh37 chromosome file opens the GRCh37 file and
+/// annotates as `--fasta` does. Ensembl VEP 116.2 filters on `param('assembly')`
+/// (BaseVEP.pm:497), which `--offline --full_cache_dir` without `--assembly` or
+/// `--grch37` leaves unset (CacheDir.pm:356 fills it inside the layout scan of
+/// :303 alone, and BaseRunner.pm:139 from a database `--offline` never opens),
+/// so the `/$assembly/i` test of BaseVEP.pm:508 is an empty pattern, which Perl
+/// reads as the last successful match, the species test of :507, and every
+/// species file passes; :502 then ranks the `toplevel` name first and :513 makes
+/// it the run's FASTA, which :523 opens. On such a directory Ensembl VEP 116.2
+/// warns `Use of uninitialized value $assembly in regexp compilation` (reported
+/// at :506, the grep's first expression) and annotates against the GRCh38-named
+/// file, where with `--assembly GRCh37` it opens the GRCh37 file, as this run
+/// does. `docs/cache-setup.md` states the difference.
+#[test]
+fn fasta_dir_filters_on_the_cache_assembly_without_assembly_flag() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let corpus = hgvs_corpus_dir();
+    let input = corpus.join("variants.vcf").display().to_string();
+    let cache = corpus.join("json_cache").display().to_string();
+    let args = |cache_flag: &str| -> Vec<String> {
+        [
+            "-i",
+            &input,
+            "--offline",
+            cache_flag,
+            &cache,
+            "--force_overwrite",
+            "--no_stats",
+            "--hgvs",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect()
+    };
+    let fasta = hgvs_corpus_fasta().display().to_string();
+    let by_file = run_with(&args("--json_cache"), &["--quiet", "--fasta", &fasta], &out);
+    assert_eq!(by_file.status.code(), Some(0), "{}", text(&by_file.stderr));
+    let expected = std::fs::read_to_string(&out).unwrap();
+
+    let mixed = ensembl_named_fasta_dir(dir.path());
+    std::fs::write(
+        mixed.join("homo_sapiens.GRCh38.dna.toplevel.fa"),
+        ">21\nACGT\n",
+    )
+    .unwrap();
+    let grch37 = mixed.join("Homo_sapiens.GRCh37.dna.chromosome.21.fa.gz");
+    for cache_flag in ["--json_cache", "--full_cache_dir"] {
+        let by_dir = run_with(
+            &args(cache_flag),
+            &["--fasta_dir", mixed.to_str().unwrap()],
+            &out,
+        );
+        let stderr = text(&by_dir.stderr);
+        assert_eq!(by_dir.status.code(), Some(0), "{cache_flag}: {stderr}");
+        assert!(
+            stderr.contains(&format!("Using reference FASTA: {}", grch37.display())),
+            "{cache_flag}: {stderr}"
+        );
+        let actual = std::fs::read_to_string(&out).unwrap();
+        assert_eq!(data_lines(&actual), data_lines(&expected), "{cache_flag}");
+        assert!(
+            data_lines(&actual).iter().any(|l| l.contains("HGVSc=")),
+            "{cache_flag}"
+        );
+    }
+}

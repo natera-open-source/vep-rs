@@ -1018,7 +1018,14 @@ fn shift_hgvs_exclusion_is_documented() {
 /// first taken (`fasta_dir_match` in vep-fasta's `lib.rs`), where
 /// BaseVEP.pm:500-509 sorts on the two preferences alone (`$a !~ /toplevel/ <=> $b
 /// !~ /toplevel/ || $a !~ /gz$/ <=> $b !~ /gz$/`) over `readdir`'s order and :513
-/// takes `$files[0]`.
+/// takes `$files[0]`. The filter reads the assembly the cache resolves to
+/// (`fasta_source` in `runner.rs` passes the resolved cache's), where :497 reads
+/// `param('assembly')`, which `--assembly`, the `--grch37` option set
+/// (Config.pm:399-403) or the layout scan of CacheDir.pm:303 (its :356) sets and
+/// BaseRunner.pm:139 fills from the database `--offline` never reaches, so under
+/// `--offline --full_cache_dir` with neither flag it is unset and BaseVEP.pm:508's
+/// `/$assembly/i` is an empty pattern, Perl's "last successful match", and every
+/// species match passes.
 #[test]
 fn fasta_dir_exclusion_is_documented() {
     assert_page_states(
@@ -1028,6 +1035,12 @@ fn fasta_dir_exclusion_is_documented() {
              Ensembl VEP's sort on the two preferences alone keeps the directory listing's \
              order (`BaseVEP.pm` lines 500-509), so on such a directory the two engines can \
              read different files",
+            "Here the filter reads the same assembly as the redirect, where Ensembl VEP reads \
+             its assembly parameter alone (line 497), set by `--assembly`, `--grch37` or the \
+             layout directory's name (`CacheDir.pm` line 356)",
+            "Under `--offline --full_cache_dir` without `--assembly` or `--grch37`, Ensembl \
+             VEP's filter passes every file naming the species (line 508), and its preferences \
+             and the listing's order choose among every assembly's files",
         ],
     );
     assert_flag_row_states(

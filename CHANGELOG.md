@@ -207,6 +207,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The cache page states that an insertion on a contig the FASTA lacks passes `--check_ref` and `--lookup_ref` in both engines. (#N)
   - The FASTA refusal table lists the `.gzi` that does not describe its file, the third refusal at open. (#N)
   - The compatibility page and the cache page's FASTA table state that `--fasta 0` or `--fasta ''` is a path here, where Ensembl VEP reads the flag as unset. (#N)
+  - The cache page states the `--fasta_dir` filter reads the cache's assembly, where Ensembl VEP under `--offline --full_cache_dir` without `--assembly` or `--grch37` filters on the species alone. (#N)
 - Co-located variants and frequencies
   - Under `--check_existing` a cache without variation data warns once, in the warnings file and on standard error unless `--quiet`, that `Existing_variation` and the frequency columns stay empty; Ensembl VEP annotates silently. (#N)
   - `--check_existing` matches known variants by allele after trimming from either end, strand-aware and span-exact, in Ensembl VEP's order; structural variants are not co-located. (#N)
@@ -228,7 +229,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `vep_core::codon::complement_base` complements the IUPAC letters as Ensembl's `reverse_comp` does, so a natively built cache's reverse-strand sequences agree with Ensembl's; `vep_effects::coding::reverse_complement_pub` is removed. (#N)
   - The `--minimal` split-allele page names the `miRNA` column: the default and tab outputs of Ensembl VEP compute a split allele's hairpin terms over the rejoined record. (#N)
 - Output formats, columns and headers
-  - `--output_format` is matched in any case, `ensembl` naming the default format; plugin header descriptions reach the default, tab and VCF headers; `--fields` or `--compress_output` with Parquet is refused. (#N)
+  - `--output_format` is matched in any case, `ensembl` naming the default format, and an unknown value is an argument syntax error (exit 2) where 0.4.0 wrote the default format; plugin header descriptions reach the default, tab and VCF headers; `--fields` or `--compress_output` with Parquet is refused. (#N)
   - `--total_length` appends the cDNA, CDS and peptide lengths to the position columns, and `VARIANT_CLASS` is the whole record's class, so a multi-allelic record prints one. (#N)
   - A record on chromosome `M` prints `MT` only where Ensembl VEP renames it: the cache knows `MT` and neither `M` nor `chrM`. (#N)
   - The VCF output writes a VCF input's line back as the bytes it was read from, under any `--delimiter`, so a record that is not UTF-8 keeps every byte. (#N)

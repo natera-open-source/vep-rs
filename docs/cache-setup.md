@@ -1,6 +1,6 @@
 # Cache setup
 
-The JSON transcript cache vep-rs annotates from is built with `vep-cache-builder` or converted from an existing Ensembl VEP cache. The page then covers how a run names the cache, the reference FASTA, chromosome names and `info.json`. [Cache checksum manifest](cache-checksums.md) covers integrity checks, and [SIFT and PolyPhen predictions](cache-predictions.md) covers the prediction matrices.
+The JSON transcript cache vep-rs annotates from is built with `vep-cache-builder` or converted from an existing Ensembl VEP cache. [Cache checksum manifest](cache-checksums.md) covers integrity checks, and [SIFT and PolyPhen predictions](cache-predictions.md) covers the prediction matrices.
 
 The cache is a directory holding `info.json` and `transcripts/`: the release directory itself, not its parent, for example `$HOME/.vep/homo_sapiens/116_GRCh38`. A run names it with `--json_cache`, or with Ensembl VEP's own cache flags when the directory sits in Ensembl VEP's layout ([Naming the cache](#naming-the-cache)). For example:
 
@@ -101,7 +101,7 @@ The conversion carries each translation's sequence edits (`seq_edits`: the initi
 
 ## Naming the cache
 
-Ensembl VEP's cache flags select the directory as Ensembl VEP does, so a command line written for it works unchanged ([Cache, species and runtime](cli/cache-species-runtime.md)). The cache root is `--dir_cache`, else a directory given to `--cache`, else `--dir` (default `$HOME/.vep`). Under it the species directory is `--species` (default `homo_sapiens`, the Latin name only), suffixed `_refseq` or `_merged` under those flags. Under that sits the directory named `<cache_version>_<assembly>`, where `--cache_version` defaults to the VEP release.
+Ensembl VEP's cache flags select the directory as Ensembl VEP does ([Cache, species and runtime](cli/cache-species-runtime.md)). The cache root is `--dir_cache`, else a directory given to `--cache`, else `--dir` (default `$HOME/.vep`). Under it the species directory is `--species` (default `homo_sapiens`, the Latin name only), suffixed `_refseq` or `_merged` under those flags. Under that sits the directory named `<cache_version>_<assembly>`, where `--cache_version` defaults to the VEP release.
 
 When one directory of that version exists, it is the cache and its assembly is read from its name; when several exist, `--assembly` chooses. An `--assembly` that disagrees with the directory name, or a directory name or `--assembly` that disagrees with the cache's own `info.json`, is an error.
 
@@ -135,19 +135,19 @@ vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
 | `--everything` without a FASTA | `INFO: Disabling --hgvs; using --offline and no FASTA file found` |
 | `--fasta_dir` holding no compatible file | `WARNING: No compatible FASTA files found in <dir>` |
 
-A `--fasta` directory is read as Bio::DB::Fasta reads one: every indexed `.fa` in it, plus the `.fa.gz` vep-rs adds, as one set of sequences; two files naming one sequence are refused (Ensembl VEP with Bio::DB::HTS takes a file only). `VEP_FASTA_STORAGE=memory` inflates a bgzipped FASTA whole into memory.
+A `--fasta` directory is read as Bio::DB::Fasta reads one: every indexed `.fa` in it, plus the `.fa.gz` vep-rs adds, as one set of sequences; two files naming one sequence are refused (Ensembl VEP with Bio::DB::HTS takes a file only).
 
-On GRCh37 and GRCh38 a read of the sequence named `Y` inside a pseudoautosomal region is served from `X` at the region's offset, as Ensembl VEP serves it: Ensembl's primary-assembly FASTA carries `N` there. The redirect follows the name the FASTA gives the sequence, so a file naming it `chrY` is read as written, as Ensembl VEP reads it.
+On GRCh37 and GRCh38 a read of `Y` inside a pseudoautosomal region is served from `X` at the region's offset, as Ensembl VEP serves it: Ensembl's primary-assembly FASTA carries `N` there. The redirect follows the FASTA's own name for the sequence, so a file naming it `chrY` is read as written, as Ensembl VEP reads it.
 
 The redirect is armed by the assembly the cache resolves to, its `info.json` first, then its directory name, then `--assembly`, where Ensembl VEP arms it from `--assembly` alone (`BaseVEP.pm` line 525, `Utils/FastaSequence.pm` line 254). Under `--offline --full_cache_dir` (`--json_cache` here) without `--assembly` that parameter stays unset there, since the directory scan that fills it runs for `--dir_cache` alone (`CacheDir.pm` line 356). So there Ensembl VEP reads a `Y` span inside the region as written and vep-rs reads `X`.
 
-`--fasta_dir <dir>` chooses, as Ensembl VEP does, the `.fa` or `.fa.gz` of the directory whose name carries the species and assembly (case-insensitively), `toplevel` before any other name and a compressed file before a plain one. The choice stands in for `--fasta` and for the cache directory's FASTA. A directory holding no such file leaves those in force and warns (the table's line) in the warnings file and on standard error unless `--quiet`; one that cannot be opened is passed over silently, as Ensembl VEP does.
+`--fasta_dir <dir>` chooses, as Ensembl VEP does, the `.fa` or `.fa.gz` whose name carries the species and assembly (case-insensitively), `toplevel` before any other name and a compressed file before a plain one, in place of `--fasta` and of the cache directory's FASTA. A directory holding no such file leaves those in force and warns (the table's line); one that cannot be opened is passed over silently, as Ensembl VEP does.
 
-Two files tied on both preferences are ordered by name, the first taken, where Ensembl VEP's sort on the two preferences alone keeps the directory listing's order (`BaseVEP.pm` lines 500-509), so on such a directory the two engines can read different files.
+Two files tied on both preferences are ordered by name, the first taken, where Ensembl VEP's sort on the two preferences alone keeps the directory listing's order (`BaseVEP.pm` lines 500-509), so on such a directory the two engines can read different files. Here the filter reads the same assembly as the redirect, where Ensembl VEP reads its assembly parameter alone (line 497), set by `--assembly`, `--grch37` or the layout directory's name (`CacheDir.pm` line 356). Under `--offline --full_cache_dir` without `--assembly` or `--grch37`, Ensembl VEP's filter passes every file naming the species (line 508), and its preferences and the listing's order choose among every assembly's files.
 
 The table's `ERROR:` lines exit 1; `--use_transcript_ref` needs the FASTA for a non-coding transcript's cDNA. `--everything` without a FASTA instead prints its INFO line on standard error (withheld under `--quiet`) and drops the HGVS notations it switched on, as Ensembl VEP does; an explicit `--hgvsg` beside it is still refused.
 
-Under `--lookup_ref` a contig the FASTA lacks skips the record at every position with the could-not-fetch warning, where Ensembl VEP's one-base placeholder slice (`BaseVEP.pm` lines 424-434) gives a one-base record at position 1 the reference `N`. Under `--check_ref` the same contig skips the record at every position with the sub-slice warning and then the mismatch warning; an insertion, naming no reference base, passes under either flag in both engines (`Parser.pm` lines 600-602 and 636). That placeholder reads `N` at position 1, so Ensembl VEP annotates a one-base record there whose reference is written `N`, and refuses one written otherwise with the mismatch warning alone (`Parser.pm` lines 614-631).
+Under `--lookup_ref` a contig the FASTA lacks skips the record at every position with the could-not-fetch warning, where Ensembl VEP's one-base placeholder slice (`BaseVEP.pm` lines 424-434) gives a one-base record at position 1 the reference `N`. Under `--check_ref` the same contig skips the record at every position with the sub-slice warning and then the mismatch warning; an insertion, naming no reference base, passes under either flag in both engines (`Parser.pm` lines 600-602 and 636). So Ensembl VEP annotates a one-base record there whose reference is written `N`, and refuses one written otherwise with the mismatch warning alone (`Parser.pm` lines 614-631).
 
 Under `--hgvs` the same contig gives these notations; neither engine warns:
 
