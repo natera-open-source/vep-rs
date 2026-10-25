@@ -17,12 +17,15 @@
 //! gene identifier was used. The parser tries its core groups in turn and
 //! stops at the first that yields a variant (Parser/HGVS.pm:164-201), so a
 //! gene name whose pick in the first group fails on its position or alleles
-//! is resolved through the other group's gene, and a notation every group
-//! refuses carries the first group's message. Ensembl VEP reads an `NM_` or
-//! `XM_` reference from its RefSeq database alone (Parser/HGVS.pm:172); here
-//! every reference is read from the one transcript cache, so such a reference
-//! resolves where the cache carries RefSeq transcripts (`--refseq`,
-//! `--merged`) and is otherwise refused as a reference no transcript carries.
+//! is resolved through the other group's gene. A notation every group refuses
+//! carries the first group's message here, where Ensembl VEP's parser joins
+//! every group's distinct message under its warning (`:199`, `:208`, `:214`),
+//! the reading `docs/divergences/hgvs-transcript-input.md` states. Ensembl VEP
+//! reads an `NM_` or `XM_` reference from its RefSeq database alone
+//! (Parser/HGVS.pm:172); here every reference is read from the one transcript
+//! cache, so such a reference resolves where the cache carries RefSeq
+//! transcripts (`--refseq`, `--merged`) and is otherwise refused as a reference
+//! no transcript carries.
 //!
 //! Positions follow the regular expression at `:1620`: a start and an
 //! optional `_end`, each `[-*]?\d+` with an optional intronic offset `+n` or
@@ -65,8 +68,9 @@ use super::{cache_unreadable, unable, Notation};
 /// the first transcript `transcripts` resolves its reference to that yields
 /// one, its written reference allele replaced by the genome's under
 /// `flags.lookup_ref` and its alleles trimmed as written under `flags.minimal`;
-/// refused with the first core group's message when every group refuses it or
-/// lacks the transcript.
+/// refused with the first core group's message alone when every group refuses
+/// it or lacks the transcript, where Ensembl VEP's parser joins every group's
+/// distinct message (Parser/HGVS.pm:199, :208, :214).
 pub(super) fn variant(
     hgvs: &str,
     notation: &Notation,
@@ -947,11 +951,15 @@ pub(super) mod tests {
     /// A gene name whose pick in the first core group refuses the notation is
     /// resolved through the second group's gene (Parser/HGVS.pm:164-201: the
     /// groups are tried in turn until one yields a variant), and a notation
-    /// both groups refuse carries the first group's message, which for a
-    /// group without the gene is that no transcript was found. The Ensembl
-    /// copy of `GENE2` is the forward transcript, whose `c.1` is `A`; the
-    /// RefSeq copy is the reverse one, whose `c.1` is `G` on its strand;
-    /// `GENE3` has the RefSeq copy alone.
+    /// both groups refuse carries the first group's message alone, which for a
+    /// group without the gene is that no transcript was found. Ensembl VEP's
+    /// parser joins both groups' distinct messages under its warning (`:199`
+    /// `merge_arrays` over the errors list, `:208` the list copied whole into
+    /// the message, `:214` the `join`), so there `GENE3:c.1T>G` would carry the
+    /// RefSeq copy's mismatch message after the first group's. The Ensembl copy
+    /// of `GENE2` is the forward transcript, whose `c.1` is `A`; the RefSeq
+    /// copy is the reverse one, whose `c.1` is `G` on its strand; `GENE3` has
+    /// the RefSeq copy alone.
     #[test]
     fn gene_name_falls_through_to_the_second_core_group() {
         let mut ensembl = forward();

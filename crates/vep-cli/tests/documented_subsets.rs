@@ -1040,7 +1040,7 @@ fn fasta_dir_exclusion_is_documented() {
     );
 }
 
-/// `hgvs-transcript-input`: the four readings of the transcript branch that
+/// `hgvs-transcript-input`: the five readings of the transcript branch that
 /// differ. An `NM_` or `XM_` reference resolves against the
 /// cache's RefSeq transcripts alone (`resolve` in vep-io's `hgvs/transcript.rs`),
 /// the lookup reads the run's transcript set, a gene name resolves in
@@ -1049,13 +1049,23 @@ fn fasta_dir_exclusion_is_documented() {
 /// (`genomic_position` there), where VariationFeatureAdaptor.pm:1829-1849 and
 /// :2146-2226 read the RefSeq and core databases and
 /// `_parse_hgvs_transcript_position` (:1608, called at :1858) carries the
-/// undefined position on.
+/// undefined position on. A notation every core group refuses is skipped with
+/// the first group's message alone (`first_refusal` in `variant` there, one
+/// line through `unable` in `hgvs.rs`), where Parser/HGVS.pm collects every
+/// group's distinct exception text (:199, `merge_arrays` over the errors list,
+/// unique strings through Utils.pm:306-307) and joins the whole list under the
+/// one header (:208 copies it into the message list, :214 the `join`); the
+/// first error alone (`$errors[0]`, :207) drives only the `--max_sv_size`
+/// collapse of :209-212. The protein branch keeps the same first refusal
+/// across the groups (`first_refusal` in `protein.rs`), where the parser's group
+/// loop (:171) is not notation-type specific, so the page's protein list states
+/// the reading too.
 #[test]
 fn hgvs_transcript_input_exclusion_is_documented() {
     assert_page_states(
         "divergences/hgvs-transcript-input.md",
         &[
-            "Four readings differ:",
+            "Five readings differ:",
             "An `NM_` or `XM_` reference resolves against the cache's RefSeq transcripts, present \
              under `--refseq` or `--merged`, and is otherwise refused as a reference no \
              transcript carries (`Could not get a Transcript object`)",
@@ -1070,7 +1080,21 @@ fn hgvs_transcript_input_exclusion_is_documented() {
             "A description whose position its regular expression leaves undefined (`c.-A>G`, a \
              sign with no digits) is refused as one it could not parse, where Ensembl VEP \
              carries the undefined position on",
+            "A notation every core group refuses is skipped with the first group's message \
+             alone, where Ensembl VEP joins every group's distinct exception text under its \
+             `Unable to parse HGVS notation` warning (`Parser/HGVS.pm` lines 199, 208 and 214)",
+            "So in its database run a refused `ENST` notation also carries the `otherfeatures` \
+             group's `Could not get a Transcript object` message, and a refused gene name that \
+             group's own refusal",
+            "Six readings of the protein branch differ:",
+            "A notation every core group refuses is skipped with the first group's message alone, \
+             as in the transcript branch, where Ensembl VEP joins every group's distinct exception \
+             text under its warning",
         ],
+    );
+    assert_page_states(
+        "intended-divergences.md",
+        &["five readings of the transcript branch and six of the protein branch differ"],
     );
 }
 
@@ -1632,6 +1656,68 @@ fn fasta_open_refusals_are_each_tabulated() {
              with samtools faidx` |",
             "| An `.fai` naming bases past the file's end | `ERROR: [fasta] FASTA index names <n> \
              bases beyond the end of <file>` |",
+        ],
+    );
+}
+
+/// `spdi`: a record whose expanded reference allele ends in a character outside
+/// `ACGTN-` is annotated with no `SPDI` (`spdi_genomic` in `vep-core/src/spdi.rs`
+/// returns `None` for it), where Ensembl VEP 116.2's `spdi_genomic` throws
+/// (VariationFeature.pm:2159 `if( $ref_allele =~ m/[^ACGTN\-]$/ig ){`, :2160
+/// `throw("No supported SPDI genomic is available for Variation Feature ...")`),
+/// called with no `eval` from OutputFactory.pm:1398 under `--spdi` or
+/// `--ga4gh_vrs` (:1397), so its run ends with exit 255 before any row of the
+/// record's buffer is written (Runner.pm:391 fills the output buffer per input
+/// buffer, :208-209 prints it); Parser.pm:556's unanchored allele test lets the
+/// record through to it. The output page and the `--spdi` help state the reading.
+#[test]
+fn spdi_reference_allele_stop_is_documented() {
+    assert_page_states(
+        "output/vep-and-tab.md",
+        &[
+            "A record whose reference allele ends in a character outside `ACGTN-` after that \
+             expansion (`AR/CA`, `(AC)/-`) is annotated with no `SPDI` on any row",
+            "Ensembl VEP's `spdi_genomic` throws on such a record (`VariationFeature.pm` line \
+             2159), under `--ga4gh_vrs` too, and the run ends with exit 255 before any row of the \
+             record's buffer is written",
+        ],
+    );
+    assert_flag_row_states(
+        "cli/output-control.md",
+        "--spdi",
+        &[
+            "A record whose reference allele ends in a character outside `ACGTN-` (`AR/CA`) is \
+             annotated with no SPDI, where Ensembl VEP stops the run on it",
+        ],
+    );
+}
+
+/// `fasta`: a `--fasta` value Perl reads as false (`0`, the empty value) is a
+/// path here (`fasta: args.fasta` in `config.rs`, with no truth filter), refused
+/// at open, where Ensembl VEP reads the flag as unset, so CacheDir.pm:235
+/// (`unless($self->param('fasta') || $self->param('no_fasta'))`) auto-detects the
+/// cache directory's FASTA and BaseVEP.pm:521 (`if(my $fasta_file =
+/// $self->param('fasta'))`) opens none otherwise; `Config.pm:246` declares it
+/// `fasta|fa=s`. The compatibility page states the reading beside the other
+/// false-value flags and the cache page's FASTA table cross-references it.
+#[test]
+fn fasta_false_value_exclusion_is_documented() {
+    assert_page_states(
+        "cli/compatibility.md",
+        &[
+            "A `--fasta` value Perl reads as false, `0` or the empty value, leaves that flag unset \
+             there likewise, so the cache directory's FASTA is auto-detected or the run proceeds \
+             without one (`CacheDir.pm:235`, `BaseVEP.pm:521`)",
+            "vep-rs opens the value as a path and refuses it with `Specified FASTA file/directory \
+             <value> not found` (exit 1)",
+        ],
+    );
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "| `--fasta 0` or `--fasta ''`, a value Ensembl VEP reads as the flag unset \
+             ([compatibility page](cli/compatibility.md#where-configpm-is-not-followed)) | \
+             `ERROR: [fasta] Specified FASTA file/directory <value> not found` |",
         ],
     );
 }

@@ -185,6 +185,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The region page's `UPLOADED_ALLELE` section covers HGVS, SPDI and identifier records, whose second `--minimal` pass prints the once-trimmed string in Ensembl VEP (`TCA>TG`: `CA/G`). (#N)
   - The `--format` help scopes the any-case whole-name match to SPDI and HGVS input. (#N)
   - The regulatory page states that a regulatory-only record's intergenic `SPDI` names the chromosome as the cache does in Ensembl VEP and as the FASTA does here. (#N)
+  - The output page and the `--spdi` help state that a record whose reference allele ends outside `ACGTN-` (`AR/CA`) gets no `SPDI`, where Ensembl VEP's `spdi_genomic` ends the run. (#N)
+  - The HGVS divergence page states that a notation every core group refuses carries the first group's message alone, where Ensembl VEP joins every group's, with tests. (#N)
 - Caches, reference FASTA and the cache tools
   - `--dir_cache`, `--species`, `--cache_version`, `--refseq` and `--merged` select the cache in Ensembl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout; a run with no cache exits 1 before reading input. (#N)
   - `--assembly` must equal the cache directory's and `info.json`'s assembly (`hg19` and `hg38` read as `GRCh37` and `GRCh38`); the cache's assembly feeds headers and plugins. (#N)
@@ -204,6 +206,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The cache page tabulates `--hgvs` over a chromosome the FASTA lacks: Ensembl VEP prints `N` as the reference base, vep-rs no HGVSc. (#N)
   - The cache page states that an insertion on a contig the FASTA lacks passes `--check_ref` and `--lookup_ref` in both engines. (#N)
   - The FASTA refusal table lists the `.gzi` that does not describe its file, the third refusal at open. (#N)
+  - The compatibility page and the cache page's FASTA table state that `--fasta 0` or `--fasta ''` is a path here, where Ensembl VEP reads the flag as unset. (#N)
 - Co-located variants and frequencies
   - Under `--check_existing` a cache without variation data warns once, in the warnings file and on standard error unless `--quiet`, that `Existing_variation` and the frequency columns stay empty; Ensembl VEP annotates silently. (#N)
   - `--check_existing` matches known variants by allele after trimming from either end, strand-aware and span-exact, in Ensembl VEP's order; structural variants are not co-located. (#N)
@@ -403,6 +406,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--show_cache_info` prints the cache information before an unreadable `--synonyms` file is refused, as Ensembl VEP reads the file only in a run. (#N)
   - A skipped non-VCF line ending `\r\r\n` is quoted with its lone `\r` as a trailing space, as Ensembl VEP quotes it. (#N)
   - The warning for a repeated --output_file ends with a space before the newline, as Ensembl VEP's does. (#N)
+  - `af_exac 1` from the `--config` file, `vep.ini` or `VEP_AF_EXAC=1` reaches the `--af_exac` refusal (exit 1) instead of being dropped silently. (#N)
 - Warnings and skipped variants
   - A refused Ensembl-format line or identifier mapping is skipped with the reason alone; the warning opened with `VCF parse error:`. (#N)
   - `--warning_file STDERR` carries each warning twice unless `--quiet`, as `print $fh` then `warn` write it; an empty or `0` value is the default file. (#N)

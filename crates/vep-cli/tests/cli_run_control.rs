@@ -3544,3 +3544,31 @@ fn parquet_output_refuses_a_duckdb_below_the_floor_before_writing() {
         .collect();
     assert!(written.is_empty(), "{written:?}");
 }
+
+/// A `--fasta` value that is false in Perl, `0` or the empty value, is a path
+/// here (`fasta: args.fasta` in `config.rs` takes it as given, and `open_fasta`
+/// in `runner.rs` opens it), refused before any output is written with
+/// vep-fasta's `Specified FASTA file/directory <value> not found` (exit 1),
+/// where Ensembl VEP 116.2 reads the flag as unset: CacheDir.pm:235
+/// `unless($self->param('fasta') || $self->param('no_fasta')) {` auto-detects the
+/// cache directory's FASTA and BaseVEP.pm:521 `if(my $fasta_file =
+/// $self->param('fasta')) {` opens none otherwise, the reading
+/// `docs/cli/compatibility.md` and `docs/cache-setup.md` state.
+#[test]
+fn fasta_false_value_is_a_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    for value in ["0", ""] {
+        let output = run_control(
+            &["-o", out.to_str().unwrap(), "--fasta", value, "--quiet"],
+            dir.path(),
+        );
+        assert_eq!(output.status.code(), Some(1), "{value:?}");
+        assert_eq!(
+            text(&output.stderr),
+            format!("ERROR: [fasta] Specified FASTA file/directory {value} not found\n"),
+            "{value:?}"
+        );
+        assert!(!out.exists(), "{value:?}: an output was written");
+    }
+}

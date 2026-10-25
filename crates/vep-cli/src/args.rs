@@ -705,7 +705,9 @@ pub struct Args {
     /// notation, the position 0-based, the deleted bases (their count when more than
     /// 20) and the inserted bases, as the input wrote the record; the chromosome is
     /// named as the cache names it, and on a row overlapping no transcript as the
-    /// FASTA names it. Ensembl VEP needs a FASTA for those rows; this reads none
+    /// FASTA names it. Ensembl VEP needs a FASTA for those rows; this reads none. A
+    /// record whose reference allele ends in a character outside `ACGTN-` (`AR/CA`) is
+    /// annotated with no SPDI, where Ensembl VEP stops the run on it
     #[arg(help_heading = "Output Control", long)]
     pub spdi: bool,
 

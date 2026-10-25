@@ -419,3 +419,38 @@ fn transcript_index_impl_is_rejected() {
         );
     }
 }
+
+/// `af_exac 1` from a `--config` file or a `--dir`'s `vep.ini` reaches the
+/// refusal `--af_exac` reaches typed, with the identical line and exit 1, as
+/// every flag read from a source does: `key_storage` in `argv.rs` stores a key
+/// naming a flag the error table refuses before parsing under its own name, and
+/// `tokens_of` lays it out as the switch `--af_exac` for the scan in
+/// `config::parse_command_line` to refuse. A `0` value adds nothing, the rule
+/// for a switch set to a false value from a source. Ensembl VEP 116.2 drops the
+/// key from a file or the environment, since `GetOptions` run against the
+/// `VEP_PARAMS` list (Config.pm:1046) matches it to no option and
+/// `is_valid_param` (:1047) reads the empty result as invalid, so
+/// `read_config_from_file` skips the line (:1096, :1100); typed, it dies on it
+/// as an unexpected parameter (vep:30).
+#[test]
+fn af_exac_is_refused_from_a_configuration_file() {
+    let message = "--af_exac was removed in Ensembl VEP release 115: use --af_gnomade";
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("flags.ini");
+    std::fs::write(&file, "af_exac 1\n").unwrap();
+    assert_refused(&["--config", file.to_str().unwrap()], message);
+
+    let ini_dir = dir.path().join("dir");
+    std::fs::create_dir_all(&ini_dir).unwrap();
+    std::fs::write(ini_dir.join("vep.ini"), "af_exac 1\n").unwrap();
+    assert_refused(&["--dir", ini_dir.to_str().unwrap()], message);
+
+    let off = dir.path().join("off.ini");
+    std::fs::write(&off, "af_exac 0\n").unwrap();
+    let (code, stderr) = refusal(&["--config", off.to_str().unwrap()]);
+    assert_eq!(code, Some(1), "the run fails later, on its cache: {stderr}");
+    assert!(
+        !stderr.contains("af_exac"),
+        "a false value adds no token: {stderr}"
+    );
+}

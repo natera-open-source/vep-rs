@@ -33,7 +33,7 @@ use std::path::{Path, PathBuf};
 use clap::{ArgAction, Command};
 
 use crate::args::Args;
-use crate::config::{CliError, ERROR_TABLE};
+use crate::config::{error_table_entry, CliError, ERROR_TABLE};
 use crate::option_rules::ALLOW_MULTIPLE;
 
 /// `@VEP_PARAMS` (`Config.pm:73-276`): every option Ensembl VEP 116.2
@@ -539,11 +539,18 @@ pub(crate) fn truthy(value: &str) -> bool {
     !(value.is_empty() || value == "0")
 }
 
+/// Whether a key names a flag the error table refuses before parsing, one the
+/// parser does not declare ([`known_options`] lists them).
+fn refused_before_parsing(key: &str) -> bool {
+    error_table_entry(key).is_some_and(|entry| !entry.declared)
+}
+
 /// Where a source's key is stored, and whether it appends: a declared option's
 /// long name and its `multiple` ([`declared_for_key`]); for an Ensembl VEP
-/// option the parser lacks, Ensembl VEP's own name, so the parser refuses it as
-/// it refuses the flag on the command line, appending when `@ALLOW_MULTIPLE`
-/// lists it; `None` for a key neither names.
+/// option the parser lacks, or a flag the error table refuses before parsing,
+/// the flag's own name, so the parser refuses it as it refuses the flag on the
+/// command line, appending when `@ALLOW_MULTIPLE` lists it; `None` for a key
+/// none of them names.
 fn key_storage(
     declared: &[Declared],
     perl: &BTreeSet<String>,
@@ -551,7 +558,9 @@ fn key_storage(
 ) -> Option<(String, bool)> {
     match declared_for_key(declared, key) {
         Some(option) => Some((option.names.canonical.clone(), option.multiple)),
-        None if perl.contains(key) => Some((key.to_string(), ALLOW_MULTIPLE.contains(&key))),
+        None if perl.contains(key) || refused_before_parsing(key) => {
+            Some((key.to_string(), ALLOW_MULTIPLE.contains(&key)))
+        }
         None => None,
     }
 }
@@ -935,7 +944,9 @@ fn key_arity(declared: &[Declared], key: &str) -> Arity {
 /// string adds the flag alone: `Config.pm:716` compares the stored value with `0`
 /// as strings, which only `0` fails, and `:718` sets it to `1`. A scalar of an
 /// Ensembl VEP option the parser lacks is added as its `@VEP_PARAMS` spec takes
-/// it, a switch's or a value's, for the parser to refuse.
+/// it, a switch's or a value's, for the parser to refuse; one of a flag the
+/// error table refuses before parsing is added as a switch, for the scan ahead
+/// of the parser to refuse.
 fn tokens_of(settings: &Settings, declared: &[Declared]) -> (Vec<OsString>, Vec<OsString>) {
     let mut scalars = Vec::new();
     for (key, value) in &settings.scalars {

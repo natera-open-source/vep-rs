@@ -724,3 +724,39 @@ fn a_repeatable_key_alone_on_its_config_line_is_dropped() {
     );
     assert!(annotated.contains("ENSP="), "the file's protein line acts");
 }
+
+/// `VEP_AF_EXAC=1` reaches the refusal `--af_exac` reaches typed, the identical
+/// line and exit 1, as `VEP_DATABASE=1` reaches `--database`'s: the key names a
+/// flag the error table refuses before parsing, which `key_storage` in `argv.rs`
+/// stores under its own name and `tokens_of` lays out as the switch `--af_exac`
+/// for the scan in `config::parse_command_line`. `VEP_AF_EXAC=0` adds nothing,
+/// a switch set to a false value. Ensembl VEP 116.2 ignores the variable:
+/// `read_config_from_environment` keeps a key only when `is_valid_param`
+/// matches it to an option of `@VEP_PARAMS` (Config.pm:1143-1147), which has no
+/// `af_exac`.
+#[test]
+fn vep_env_af_exac_reaches_the_refusal() {
+    let home = tempfile::tempdir().unwrap();
+    let run = |value: &str| {
+        vep(home.path())
+            .args(["-i", "/nonexistent/input.vcf", "--quiet"])
+            .env("VEP_AF_EXAC", value)
+            .output()
+            .unwrap()
+    };
+    let refused = run("1");
+    assert_eq!(refused.status.code(), Some(1));
+    assert_eq!(
+        text(&refused.stderr),
+        "ERROR: [cli] --af_exac was removed in Ensembl VEP release 115: use --af_gnomade\n"
+    );
+
+    let off = run("0");
+    let stderr = text(&off.stderr);
+    assert_eq!(
+        off.status.code(),
+        Some(1),
+        "the run fails later, on its cache: {stderr}"
+    );
+    assert!(!stderr.contains("af_exac"), "{stderr}");
+}

@@ -785,3 +785,98 @@ fn a_hash_line_counts_toward_the_line_numbers() {
     assert!(!snv(&plain_rows).is_empty());
     assert_eq!(snv(&rows(&out)), snv(&plain_rows));
 }
+
+/// A record whose reference allele ends in a character outside `ACGTN-` after
+/// expansion (`AR/CA`) is annotated under `--spdi`, and under `--ga4gh_vrs`,
+/// with no `SPDI` and no `GA4GH_VRS` pair on any row (`spdi_genomic` in
+/// `vep-core/src/spdi.rs` returns `None` for it), the run exiting 0; the
+/// `GA4GH_VRS` half runs against the identifiers corpus's cache, whose synonyms
+/// table carries `NC_000021.9`, beside an SNV that gets both pairs, since the
+/// release-116 cache has no synonyms and writes no `GA4GH_VRS` to any record.
+/// Ensembl VEP 116.2's `spdi_genomic` throws on the record
+/// (VariationFeature.pm:2159 `if( $ref_allele =~ m/[^ACGTN\-]$/ig ){`, :2160
+/// `throw("No supported SPDI genomic is available for Variation Feature
+/// $reference_name:$vf_start-$vf_end ($vf_strand)")`), with no `eval` around the
+/// call at OutputFactory.pm:1398 (`$vf->{_spdi_genomic} = $vf->spdi_genomic();`
+/// under `:1397 if($self->{spdi} || $self->{ga4gh_vrs})`), so
+/// `21 20006769 20006770 AR/CA + ar_ca` ends its run there with exit 255 before
+/// any row of its buffer is written (Runner.pm:391 fills the output buffer per
+/// input buffer, :208-209 prints it), having passed Parser.pm:556's unanchored
+/// allele test (`unless($vf->{allele_string} =~ /([ACGTN-]+\/*)+/)`).
+#[test]
+fn reference_allele_ending_outside_acgtn_gets_no_spdi() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = write(
+        dir.path(),
+        "ar_ca.txt",
+        "21\t20006769\t20006769\tA/C\t+\tsnv\n21\t20006769\t20006770\tAR/CA\t+\tar_ca\n",
+    );
+    let has_extra = |row: &str, prefix: &str| -> bool {
+        row.split('\t')
+            .nth(13)
+            .unwrap_or("")
+            .split(';')
+            .any(|kv| kv.starts_with(prefix))
+    };
+    let ar_ca_rows = |rows: &[String]| -> Vec<String> {
+        rows.iter()
+            .filter(|row| row.starts_with("ar_ca\t"))
+            .cloned()
+            .collect()
+    };
+
+    let spdi_rows = annotate(dir.path(), &input, &["--spdi"]);
+    let spdi_ar_ca = ar_ca_rows(&spdi_rows);
+    assert!(!spdi_ar_ca.is_empty(), "{spdi_rows:?}");
+    assert!(
+        spdi_rows
+            .iter()
+            .any(|row| row.starts_with("snv\t") && has_extra(row, "SPDI=")),
+        "{spdi_rows:?}"
+    );
+    for row in &spdi_ar_ca {
+        let fields: Vec<&str> = row.split('\t').collect();
+        assert_eq!(fields[1], "21:20006769-20006770", "{row}");
+        assert_eq!(fields[2], "CA", "{row}");
+        assert!(!has_extra(row, "SPDI="), "{row}");
+    }
+
+    let identifiers_cache = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-identifiers/json_cache");
+    let out = output_path(dir.path());
+    let output = common::isolated_vep(dir.path())
+        .arg("-i")
+        .arg(&input)
+        .arg("-o")
+        .arg(&out)
+        .arg("--json_cache")
+        .arg(&identifiers_cache)
+        .args([
+            "--assembly",
+            "GRCh38",
+            "--force_overwrite",
+            "--no_stats",
+            "--quiet",
+            "--spdi",
+            "--ga4gh_vrs",
+        ])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let vrs_rows = rows(&out);
+    assert!(
+        vrs_rows.iter().any(|row| {
+            row.starts_with("snv\t") && has_extra(row, "SPDI=") && has_extra(row, "GA4GH_VRS=")
+        }),
+        "the control SNV carries both pairs: {vrs_rows:?}"
+    );
+    let vrs_ar_ca = ar_ca_rows(&vrs_rows);
+    assert!(!vrs_ar_ca.is_empty(), "{vrs_rows:?}");
+    for row in &vrs_ar_ca {
+        assert!(
+            !has_extra(row, "SPDI=") && !has_extra(row, "GA4GH_VRS="),
+            "{row}"
+        );
+    }
+}

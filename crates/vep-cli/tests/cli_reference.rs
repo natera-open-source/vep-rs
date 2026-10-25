@@ -905,6 +905,10 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          whitespace, and opens a `>`-led value for writing, emptying the file it names and \
          reading an empty table. A value Perl reads as false leaves the flag unset there, so \
          the cache's own file is read (`CacheDir.pm:254`).\n\
+         - A `--fasta` value Perl reads as false, `0` or the empty value, leaves that flag unset \
+         there likewise, so the cache directory's FASTA is auto-detected or the run proceeds \
+         without one (`CacheDir.pm:235`, `BaseVEP.pm:521`). vep-rs opens the value as a path \
+         and refuses it with `Specified FASTA file/directory <value> not found` (exit 1).\n\
          - The `--warning_file` and `--skipped_variants_file` values name their files as \
          given likewise, `-`, surrounding whitespace and a `>`-led value included. Ensembl \
          VEP opens each for writing with the two-argument `open` (`BaseVEP.pm:894`, \
@@ -972,8 +976,10 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          VEP drops it. So is an alias, unless the alias is an option of Ensembl VEP's own \
          (`full_cache_dir` names `--json_cache`).\n\
          - A key of an Ensembl VEP option this version lacks (`stats_html 1`) is refused as the \
-         flag on the command line is (exit 2). The exception is a switch of Ensembl VEP's set \
-         to `0`: off there, it adds nothing here.\n\
+         flag on the command line is (exit 2), and a key of a flag this version refuses \
+         (`database 1`, `af_exac 1`) reaches that refusal (exit 1). The exception is a switch \
+         set to `0` or the empty value: off there, it adds nothing here, and `af_exac 0` adds \
+         nothing either.\n\
          - Of several lines naming one flag, the first whose value is not `0` or empty counts.\n\
          - A `--config` file that cannot be opened is `ERROR: [config] Could not open config \
          file \"<file>\"`; `{INI_FILE}` is read only when it is a file.\n\n\
