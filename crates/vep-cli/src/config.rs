@@ -241,7 +241,7 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
         declared: false,
         treatment: Treatment::Refused {
             component: "cli",
-            message: "--af_exac was removed in Ensembl VEP release 115: use --af_gnomade",
+            message: "--af_exac was removed in Ensembl VEP release 107: use --af_gnomade",
         },
         ensembl_vep: "Config.pm:618 names it among --database's incompatibilities while @VEP_PARAMS (:73-276) does not declare it, so Ensembl VEP refuses it as an unexpected parameter (vep:30)",
         route: "--af_gnomade",
@@ -2617,7 +2617,7 @@ mod tests {
         }
         assert_eq!(
             refusal(&["vep", "--af_exac=1"]),
-            "ERROR: [cli] --af_exac was removed in Ensembl VEP release 115: use --af_gnomade"
+            "ERROR: [cli] --af_exac was removed in Ensembl VEP release 107: use --af_gnomade"
         );
     }
 

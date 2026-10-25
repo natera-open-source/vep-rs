@@ -197,12 +197,13 @@ fn db_version_is_refused() {
     );
 }
 
-/// `--af_exac` left `@VEP_PARAMS` with release 115 and survives only in
-/// `%INCOMPATIBLE{database}` (Config.pm:618); it is refused before parsing, in
+/// `--af_exac` left Ensembl VEP's option list with release 107, the release
+/// that added `--af_gnomade`; Ensembl VEP 116.2 names it only in
+/// `%INCOMPATIBLE{database}` (Config.pm:618). It is refused before parsing, in
 /// both spellings, naming its replacement.
 #[test]
 fn af_exac_is_refused_as_removed_upstream() {
-    let message = "--af_exac was removed in Ensembl VEP release 115: use --af_gnomade";
+    let message = "--af_exac was removed in Ensembl VEP release 107: use --af_gnomade";
     assert_refused(&["--af_exac"], message);
     assert_refused(&["--af_exac=1"], message);
     assert_refused(&["--everything", "--af_exac"], message);
@@ -434,7 +435,7 @@ fn transcript_index_impl_is_rejected() {
 /// as an unexpected parameter (vep:30).
 #[test]
 fn af_exac_is_refused_from_a_configuration_file() {
-    let message = "--af_exac was removed in Ensembl VEP release 115: use --af_gnomade";
+    let message = "--af_exac was removed in Ensembl VEP release 107: use --af_gnomade";
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("flags.ini");
     std::fs::write(&file, "af_exac 1\n").unwrap();

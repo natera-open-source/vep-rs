@@ -748,7 +748,7 @@ fn vep_env_af_exac_reaches_the_refusal() {
     assert_eq!(refused.status.code(), Some(1));
     assert_eq!(
         text(&refused.stderr),
-        "ERROR: [cli] --af_exac was removed in Ensembl VEP release 115: use --af_gnomade\n"
+        "ERROR: [cli] --af_exac was removed in Ensembl VEP release 107: use --af_gnomade\n"
     );
 
     let off = run("0");

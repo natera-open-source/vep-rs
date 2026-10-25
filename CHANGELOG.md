@@ -407,6 +407,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A skipped non-VCF line ending `\r\r\n` is quoted with its lone `\r` as a trailing space, as Ensembl VEP quotes it. (#N)
   - The warning for a repeated --output_file ends with a space before the newline, as Ensembl VEP's does. (#N)
   - `af_exac 1` from the `--config` file, `vep.ini` or `VEP_AF_EXAC=1` reaches the `--af_exac` refusal (exit 1) instead of being dropped silently. (#N)
+  - The `--af_exac` refusal names Ensembl VEP release 107, the release that dropped the flag, in place of release 115. (#N)
 - Warnings and skipped variants
   - A refused Ensembl-format line or identifier mapping is skipped with the reason alone; the warning opened with `VCF parse error:`. (#N)
   - `--warning_file STDERR` carries each warning twice unless `--quiet`, as `print $fh` then `warn` write it; an empty or `0` value is the default file. (#N)
