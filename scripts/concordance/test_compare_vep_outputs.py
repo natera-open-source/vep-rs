@@ -2316,9 +2316,10 @@ class ReferenceRegistryTests(unittest.TestCase):
         )
         self.assertEqual([r.excludes for r in rules],
                          [True, False, False, False, True, False, True, True, False, True, False, False, True, False],
-                         "this comparator reads no input and no cache: the lost-row breakend shapes, the "
-                         "missing ALT, the empty expansion, the `*`-only ALT and the dropped `RN=0` allele are "
-                         "judged only by the structural-variant comparator")
+                         "this comparator reads no cache and opens the input only to recognise gVCF variant "
+                         "sites: the lost-row breakend shapes, the missing ALT, the empty expansion, the "
+                         "`*`-only ALT and the dropped `RN=0` allele are judged only by the structural-variant "
+                         "comparator")
         self.assertEqual([r.excludes_with_cache for r in rules],
                          [True, True, True, False, True, False, True, True, True, True, True, True, True, True],
                          "the structural-variant comparator sets every class aside but the FASTA shape and the "

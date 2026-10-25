@@ -936,14 +936,14 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
         bucket=CNV_TR_EMPTY_EXPANSION_BUCKET,
         definition=(
             "With a FASTA, a <CNV:TR> whose expansion yields no alternate allele, or one "
-            "equal to the reference run (`RN=.`, a RUC that is not a positive number, a RUC "
-            "times unit length equal to SVLEN), is expanded to an allele string with no "
-            "alternate and the reference writes nothing for it, without a warning; vep-rs "
-            "with a FASTA writes nothing for it either, and without one writes the symbolic "
-            "rows over the run, as the reference does without one. vep-rs's rows are set "
-            "aside by the structural-variant comparator when the input record has the shape "
-            "and the reference wrote nothing at or beside the run; the SNP/indel comparator "
-            "does not judge it."
+            "equal to the reference run (`RN=.`, a RUC Perl reads as true that gives zero or "
+            "fewer repeats, a RUC times unit length equal to SVLEN), is expanded to an allele "
+            "string with no alternate and the reference writes nothing for it, without a "
+            "warning; vep-rs with a FASTA writes nothing for it either, and without one "
+            "writes the symbolic rows over the run, as the reference does without one. "
+            "vep-rs's rows are set aside by the structural-variant comparator when the input "
+            "record has the shape and the reference wrote nothing at or beside the run; the "
+            "SNP/indel comparator does not judge it."
         ),
         excludes=False,
         excludes_with_cache=True,

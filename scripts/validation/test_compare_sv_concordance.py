@@ -2747,8 +2747,9 @@ class FastaNamedSliceIntergenicTests(unittest.TestCase):
     def test_an_empty_tandem_repeat_expansion_is_set_aside_only_when_the_reference_wrote_nothing(self) -> None:
         """With a FASTA, Ensembl VEP 116.2 writes nothing for a `<CNV:TR>` whose expansion is
         empty or unchanged (`RN=.`, `RUC=abc`, `RUC=-2`, `RUC=3` on a three-unit run) and no
-        warning; vep-rs writes the symbolic rows over the run. Without a FASTA the reference
-        writes the symbolic rows too, and nothing is set aside."""
+        warning, and vep-rs with a FASTA writes nothing for it either; without one both
+        engines write the symbolic rows over the run. vep-rs's symbolic rows are set aside
+        only when the reference wrote nothing at or beside the run."""
         run = "SVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC;"
         empties = [REC(30425587, "N", "<CNV:TR>", run + "RUC=3"), REC(30425587, "N", "<CNV:TR>", run + "RN=.;RUC=4"),
                    REC(30425587, "N", "<CNV:TR>", run + "RUC=abc"), REC(30425587, "N", "<CNV:TR>", run + "RUC=-2")]

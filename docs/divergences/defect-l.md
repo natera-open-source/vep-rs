@@ -2,7 +2,7 @@
 
 **The defect in one sentence.** With a FASTA, Ensembl VEP drops a `<CNV:TR>` record without a row or a warning when its expansion to a literal allele string yields no alternate allele, or one identical to the reference run.
 
-The expansion may yield no alternate allele (`RN=.` on the only allele, a `RUC` that is not a positive number) or an allele identical to the reference run (`RUC` times the unit length equal to `SVLEN`). The record then passes through the parser without a feature to annotate: no row in any format, and no warning.
+The expansion may yield no alternate allele (`RN=.` on the only allele, a `RUC` Perl reads as true that gives zero or fewer repeats: `abc`, `-2`, `0.5`) or an allele identical to the reference run (`RUC` times the unit length equal to `SVLEN`). The record then passes through the parser without a feature to annotate: no row in any format, and no warning.
 
 **Why this is a defect.** A record the input states is a variant and the parser accepts should be annotated or refused with a message, never dropped in silence. Ensembl VEP itself annotates the same record as a symbolic `tandem_repeat` over the run when no FASTA is given.
 
@@ -23,7 +23,7 @@ Tuple, pair, set aside, charged and the other scoring terms are defined in [How 
 
 ### 19.1 What a reader needs to know first
 
-With a FASTA, Ensembl VEP expands a `<CNV:TR>` record to a literal allele string ([12.4](cnv-tr.md#124-why-ensembl-vep-writes-that)). The record's `RN`, `RUS`, `RUC` and `RB` fields are explained on [the `<CNV:TR>` page](cnv-tr.md#121-what-a-reader-needs-to-know-first). The expansion may yield no alternate allele (`RN=.` on the only allele, a `RUC` that is not a positive number) or an allele identical to the reference run (`RUC` times the unit length equal to `SVLEN`). The allele string then has no alternate, and the record passes through the parser without a feature to annotate: no row in any format, and no warning. Without a FASTA both engines write the symbolic `tandem_repeat` rows; with one, vep-rs expands the record as Ensembl VEP does and writes what Ensembl VEP writes.
+With a FASTA, Ensembl VEP expands a `<CNV:TR>` record to a literal allele string ([12.4](cnv-tr.md#124-why-ensembl-vep-writes-that)). Its `RN`, `RUS`, `RUC` and `RB` fields are explained on [the `<CNV:TR>` page](cnv-tr.md#121-what-a-reader-needs-to-know-first). The expansion may yield no alternate allele (`RN=.` on the only allele, a `RUC` Perl reads as true that gives zero or fewer repeats) or an allele identical to the reference run (`RUC` times the unit length equal to `SVLEN`). The allele string then has no alternate, and the record passes through the parser without a feature to annotate: no row and no warning. Without a FASTA both engines write the symbolic `tandem_repeat` rows; with one, vep-rs expands the record as Ensembl VEP does and writes what Ensembl VEP writes.
 
 ### 19.2 The record
 
@@ -100,6 +100,6 @@ The class is `cnv_tr_empty_expansion_dropped` in the 116.2 registry. The structu
 
 The input record is a single `<CNV:TR>` of one of three shapes: its `RN` is `.`; its repeat counts, `RUC` or `RB` in whole units, truncated as Perl's `x` operator truncates them, repeat nothing; or its counts times the unit lengths equal `SVLEN`.
 
-`RUC=3.5` on a three-unit run is included, as is an unchanged expansion over several repeat sequences, `RN=3;RUS=AGC,AGC,AGC;RUC=1,1,1` or `RN=2;RUS=AGC,AG;RUC=3,0` on the nine-base run, and a count in fullwidth digits, `RUC=４`, which Perl numifies to 0. A unit of no bases repeats nothing under `RUC`, `"" x n` being the empty expansion, and is set aside like `RN=.`. Under `RB` it divides by zero in Perl, which stops Ensembl VEP with no output, so no reference holds such a record.
+`RUC=3.5` on a three-unit run is included, as is an unchanged expansion over several repeat sequences, `RN=3;RUS=AGC,AGC,AGC;RUC=1,1,1` or `RN=2;RUS=AGC,AG;RUC=3,0` on the nine-base run, and a count in fullwidth digits, `RUC=４`, which Perl numifies to 0. A `RUC` Perl reads as false, `0` or empty, falls to `RB` (line 385); without an `RB` the record is not expanded, and both engines write the symbolic rows. A unit of no bases repeats nothing under `RUC`, `"" x n` being the empty expansion, and is set aside like `RN=.`. Under `RB` it divides by zero in Perl, which stops Ensembl VEP with no output, so no reference holds such a record.
 
 The SNP/indel comparator, which opens the input only to recognise gVCF variant sites under `--input-dir` or `--input-vcf`, does not judge the class.

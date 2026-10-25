@@ -110,4 +110,4 @@ vep -i missing.vcf -o missing.vep-rs.txt --offline --json_cache tests/golden/116
 
 ### 17.7 How the comparator treats this class
 
-The class is `missing_alt_annotated` in the 116.2 registry. The structural-variant comparator reads the input and sets aside the reference's rows at the Location of a record whose ALT is `.` and whose `SVTYPE` Perl reads as true. The SNP/indel comparator reads no input and cannot tell such a row from a record with an allele, so there the class counts nothing and the rows stay charged.
+The class is `missing_alt_annotated` in the 116.2 registry. The structural-variant comparator reads the input and sets aside the reference's rows at the Location of a record whose ALT is `.` and whose `SVTYPE` Perl reads as true. The SNP/indel comparator, which opens the input only to recognise gVCF variant sites under `--input-dir` or `--input-vcf`, judges this class from the output alone. There it cannot tell such a row from a record with an allele, so the class counts nothing and the rows stay charged.

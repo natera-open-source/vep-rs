@@ -1947,8 +1947,9 @@ def skipped_record_rows(
     route 116.2 shares with 115.2 (`start > end+1`) is reported; two records at one start
     whose alleles and Locations coincide, one skipped and one kept.
 
-    The SNP/indel comparator has no input VCF and applies the output-only rule
-    (`ReferenceRecordScope`): a Location with vep-rs structural rows and no reference row.
+    The SNP/indel comparator opens the input only to recognise gVCF variant sites and
+    judges this class by the output-only rule (`ReferenceRecordScope`): a Location with
+    vep-rs structural rows and no reference row.
 
     The gVCF variant site (`gvcf_variant_site`) is its own class,
     `GVCF_VARIANT_SITE_DROPPED_BUCKET`: its record is confirmed, so it explains its Location

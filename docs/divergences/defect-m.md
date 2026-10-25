@@ -146,4 +146,4 @@ Replacing `SVTYPE=DEL;END=30425949` with `.` gives no row from either engine.
 
 ### 20.7 How the comparator treats this class
 
-The class is `star_alone_svtype_annotated` in the 116.2 registry. The structural-variant comparator reads the input and sets aside the reference's rows at the Location of a record whose ALTs are all `*` and whose `SVTYPE` Perl reads as true. The SNP/indel comparator reads no input and cannot tell such a row from a record with an allele, so there the class counts nothing and the rows stay charged.
+The class is `star_alone_svtype_annotated` in the 116.2 registry. The structural-variant comparator reads the input and sets aside the reference's rows at the Location of a record whose ALTs are all `*` and whose `SVTYPE` Perl reads as true. The SNP/indel comparator, which opens the input only to recognise gVCF variant sites under `--input-dir` or `--input-vcf`, judges this class from the output alone. There it cannot tell such a row from a record with an allele, so the class counts nothing and the rows stay charged.

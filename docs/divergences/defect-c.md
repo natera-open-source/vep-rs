@@ -249,7 +249,7 @@ The records and the outputs are the authority, not the warnings file, which is a
 - vep-rs structural rows at a Location Ensembl VEP wrote nothing for that no record on a route explains;
 - or a dropped and a kept record at one start whose alleles and ends coincide.
 
-The SNP/indel comparator, `scripts/concordance/compare_vep_outputs.py`, reads the two outputs and no input VCF, so it applies an output-only rule. Ensembl VEP 116.2 writes at least one row for every record it keeps, an `intergenic_variant` row when no transcript is in range. So a Location at which vep-rs wrote rows and Ensembl VEP wrote nothing, under any allele, is a record Ensembl VEP dropped.
+The SNP/indel comparator, `scripts/concordance/compare_vep_outputs.py`, opens the input only to recognise gVCF variant sites under `--input-dir` or `--input-vcf`, so for this class it applies an output-only rule. Ensembl VEP 116.2 writes at least one row for every record it keeps, an `intergenic_variant` row when no transcript is in range. So a Location at which vep-rs wrote rows and Ensembl VEP wrote nothing, under any allele, is a record Ensembl VEP dropped.
 
 At least one vep-rs row at the Location must carry a structural allele (every route to the mark is structural), and `tandem_repeat` does not admit a Location, because Ensembl VEP keeps a `<CNV:TR>` record and writes it at another Location (class 12). Once admitted, every vep-rs row at the Location is set aside, a sequence allele beside the symbolic one of a mixed ALT list included, because Ensembl VEP skips the line whole. The SNP/indel datasets carry no such record.
 
