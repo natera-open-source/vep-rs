@@ -218,8 +218,9 @@ def engine_label(block, engine: str, display: str, name: str) -> str:
 
 
 def read_chart(record: dict, name: str, version: str) -> dict:
-    """Everything the chart draws, read from the record: datasets, per-series labels and times, the
-    protocol's machine count and thread count, and notes on omitted bars."""
+    """Everything the chart draws, read from the record: datasets, per-series labels and times, the base
+    series' machine count, every series measured on another count, the thread count, and notes on
+    omitted bars."""
     datasets = read_datasets(record, name)
     (wall_time, fork) = required(record, ("wall_time", "fork"), name)
     fork = integer(fork, "fork", name)
@@ -247,10 +248,10 @@ def read_chart(record: dict, name: str, version: str) -> dict:
         clones[engine] = integer(n_clones, "n_clones_per_cell", where)
         series.append({"engine": engine, "display": display, "css_class": css_class,
                        "label": engine_label(block, engine, display, name), "times": times})
-    if len(set(clones.values())) != 1:
-        fail(f"{name} names several machine counts per cell: {sorted(clones.items())}")
+    base_clones = clones[BASE_ENGINE]
+    other_clones = [(s["display"], clones[s["engine"]]) for s in series if clones[s["engine"]] != base_clones]
     return {"version": version, "datasets": datasets, "series": series, "fork": fork,
-            "n_clones": next(iter(clones.values())), "notes": notes}
+            "n_clones": base_clones, "other_clones": other_clones, "notes": notes}
 
 
 def significant_3(x: Decimal) -> str:
@@ -422,10 +423,13 @@ def short_name(dataset: dict) -> str:
 
 
 def title_text(chart: dict) -> str:
-    return (
-        f"Wall time, sum of per-chromosome medians over {chart['n_clones']} machines at {chart['fork']} threads, "
-        f"{ARCH_LABEL}"
-    )
+    """The protocol line: the base series' machines per cell, with every series measured on another
+    count named beside it."""
+    machines = f"{chart['n_clones']} machines"
+    if chart["other_clones"]:
+        others = ", ".join(f"{display} over {count}" for display, count in chart["other_clones"])
+        machines += f" ({others})"
+    return f"Wall time, sum of per-chromosome medians over {machines} at {chart['fork']} threads, {ARCH_LABEL}"
 
 
 def heading(chart: dict, width: float) -> tuple[list[str], float]:

@@ -1,0 +1,6244 @@
+{
+  "arches": [
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "ami_ssm_param": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64",
+      "arch": "arm64",
+      "cpu": "AWS Graviton5",
+      "fork": 16,
+      "host_memory_gib": 64,
+      "host_vcpu_count": 32,
+      "instance_type": "c9gd.8xlarge",
+      "local_nvme": true
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "ami_ssm_param": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64",
+      "arch": "x86_64",
+      "cpu": "Intel x86_64",
+      "fork": 16,
+      "host_memory_gib": 64,
+      "host_vcpu_count": 32,
+      "instance_type": "c8id.8xlarge",
+      "local_nvme": true
+    }
+  ],
+  "binary_md5_vep_rs_arm": "39b42c4d1ab00bfb6cd0d424b9675d5c",
+  "binary_md5_vep_rs_x86": "f47f4718fa0e39974525f29a1852d548",
+  "cargo_lock_sha256": "de3d15b7a7b6f5b63f01da0c34a38e06f5760af5ce98e28d3b605a7e2e2188c1",
+  "clone_manifest_note": "One entry per clone of each sweep; instance ids are positional (clone-<role>-<arch>-<index>).",
+  "clones": [
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "39b42c4d1ab00bfb6cd0d424b9675d5c",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:59:50Z",
+      "dataset_inventory_sha256": "2d8d2d89bd4e7b7c8ef1fb409a93dc78bee0e4ac573ea4cea37d3616cdd32989",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-concordance-arm64-001",
+      "instance_type": "r9gd.8xlarge",
+      "role": "concordance",
+      "run_index": 1,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005747Z"
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "39b42c4d1ab00bfb6cd0d424b9675d5c",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T02:00:17Z",
+      "dataset_inventory_sha256": "2d8d2d89bd4e7b7c8ef1fb409a93dc78bee0e4ac573ea4cea37d3616cdd32989",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-concordance-arm64-002",
+      "instance_type": "r9gd.8xlarge",
+      "role": "concordance",
+      "run_index": 2,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005747Z"
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "f47f4718fa0e39974525f29a1852d548",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T02:07:41Z",
+      "dataset_inventory_sha256": "2d8d2d89bd4e7b7c8ef1fb409a93dc78bee0e4ac573ea4cea37d3616cdd32989",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-concordance-x86_64-001",
+      "instance_type": "r8id.8xlarge",
+      "role": "concordance",
+      "run_index": 1,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005747Z"
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "f47f4718fa0e39974525f29a1852d548",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T02:08:18Z",
+      "dataset_inventory_sha256": "2d8d2d89bd4e7b7c8ef1fb409a93dc78bee0e4ac573ea4cea37d3616cdd32989",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-concordance-x86_64-002",
+      "instance_type": "r8id.8xlarge",
+      "role": "concordance",
+      "run_index": 2,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005747Z"
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "39b42c4d1ab00bfb6cd0d424b9675d5c",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:17:39Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-wall_time-arm64-001",
+      "instance_type": "c9gd.8xlarge",
+      "role": "wall_time",
+      "run_index": 1,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005746Z",
+      "wall_time_sec": {
+        "s01": 3.42,
+        "s02": 11.34,
+        "s07": 1.23,
+        "s08": 3.32
+      }
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "39b42c4d1ab00bfb6cd0d424b9675d5c",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:18:10Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-wall_time-arm64-002",
+      "instance_type": "c9gd.8xlarge",
+      "role": "wall_time",
+      "run_index": 2,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005746Z",
+      "wall_time_sec": {
+        "s01": 3.43,
+        "s02": 11.44,
+        "s07": 1.25,
+        "s08": 3.44
+      }
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "39b42c4d1ab00bfb6cd0d424b9675d5c",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:17:59Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-wall_time-arm64-003",
+      "instance_type": "c9gd.8xlarge",
+      "role": "wall_time",
+      "run_index": 3,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005746Z",
+      "wall_time_sec": {
+        "s01": 4.04,
+        "s02": 11.34,
+        "s07": 1.23,
+        "s08": 3.33
+      }
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "39b42c4d1ab00bfb6cd0d424b9675d5c",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:18:00Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-wall_time-arm64-004",
+      "instance_type": "c9gd.8xlarge",
+      "role": "wall_time",
+      "run_index": 4,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005746Z",
+      "wall_time_sec": {
+        "s01": 3.42,
+        "s02": 11.42,
+        "s07": 1.25,
+        "s08": 3.46
+      }
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "39b42c4d1ab00bfb6cd0d424b9675d5c",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:17:57Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-wall_time-arm64-005",
+      "instance_type": "c9gd.8xlarge",
+      "role": "wall_time",
+      "run_index": 5,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005746Z",
+      "wall_time_sec": {
+        "s01": 3.49,
+        "s02": 11.3,
+        "s07": 1.24,
+        "s08": 3.39
+      }
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "f47f4718fa0e39974525f29a1852d548",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:20:40Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-wall_time-x86_64-001",
+      "instance_type": "c8id.8xlarge",
+      "role": "wall_time",
+      "run_index": 1,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005746Z",
+      "wall_time_sec": {
+        "s01": 5.15,
+        "s02": 15.3,
+        "s07": 1.85,
+        "s08": 4.82
+      }
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "f47f4718fa0e39974525f29a1852d548",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:21:45Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-wall_time-x86_64-002",
+      "instance_type": "c8id.8xlarge",
+      "role": "wall_time",
+      "run_index": 2,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005746Z",
+      "wall_time_sec": {
+        "s01": 5.15,
+        "s02": 15.43,
+        "s07": 1.86,
+        "s08": 4.8
+      }
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "f47f4718fa0e39974525f29a1852d548",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:21:26Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-wall_time-x86_64-003",
+      "instance_type": "c8id.8xlarge",
+      "role": "wall_time",
+      "run_index": 3,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005746Z",
+      "wall_time_sec": {
+        "s01": 5.22,
+        "s02": 15.38,
+        "s07": 1.84,
+        "s08": 4.77
+      }
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "f47f4718fa0e39974525f29a1852d548",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:20:45Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-wall_time-x86_64-004",
+      "instance_type": "c8id.8xlarge",
+      "role": "wall_time",
+      "run_index": 4,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005746Z",
+      "wall_time_sec": {
+        "s01": 5.12,
+        "s02": 15.57,
+        "s07": 1.87,
+        "s08": 4.86
+      }
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "f47f4718fa0e39974525f29a1852d548",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:21:08Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-wall_time-x86_64-005",
+      "instance_type": "c8id.8xlarge",
+      "role": "wall_time",
+      "run_index": 5,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005746Z",
+      "wall_time_sec": {
+        "s01": 5.08,
+        "s02": 15.44,
+        "s07": 1.85,
+        "s08": 4.87
+      }
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "a96d5b61a8f0f6d66fc20bc3d9c3ccbb",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:17:53Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-previous_release_control-arm64-001",
+      "instance_type": "c9gd.8xlarge",
+      "role": "previous_release_control",
+      "run_index": 1,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005749Z",
+      "wall_time_sec": {
+        "s01": 3.9,
+        "s02": 11.58,
+        "s07": 1.17,
+        "s08": 3.28
+      }
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "a96d5b61a8f0f6d66fc20bc3d9c3ccbb",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:21:30Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-previous_release_control-arm64-002",
+      "instance_type": "c9gd.8xlarge",
+      "role": "previous_release_control",
+      "run_index": 2,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005749Z",
+      "wall_time_sec": {
+        "s01": 3.86,
+        "s02": 11.56,
+        "s07": 1.15,
+        "s08": 3.2
+      }
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "a96d5b61a8f0f6d66fc20bc3d9c3ccbb",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:19:16Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-previous_release_control-arm64-003",
+      "instance_type": "c9gd.8xlarge",
+      "role": "previous_release_control",
+      "run_index": 3,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005749Z",
+      "wall_time_sec": {
+        "s01": 3.86,
+        "s02": 11.5,
+        "s07": 1.16,
+        "s08": 3.13
+      }
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "3d95a528e3b350cc8dd0fe80826a4ab1",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:20:37Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-previous_release_control-x86_64-001",
+      "instance_type": "c8id.8xlarge",
+      "role": "previous_release_control",
+      "run_index": 1,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005749Z",
+      "wall_time_sec": {
+        "s01": 6.46,
+        "s02": 16.65,
+        "s07": 1.76,
+        "s08": 4.61
+      }
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "3d95a528e3b350cc8dd0fe80826a4ab1",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:21:44Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-previous_release_control-x86_64-002",
+      "instance_type": "c8id.8xlarge",
+      "role": "previous_release_control",
+      "run_index": 2,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005749Z",
+      "wall_time_sec": {
+        "s01": 6.45,
+        "s02": 16.65,
+        "s07": 1.73,
+        "s08": 4.59
+      }
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "3d95a528e3b350cc8dd0fe80826a4ab1",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:21:55Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-previous_release_control-x86_64-003",
+      "instance_type": "c8id.8xlarge",
+      "role": "previous_release_control",
+      "run_index": 3,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261025T005749Z",
+      "wall_time_sec": {
+        "s01": 6.48,
+        "s02": 16.65,
+        "s07": 1.78,
+        "s08": 4.54
+      }
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "a96d5b61a8f0f6d66fc20bc3d9c3ccbb",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-22T17:21:56Z",
+      "dataset_inventory_sha256": "2d8d2d89bd4e7b7c8ef1fb409a93dc78bee0e4ac573ea4cea37d3616cdd32989",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-previous_release_concordance-arm64-001",
+      "instance_type": "r9gd.8xlarge",
+      "role": "previous_release_concordance",
+      "run_index": 1,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261022T161358Z"
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "3d95a528e3b350cc8dd0fe80826a4ab1",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-22T17:26:12Z",
+      "dataset_inventory_sha256": "2d8d2d89bd4e7b7c8ef1fb409a93dc78bee0e4ac573ea4cea37d3616cdd32989",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-previous_release_concordance-x86_64-001",
+      "instance_type": "r8id.8xlarge",
+      "role": "previous_release_concordance",
+      "run_index": 1,
+      "suites": [
+        "s01",
+        "s02",
+        "s07",
+        "s08",
+        "s09",
+        "s10"
+      ],
+      "sweep_id": "sweep-20261022T161358Z"
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "73ff830e5053c70b566242277b4f2bcc",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:17:31Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-generic_build-arm64-001",
+      "instance_type": "c9gd.8xlarge",
+      "role": "generic_build",
+      "run_index": 1,
+      "suites": [
+        "s02"
+      ],
+      "sweep_id": "sweep-20261025T005748Z",
+      "wall_time_sec": {
+        "s02": 11.17
+      }
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "73ff830e5053c70b566242277b4f2bcc",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:19:16Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-generic_build-arm64-002",
+      "instance_type": "c9gd.8xlarge",
+      "role": "generic_build",
+      "run_index": 2,
+      "suites": [
+        "s02"
+      ],
+      "sweep_id": "sweep-20261025T005748Z",
+      "wall_time_sec": {
+        "s02": 11.15
+      }
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "73ff830e5053c70b566242277b4f2bcc",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:19:20Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-generic_build-arm64-003",
+      "instance_type": "c9gd.8xlarge",
+      "role": "generic_build",
+      "run_index": 3,
+      "suites": [
+        "s02"
+      ],
+      "sweep_id": "sweep-20261025T005748Z",
+      "wall_time_sec": {
+        "s02": 11.2
+      }
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "73ff830e5053c70b566242277b4f2bcc",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:22:01Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-generic_build-arm64-004",
+      "instance_type": "c9gd.8xlarge",
+      "role": "generic_build",
+      "run_index": 4,
+      "suites": [
+        "s02"
+      ],
+      "sweep_id": "sweep-20261025T005748Z",
+      "wall_time_sec": {
+        "s02": 11.13
+      }
+    },
+    {
+      "ami_id": "ami-0a2a049c945b84826",
+      "arch": "arm64",
+      "binary_md5": "73ff830e5053c70b566242277b4f2bcc",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:19:20Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-generic_build-arm64-005",
+      "instance_type": "c9gd.8xlarge",
+      "role": "generic_build",
+      "run_index": 5,
+      "suites": [
+        "s02"
+      ],
+      "sweep_id": "sweep-20261025T005748Z",
+      "wall_time_sec": {
+        "s02": 11.19
+      }
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "5f3453030241c2bf3671a4a393f166a8",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:20:56Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-generic_build-x86_64-001",
+      "instance_type": "c8id.8xlarge",
+      "role": "generic_build",
+      "run_index": 1,
+      "suites": [
+        "s02"
+      ],
+      "sweep_id": "sweep-20261025T005748Z",
+      "wall_time_sec": {
+        "s02": 15.64
+      }
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "5f3453030241c2bf3671a4a393f166a8",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:22:00Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-generic_build-x86_64-002",
+      "instance_type": "c8id.8xlarge",
+      "role": "generic_build",
+      "run_index": 2,
+      "suites": [
+        "s02"
+      ],
+      "sweep_id": "sweep-20261025T005748Z",
+      "wall_time_sec": {
+        "s02": 15.54
+      }
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "5f3453030241c2bf3671a4a393f166a8",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:22:37Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-generic_build-x86_64-003",
+      "instance_type": "c8id.8xlarge",
+      "role": "generic_build",
+      "run_index": 3,
+      "suites": [
+        "s02"
+      ],
+      "sweep_id": "sweep-20261025T005748Z",
+      "wall_time_sec": {
+        "s02": 15.44
+      }
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "5f3453030241c2bf3671a4a393f166a8",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:23:31Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-generic_build-x86_64-004",
+      "instance_type": "c8id.8xlarge",
+      "role": "generic_build",
+      "run_index": 4,
+      "suites": [
+        "s02"
+      ],
+      "sweep_id": "sweep-20261025T005748Z",
+      "wall_time_sec": {
+        "s02": 15.59
+      }
+    },
+    {
+      "ami_id": "ami-029a761f237195c2c",
+      "arch": "x86_64",
+      "binary_md5": "5f3453030241c2bf3671a4a393f166a8",
+      "binary_md5_source": "clone COMPLETE marker (verified == pin)",
+      "completed_at_utc": "2026-10-25T01:22:53Z",
+      "dataset_inventory_sha256": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+      "engine": "vep_rs",
+      "final_state": "terminated",
+      "instance_id": "clone-generic_build-x86_64-005",
+      "instance_type": "c8id.8xlarge",
+      "role": "generic_build",
+      "run_index": 5,
+      "suites": [
+        "s02"
+      ],
+      "sweep_id": "sweep-20261025T005748Z",
+      "wall_time_sec": {
+        "s02": 15.56
+      }
+    }
+  ],
+  "concordance": {
+    "s01": {
+      "adj_f1": 1.0,
+      "adj_intersection": 33483180,
+      "adj_perl": 33483180,
+      "adj_rust": 33483180,
+      "intersection": 33483180,
+      "perl": 33483881,
+      "raw_f1": 0.999979065,
+      "rust": 33483881,
+      "set_aside": {
+        "adjusted": {
+          "excluded_categories": {
+            "bnd_bare_reference_allele_row": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "bnd_mate_32bit_buffer_intergenic": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "bnd_own_chromosome_rows_lost": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "bnd_synonym_mate_rows_lost": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "cnv_tr_empty_expansion_dropped": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "cnv_tr_rn_zero_allele_dropped": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "dot_breakend_without_svtype_pair": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "fasta_named_slice_intergenic": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "frameshift_splice_cascade_swap": {
+              "count": 156,
+              "excluded": 156
+            },
+            "gvcf_variant_site_dropped": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "intronic_overcall_swap": {
+              "count": 117,
+              "excluded": 117
+            },
+            "missing_alt_annotated": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "non_integer_end_annotated": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "non_numeric_pos_numified": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "ppt_overcall_swap": {
+              "count": 53,
+              "excluded": 53
+            },
+            "reference_skipped_record": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "splice_lastwrite_swap": {
+              "count": 114,
+              "excluded": 114
+            },
+            "star_alone_svtype_annotated": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "start_cooccurrence_swap": {
+              "count": 261,
+              "excluded": 261
+            }
+          },
+          "excluded_perl_tuples": 701,
+          "excluded_rust_tuples": 701
+        },
+        "by_taxonomy_class": {
+          "bnd_bare_reference_allele_row": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "bnd_mate_32bit_buffer_intergenic": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "bnd_own_chromosome_rows_lost": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "bnd_synonym_mate_rows_lost": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "cnv_tr_empty_expansion_dropped": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "cnv_tr_rn_zero_allele_dropped": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "dot_breakend_without_svtype_pair": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "fasta_named_slice_intergenic": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "gvcf_variant_site_dropped": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "missing_alt_annotated": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "non_integer_end_annotated": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "non_numeric_pos_numified": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "reference_skipped_record": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "splice_family_swap": {
+            "count": 440,
+            "excluded": 440
+          },
+          "star_alone_svtype_annotated": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "start_cooccurrence_swap": {
+            "count": 261,
+            "excluded": 261
+          }
+        }
+      }
+    },
+    "s02": {
+      "adj_f1": 1.0,
+      "adj_intersection": 125569159,
+      "adj_perl": 125569159,
+      "adj_rust": 125569159,
+      "intersection": 125569159,
+      "perl": 125572619,
+      "raw_f1": 0.999972446,
+      "rust": 125572619,
+      "set_aside": {
+        "adjusted": {
+          "excluded_categories": {
+            "bnd_bare_reference_allele_row": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "bnd_mate_32bit_buffer_intergenic": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "bnd_own_chromosome_rows_lost": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "bnd_synonym_mate_rows_lost": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "cnv_tr_empty_expansion_dropped": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "cnv_tr_rn_zero_allele_dropped": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "dot_breakend_without_svtype_pair": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "fasta_named_slice_intergenic": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "frameshift_splice_cascade_swap": {
+              "count": 774,
+              "excluded": 774
+            },
+            "gvcf_variant_site_dropped": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "intronic_overcall_swap": {
+              "count": 404,
+              "excluded": 404
+            },
+            "missing_alt_annotated": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "non_integer_end_annotated": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "non_numeric_pos_numified": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "ppt_overcall_swap": {
+              "count": 331,
+              "excluded": 331
+            },
+            "reference_skipped_record": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "splice_lastwrite_swap": {
+              "count": 485,
+              "excluded": 485
+            },
+            "star_alone_svtype_annotated": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "start_cooccurrence_swap": {
+              "count": 1466,
+              "excluded": 1466
+            }
+          },
+          "excluded_perl_tuples": 3460,
+          "excluded_rust_tuples": 3460
+        },
+        "by_taxonomy_class": {
+          "bnd_bare_reference_allele_row": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "bnd_mate_32bit_buffer_intergenic": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "bnd_own_chromosome_rows_lost": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "bnd_synonym_mate_rows_lost": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "cnv_tr_empty_expansion_dropped": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "cnv_tr_rn_zero_allele_dropped": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "dot_breakend_without_svtype_pair": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "fasta_named_slice_intergenic": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "gvcf_variant_site_dropped": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "missing_alt_annotated": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "non_integer_end_annotated": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "non_numeric_pos_numified": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "reference_skipped_record": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "splice_family_swap": {
+            "count": 1994,
+            "excluded": 1994
+          },
+          "star_alone_svtype_annotated": {
+            "count": 0,
+            "excluded": 0,
+            "perl": 0,
+            "records": 0,
+            "rust": 0
+          },
+          "start_cooccurrence_swap": {
+            "count": 1466,
+            "excluded": 1466
+          }
+        }
+      }
+    },
+    "s07": {
+      "adj_f1": 1.0,
+      "adj_intersection": 315637,
+      "adj_perl": 315637,
+      "adj_rust": 315637,
+      "intersection": 315637,
+      "per_file": {
+        "01_snv": {
+          "engine_tuples": 7488,
+          "f1": 1.0,
+          "intersection": 7488,
+          "perl_tuples": 7488
+        },
+        "02_mnp_complex": {
+          "engine_tuples": 19664,
+          "f1": 1.0,
+          "intersection": 19664,
+          "perl_tuples": 19664
+        },
+        "03_small_indels": {
+          "engine_tuples": 19763,
+          "f1": 1.0,
+          "intersection": 19763,
+          "perl_tuples": 19763
+        },
+        "04_large_explicit": {
+          "engine_tuples": 3985,
+          "f1": 1.0,
+          "intersection": 3985,
+          "perl_tuples": 3985
+        },
+        "05_symbolic_del_ins": {
+          "engine_tuples": 73007,
+          "f1": 1.0,
+          "intersection": 73007,
+          "perl_tuples": 73007
+        },
+        "06_symbolic_dup_inv": {
+          "engine_tuples": 67036,
+          "f1": 1.0,
+          "intersection": 67036,
+          "perl_tuples": 67036
+        },
+        "07_cnv_repeat": {
+          "engine_tuples": 21483,
+          "f1": 1.0,
+          "intersection": 21483,
+          "perl_tuples": 21483
+        },
+        "08_mobile_elements": {
+          "engine_tuples": 7607,
+          "f1": 1.0,
+          "intersection": 7607,
+          "perl_tuples": 7607
+        },
+        "09_breakends": {
+          "engine_tuples": 24254,
+          "f1": 0.939137995,
+          "intersection": 22683,
+          "perl_tuples": 24052
+        },
+        "10_special_alleles": {
+          "engine_tuples": 1207,
+          "f1": 0.909665763,
+          "intersection": 1007,
+          "perl_tuples": 1007
+        },
+        "11_multi_allelic": {
+          "engine_tuples": 8565,
+          "f1": 0.999883246,
+          "intersection": 8564,
+          "perl_tuples": 8565
+        },
+        "12_complex_imprecise": {
+          "engine_tuples": 6548,
+          "f1": 0.900142773,
+          "intersection": 5359,
+          "perl_tuples": 5359
+        },
+        "13_vcf45_features": {
+          "engine_tuples": 8615,
+          "f1": 0.995589089,
+          "intersection": 8577,
+          "perl_tuples": 8615
+        },
+        "1kg_sv_chr21": {
+          "engine_tuples": 3057,
+          "f1": 1.0,
+          "intersection": 3057,
+          "perl_tuples": 3057
+        },
+        "clinvar_sv_chr21": {
+          "engine_tuples": 20913,
+          "f1": 0.999952183,
+          "intersection": 20912,
+          "perl_tuples": 20913
+        },
+        "gnomad_sv_v2.1_chr21": {
+          "engine_tuples": 44581,
+          "f1": 0.726719694,
+          "intersection": 25445,
+          "perl_tuples": 25446
+        }
+      },
+      "per_file_adjusted": {
+        "01_snv": {
+          "engine_tuples": 7488,
+          "f1": 1.0,
+          "intersection": 7488,
+          "perl_tuples": 7488
+        },
+        "02_mnp_complex": {
+          "engine_tuples": 19664,
+          "f1": 1.0,
+          "intersection": 19664,
+          "perl_tuples": 19664
+        },
+        "03_small_indels": {
+          "engine_tuples": 19763,
+          "f1": 1.0,
+          "intersection": 19763,
+          "perl_tuples": 19763
+        },
+        "04_large_explicit": {
+          "engine_tuples": 3985,
+          "f1": 1.0,
+          "intersection": 3985,
+          "perl_tuples": 3985
+        },
+        "05_symbolic_del_ins": {
+          "engine_tuples": 73007,
+          "f1": 1.0,
+          "intersection": 73007,
+          "perl_tuples": 73007
+        },
+        "06_symbolic_dup_inv": {
+          "engine_tuples": 67036,
+          "f1": 1.0,
+          "intersection": 67036,
+          "perl_tuples": 67036
+        },
+        "07_cnv_repeat": {
+          "engine_tuples": 21483,
+          "f1": 1.0,
+          "intersection": 21483,
+          "perl_tuples": 21483
+        },
+        "08_mobile_elements": {
+          "engine_tuples": 7607,
+          "f1": 1.0,
+          "intersection": 7607,
+          "perl_tuples": 7607
+        },
+        "09_breakends": {
+          "engine_tuples": 22683,
+          "f1": 1.0,
+          "intersection": 22683,
+          "perl_tuples": 22683
+        },
+        "10_special_alleles": {
+          "engine_tuples": 1007,
+          "f1": 1.0,
+          "intersection": 1007,
+          "perl_tuples": 1007
+        },
+        "11_multi_allelic": {
+          "engine_tuples": 8564,
+          "f1": 1.0,
+          "intersection": 8564,
+          "perl_tuples": 8564
+        },
+        "12_complex_imprecise": {
+          "engine_tuples": 5359,
+          "f1": 1.0,
+          "intersection": 5359,
+          "perl_tuples": 5359
+        },
+        "13_vcf45_features": {
+          "engine_tuples": 8577,
+          "f1": 1.0,
+          "intersection": 8577,
+          "perl_tuples": 8577
+        },
+        "1kg_sv_chr21": {
+          "engine_tuples": 3057,
+          "f1": 1.0,
+          "intersection": 3057,
+          "perl_tuples": 3057
+        },
+        "clinvar_sv_chr21": {
+          "engine_tuples": 20912,
+          "f1": 1.0,
+          "intersection": 20912,
+          "perl_tuples": 20912
+        },
+        "gnomad_sv_v2.1_chr21": {
+          "engine_tuples": 25445,
+          "f1": 1.0,
+          "intersection": 25445,
+          "perl_tuples": 25445
+        }
+      },
+      "perl": 317047,
+      "raw_f1": 0.964042027,
+      "rust": 337773,
+      "set_aside": {
+        "adjusted": {
+          "bnd_bare_reference_allele_rows": 0,
+          "bnd_mate_32bit_buffer_records": 0,
+          "bnd_mate_32bit_buffer_reference_tuples": 0,
+          "cnvtr_swap_pairs_total_perl": 0,
+          "cnvtr_swap_pairs_total_rust": 0,
+          "cross_file_duplicate_perl": 35,
+          "cross_file_duplicate_rust": 35,
+          "divergence_classes": {
+            "bnd_bare_reference_allele_row": {
+              "excluded": 0
+            },
+            "bnd_mate_32bit_buffer_intergenic": {
+              "excluded": 0
+            },
+            "bnd_own_chromosome_rows_lost": {
+              "excluded": 202
+            },
+            "bnd_synonym_mate_rows_lost": {
+              "excluded": 0
+            },
+            "cnv_tr_empty_expansion_dropped": {
+              "excluded": 0
+            },
+            "cnv_tr_rn_zero_allele_dropped": {
+              "excluded": 0
+            },
+            "dot_breakend_without_svtype_pair": {
+              "excluded": 0
+            },
+            "fasta_named_slice_intergenic": {
+              "excluded": 0
+            },
+            "gvcf_variant_site_dropped": {
+              "excluded": 0
+            },
+            "missing_alt_annotated": {
+              "excluded": 0
+            },
+            "non_integer_end_annotated": {
+              "excluded": 0
+            },
+            "non_numeric_pos_numified": {
+              "excluded": 0
+            },
+            "reference_skipped_record": {
+              "excluded": 20524
+            },
+            "star_alone_svtype_annotated": {
+              "excluded": 0
+            }
+          },
+          "excluded_bnd_own_rows_lost_by_file": {
+            "09_breakends": 202
+          },
+          "excluded_bnd_own_rows_lost_rust": 202,
+          "excluded_bnd_synonym_mate_rows_rust": 0,
+          "excluded_breakend_mate_local_read_by_file": {
+            "09_breakends": {
+              "cross_chromosome": 1181,
+              "perl": 1369,
+              "rust": 1369,
+              "same_chromosome": 188
+            },
+            "13_vcf45_features": {
+              "cross_chromosome": 0,
+              "perl": 38,
+              "rust": 38,
+              "same_chromosome": 38
+            }
+          },
+          "excluded_breakend_mate_local_read_by_kind": {
+            "cross_chromosome": 1181,
+            "same_chromosome": 226
+          },
+          "excluded_breakend_mate_local_read_perl": 1407,
+          "excluded_breakend_mate_local_read_rust": 1407,
+          "excluded_cnv_tr_empty_expansion_rust": 0,
+          "excluded_cnv_tr_rn_zero_rust": 0,
+          "excluded_cnvtr_perl": 0,
+          "excluded_cnvtr_rust": 0,
+          "excluded_cross_chromosome_perl": 0,
+          "excluded_cross_chromosome_rust": 0,
+          "excluded_divergences": 22136,
+          "excluded_dot_breakend_pair_perl": 0,
+          "excluded_dot_breakend_pair_rust": 0,
+          "excluded_gvcf_variant_site_rust": 0,
+          "excluded_missing_alt_annotated_perl": 0,
+          "excluded_non_integer_end_perl": 0,
+          "excluded_non_integer_end_rust": 0,
+          "excluded_non_numeric_pos_perl": 0,
+          "excluded_non_ref_batch_perl": 0,
+          "excluded_non_ref_batch_rust": 0,
+          "excluded_perl_extra": 1410,
+          "excluded_reference_skipped_by_file": {
+            "10_special_alleles": {
+              "records": 200,
+              "rust": 200
+            },
+            "12_complex_imprecise": {
+              "records": 100,
+              "rust": 1189
+            },
+            "gnomad_sv_v2.1_chr21": {
+              "records": 89,
+              "rust": 19135
+            }
+          },
+          "excluded_reference_skipped_rust": 20524,
+          "excluded_registry_swap_by_bucket": {
+            "covered_splice_region_swap": 0,
+            "start_cooccurrence_swap": 3
+          },
+          "excluded_registry_swap_by_file": {
+            "11_multi_allelic": {
+              "covered_splice_region_swap": 0,
+              "perl": 1,
+              "rust": 1,
+              "start_cooccurrence_swap": 1
+            },
+            "clinvar_sv_chr21": {
+              "covered_splice_region_swap": 0,
+              "perl": 1,
+              "rust": 1,
+              "start_cooccurrence_swap": 1
+            },
+            "gnomad_sv_v2.1_chr21": {
+              "covered_splice_region_swap": 0,
+              "perl": 1,
+              "rust": 1,
+              "start_cooccurrence_swap": 1
+            }
+          },
+          "excluded_registry_swap_perl": 3,
+          "excluded_registry_swap_rust": 3,
+          "excluded_rust_extra": 22136,
+          "excluded_star_alone_svtype_perl": 0,
+          "excluded_transcript_selection_mate_rust": 0,
+          "excluded_transcript_selection_perl": 0,
+          "excluded_transcript_selection_rust": 0,
+          "fasta_named_slice_intergenic_records": 0,
+          "gvcf_variant_site_records": 0,
+          "intersection_union": 315602,
+          "perl_tuples_union": 315602,
+          "reference_skipped_records": 389,
+          "rust_tuples_union": 315602,
+          "scored_engine_transcripts_absent_from_cache": 0,
+          "transcript_selection_cnvtr_overlap_rust": 0,
+          "transcript_selection_cross_chromosome_overlap_perl": 0
+        },
+        "overall": {
+          "cross_file_duplicate_perl": 35,
+          "cross_file_duplicate_rust": 35,
+          "intersection_union": 315602,
+          "perl_tuples_union": 317012,
+          "rust_tuples_union": 337738
+        },
+        "per_file_sums": {
+          "excluded_bnd_own_rows_lost_by_file": 202,
+          "excluded_breakend_mate_local_read_by_file": {
+            "cross_chromosome": 1181,
+            "perl": 1407,
+            "rust": 1407,
+            "same_chromosome": 226
+          },
+          "excluded_reference_skipped_by_file": {
+            "records": 389,
+            "rust": 20524
+          },
+          "excluded_registry_swap_by_file": {
+            "covered_splice_region_swap": 0,
+            "perl": 3,
+            "rust": 3,
+            "start_cooccurrence_swap": 3
+          }
+        }
+      }
+    },
+    "s08": {
+      "adj_f1": 1.0,
+      "adj_intersection": 1444742,
+      "adj_perl": 1444742,
+      "adj_rust": 1444742,
+      "intersection": 1444742,
+      "per_file": {
+        "01_snv": {
+          "engine_tuples": 23927,
+          "f1": 1.0,
+          "intersection": 23927,
+          "perl_tuples": 23927
+        },
+        "02_mnp_complex": {
+          "engine_tuples": 93901,
+          "f1": 0.99978701,
+          "intersection": 93881,
+          "perl_tuples": 93901
+        },
+        "03_small_indels": {
+          "engine_tuples": 87206,
+          "f1": 1.0,
+          "intersection": 87206,
+          "perl_tuples": 87206
+        },
+        "04_large_explicit": {
+          "engine_tuples": 16348,
+          "f1": 1.0,
+          "intersection": 16348,
+          "perl_tuples": 16348
+        },
+        "05_symbolic_del_ins": {
+          "engine_tuples": 155280,
+          "f1": 0.99999356,
+          "intersection": 155279,
+          "perl_tuples": 155280
+        },
+        "06_symbolic_dup_inv": {
+          "engine_tuples": 140413,
+          "f1": 1.0,
+          "intersection": 140413,
+          "perl_tuples": 140413
+        },
+        "07_cnv_repeat": {
+          "engine_tuples": 46582,
+          "f1": 0.999892662,
+          "intersection": 46577,
+          "perl_tuples": 46582
+        },
+        "08_mobile_elements": {
+          "engine_tuples": 35278,
+          "f1": 1.0,
+          "intersection": 35278,
+          "perl_tuples": 35278
+        },
+        "09_breakends": {
+          "engine_tuples": 118099,
+          "f1": 0.941841776,
+          "intersection": 110754,
+          "perl_tuples": 117087
+        },
+        "10_special_alleles": {
+          "engine_tuples": 4007,
+          "f1": 0.974404914,
+          "intersection": 3807,
+          "perl_tuples": 3807
+        },
+        "11_multi_allelic": {
+          "engine_tuples": 33002,
+          "f1": 1.0,
+          "intersection": 33002,
+          "perl_tuples": 33002
+        },
+        "12_complex_imprecise": {
+          "engine_tuples": 18151,
+          "f1": 0.840905463,
+          "intersection": 13169,
+          "perl_tuples": 13170
+        },
+        "13_vcf45_features": {
+          "engine_tuples": 34359,
+          "f1": 0.99921418,
+          "intersection": 34332,
+          "perl_tuples": 34359
+        },
+        "1kg_sv_chr21": {
+          "engine_tuples": 31818,
+          "f1": 0.989455966,
+          "intersection": 31155,
+          "perl_tuples": 31156
+        },
+        "clinvar_sv_chr21": {
+          "engine_tuples": 86480,
+          "f1": 1.0,
+          "intersection": 86480,
+          "perl_tuples": 86480
+        },
+        "gnomad_sv_v4.1_chr21": {
+          "engine_tuples": 809949,
+          "f1": 0.791428005,
+          "intersection": 533134,
+          "perl_tuples": 537322
+        }
+      },
+      "per_file_adjusted": {
+        "01_snv": {
+          "engine_tuples": 23927,
+          "f1": 1.0,
+          "intersection": 23927,
+          "perl_tuples": 23927
+        },
+        "02_mnp_complex": {
+          "engine_tuples": 93881,
+          "f1": 1.0,
+          "intersection": 93881,
+          "perl_tuples": 93881
+        },
+        "03_small_indels": {
+          "engine_tuples": 87206,
+          "f1": 1.0,
+          "intersection": 87206,
+          "perl_tuples": 87206
+        },
+        "04_large_explicit": {
+          "engine_tuples": 16348,
+          "f1": 1.0,
+          "intersection": 16348,
+          "perl_tuples": 16348
+        },
+        "05_symbolic_del_ins": {
+          "engine_tuples": 155279,
+          "f1": 1.0,
+          "intersection": 155279,
+          "perl_tuples": 155279
+        },
+        "06_symbolic_dup_inv": {
+          "engine_tuples": 140413,
+          "f1": 1.0,
+          "intersection": 140413,
+          "perl_tuples": 140413
+        },
+        "07_cnv_repeat": {
+          "engine_tuples": 46577,
+          "f1": 1.0,
+          "intersection": 46577,
+          "perl_tuples": 46577
+        },
+        "08_mobile_elements": {
+          "engine_tuples": 35278,
+          "f1": 1.0,
+          "intersection": 35278,
+          "perl_tuples": 35278
+        },
+        "09_breakends": {
+          "engine_tuples": 110754,
+          "f1": 1.0,
+          "intersection": 110754,
+          "perl_tuples": 110754
+        },
+        "10_special_alleles": {
+          "engine_tuples": 3807,
+          "f1": 1.0,
+          "intersection": 3807,
+          "perl_tuples": 3807
+        },
+        "11_multi_allelic": {
+          "engine_tuples": 33002,
+          "f1": 1.0,
+          "intersection": 33002,
+          "perl_tuples": 33002
+        },
+        "12_complex_imprecise": {
+          "engine_tuples": 13169,
+          "f1": 1.0,
+          "intersection": 13169,
+          "perl_tuples": 13169
+        },
+        "13_vcf45_features": {
+          "engine_tuples": 34332,
+          "f1": 1.0,
+          "intersection": 34332,
+          "perl_tuples": 34332
+        },
+        "1kg_sv_chr21": {
+          "engine_tuples": 31155,
+          "f1": 1.0,
+          "intersection": 31155,
+          "perl_tuples": 31155
+        },
+        "clinvar_sv_chr21": {
+          "engine_tuples": 86480,
+          "f1": 1.0,
+          "intersection": 86480,
+          "perl_tuples": 86480
+        },
+        "gnomad_sv_v4.1_chr21": {
+          "engine_tuples": 533134,
+          "f1": 1.0,
+          "intersection": 533134,
+          "perl_tuples": 533134
+        }
+      },
+      "perl": 1455318,
+      "raw_f1": 0.905760853,
+      "rust": 1734800,
+      "set_aside": {
+        "adjusted": {
+          "bnd_bare_reference_allele_rows": 0,
+          "bnd_mate_32bit_buffer_records": 0,
+          "bnd_mate_32bit_buffer_reference_tuples": 0,
+          "cnvtr_swap_pairs_total_perl": 0,
+          "cnvtr_swap_pairs_total_rust": 0,
+          "cross_file_duplicate_perl": 16730,
+          "cross_file_duplicate_rust": 16730,
+          "divergence_classes": {
+            "bnd_bare_reference_allele_row": {
+              "excluded": 0
+            },
+            "bnd_mate_32bit_buffer_intergenic": {
+              "excluded": 0
+            },
+            "bnd_own_chromosome_rows_lost": {
+              "excluded": 1012
+            },
+            "bnd_synonym_mate_rows_lost": {
+              "excluded": 0
+            },
+            "cnv_tr_empty_expansion_dropped": {
+              "excluded": 0
+            },
+            "cnv_tr_rn_zero_allele_dropped": {
+              "excluded": 0
+            },
+            "dot_breakend_without_svtype_pair": {
+              "excluded": 0
+            },
+            "fasta_named_slice_intergenic": {
+              "excluded": 0
+            },
+            "gvcf_variant_site_dropped": {
+              "excluded": 0
+            },
+            "missing_alt_annotated": {
+              "excluded": 0
+            },
+            "non_integer_end_annotated": {
+              "excluded": 0
+            },
+            "non_numeric_pos_numified": {
+              "excluded": 0
+            },
+            "reference_skipped_record": {
+              "excluded": 278309
+            },
+            "star_alone_svtype_annotated": {
+              "excluded": 0
+            }
+          },
+          "excluded_bnd_own_rows_lost_by_file": {
+            "09_breakends": 1012
+          },
+          "excluded_bnd_own_rows_lost_rust": 1012,
+          "excluded_bnd_synonym_mate_rows_rust": 0,
+          "excluded_breakend_mate_local_read_by_file": {
+            "09_breakends": {
+              "cross_chromosome": 5794,
+              "perl": 6333,
+              "rust": 6333,
+              "same_chromosome": 539
+            },
+            "13_vcf45_features": {
+              "cross_chromosome": 0,
+              "perl": 27,
+              "rust": 27,
+              "same_chromosome": 27
+            },
+            "gnomad_sv_v4.1_chr21": {
+              "cross_chromosome": 4158,
+              "perl": 4158,
+              "rust": 4158,
+              "same_chromosome": 0
+            }
+          },
+          "excluded_breakend_mate_local_read_by_kind": {
+            "cross_chromosome": 9952,
+            "same_chromosome": 566
+          },
+          "excluded_breakend_mate_local_read_perl": 10518,
+          "excluded_breakend_mate_local_read_rust": 10518,
+          "excluded_cnv_tr_empty_expansion_rust": 0,
+          "excluded_cnv_tr_rn_zero_rust": 0,
+          "excluded_cnvtr_perl": 0,
+          "excluded_cnvtr_rust": 0,
+          "excluded_cross_chromosome_perl": 0,
+          "excluded_cross_chromosome_rust": 0,
+          "excluded_divergences": 289896,
+          "excluded_dot_breakend_pair_perl": 0,
+          "excluded_dot_breakend_pair_rust": 0,
+          "excluded_gvcf_variant_site_rust": 0,
+          "excluded_missing_alt_annotated_perl": 0,
+          "excluded_non_integer_end_perl": 0,
+          "excluded_non_integer_end_rust": 0,
+          "excluded_non_numeric_pos_perl": 0,
+          "excluded_non_ref_batch_perl": 0,
+          "excluded_non_ref_batch_rust": 0,
+          "excluded_perl_extra": 10575,
+          "excluded_reference_skipped_by_file": {
+            "10_special_alleles": {
+              "records": 200,
+              "rust": 200
+            },
+            "12_complex_imprecise": {
+              "records": 100,
+              "rust": 4981
+            },
+            "1kg_sv_chr21": {
+              "records": 49,
+              "rust": 662
+            },
+            "gnomad_sv_v4.1_chr21": {
+              "records": 245,
+              "rust": 272627
+            }
+          },
+          "excluded_reference_skipped_rust": 278309,
+          "excluded_registry_swap_by_bucket": {
+            "covered_splice_region_swap": 20,
+            "start_cooccurrence_swap": 37
+          },
+          "excluded_registry_swap_by_file": {
+            "02_mnp_complex": {
+              "covered_splice_region_swap": 20,
+              "perl": 20,
+              "rust": 20,
+              "start_cooccurrence_swap": 0
+            },
+            "05_symbolic_del_ins": {
+              "covered_splice_region_swap": 0,
+              "perl": 1,
+              "rust": 1,
+              "start_cooccurrence_swap": 1
+            },
+            "07_cnv_repeat": {
+              "covered_splice_region_swap": 0,
+              "perl": 5,
+              "rust": 5,
+              "start_cooccurrence_swap": 5
+            },
+            "12_complex_imprecise": {
+              "covered_splice_region_swap": 0,
+              "perl": 1,
+              "rust": 1,
+              "start_cooccurrence_swap": 1
+            },
+            "1kg_sv_chr21": {
+              "covered_splice_region_swap": 0,
+              "perl": 1,
+              "rust": 1,
+              "start_cooccurrence_swap": 1
+            },
+            "gnomad_sv_v4.1_chr21": {
+              "covered_splice_region_swap": 0,
+              "perl": 30,
+              "rust": 30,
+              "start_cooccurrence_swap": 30
+            }
+          },
+          "excluded_registry_swap_perl": 57,
+          "excluded_registry_swap_rust": 57,
+          "excluded_rust_extra": 289896,
+          "excluded_star_alone_svtype_perl": 0,
+          "excluded_transcript_selection_mate_rust": 0,
+          "excluded_transcript_selection_perl": 0,
+          "excluded_transcript_selection_rust": 0,
+          "fasta_named_slice_intergenic_records": 0,
+          "gvcf_variant_site_records": 0,
+          "intersection_union": 1428012,
+          "perl_tuples_union": 1428012,
+          "reference_skipped_records": 594,
+          "rust_tuples_union": 1428012,
+          "scored_engine_transcripts_absent_from_cache": 0,
+          "transcript_selection_cnvtr_overlap_rust": 0,
+          "transcript_selection_cross_chromosome_overlap_perl": 0
+        },
+        "overall": {
+          "cross_file_duplicate_perl": 16731,
+          "cross_file_duplicate_rust": 16892,
+          "intersection_union": 1428012,
+          "perl_tuples_union": 1438587,
+          "rust_tuples_union": 1717908
+        },
+        "per_file_sums": {
+          "excluded_bnd_own_rows_lost_by_file": 1012,
+          "excluded_breakend_mate_local_read_by_file": {
+            "cross_chromosome": 9952,
+            "perl": 10518,
+            "rust": 10518,
+            "same_chromosome": 566
+          },
+          "excluded_reference_skipped_by_file": {
+            "records": 594,
+            "rust": 278470
+          },
+          "excluded_registry_swap_by_file": {
+            "covered_splice_region_swap": 20,
+            "perl": 58,
+            "rust": 58,
+            "start_cooccurrence_swap": 38
+          }
+        }
+      }
+    }
+  },
+  "concordance_note": "One value per suite, scored against Ensembl VEP 116.2's archived output (perl_reference names the sets): every clone of both architectures of the concordance sweep reported the same raw and adjusted F1 and the same tuple counts (F1 is deterministic per binary and architecture-independent). The README's \"Current release\" tables render these values from this record at nine decimal places, recomputed from the tuple counts. Adjusted F1 is 1.0 on every suite. Tuple counts move against v0.4.0 on s07, s08; the movement is in this record, previous_release_concordance beside concordance per cell and per file for the structural-variant cells, and in the README's \"Current release\" tables, which render the re-scored rows beneath this version's. The paired run of the previous release (previous_release_concordance, run on 2026-10-22 where this version's ran on 2026-10-25, the same clones' protocol, the same Ensembl VEP 116.2 reference) is the comparison basis: raw F1 and tuple counts are held not below it on every suite.",
+  "concordance_sweep_id": "sweep-20261025T005747Z",
+  "dataset_inventory_sha256_concordance_sweep": "2d8d2d89bd4e7b7c8ef1fb409a93dc78bee0e4ac573ea4cea37d3616cdd32989",
+  "dataset_inventory_sha256_note": "One value per sweep, identical across its clones of both architectures (each clone entry carries its own). The concordance sweep's clones also synced the archived Perl ground truth the comparator reads, so its inventory covers more files than the wall-time sweep's.",
+  "dataset_inventory_sha256_wall_time_sweep": "8bc7a342d6eecbb86db4ac406cefdffa1d7d98775bf49cb0670d953fd2290ee2",
+  "date": "2026-10-25",
+  "field_agreement": {
+    "clones_agree": 4,
+    "columns_differing_from_previous": [],
+    "note": "compare_vep_fields.py on every concordance clone of the release (v0.5.0 candidate f00cff86, 2 + 2 clones) and of the previous release (v0.4.0 re-scored, 1 + 1 clones), the same protocol, both against the Ensembl VEP 116.2 reference set: per suite the key totals and, per output column, the rows compared (both engines wrote the key), equal and differing. Only s01 and s02 are field-compared in this fleet: the structural-variant cells (s07 to s10) have no per-column comparator. columns_differing_from_previous lists every (suite, column) whose compared/equal/differ counts differ from the previous release's paired clone; a listed column whose compared count rose with differ 0 means the released version agrees with Ensembl VEP on more tuples than the previous release did, and an empty list means it agrees column for column exactly where the previous release did.",
+    "per_suite": {
+      "s01": {
+        "columns": {
+          "Amino_acids": {
+            "agreement": 1.0,
+            "compared": 33483180,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 33483180
+          },
+          "CDS_position": {
+            "agreement": 1.0,
+            "compared": 33483180,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 33483180
+          },
+          "Codons": {
+            "agreement": 1.0,
+            "compared": 33483180,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 33483180
+          },
+          "Existing_variation": {
+            "agreement": 1.0,
+            "compared": 33483180,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 33483180
+          },
+          "Gene": {
+            "agreement": 1.0,
+            "compared": 33483180,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 33483180
+          },
+          "Protein_position": {
+            "agreement": 1.0,
+            "compared": 33483180,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 33483180
+          },
+          "Uploaded_variation": {
+            "agreement": 1.0,
+            "compared": 33483180,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 33483180
+          },
+          "cDNA_position": {
+            "agreement": 1.0,
+            "compared": 33483180,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 33483180
+          }
+        },
+        "totals": {
+          "intersection": 33483180,
+          "reference_duplicate_keys": 88,
+          "reference_keys": 33483881,
+          "reference_only": 701,
+          "scored_duplicate_keys": 88,
+          "scored_keys": 33483881,
+          "scored_only": 701
+        }
+      },
+      "s02": {
+        "columns": {
+          "Amino_acids": {
+            "agreement": 1.0,
+            "compared": 125569159,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 125569159
+          },
+          "CDS_position": {
+            "agreement": 1.0,
+            "compared": 125569159,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 125569159
+          },
+          "Codons": {
+            "agreement": 1.0,
+            "compared": 125569159,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 125569159
+          },
+          "Existing_variation": {
+            "agreement": 1.0,
+            "compared": 125569159,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 125569159
+          },
+          "Gene": {
+            "agreement": 1.0,
+            "compared": 125569159,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 125569159
+          },
+          "Protein_position": {
+            "agreement": 1.0,
+            "compared": 125569159,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 125569159
+          },
+          "Uploaded_variation": {
+            "agreement": 1.0,
+            "compared": 125569159,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 125569159
+          },
+          "cDNA_position": {
+            "agreement": 1.0,
+            "compared": 125569159,
+            "differ": 0,
+            "distinct_mismatch_shapes": 0,
+            "equal": 125569159
+          }
+        },
+        "totals": {
+          "intersection": 125569159,
+          "reference_duplicate_keys": 296,
+          "reference_keys": 125572619,
+          "reference_only": 3460,
+          "scored_duplicate_keys": 296,
+          "scored_keys": 125572619,
+          "scored_only": 3460
+        }
+      }
+    }
+  },
+  "generated_at_utc": "2026-10-25T09:43:41Z",
+  "generic_build_sweep_id": "sweep-20261025T005748Z",
+  "generic_builds": {
+    "arm64": {
+      "binary_md5": "73ff830e5053c70b566242277b4f2bcc",
+      "cells": [
+        "s02"
+      ],
+      "glibc_floor": "2.17",
+      "instance_type": "c9gd.8xlarge",
+      "linker": "zig-0.17.0",
+      "n_clones": 5,
+      "rustc": "1.97.1",
+      "target_cpu": "generic"
+    },
+    "x86_64": {
+      "binary_md5": "5f3453030241c2bf3671a4a393f166a8",
+      "cells": [
+        "s02"
+      ],
+      "glibc_floor": "2.17",
+      "instance_type": "c8id.8xlarge",
+      "linker": "zig-0.17.0",
+      "n_clones": 5,
+      "rustc": "1.97.1",
+      "target_cpu": "x86-64-v2"
+    }
+  },
+  "generic_builds_note": "The released source built for a CPU floor below the measured build's (target_cpu generic on arm64, x86-64-v2 on x86_64), timed under the release protocol on the same classes as the measured build (5 clones per architecture) on s02: each of its per_cell_aggregates entries carries its target_cpu, and an entry without one is the measured build. The binaries' md5, glibc floor, linker and compiler are read from their build markers; the generic builds are timed, never scored, and their wall time is stated beside the measured build's, never in its place.",
+  "glibc_floor": "2.17",
+  "harness_skip_fields": false,
+  "harness_skip_fields_note": "The per-column field comparator (compare_vep_fields.py) ran on every concordance clone of both releases; field_agreement summarises the released version's per-suite, per-column agreement and names every column whose agreement differs from the previous release's.",
+  "harvest_problems": {
+    "concordance": [],
+    "generic_build": [],
+    "previous_release_concordance": [],
+    "previous_release_control": [],
+    "wall_time": []
+  },
+  "linker": "zig-0.17.0",
+  "linker_note": "The minimum glibc the measured binaries need (glibc_floor), read from their ELF version needs by the build's floor check, and the linker that produced them (linker), both read from the build markers of both architectures; the floor and the linker are the release workflow's, so the measured binaries are linked as the release archives are.",
+  "measurement_entrypoint": "scripts/concordance/run_clone_measurement.sh",
+  "methodology": "cross_instance_parallel_clone",
+  "methodology_note": "c9gd.8xlarge (ARM Graviton5) and c8id.8xlarge (Intel x86_64), 32 vCPU / 64 GiB / local NVMe instance store, spec-matched, the newest available class per architecture (Graviton5 against 8th-generation Intel); 5 fresh clones per architecture booting the stock AL2023 base image, each syncing the dataset to local NVMe. The wall-time sweep runs scripts/concordance/run_clone_measurement.sh --walltime-only (--fork 16, sites-only inputs): one cold-cache warmup (discarded) and one timed measurement per cell, then self-terminates; median and P5/P95 across the clones per cell (Weibull, R type 6). The concordance sweep runs the same script without --walltime-only, so each clone also computes the 6-cell concordance report against the archived Perl ground truth, on r9gd.8xlarge and r8id.8xlarge (32 vCPU / 256 GiB); its wall times are not used, because the comparator running between suites perturbs the timed run that follows a warmup on the largest output.",
+  "n_clones_per_arch": {
+    "concordance": {
+      "arm64": 2,
+      "x86_64": 2
+    },
+    "generic_build": {
+      "arm64": 5,
+      "x86_64": 5
+    },
+    "previous_release_concordance": {
+      "arm64": 1,
+      "x86_64": 1
+    },
+    "previous_release_control": {
+      "arm64": 3,
+      "x86_64": 3
+    },
+    "wall_time": {
+      "arm64": 5,
+      "x86_64": 5
+    }
+  },
+  "n_clones_per_cell": 5,
+  "outlier_threshold_p95_p5_ratio": 1.3,
+  "per_cell_aggregates": [
+    {
+      "arch": "arm64",
+      "condition": "sites_only",
+      "engine": "vep_rs",
+      "engine_version": "v0.5.0",
+      "instance_type": "c9gd.8xlarge",
+      "max": 4.04,
+      "median_sec": 3.43,
+      "min": 3.42,
+      "n_clones": 5,
+      "p25": 3.42,
+      "p5": 3.42,
+      "p75": 3.765,
+      "p95": 4.04,
+      "p95_p5_ratio": 1.181,
+      "suite_id": "s01"
+    },
+    {
+      "arch": "arm64",
+      "condition": "sites_only",
+      "engine": "vep_rs",
+      "engine_version": "v0.5.0",
+      "instance_type": "c9gd.8xlarge",
+      "max": 11.44,
+      "median_sec": 11.34,
+      "min": 11.3,
+      "n_clones": 5,
+      "p25": 11.32,
+      "p5": 11.3,
+      "p75": 11.43,
+      "p95": 11.44,
+      "p95_p5_ratio": 1.012,
+      "suite_id": "s02"
+    },
+    {
+      "arch": "arm64",
+      "condition": "sites_only",
+      "engine": "vep_rs",
+      "engine_version": "v0.5.0",
+      "instance_type": "c9gd.8xlarge",
+      "max": 1.25,
+      "median_sec": 1.24,
+      "min": 1.23,
+      "n_clones": 5,
+      "p25": 1.23,
+      "p5": 1.23,
+      "p75": 1.25,
+      "p95": 1.25,
+      "p95_p5_ratio": 1.016,
+      "suite_id": "s07"
+    },
+    {
+      "arch": "arm64",
+      "condition": "sites_only",
+      "engine": "vep_rs",
+      "engine_version": "v0.5.0",
+      "instance_type": "c9gd.8xlarge",
+      "max": 3.46,
+      "median_sec": 3.39,
+      "min": 3.32,
+      "n_clones": 5,
+      "p25": 3.325,
+      "p5": 3.32,
+      "p75": 3.45,
+      "p95": 3.46,
+      "p95_p5_ratio": 1.042,
+      "suite_id": "s08"
+    },
+    {
+      "arch": "x86_64",
+      "condition": "sites_only",
+      "engine": "vep_rs",
+      "engine_version": "v0.5.0",
+      "instance_type": "c8id.8xlarge",
+      "max": 5.22,
+      "median_sec": 5.15,
+      "min": 5.08,
+      "n_clones": 5,
+      "p25": 5.1,
+      "p5": 5.08,
+      "p75": 5.185,
+      "p95": 5.22,
+      "p95_p5_ratio": 1.028,
+      "suite_id": "s01"
+    },
+    {
+      "arch": "x86_64",
+      "condition": "sites_only",
+      "engine": "vep_rs",
+      "engine_version": "v0.5.0",
+      "instance_type": "c8id.8xlarge",
+      "max": 15.57,
+      "median_sec": 15.43,
+      "min": 15.3,
+      "n_clones": 5,
+      "p25": 15.34,
+      "p5": 15.3,
+      "p75": 15.505,
+      "p95": 15.57,
+      "p95_p5_ratio": 1.018,
+      "suite_id": "s02"
+    },
+    {
+      "arch": "x86_64",
+      "condition": "sites_only",
+      "engine": "vep_rs",
+      "engine_version": "v0.5.0",
+      "instance_type": "c8id.8xlarge",
+      "max": 1.87,
+      "median_sec": 1.85,
+      "min": 1.84,
+      "n_clones": 5,
+      "p25": 1.845,
+      "p5": 1.84,
+      "p75": 1.865,
+      "p95": 1.87,
+      "p95_p5_ratio": 1.016,
+      "suite_id": "s07"
+    },
+    {
+      "arch": "x86_64",
+      "condition": "sites_only",
+      "engine": "vep_rs",
+      "engine_version": "v0.5.0",
+      "instance_type": "c8id.8xlarge",
+      "max": 4.87,
+      "median_sec": 4.82,
+      "min": 4.77,
+      "n_clones": 5,
+      "p25": 4.785,
+      "p5": 4.77,
+      "p75": 4.865,
+      "p95": 4.87,
+      "p95_p5_ratio": 1.021,
+      "suite_id": "s08"
+    },
+    {
+      "arch": "arm64",
+      "condition": "sites_only",
+      "engine": "vep_rs",
+      "engine_version": "v0.5.0",
+      "instance_type": "c9gd.8xlarge",
+      "max": 11.2,
+      "median_sec": 11.17,
+      "min": 11.13,
+      "n_clones": 5,
+      "p25": 11.14,
+      "p5": 11.13,
+      "p75": 11.195,
+      "p95": 11.2,
+      "p95_p5_ratio": 1.006,
+      "suite_id": "s02",
+      "target_cpu": "generic"
+    },
+    {
+      "arch": "x86_64",
+      "condition": "sites_only",
+      "engine": "vep_rs",
+      "engine_version": "v0.5.0",
+      "instance_type": "c8id.8xlarge",
+      "max": 15.64,
+      "median_sec": 15.56,
+      "min": 15.44,
+      "n_clones": 5,
+      "p25": 15.49,
+      "p5": 15.44,
+      "p75": 15.615,
+      "p95": 15.64,
+      "p95_p5_ratio": 1.013,
+      "suite_id": "s02",
+      "target_cpu": "x86-64-v2"
+    }
+  ],
+  "per_cell_aggregates_note": "Wall time per (arch, suite) over the completed clones of the wall-time sweep (median and quantiles by the Weibull estimator, R type 6); each of those clones' entry under clones carries the per-suite wall time it reported (wall_time_sec), so every aggregate re-derives from this record. The README's \"Current release\" table renders these values.",
+  "perl_reference": {
+    "snv_indel": {
+      "cache_version": 116,
+      "cells": {
+        "s01": {
+          "assembly": "GRCh37",
+          "input_records": 4388172,
+          "output_data_lines": 33483969,
+          "reference_generation_wall_seconds": 1005
+        },
+        "s02": {
+          "assembly": "GRCh38",
+          "input_records": 4398127,
+          "output_data_lines": 125572915,
+          "reference_generation_wall_seconds": 3706
+        }
+      },
+      "digest": "sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+      "fork": 16,
+      "image": "ensemblorg/ensembl-vep:release_116.2",
+      "prefix": "ground_truth/perl/canonical_116_20261008"
+    },
+    "sv": {
+      "cache_version": 116,
+      "digest": "sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+      "fork": 4,
+      "image": "ensemblorg/ensembl-vep:release_116.2",
+      "prefix": "ground_truth/perl/sv_per_vcf_r116.2_c116_20261008"
+    }
+  },
+  "population_concordance": {
+    "binary_md5_arm64": "39b42c4d1ab00bfb6cd0d424b9675d5c",
+    "campaign_id": "n5-veprsconc-20261025T011304Z",
+    "gates_all_pass": true,
+    "mask_register": [
+      {
+        "bucket": "bnd_bare_reference_allele_row",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "bnd_mate_32bit_buffer_intergenic",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "bnd_own_chromosome_rows_lost",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "bnd_synonym_mate_rows_lost",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "cnv_tr_empty_expansion_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "cnv_tr_rn_zero_allele_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "dot_breakend_without_svtype_pair",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "fasta_named_slice_intergenic",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "frameshift_splice_cascade_swap",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "gvcf_variant_site_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "intronic_overcall_swap",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "missing_alt_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "non_integer_end_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "non_numeric_pos_numified",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "ppt_overcall_swap",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "reference_skipped_record",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "splice_lastwrite_swap",
+        "count": "1",
+        "excluded": "1",
+        "suite": "p04"
+      },
+      {
+        "bucket": "star_alone_svtype_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p04"
+      },
+      {
+        "bucket": "start_cooccurrence_swap",
+        "count": "6208",
+        "excluded": "6208",
+        "suite": "p04"
+      },
+      {
+        "bucket": "bnd_bare_reference_allele_row",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "bnd_mate_32bit_buffer_intergenic",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "bnd_own_chromosome_rows_lost",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "bnd_synonym_mate_rows_lost",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "cnv_tr_empty_expansion_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "cnv_tr_rn_zero_allele_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "dot_breakend_without_svtype_pair",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "fasta_named_slice_intergenic",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "frameshift_splice_cascade_swap",
+        "count": "1",
+        "excluded": "1",
+        "suite": "p03"
+      },
+      {
+        "bucket": "gvcf_variant_site_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "intronic_overcall_swap",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "missing_alt_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "non_integer_end_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "non_numeric_pos_numified",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "ppt_overcall_swap",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "reference_skipped_record",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "splice_lastwrite_swap",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "star_alone_svtype_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p03"
+      },
+      {
+        "bucket": "start_cooccurrence_swap",
+        "count": "423",
+        "excluded": "423",
+        "suite": "p03"
+      },
+      {
+        "bucket": "bnd_bare_reference_allele_row",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "bnd_mate_32bit_buffer_intergenic",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "bnd_own_chromosome_rows_lost",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "bnd_synonym_mate_rows_lost",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "cnv_tr_empty_expansion_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "cnv_tr_rn_zero_allele_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "dot_breakend_without_svtype_pair",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "fasta_named_slice_intergenic",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "frameshift_splice_cascade_swap",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "gvcf_variant_site_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "intronic_overcall_swap",
+        "count": "2",
+        "excluded": "2",
+        "suite": "p05"
+      },
+      {
+        "bucket": "missing_alt_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "non_integer_end_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "non_numeric_pos_numified",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "ppt_overcall_swap",
+        "count": "1",
+        "excluded": "1",
+        "suite": "p05"
+      },
+      {
+        "bucket": "reference_skipped_record",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "splice_lastwrite_swap",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "star_alone_svtype_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p05"
+      },
+      {
+        "bucket": "start_cooccurrence_swap",
+        "count": "79",
+        "excluded": "79",
+        "suite": "p05"
+      },
+      {
+        "bucket": "bnd_bare_reference_allele_row",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "bnd_mate_32bit_buffer_intergenic",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "bnd_own_chromosome_rows_lost",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "bnd_synonym_mate_rows_lost",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "cnv_tr_empty_expansion_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "cnv_tr_rn_zero_allele_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "dot_breakend_without_svtype_pair",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "fasta_named_slice_intergenic",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "frameshift_splice_cascade_swap",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "gvcf_variant_site_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "intronic_overcall_swap",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "missing_alt_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "non_integer_end_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "non_numeric_pos_numified",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "ppt_overcall_swap",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "reference_skipped_record",
+        "count": "14850",
+        "excluded": "14850",
+        "suite": "p06"
+      },
+      {
+        "bucket": "splice_lastwrite_swap",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "star_alone_svtype_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "p06"
+      },
+      {
+        "bucket": "start_cooccurrence_swap",
+        "count": "543",
+        "excluded": "543",
+        "suite": "p06"
+      },
+      {
+        "bucket": "bnd_bare_reference_allele_row",
+        "count": "0",
+        "excluded": "0",
+        "suite": "all"
+      },
+      {
+        "bucket": "bnd_mate_32bit_buffer_intergenic",
+        "count": "0",
+        "excluded": "0",
+        "suite": "all"
+      },
+      {
+        "bucket": "bnd_own_chromosome_rows_lost",
+        "count": "0",
+        "excluded": "0",
+        "suite": "all"
+      },
+      {
+        "bucket": "bnd_synonym_mate_rows_lost",
+        "count": "0",
+        "excluded": "0",
+        "suite": "all"
+      },
+      {
+        "bucket": "cnv_tr_empty_expansion_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "all"
+      },
+      {
+        "bucket": "cnv_tr_rn_zero_allele_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "all"
+      },
+      {
+        "bucket": "dot_breakend_without_svtype_pair",
+        "count": "0",
+        "excluded": "0",
+        "suite": "all"
+      },
+      {
+        "bucket": "fasta_named_slice_intergenic",
+        "count": "0",
+        "excluded": "0",
+        "suite": "all"
+      },
+      {
+        "bucket": "frameshift_splice_cascade_swap",
+        "count": "1",
+        "excluded": "1",
+        "suite": "all"
+      },
+      {
+        "bucket": "gvcf_variant_site_dropped",
+        "count": "0",
+        "excluded": "0",
+        "suite": "all"
+      },
+      {
+        "bucket": "intronic_overcall_swap",
+        "count": "2",
+        "excluded": "2",
+        "suite": "all"
+      },
+      {
+        "bucket": "missing_alt_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "all"
+      },
+      {
+        "bucket": "non_integer_end_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "all"
+      },
+      {
+        "bucket": "non_numeric_pos_numified",
+        "count": "0",
+        "excluded": "0",
+        "suite": "all"
+      },
+      {
+        "bucket": "ppt_overcall_swap",
+        "count": "1",
+        "excluded": "1",
+        "suite": "all"
+      },
+      {
+        "bucket": "reference_skipped_record",
+        "count": "14850",
+        "excluded": "14850",
+        "suite": "all"
+      },
+      {
+        "bucket": "splice_lastwrite_swap",
+        "count": "1",
+        "excluded": "1",
+        "suite": "all"
+      },
+      {
+        "bucket": "star_alone_svtype_annotated",
+        "count": "0",
+        "excluded": "0",
+        "suite": "all"
+      },
+      {
+        "bucket": "start_cooccurrence_swap",
+        "count": "7253",
+        "excluded": "7253",
+        "suite": "all"
+      }
+    ],
+    "n_gates": 911,
+    "note": "Whole-genome concordance of the released binary against Ensembl VEP 116.2's archived output on four population datasets, one clone per chromosome shard (the pool arch's), the same comparator, cache and reference FASTA as the genome-wide ClinVar and structural-variant cells. A variant is one VCF record; a tuple is one output row reduced to (Location, Allele, Feature, Feature_type, Consequence set); F1 is pooled by summed counts (micro-F1), raw with nothing set aside and adjusted with the documented divergence classes set aside. Wall time per shard is carried in the fleet archive as information only.",
+    "per_chromosome": [
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "1",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 56,
+        "excluded_rust": 56,
+        "intersection": 69776267,
+        "open_rows": 0,
+        "perl_tuples": 69776323,
+        "raw_f1": 0.999999197,
+        "suite": "p03",
+        "variants": 20370890,
+        "vep_rs_rows": 69776323,
+        "vep_rs_tuples": 69776323
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "2",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 35,
+        "excluded_rust": 35,
+        "intersection": 72615972,
+        "open_rows": 0,
+        "perl_tuples": 72616007,
+        "raw_f1": 0.999999518,
+        "suite": "p03",
+        "variants": 21892245,
+        "vep_rs_rows": 72616007,
+        "vep_rs_tuples": 72616007
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "3",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 7,
+        "excluded_rust": 7,
+        "intersection": 64730181,
+        "open_rows": 0,
+        "perl_tuples": 64730188,
+        "raw_f1": 0.999999892,
+        "suite": "p03",
+        "variants": 17834355,
+        "vep_rs_rows": 64730188,
+        "vep_rs_tuples": 64730188
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "4",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 5,
+        "excluded_rust": 5,
+        "intersection": 49824644,
+        "open_rows": 0,
+        "perl_tuples": 49824649,
+        "raw_f1": 0.9999999,
+        "suite": "p03",
+        "variants": 17423639,
+        "vep_rs_rows": 49824649,
+        "vep_rs_tuples": 49824649
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "5",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 14,
+        "excluded_rust": 14,
+        "intersection": 48554016,
+        "open_rows": 0,
+        "perl_tuples": 48554030,
+        "raw_f1": 0.999999712,
+        "suite": "p03",
+        "variants": 16290654,
+        "vep_rs_rows": 48554030,
+        "vep_rs_tuples": 48554030
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "6",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 27,
+        "excluded_rust": 27,
+        "intersection": 42759842,
+        "open_rows": 0,
+        "perl_tuples": 42759869,
+        "raw_f1": 0.999999369,
+        "suite": "p03",
+        "variants": 15190442,
+        "vep_rs_rows": 42759869,
+        "vep_rs_tuples": 42759869
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "7",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 25,
+        "excluded_rust": 25,
+        "intersection": 49930752,
+        "open_rows": 0,
+        "perl_tuples": 49930777,
+        "raw_f1": 0.999999499,
+        "suite": "p03",
+        "variants": 14752321,
+        "vep_rs_rows": 49930777,
+        "vep_rs_tuples": 49930777
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "8",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 26,
+        "excluded_rust": 26,
+        "intersection": 46019933,
+        "open_rows": 0,
+        "perl_tuples": 46019959,
+        "raw_f1": 0.999999435,
+        "suite": "p03",
+        "variants": 14073574,
+        "vep_rs_rows": 46019959,
+        "vep_rs_tuples": 46019959
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "9",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 11,
+        "excluded_rust": 11,
+        "intersection": 32367803,
+        "open_rows": 0,
+        "perl_tuples": 32367814,
+        "raw_f1": 0.99999966,
+        "suite": "p03",
+        "variants": 11480614,
+        "vep_rs_rows": 32367814,
+        "vep_rs_tuples": 32367814
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "10",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 22,
+        "excluded_rust": 22,
+        "intersection": 37408828,
+        "open_rows": 0,
+        "perl_tuples": 37408850,
+        "raw_f1": 0.999999412,
+        "suite": "p03",
+        "variants": 12118750,
+        "vep_rs_rows": 37408850,
+        "vep_rs_tuples": 37408850
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "11",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 3,
+        "excluded_rust": 3,
+        "intersection": 47394791,
+        "open_rows": 0,
+        "perl_tuples": 47394794,
+        "raw_f1": 0.999999937,
+        "suite": "p03",
+        "variants": 12345492,
+        "vep_rs_rows": 47394794,
+        "vep_rs_tuples": 47394794
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "12",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 8,
+        "excluded_rust": 8,
+        "intersection": 46564817,
+        "open_rows": 0,
+        "perl_tuples": 46564825,
+        "raw_f1": 0.999999828,
+        "suite": "p03",
+        "variants": 11933435,
+        "vep_rs_rows": 46564825,
+        "vep_rs_tuples": 46564825
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "13",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 4,
+        "excluded_rust": 4,
+        "intersection": 18735100,
+        "open_rows": 0,
+        "perl_tuples": 18735104,
+        "raw_f1": 0.999999786,
+        "suite": "p03",
+        "variants": 8693573,
+        "vep_rs_rows": 18735104,
+        "vep_rs_tuples": 18735104
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "14",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 19,
+        "excluded_rust": 19,
+        "intersection": 31777900,
+        "open_rows": 0,
+        "perl_tuples": 31777919,
+        "raw_f1": 0.999999402,
+        "suite": "p03",
+        "variants": 8220638,
+        "vep_rs_rows": 31777919,
+        "vep_rs_tuples": 31777919
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "15",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 12,
+        "excluded_rust": 12,
+        "intersection": 30376483,
+        "open_rows": 0,
+        "perl_tuples": 30376495,
+        "raw_f1": 0.999999605,
+        "suite": "p03",
+        "variants": 7723667,
+        "vep_rs_rows": 30376495,
+        "vep_rs_tuples": 30376495
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "16",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 25,
+        "excluded_rust": 25,
+        "intersection": 38177857,
+        "open_rows": 0,
+        "perl_tuples": 38177882,
+        "raw_f1": 0.999999345,
+        "suite": "p03",
+        "variants": 8618657,
+        "vep_rs_rows": 38177882,
+        "vep_rs_tuples": 38177882
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "17",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 23,
+        "excluded_rust": 23,
+        "intersection": 38095142,
+        "open_rows": 0,
+        "perl_tuples": 38095165,
+        "raw_f1": 0.999999396,
+        "suite": "p03",
+        "variants": 7373819,
+        "vep_rs_rows": 38095165,
+        "vep_rs_tuples": 38095165
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "18",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 0,
+        "excluded_rust": 0,
+        "intersection": 22695898,
+        "open_rows": 0,
+        "perl_tuples": 22695898,
+        "raw_f1": 1.0,
+        "suite": "p03",
+        "variants": 6893751,
+        "vep_rs_rows": 22695898,
+        "vep_rs_tuples": 22695898
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "19",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 48,
+        "excluded_rust": 48,
+        "intersection": 31958913,
+        "open_rows": 0,
+        "perl_tuples": 31958961,
+        "raw_f1": 0.999998498,
+        "suite": "p03",
+        "variants": 5991870,
+        "vep_rs_rows": 31958961,
+        "vep_rs_tuples": 31958961
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "20",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 9,
+        "excluded_rust": 9,
+        "intersection": 17219064,
+        "open_rows": 0,
+        "perl_tuples": 17219073,
+        "raw_f1": 0.999999477,
+        "suite": "p03",
+        "variants": 5516836,
+        "vep_rs_rows": 17219073,
+        "vep_rs_tuples": 17219073
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "21",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 3,
+        "excluded_rust": 3,
+        "intersection": 11075419,
+        "open_rows": 0,
+        "perl_tuples": 11075422,
+        "raw_f1": 0.999999729,
+        "suite": "p03",
+        "variants": 3483000,
+        "vep_rs_rows": 11075422,
+        "vep_rs_tuples": 11075422
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "22",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 2,
+        "excluded_rust": 2,
+        "intersection": 15299689,
+        "open_rows": 0,
+        "perl_tuples": 15299691,
+        "raw_f1": 0.999999869,
+        "suite": "p03",
+        "variants": 3567085,
+        "vep_rs_rows": 15299691,
+        "vep_rs_tuples": 15299691
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "X",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "excluded_perl": 40,
+        "excluded_rust": 40,
+        "intersection": 22305167,
+        "open_rows": 0,
+        "perl_tuples": 22305207,
+        "raw_f1": 0.999998207,
+        "suite": "p03",
+        "variants": 10153029,
+        "vep_rs_rows": 22305207,
+        "vep_rs_tuples": 22305207
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "1",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 615,
+        "excluded_rust": 615,
+        "intersection": 814711102,
+        "open_rows": 0,
+        "perl_tuples": 814711717,
+        "raw_f1": 0.999999245,
+        "suite": "p04",
+        "variants": 59160006,
+        "vep_rs_rows": 814711717,
+        "vep_rs_tuples": 814711717
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "2",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 449,
+        "excluded_rust": 449,
+        "intersection": 805439437,
+        "open_rows": 0,
+        "perl_tuples": 805439886,
+        "raw_f1": 0.999999443,
+        "suite": "p04",
+        "variants": 62931878,
+        "vep_rs_rows": 805439887,
+        "vep_rs_tuples": 805439886
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "3",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 176,
+        "excluded_rust": 176,
+        "intersection": 759407930,
+        "open_rows": 0,
+        "perl_tuples": 759408106,
+        "raw_f1": 0.999999768,
+        "suite": "p04",
+        "variants": 51235008,
+        "vep_rs_rows": 759408125,
+        "vep_rs_tuples": 759408106
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "4",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 183,
+        "excluded_rust": 183,
+        "intersection": 516728602,
+        "open_rows": 0,
+        "perl_tuples": 516728785,
+        "raw_f1": 0.999999646,
+        "suite": "p04",
+        "variants": 50142330,
+        "vep_rs_rows": 516728785,
+        "vep_rs_tuples": 516728785
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "5",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 271,
+        "excluded_rust": 271,
+        "intersection": 484029759,
+        "open_rows": 0,
+        "perl_tuples": 484030030,
+        "raw_f1": 0.99999944,
+        "suite": "p04",
+        "variants": 46410785,
+        "vep_rs_rows": 484030030,
+        "vep_rs_tuples": 484030030
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "6",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 245,
+        "excluded_rust": 245,
+        "intersection": 518076666,
+        "open_rows": 0,
+        "perl_tuples": 518076911,
+        "raw_f1": 0.999999527,
+        "suite": "p04",
+        "variants": 43703160,
+        "vep_rs_rows": 518076911,
+        "vep_rs_tuples": 518076911
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "7",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 236,
+        "excluded_rust": 236,
+        "intersection": 546724645,
+        "open_rows": 0,
+        "perl_tuples": 546724881,
+        "raw_f1": 0.999999568,
+        "suite": "p04",
+        "variants": 42466679,
+        "vep_rs_rows": 546724882,
+        "vep_rs_tuples": 546724881
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "8",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 190,
+        "excluded_rust": 190,
+        "intersection": 508573632,
+        "open_rows": 0,
+        "perl_tuples": 508573822,
+        "raw_f1": 0.999999626,
+        "suite": "p04",
+        "variants": 39939308,
+        "vep_rs_rows": 508573827,
+        "vep_rs_tuples": 508573822
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "9",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 149,
+        "excluded_rust": 149,
+        "intersection": 435686094,
+        "open_rows": 0,
+        "perl_tuples": 435686243,
+        "raw_f1": 0.999999658,
+        "suite": "p04",
+        "variants": 33833698,
+        "vep_rs_rows": 435686252,
+        "vep_rs_tuples": 435686243
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "10",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 424,
+        "excluded_rust": 424,
+        "intersection": 467642320,
+        "open_rows": 0,
+        "perl_tuples": 467642744,
+        "raw_f1": 0.999999093,
+        "suite": "p04",
+        "variants": 35497598,
+        "vep_rs_rows": 467642744,
+        "vep_rs_tuples": 467642744
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "11",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 242,
+        "excluded_rust": 242,
+        "intersection": 453505634,
+        "open_rows": 0,
+        "perl_tuples": 453505876,
+        "raw_f1": 0.999999466,
+        "suite": "p04",
+        "variants": 35080671,
+        "vep_rs_rows": 453505876,
+        "vep_rs_tuples": 453505876
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "12",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 264,
+        "excluded_rust": 264,
+        "intersection": 434917510,
+        "open_rows": 0,
+        "perl_tuples": 434917774,
+        "raw_f1": 0.999999393,
+        "suite": "p04",
+        "variants": 34332175,
+        "vep_rs_rows": 434917774,
+        "vep_rs_tuples": 434917774
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "13",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 134,
+        "excluded_rust": 134,
+        "intersection": 217048670,
+        "open_rows": 0,
+        "perl_tuples": 217048804,
+        "raw_f1": 0.999999383,
+        "suite": "p04",
+        "variants": 24993777,
+        "vep_rs_rows": 217048804,
+        "vep_rs_tuples": 217048804
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "14",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 307,
+        "excluded_rust": 307,
+        "intersection": 308035176,
+        "open_rows": 0,
+        "perl_tuples": 308035483,
+        "raw_f1": 0.999999003,
+        "suite": "p04",
+        "variants": 23568672,
+        "vep_rs_rows": 308035483,
+        "vep_rs_tuples": 308035483
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "15",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 161,
+        "excluded_rust": 161,
+        "intersection": 325505863,
+        "open_rows": 0,
+        "perl_tuples": 325506024,
+        "raw_f1": 0.999999505,
+        "suite": "p04",
+        "variants": 22225848,
+        "vep_rs_rows": 325506028,
+        "vep_rs_tuples": 325506024
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "16",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 194,
+        "excluded_rust": 194,
+        "intersection": 340538013,
+        "open_rows": 0,
+        "perl_tuples": 340538207,
+        "raw_f1": 0.99999943,
+        "suite": "p04",
+        "variants": 24719921,
+        "vep_rs_rows": 340538207,
+        "vep_rs_tuples": 340538207
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "17",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 360,
+        "excluded_rust": 360,
+        "intersection": 366476377,
+        "open_rows": 0,
+        "perl_tuples": 366476737,
+        "raw_f1": 0.999999018,
+        "suite": "p04",
+        "variants": 21944455,
+        "vep_rs_rows": 366476737,
+        "vep_rs_tuples": 366476737
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "18",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 71,
+        "excluded_rust": 71,
+        "intersection": 231558251,
+        "open_rows": 0,
+        "perl_tuples": 231558322,
+        "raw_f1": 0.999999693,
+        "suite": "p04",
+        "variants": 19467717,
+        "vep_rs_rows": 231558322,
+        "vep_rs_tuples": 231558322
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "19",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 354,
+        "excluded_rust": 354,
+        "intersection": 304052293,
+        "open_rows": 0,
+        "perl_tuples": 304052647,
+        "raw_f1": 0.999998836,
+        "suite": "p04",
+        "variants": 17293274,
+        "vep_rs_rows": 304052647,
+        "vep_rs_tuples": 304052647
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "20",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 227,
+        "excluded_rust": 227,
+        "intersection": 207018561,
+        "open_rows": 0,
+        "perl_tuples": 207018788,
+        "raw_f1": 0.999998903,
+        "suite": "p04",
+        "variants": 16355695,
+        "vep_rs_rows": 207018788,
+        "vep_rs_tuples": 207018788
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "21",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 127,
+        "excluded_rust": 127,
+        "intersection": 136629565,
+        "open_rows": 0,
+        "perl_tuples": 136629692,
+        "raw_f1": 0.99999907,
+        "suite": "p04",
+        "variants": 10958898,
+        "vep_rs_rows": 136629693,
+        "vep_rs_tuples": 136629692
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "22",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 229,
+        "excluded_rust": 229,
+        "intersection": 195680453,
+        "open_rows": 0,
+        "perl_tuples": 195680682,
+        "raw_f1": 0.99999883,
+        "suite": "p04",
+        "variants": 11608143,
+        "vep_rs_rows": 195680689,
+        "vep_rs_tuples": 195680682
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "X",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 601,
+        "excluded_rust": 601,
+        "intersection": 218634669,
+        "open_rows": 0,
+        "perl_tuples": 218635270,
+        "raw_f1": 0.999997251,
+        "suite": "p04",
+        "variants": 30297561,
+        "vep_rs_rows": 218635270,
+        "vep_rs_tuples": 218635270
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "Y",
+        "dataset": "gnomad_v4.1_genomes",
+        "excluded_perl": 0,
+        "excluded_rust": 0,
+        "intersection": 4935392,
+        "open_rows": 0,
+        "perl_tuples": 4935392,
+        "raw_f1": 1.0,
+        "suite": "p04",
+        "variants": 1169063,
+        "vep_rs_rows": 4935392,
+        "vep_rs_tuples": 4935392
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "1",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 3,
+        "excluded_rust": 3,
+        "intersection": 22067856,
+        "open_rows": 0,
+        "perl_tuples": 22067859,
+        "raw_f1": 0.999999864,
+        "suite": "p05",
+        "variants": 6468094,
+        "vep_rs_rows": 22069247,
+        "vep_rs_tuples": 22067859
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "2",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 14,
+        "excluded_rust": 14,
+        "intersection": 23490361,
+        "open_rows": 0,
+        "perl_tuples": 23490375,
+        "raw_f1": 0.999999404,
+        "suite": "p05",
+        "variants": 7081600,
+        "vep_rs_rows": 23491663,
+        "vep_rs_tuples": 23490375
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "3",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 0,
+        "excluded_rust": 0,
+        "intersection": 21114456,
+        "open_rows": 0,
+        "perl_tuples": 21114456,
+        "raw_f1": 1.0,
+        "suite": "p05",
+        "variants": 5832276,
+        "vep_rs_rows": 21115335,
+        "vep_rs_tuples": 21114456
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "4",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 0,
+        "excluded_rust": 0,
+        "intersection": 16351146,
+        "open_rows": 0,
+        "perl_tuples": 16351146,
+        "raw_f1": 1.0,
+        "suite": "p05",
+        "variants": 5732585,
+        "vep_rs_rows": 16351737,
+        "vep_rs_tuples": 16351146
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "5",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 0,
+        "excluded_rust": 0,
+        "intersection": 15659559,
+        "open_rows": 0,
+        "perl_tuples": 15659559,
+        "raw_f1": 1.0,
+        "suite": "p05",
+        "variants": 5265763,
+        "vep_rs_rows": 15660609,
+        "vep_rs_tuples": 15659559
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "6",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 1,
+        "excluded_rust": 1,
+        "intersection": 14204215,
+        "open_rows": 0,
+        "perl_tuples": 14204216,
+        "raw_f1": 0.99999993,
+        "suite": "p05",
+        "variants": 5024119,
+        "vep_rs_rows": 14205163,
+        "vep_rs_tuples": 14204216
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "7",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 1,
+        "excluded_rust": 1,
+        "intersection": 15933527,
+        "open_rows": 0,
+        "perl_tuples": 15933528,
+        "raw_f1": 0.999999937,
+        "suite": "p05",
+        "variants": 4716715,
+        "vep_rs_rows": 15934432,
+        "vep_rs_tuples": 15933528
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "8",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 3,
+        "excluded_rust": 3,
+        "intersection": 15083774,
+        "open_rows": 0,
+        "perl_tuples": 15083777,
+        "raw_f1": 0.999999801,
+        "suite": "p05",
+        "variants": 4597105,
+        "vep_rs_rows": 15084501,
+        "vep_rs_tuples": 15083777
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "9",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 1,
+        "excluded_rust": 1,
+        "intersection": 10247073,
+        "open_rows": 0,
+        "perl_tuples": 10247074,
+        "raw_f1": 0.999999902,
+        "suite": "p05",
+        "variants": 3560687,
+        "vep_rs_rows": 10247801,
+        "vep_rs_tuples": 10247074
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "10",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 1,
+        "excluded_rust": 1,
+        "intersection": 12297217,
+        "open_rows": 0,
+        "perl_tuples": 12297218,
+        "raw_f1": 0.999999919,
+        "suite": "p05",
+        "variants": 3992219,
+        "vep_rs_rows": 12298230,
+        "vep_rs_tuples": 12297218
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "11",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 4,
+        "excluded_rust": 4,
+        "intersection": 15564294,
+        "open_rows": 0,
+        "perl_tuples": 15564298,
+        "raw_f1": 0.999999743,
+        "suite": "p05",
+        "variants": 4045628,
+        "vep_rs_rows": 15565000,
+        "vep_rs_tuples": 15564298
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "12",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 1,
+        "excluded_rust": 1,
+        "intersection": 15048660,
+        "open_rows": 0,
+        "perl_tuples": 15048661,
+        "raw_f1": 0.999999934,
+        "suite": "p05",
+        "variants": 3868428,
+        "vep_rs_rows": 15049472,
+        "vep_rs_tuples": 15048661
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "13",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 2,
+        "excluded_rust": 2,
+        "intersection": 6141787,
+        "open_rows": 0,
+        "perl_tuples": 6141789,
+        "raw_f1": 0.999999674,
+        "suite": "p05",
+        "variants": 2857916,
+        "vep_rs_rows": 6142027,
+        "vep_rs_tuples": 6141789
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "14",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 6,
+        "excluded_rust": 6,
+        "intersection": 10311738,
+        "open_rows": 0,
+        "perl_tuples": 10311744,
+        "raw_f1": 0.999999418,
+        "suite": "p05",
+        "variants": 2655067,
+        "vep_rs_rows": 10312189,
+        "vep_rs_tuples": 10311744
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "15",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 1,
+        "excluded_rust": 1,
+        "intersection": 9664648,
+        "open_rows": 0,
+        "perl_tuples": 9664649,
+        "raw_f1": 0.999999897,
+        "suite": "p05",
+        "variants": 2424689,
+        "vep_rs_rows": 9665495,
+        "vep_rs_tuples": 9664649
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "16",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 0,
+        "excluded_rust": 0,
+        "intersection": 12160674,
+        "open_rows": 0,
+        "perl_tuples": 12160674,
+        "raw_f1": 1.0,
+        "suite": "p05",
+        "variants": 2697949,
+        "vep_rs_rows": 12162410,
+        "vep_rs_tuples": 12160674
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "17",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 8,
+        "excluded_rust": 8,
+        "intersection": 11995995,
+        "open_rows": 0,
+        "perl_tuples": 11996003,
+        "raw_f1": 0.999999333,
+        "suite": "p05",
+        "variants": 2329288,
+        "vep_rs_rows": 11996928,
+        "vep_rs_tuples": 11996003
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "18",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 0,
+        "excluded_rust": 0,
+        "intersection": 7454473,
+        "open_rows": 0,
+        "perl_tuples": 7454473,
+        "raw_f1": 1.0,
+        "suite": "p05",
+        "variants": 2267185,
+        "vep_rs_rows": 7455100,
+        "vep_rs_tuples": 7454473
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "19",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 0,
+        "excluded_rust": 0,
+        "intersection": 9964404,
+        "open_rows": 0,
+        "perl_tuples": 9964404,
+        "raw_f1": 1.0,
+        "suite": "p05",
+        "variants": 1832506,
+        "vep_rs_rows": 9965582,
+        "vep_rs_tuples": 9964404
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "20",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 6,
+        "excluded_rust": 6,
+        "intersection": 5610201,
+        "open_rows": 0,
+        "perl_tuples": 5610207,
+        "raw_f1": 0.999998931,
+        "suite": "p05",
+        "variants": 1812841,
+        "vep_rs_rows": 5610498,
+        "vep_rs_tuples": 5610207
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "21",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 0,
+        "excluded_rust": 0,
+        "intersection": 3603259,
+        "open_rows": 0,
+        "perl_tuples": 3603259,
+        "raw_f1": 1.0,
+        "suite": "p05",
+        "variants": 1105538,
+        "vep_rs_rows": 3603345,
+        "vep_rs_tuples": 3603259
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "22",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 21,
+        "excluded_rust": 21,
+        "intersection": 4852639,
+        "open_rows": 0,
+        "perl_tuples": 4852660,
+        "raw_f1": 0.999995672,
+        "suite": "p05",
+        "variants": 1103547,
+        "vep_rs_rows": 4853466,
+        "vep_rs_tuples": 4852660
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "MT",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 0,
+        "excluded_rust": 0,
+        "intersection": 83453,
+        "open_rows": 0,
+        "perl_tuples": 83453,
+        "raw_f1": 1.0,
+        "suite": "p05",
+        "variants": 3892,
+        "vep_rs_rows": 83453,
+        "vep_rs_tuples": 83453
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "X",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 9,
+        "excluded_rust": 9,
+        "intersection": 7643748,
+        "open_rows": 0,
+        "perl_tuples": 7643757,
+        "raw_f1": 0.999998823,
+        "suite": "p05",
+        "variants": 3468093,
+        "vep_rs_rows": 7668848,
+        "vep_rs_tuples": 7643757
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "chromosome": "Y",
+        "dataset": "1000g_phase3_20130502",
+        "excluded_perl": 0,
+        "excluded_rust": 0,
+        "intersection": 100239,
+        "open_rows": 0,
+        "perl_tuples": 100239,
+        "raw_f1": 1.0,
+        "suite": "p05",
+        "variants": 62042,
+        "vep_rs_rows": 100732,
+        "vep_rs_tuples": 100239
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "1",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 72,
+        "excluded_rust": 72,
+        "intersection": 75502309,
+        "open_rows": 0,
+        "perl_tuples": 75502381,
+        "raw_f1": 0.999999046,
+        "suite": "p06",
+        "variants": 5759060,
+        "vep_rs_rows": 75502413,
+        "vep_rs_tuples": 75502381
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "2",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 83,
+        "excluded_rust": 83,
+        "intersection": 75569235,
+        "open_rows": 0,
+        "perl_tuples": 75569318,
+        "raw_f1": 0.999998902,
+        "suite": "p06",
+        "variants": 6088598,
+        "vep_rs_rows": 75569445,
+        "vep_rs_tuples": 75569318
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "3",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 2,
+        "excluded_rust": 2,
+        "intersection": 71241386,
+        "open_rows": 0,
+        "perl_tuples": 71241388,
+        "raw_f1": 0.999999972,
+        "suite": "p06",
+        "variants": 4983185,
+        "vep_rs_rows": 71241452,
+        "vep_rs_tuples": 71241388
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "4",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 1,
+        "excluded_rust": 1,
+        "intersection": 50270162,
+        "open_rows": 0,
+        "perl_tuples": 50270163,
+        "raw_f1": 0.99999998,
+        "suite": "p06",
+        "variants": 4875465,
+        "vep_rs_rows": 50270198,
+        "vep_rs_tuples": 50270163
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "5",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 0,
+        "excluded_rust": 0,
+        "intersection": 45302296,
+        "open_rows": 0,
+        "perl_tuples": 45302296,
+        "raw_f1": 1.0,
+        "suite": "p06",
+        "variants": 4536819,
+        "vep_rs_rows": 45302301,
+        "vep_rs_tuples": 45302296
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "6",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 10,
+        "excluded_rust": 10,
+        "intersection": 50593628,
+        "open_rows": 0,
+        "perl_tuples": 50593638,
+        "raw_f1": 0.999999802,
+        "suite": "p06",
+        "variants": 4315217,
+        "vep_rs_rows": 50593811,
+        "vep_rs_tuples": 50593638
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "7",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 43,
+        "excluded_rust": 43,
+        "intersection": 51739887,
+        "open_rows": 0,
+        "perl_tuples": 51739930,
+        "raw_f1": 0.999999169,
+        "suite": "p06",
+        "variants": 4137254,
+        "vep_rs_rows": 51739950,
+        "vep_rs_tuples": 51739930
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "8",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 8,
+        "excluded_rust": 8,
+        "intersection": 47215497,
+        "open_rows": 0,
+        "perl_tuples": 47215505,
+        "raw_f1": 0.999999831,
+        "suite": "p06",
+        "variants": 3886222,
+        "vep_rs_rows": 47215505,
+        "vep_rs_tuples": 47215505
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "9",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 11,
+        "excluded_rust": 11,
+        "intersection": 39520317,
+        "open_rows": 0,
+        "perl_tuples": 39520328,
+        "raw_f1": 0.999999722,
+        "suite": "p06",
+        "variants": 3165513,
+        "vep_rs_rows": 39520328,
+        "vep_rs_tuples": 39520328
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "10",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 12,
+        "excluded_rust": 12,
+        "intersection": 45112976,
+        "open_rows": 0,
+        "perl_tuples": 45112988,
+        "raw_f1": 0.999999734,
+        "suite": "p06",
+        "variants": 3495473,
+        "vep_rs_rows": 45113057,
+        "vep_rs_tuples": 45112988
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "11",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 19,
+        "excluded_rust": 19,
+        "intersection": 42997450,
+        "open_rows": 0,
+        "perl_tuples": 42997469,
+        "raw_f1": 0.999999558,
+        "suite": "p06",
+        "variants": 3423341,
+        "vep_rs_rows": 42997490,
+        "vep_rs_tuples": 42997469
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "12",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 9,
+        "excluded_rust": 9,
+        "intersection": 41093427,
+        "open_rows": 0,
+        "perl_tuples": 41093436,
+        "raw_f1": 0.999999781,
+        "suite": "p06",
+        "variants": 3332788,
+        "vep_rs_rows": 41093436,
+        "vep_rs_tuples": 41093436
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "13",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 1,
+        "excluded_rust": 1,
+        "intersection": 21080830,
+        "open_rows": 0,
+        "perl_tuples": 21080831,
+        "raw_f1": 0.999999953,
+        "suite": "p06",
+        "variants": 2509179,
+        "vep_rs_rows": 21080845,
+        "vep_rs_tuples": 21080831
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "14",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 58,
+        "excluded_rust": 6896,
+        "intersection": 29157272,
+        "open_rows": 0,
+        "perl_tuples": 29157330,
+        "raw_f1": 0.999880764,
+        "suite": "p06",
+        "variants": 2290400,
+        "vep_rs_rows": 29164228,
+        "vep_rs_tuples": 29164168
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "15",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 1,
+        "excluded_rust": 1,
+        "intersection": 30308673,
+        "open_rows": 0,
+        "perl_tuples": 30308674,
+        "raw_f1": 0.999999967,
+        "suite": "p06",
+        "variants": 2109285,
+        "vep_rs_rows": 30308677,
+        "vep_rs_tuples": 30308674
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "16",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 39,
+        "excluded_rust": 39,
+        "intersection": 32071586,
+        "open_rows": 0,
+        "perl_tuples": 32071625,
+        "raw_f1": 0.999998784,
+        "suite": "p06",
+        "variants": 2362361,
+        "vep_rs_rows": 32071626,
+        "vep_rs_tuples": 32071625
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "17",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 44,
+        "excluded_rust": 44,
+        "intersection": 34228925,
+        "open_rows": 0,
+        "perl_tuples": 34228969,
+        "raw_f1": 0.999998715,
+        "suite": "p06",
+        "variants": 2073624,
+        "vep_rs_rows": 34228972,
+        "vep_rs_tuples": 34228969
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "18",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 0,
+        "excluded_rust": 2079,
+        "intersection": 22419904,
+        "open_rows": 0,
+        "perl_tuples": 22419904,
+        "raw_f1": 0.999953637,
+        "suite": "p06",
+        "variants": 1963845,
+        "vep_rs_rows": 22421988,
+        "vep_rs_tuples": 22421983
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "19",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 23,
+        "excluded_rust": 23,
+        "intersection": 29102712,
+        "open_rows": 0,
+        "perl_tuples": 29102735,
+        "raw_f1": 0.99999921,
+        "suite": "p06",
+        "variants": 1670692,
+        "vep_rs_rows": 29102761,
+        "vep_rs_tuples": 29102735
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "20",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 34,
+        "excluded_rust": 34,
+        "intersection": 19877172,
+        "open_rows": 0,
+        "perl_tuples": 19877206,
+        "raw_f1": 0.999998289,
+        "suite": "p06",
+        "variants": 1644384,
+        "vep_rs_rows": 19877206,
+        "vep_rs_tuples": 19877206
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "21",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 1,
+        "excluded_rust": 1,
+        "intersection": 12947343,
+        "open_rows": 0,
+        "perl_tuples": 12947344,
+        "raw_f1": 0.999999923,
+        "suite": "p06",
+        "variants": 1002753,
+        "vep_rs_rows": 12947344,
+        "vep_rs_tuples": 12947344
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "22",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 2,
+        "excluded_rust": 2,
+        "intersection": 18336418,
+        "open_rows": 0,
+        "perl_tuples": 18336420,
+        "raw_f1": 0.999999891,
+        "suite": "p06",
+        "variants": 1066557,
+        "vep_rs_rows": 18336420,
+        "vep_rs_tuples": 18336420
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "chromosome": "X",
+        "dataset": "1000g_highcov_20220422",
+        "excluded_perl": 70,
+        "excluded_rust": 6003,
+        "intersection": 20132146,
+        "open_rows": 0,
+        "perl_tuples": 20132216,
+        "raw_f1": 0.999849194,
+        "suite": "p06",
+        "variants": 2862781,
+        "vep_rs_rows": 20138149,
+        "vep_rs_tuples": 20138149
+      }
+    ],
+    "per_dataset": [
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "dataset": "gnomad_v4.1_genomes",
+        "discordant_rows": 12418,
+        "excluded_perl": 6209,
+        "excluded_rust": 6209,
+        "fleet_id": "n5-veprsconc-20261025T011304Z-gnomad_v4.1_genomes",
+        "intersection": 9601556614,
+        "label": "gnomAD v4.1, whole genome",
+        "open_rows": 0,
+        "perl_tuples": 9601562823,
+        "raw_f1": 0.999999353,
+        "shards": 24,
+        "suite": "p04",
+        "variants": 759336320,
+        "vep_rs_tuples": 9601562823
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "dataset": "gnomad_v2.1.1_genomes",
+        "discordant_rows": 848,
+        "excluded_perl": 424,
+        "excluded_rust": 424,
+        "fleet_id": "n5-veprsconc-20261025T011304Z-gnomad_v2.1.1_genomes",
+        "intersection": 885664478,
+        "label": "gnomAD v2.1.1, whole genome",
+        "open_rows": 0,
+        "perl_tuples": 885664902,
+        "raw_f1": 0.999999521,
+        "shards": 23,
+        "suite": "p03",
+        "variants": 261942336,
+        "vep_rs_tuples": 885664902
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh37",
+        "dataset": "1000g_phase3_20130502",
+        "discordant_rows": 164,
+        "excluded_perl": 82,
+        "excluded_rust": 82,
+        "fleet_id": "n5-veprsconc-20261025T011304Z-1000g_phase3_20130502",
+        "intersection": 286649396,
+        "label": "1000 Genomes Phase 3, whole genome",
+        "open_rows": 0,
+        "perl_tuples": 286649478,
+        "raw_f1": 0.999999714,
+        "shards": 25,
+        "suite": "p05",
+        "variants": 84805772,
+        "vep_rs_tuples": 286649478
+      },
+      {
+        "adjusted_f1": 1.0,
+        "assembly": "GRCh38",
+        "dataset": "1000g_highcov_20220422",
+        "discordant_rows": 15936,
+        "excluded_perl": 543,
+        "excluded_rust": 15393,
+        "fleet_id": "n5-veprsconc-20261025T011304Z-1000g_highcov_20220422",
+        "intersection": 905821551,
+        "label": "1000 Genomes high-coverage, whole genome",
+        "open_rows": 0,
+        "perl_tuples": 905822094,
+        "raw_f1": 0.999991204,
+        "shards": 23,
+        "suite": "p06",
+        "variants": 73554796,
+        "vep_rs_tuples": 905836944
+      }
+    ],
+    "perl_reference": {
+      "cache_version": 116,
+      "digest": "sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+      "image": "ensemblorg/ensembl-vep:release_116.2",
+      "prefix": "population/ground_truth/perl/population_r116.2_c116_20261008"
+    },
+    "perl_reference_prefix": "population/ground_truth/perl/population_r116.2_c116_20261008",
+    "pool_arch": "arm64",
+    "pooled": {
+      "adjusted_f1": 1.0,
+      "discordant_rows": 29366,
+      "excluded_perl": 7258,
+      "excluded_rust": 22108,
+      "intersection": 11679692039,
+      "label": "All four",
+      "open_rows": 0,
+      "perl_tuples": 11679699297,
+      "raw_f1": 0.999998743,
+      "shards": 95,
+      "suite": "all",
+      "variants": 1179639224,
+      "vep_rs_tuples": 11679714147
+    },
+    "release": "v0.5.0",
+    "source_commit": "f00cff869952b82862768d5663c176ecb4720e40"
+  },
+  "previous_release_concordance": {
+    "binary_md5": {
+      "arm64": "a96d5b61a8f0f6d66fc20bc3d9c3ccbb",
+      "x86_64": "3d95a528e3b350cc8dd0fe80826a4ab1"
+    },
+    "concordance": {
+      "s01": {
+        "adj_f1": 1.0,
+        "adj_intersection": 33483180,
+        "adj_perl": 33483180,
+        "adj_rust": 33483180,
+        "intersection": 33483180,
+        "perl": 33483881,
+        "raw_f1": 0.999979065,
+        "rust": 33483881,
+        "set_aside": {
+          "adjusted": {
+            "excluded_categories": {
+              "bnd_bare_reference_allele_row": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "bnd_mate_32bit_buffer_intergenic": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "bnd_own_chromosome_rows_lost": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "bnd_synonym_mate_rows_lost": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "cnv_tr_empty_expansion_dropped": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "cnv_tr_rn_zero_allele_dropped": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "dot_breakend_without_svtype_pair": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "fasta_named_slice_intergenic": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "frameshift_splice_cascade_swap": {
+                "count": 156,
+                "excluded": 156
+              },
+              "gvcf_variant_site_dropped": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "intronic_overcall_swap": {
+                "count": 117,
+                "excluded": 117
+              },
+              "missing_alt_annotated": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "non_integer_end_annotated": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "non_numeric_pos_numified": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "ppt_overcall_swap": {
+                "count": 53,
+                "excluded": 53
+              },
+              "reference_skipped_record": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "splice_lastwrite_swap": {
+                "count": 114,
+                "excluded": 114
+              },
+              "star_alone_svtype_annotated": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "start_cooccurrence_swap": {
+                "count": 261,
+                "excluded": 261
+              }
+            },
+            "excluded_perl_tuples": 701,
+            "excluded_rust_tuples": 701
+          },
+          "by_taxonomy_class": {
+            "bnd_bare_reference_allele_row": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "bnd_mate_32bit_buffer_intergenic": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "bnd_own_chromosome_rows_lost": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "bnd_synonym_mate_rows_lost": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "cnv_tr_empty_expansion_dropped": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "cnv_tr_rn_zero_allele_dropped": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "dot_breakend_without_svtype_pair": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "fasta_named_slice_intergenic": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "gvcf_variant_site_dropped": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "missing_alt_annotated": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "non_integer_end_annotated": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "non_numeric_pos_numified": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "reference_skipped_record": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "splice_family_swap": {
+              "count": 440,
+              "excluded": 440
+            },
+            "star_alone_svtype_annotated": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "start_cooccurrence_swap": {
+              "count": 261,
+              "excluded": 261
+            }
+          }
+        }
+      },
+      "s02": {
+        "adj_f1": 1.0,
+        "adj_intersection": 125569159,
+        "adj_perl": 125569159,
+        "adj_rust": 125569159,
+        "intersection": 125569159,
+        "perl": 125572619,
+        "raw_f1": 0.999972446,
+        "rust": 125572619,
+        "set_aside": {
+          "adjusted": {
+            "excluded_categories": {
+              "bnd_bare_reference_allele_row": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "bnd_mate_32bit_buffer_intergenic": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "bnd_own_chromosome_rows_lost": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "bnd_synonym_mate_rows_lost": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "cnv_tr_empty_expansion_dropped": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "cnv_tr_rn_zero_allele_dropped": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "dot_breakend_without_svtype_pair": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "fasta_named_slice_intergenic": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "frameshift_splice_cascade_swap": {
+                "count": 774,
+                "excluded": 774
+              },
+              "gvcf_variant_site_dropped": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "intronic_overcall_swap": {
+                "count": 404,
+                "excluded": 404
+              },
+              "missing_alt_annotated": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "non_integer_end_annotated": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "non_numeric_pos_numified": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "ppt_overcall_swap": {
+                "count": 331,
+                "excluded": 331
+              },
+              "reference_skipped_record": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "splice_lastwrite_swap": {
+                "count": 485,
+                "excluded": 485
+              },
+              "star_alone_svtype_annotated": {
+                "count": 0,
+                "excluded": 0,
+                "perl": 0,
+                "records": 0,
+                "rust": 0
+              },
+              "start_cooccurrence_swap": {
+                "count": 1466,
+                "excluded": 1466
+              }
+            },
+            "excluded_perl_tuples": 3460,
+            "excluded_rust_tuples": 3460
+          },
+          "by_taxonomy_class": {
+            "bnd_bare_reference_allele_row": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "bnd_mate_32bit_buffer_intergenic": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "bnd_own_chromosome_rows_lost": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "bnd_synonym_mate_rows_lost": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "cnv_tr_empty_expansion_dropped": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "cnv_tr_rn_zero_allele_dropped": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "dot_breakend_without_svtype_pair": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "fasta_named_slice_intergenic": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "gvcf_variant_site_dropped": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "missing_alt_annotated": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "non_integer_end_annotated": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "non_numeric_pos_numified": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "reference_skipped_record": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "splice_family_swap": {
+              "count": 1994,
+              "excluded": 1994
+            },
+            "star_alone_svtype_annotated": {
+              "count": 0,
+              "excluded": 0,
+              "perl": 0,
+              "records": 0,
+              "rust": 0
+            },
+            "start_cooccurrence_swap": {
+              "count": 1466,
+              "excluded": 1466
+            }
+          }
+        }
+      },
+      "s07": {
+        "adj_f1": 1.0,
+        "adj_intersection": 314269,
+        "adj_perl": 314269,
+        "adj_rust": 314269,
+        "intersection": 314269,
+        "per_file": {
+          "01_snv": {
+            "engine_tuples": 7488,
+            "f1": 1.0,
+            "intersection": 7488,
+            "perl_tuples": 7488
+          },
+          "02_mnp_complex": {
+            "engine_tuples": 19664,
+            "f1": 1.0,
+            "intersection": 19664,
+            "perl_tuples": 19664
+          },
+          "03_small_indels": {
+            "engine_tuples": 19763,
+            "f1": 1.0,
+            "intersection": 19763,
+            "perl_tuples": 19763
+          },
+          "04_large_explicit": {
+            "engine_tuples": 3985,
+            "f1": 1.0,
+            "intersection": 3985,
+            "perl_tuples": 3985
+          },
+          "05_symbolic_del_ins": {
+            "engine_tuples": 73007,
+            "f1": 1.0,
+            "intersection": 73007,
+            "perl_tuples": 73007
+          },
+          "06_symbolic_dup_inv": {
+            "engine_tuples": 67036,
+            "f1": 1.0,
+            "intersection": 67036,
+            "perl_tuples": 67036
+          },
+          "07_cnv_repeat": {
+            "engine_tuples": 21483,
+            "f1": 0.936321743,
+            "intersection": 20115,
+            "perl_tuples": 21483
+          },
+          "08_mobile_elements": {
+            "engine_tuples": 7607,
+            "f1": 1.0,
+            "intersection": 7607,
+            "perl_tuples": 7607
+          },
+          "09_breakends": {
+            "engine_tuples": 24254,
+            "f1": 0.939137995,
+            "intersection": 22683,
+            "perl_tuples": 24052
+          },
+          "10_special_alleles": {
+            "engine_tuples": 1207,
+            "f1": 0.909665763,
+            "intersection": 1007,
+            "perl_tuples": 1007
+          },
+          "11_multi_allelic": {
+            "engine_tuples": 8565,
+            "f1": 0.999883246,
+            "intersection": 8564,
+            "perl_tuples": 8565
+          },
+          "12_complex_imprecise": {
+            "engine_tuples": 6548,
+            "f1": 0.900142773,
+            "intersection": 5359,
+            "perl_tuples": 5359
+          },
+          "13_vcf45_features": {
+            "engine_tuples": 8615,
+            "f1": 0.995589089,
+            "intersection": 8577,
+            "perl_tuples": 8615
+          },
+          "1kg_sv_chr21": {
+            "engine_tuples": 3057,
+            "f1": 1.0,
+            "intersection": 3057,
+            "perl_tuples": 3057
+          },
+          "clinvar_sv_chr21": {
+            "engine_tuples": 20913,
+            "f1": 0.999952183,
+            "intersection": 20912,
+            "perl_tuples": 20913
+          },
+          "gnomad_sv_v2.1_chr21": {
+            "engine_tuples": 44581,
+            "f1": 0.726719694,
+            "intersection": 25445,
+            "perl_tuples": 25446
+          }
+        },
+        "per_file_adjusted": {
+          "01_snv": {
+            "engine_tuples": 7488,
+            "f1": 1.0,
+            "intersection": 7488,
+            "perl_tuples": 7488
+          },
+          "02_mnp_complex": {
+            "engine_tuples": 19664,
+            "f1": 1.0,
+            "intersection": 19664,
+            "perl_tuples": 19664
+          },
+          "03_small_indels": {
+            "engine_tuples": 19763,
+            "f1": 1.0,
+            "intersection": 19763,
+            "perl_tuples": 19763
+          },
+          "04_large_explicit": {
+            "engine_tuples": 3985,
+            "f1": 1.0,
+            "intersection": 3985,
+            "perl_tuples": 3985
+          },
+          "05_symbolic_del_ins": {
+            "engine_tuples": 73007,
+            "f1": 1.0,
+            "intersection": 73007,
+            "perl_tuples": 73007
+          },
+          "06_symbolic_dup_inv": {
+            "engine_tuples": 67036,
+            "f1": 1.0,
+            "intersection": 67036,
+            "perl_tuples": 67036
+          },
+          "07_cnv_repeat": {
+            "engine_tuples": 20115,
+            "f1": 1.0,
+            "intersection": 20115,
+            "perl_tuples": 20115
+          },
+          "08_mobile_elements": {
+            "engine_tuples": 7607,
+            "f1": 1.0,
+            "intersection": 7607,
+            "perl_tuples": 7607
+          },
+          "09_breakends": {
+            "engine_tuples": 22683,
+            "f1": 1.0,
+            "intersection": 22683,
+            "perl_tuples": 22683
+          },
+          "10_special_alleles": {
+            "engine_tuples": 1007,
+            "f1": 1.0,
+            "intersection": 1007,
+            "perl_tuples": 1007
+          },
+          "11_multi_allelic": {
+            "engine_tuples": 8564,
+            "f1": 1.0,
+            "intersection": 8564,
+            "perl_tuples": 8564
+          },
+          "12_complex_imprecise": {
+            "engine_tuples": 5359,
+            "f1": 1.0,
+            "intersection": 5359,
+            "perl_tuples": 5359
+          },
+          "13_vcf45_features": {
+            "engine_tuples": 8577,
+            "f1": 1.0,
+            "intersection": 8577,
+            "perl_tuples": 8577
+          },
+          "1kg_sv_chr21": {
+            "engine_tuples": 3057,
+            "f1": 1.0,
+            "intersection": 3057,
+            "perl_tuples": 3057
+          },
+          "clinvar_sv_chr21": {
+            "engine_tuples": 20912,
+            "f1": 1.0,
+            "intersection": 20912,
+            "perl_tuples": 20912
+          },
+          "gnomad_sv_v2.1_chr21": {
+            "engine_tuples": 25445,
+            "f1": 1.0,
+            "intersection": 25445,
+            "perl_tuples": 25445
+          }
+        },
+        "perl": 317047,
+        "raw_f1": 0.959863779,
+        "rust": 337773,
+        "set_aside": {
+          "adjusted": {
+            "bnd_bare_reference_allele_rows": 0,
+            "bnd_mate_32bit_buffer_records": 0,
+            "bnd_mate_32bit_buffer_reference_tuples": 0,
+            "cnvtr_swap_pairs_total_by_file": {
+              "07_cnv_repeat": {
+                "perl": 1368,
+                "rust": 1368
+              }
+            },
+            "cnvtr_swap_pairs_total_perl": 1368,
+            "cnvtr_swap_pairs_total_rust": 1368,
+            "cross_file_duplicate_perl": 35,
+            "cross_file_duplicate_rust": 35,
+            "divergence_classes": {
+              "bnd_bare_reference_allele_row": {
+                "excluded": 0
+              },
+              "bnd_mate_32bit_buffer_intergenic": {
+                "excluded": 0
+              },
+              "bnd_own_chromosome_rows_lost": {
+                "excluded": 202
+              },
+              "bnd_synonym_mate_rows_lost": {
+                "excluded": 0
+              },
+              "cnv_tr_empty_expansion_dropped": {
+                "excluded": 0
+              },
+              "cnv_tr_rn_zero_allele_dropped": {
+                "excluded": 0
+              },
+              "dot_breakend_without_svtype_pair": {
+                "excluded": 0
+              },
+              "fasta_named_slice_intergenic": {
+                "excluded": 0
+              },
+              "gvcf_variant_site_dropped": {
+                "excluded": 0
+              },
+              "missing_alt_annotated": {
+                "excluded": 0
+              },
+              "non_integer_end_annotated": {
+                "excluded": 0
+              },
+              "non_numeric_pos_numified": {
+                "excluded": 0
+              },
+              "reference_skipped_record": {
+                "excluded": 20524
+              },
+              "star_alone_svtype_annotated": {
+                "excluded": 0
+              }
+            },
+            "excluded_bnd_own_rows_lost_by_file": {
+              "09_breakends": 202
+            },
+            "excluded_bnd_own_rows_lost_rust": 202,
+            "excluded_bnd_synonym_mate_rows_rust": 0,
+            "excluded_breakend_mate_local_read_by_file": {
+              "09_breakends": {
+                "cross_chromosome": 1181,
+                "perl": 1369,
+                "rust": 1369,
+                "same_chromosome": 188
+              },
+              "13_vcf45_features": {
+                "cross_chromosome": 0,
+                "perl": 38,
+                "rust": 38,
+                "same_chromosome": 38
+              }
+            },
+            "excluded_breakend_mate_local_read_by_kind": {
+              "cross_chromosome": 1181,
+              "same_chromosome": 226
+            },
+            "excluded_breakend_mate_local_read_perl": 1407,
+            "excluded_breakend_mate_local_read_rust": 1407,
+            "excluded_cnv_tr_empty_expansion_rust": 0,
+            "excluded_cnv_tr_rn_zero_rust": 0,
+            "excluded_cnvtr_by_file": {
+              "07_cnv_repeat": 1368
+            },
+            "excluded_cnvtr_perl": 1368,
+            "excluded_cnvtr_rust": 1368,
+            "excluded_cross_chromosome_perl": 0,
+            "excluded_cross_chromosome_rust": 0,
+            "excluded_divergences": 23504,
+            "excluded_dot_breakend_pair_perl": 0,
+            "excluded_dot_breakend_pair_rust": 0,
+            "excluded_gvcf_variant_site_rust": 0,
+            "excluded_missing_alt_annotated_perl": 0,
+            "excluded_non_integer_end_perl": 0,
+            "excluded_non_integer_end_rust": 0,
+            "excluded_non_numeric_pos_perl": 0,
+            "excluded_non_ref_batch_perl": 0,
+            "excluded_non_ref_batch_rust": 0,
+            "excluded_perl_extra": 2778,
+            "excluded_reference_skipped_by_file": {
+              "10_special_alleles": {
+                "records": 200,
+                "rust": 200
+              },
+              "12_complex_imprecise": {
+                "records": 100,
+                "rust": 1189
+              },
+              "gnomad_sv_v2.1_chr21": {
+                "records": 89,
+                "rust": 19135
+              }
+            },
+            "excluded_reference_skipped_rust": 20524,
+            "excluded_registry_swap_by_bucket": {
+              "covered_splice_region_swap": 0,
+              "start_cooccurrence_swap": 3
+            },
+            "excluded_registry_swap_by_file": {
+              "11_multi_allelic": {
+                "covered_splice_region_swap": 0,
+                "perl": 1,
+                "rust": 1,
+                "start_cooccurrence_swap": 1
+              },
+              "clinvar_sv_chr21": {
+                "covered_splice_region_swap": 0,
+                "perl": 1,
+                "rust": 1,
+                "start_cooccurrence_swap": 1
+              },
+              "gnomad_sv_v2.1_chr21": {
+                "covered_splice_region_swap": 0,
+                "perl": 1,
+                "rust": 1,
+                "start_cooccurrence_swap": 1
+              }
+            },
+            "excluded_registry_swap_perl": 3,
+            "excluded_registry_swap_rust": 3,
+            "excluded_rust_extra": 23504,
+            "excluded_star_alone_svtype_perl": 0,
+            "excluded_transcript_selection_mate_rust": 0,
+            "excluded_transcript_selection_perl": 0,
+            "excluded_transcript_selection_rust": 0,
+            "fasta_named_slice_intergenic_records": 0,
+            "gvcf_variant_site_records": 0,
+            "intersection_union": 314234,
+            "perl_tuples_union": 314234,
+            "reference_skipped_records": 389,
+            "rust_tuples_union": 314234,
+            "scored_engine_transcripts_absent_from_cache": 0,
+            "transcript_selection_cnvtr_overlap_rust": 0,
+            "transcript_selection_cross_chromosome_overlap_perl": 0
+          },
+          "overall": {
+            "cross_file_duplicate_perl": 35,
+            "cross_file_duplicate_rust": 35,
+            "intersection_union": 314234,
+            "perl_tuples_union": 317012,
+            "rust_tuples_union": 337738
+          },
+          "per_file_sums": {
+            "cnvtr_swap_pairs_total_by_file": {
+              "perl": 1368,
+              "rust": 1368
+            },
+            "excluded_bnd_own_rows_lost_by_file": 202,
+            "excluded_breakend_mate_local_read_by_file": {
+              "cross_chromosome": 1181,
+              "perl": 1407,
+              "rust": 1407,
+              "same_chromosome": 226
+            },
+            "excluded_cnvtr_by_file": 1368,
+            "excluded_reference_skipped_by_file": {
+              "records": 389,
+              "rust": 20524
+            },
+            "excluded_registry_swap_by_file": {
+              "covered_splice_region_swap": 0,
+              "perl": 3,
+              "rust": 3,
+              "start_cooccurrence_swap": 3
+            }
+          }
+        }
+      },
+      "s08": {
+        "adj_f1": 1.0,
+        "adj_intersection": 1440991,
+        "adj_perl": 1440991,
+        "adj_rust": 1440991,
+        "intersection": 1440991,
+        "per_file": {
+          "01_snv": {
+            "engine_tuples": 23927,
+            "f1": 1.0,
+            "intersection": 23927,
+            "perl_tuples": 23927
+          },
+          "02_mnp_complex": {
+            "engine_tuples": 93901,
+            "f1": 0.99978701,
+            "intersection": 93881,
+            "perl_tuples": 93901
+          },
+          "03_small_indels": {
+            "engine_tuples": 87206,
+            "f1": 1.0,
+            "intersection": 87206,
+            "perl_tuples": 87206
+          },
+          "04_large_explicit": {
+            "engine_tuples": 16348,
+            "f1": 1.0,
+            "intersection": 16348,
+            "perl_tuples": 16348
+          },
+          "05_symbolic_del_ins": {
+            "engine_tuples": 155280,
+            "f1": 0.99999356,
+            "intersection": 155279,
+            "perl_tuples": 155280
+          },
+          "06_symbolic_dup_inv": {
+            "engine_tuples": 140413,
+            "f1": 1.0,
+            "intersection": 140413,
+            "perl_tuples": 140413
+          },
+          "07_cnv_repeat": {
+            "engine_tuples": 46582,
+            "f1": 0.919367996,
+            "intersection": 42826,
+            "perl_tuples": 46582
+          },
+          "08_mobile_elements": {
+            "engine_tuples": 35278,
+            "f1": 1.0,
+            "intersection": 35278,
+            "perl_tuples": 35278
+          },
+          "09_breakends": {
+            "engine_tuples": 118099,
+            "f1": 0.941841776,
+            "intersection": 110754,
+            "perl_tuples": 117087
+          },
+          "10_special_alleles": {
+            "engine_tuples": 4007,
+            "f1": 0.974404914,
+            "intersection": 3807,
+            "perl_tuples": 3807
+          },
+          "11_multi_allelic": {
+            "engine_tuples": 33002,
+            "f1": 1.0,
+            "intersection": 33002,
+            "perl_tuples": 33002
+          },
+          "12_complex_imprecise": {
+            "engine_tuples": 18151,
+            "f1": 0.840905463,
+            "intersection": 13169,
+            "perl_tuples": 13170
+          },
+          "13_vcf45_features": {
+            "engine_tuples": 34359,
+            "f1": 0.99921418,
+            "intersection": 34332,
+            "perl_tuples": 34359
+          },
+          "1kg_sv_chr21": {
+            "engine_tuples": 31818,
+            "f1": 0.989455966,
+            "intersection": 31155,
+            "perl_tuples": 31156
+          },
+          "clinvar_sv_chr21": {
+            "engine_tuples": 86480,
+            "f1": 1.0,
+            "intersection": 86480,
+            "perl_tuples": 86480
+          },
+          "gnomad_sv_v4.1_chr21": {
+            "engine_tuples": 809949,
+            "f1": 0.791428005,
+            "intersection": 533134,
+            "perl_tuples": 537322
+          }
+        },
+        "per_file_adjusted": {
+          "01_snv": {
+            "engine_tuples": 23927,
+            "f1": 1.0,
+            "intersection": 23927,
+            "perl_tuples": 23927
+          },
+          "02_mnp_complex": {
+            "engine_tuples": 93881,
+            "f1": 1.0,
+            "intersection": 93881,
+            "perl_tuples": 93881
+          },
+          "03_small_indels": {
+            "engine_tuples": 87206,
+            "f1": 1.0,
+            "intersection": 87206,
+            "perl_tuples": 87206
+          },
+          "04_large_explicit": {
+            "engine_tuples": 16348,
+            "f1": 1.0,
+            "intersection": 16348,
+            "perl_tuples": 16348
+          },
+          "05_symbolic_del_ins": {
+            "engine_tuples": 155279,
+            "f1": 1.0,
+            "intersection": 155279,
+            "perl_tuples": 155279
+          },
+          "06_symbolic_dup_inv": {
+            "engine_tuples": 140413,
+            "f1": 1.0,
+            "intersection": 140413,
+            "perl_tuples": 140413
+          },
+          "07_cnv_repeat": {
+            "engine_tuples": 42826,
+            "f1": 1.0,
+            "intersection": 42826,
+            "perl_tuples": 42826
+          },
+          "08_mobile_elements": {
+            "engine_tuples": 35278,
+            "f1": 1.0,
+            "intersection": 35278,
+            "perl_tuples": 35278
+          },
+          "09_breakends": {
+            "engine_tuples": 110754,
+            "f1": 1.0,
+            "intersection": 110754,
+            "perl_tuples": 110754
+          },
+          "10_special_alleles": {
+            "engine_tuples": 3807,
+            "f1": 1.0,
+            "intersection": 3807,
+            "perl_tuples": 3807
+          },
+          "11_multi_allelic": {
+            "engine_tuples": 33002,
+            "f1": 1.0,
+            "intersection": 33002,
+            "perl_tuples": 33002
+          },
+          "12_complex_imprecise": {
+            "engine_tuples": 13169,
+            "f1": 1.0,
+            "intersection": 13169,
+            "perl_tuples": 13169
+          },
+          "13_vcf45_features": {
+            "engine_tuples": 34332,
+            "f1": 1.0,
+            "intersection": 34332,
+            "perl_tuples": 34332
+          },
+          "1kg_sv_chr21": {
+            "engine_tuples": 31155,
+            "f1": 1.0,
+            "intersection": 31155,
+            "perl_tuples": 31155
+          },
+          "clinvar_sv_chr21": {
+            "engine_tuples": 86480,
+            "f1": 1.0,
+            "intersection": 86480,
+            "perl_tuples": 86480
+          },
+          "gnomad_sv_v4.1_chr21": {
+            "engine_tuples": 533134,
+            "f1": 1.0,
+            "intersection": 533134,
+            "perl_tuples": 533134
+          }
+        },
+        "perl": 1455318,
+        "raw_f1": 0.903409216,
+        "rust": 1734800,
+        "set_aside": {
+          "adjusted": {
+            "bnd_bare_reference_allele_rows": 0,
+            "bnd_mate_32bit_buffer_records": 0,
+            "bnd_mate_32bit_buffer_reference_tuples": 0,
+            "cnvtr_swap_pairs_total_by_file": {
+              "07_cnv_repeat": {
+                "perl": 3751,
+                "rust": 3751
+              }
+            },
+            "cnvtr_swap_pairs_total_perl": 3751,
+            "cnvtr_swap_pairs_total_rust": 3751,
+            "cross_file_duplicate_perl": 16730,
+            "cross_file_duplicate_rust": 16730,
+            "divergence_classes": {
+              "bnd_bare_reference_allele_row": {
+                "excluded": 0
+              },
+              "bnd_mate_32bit_buffer_intergenic": {
+                "excluded": 0
+              },
+              "bnd_own_chromosome_rows_lost": {
+                "excluded": 1012
+              },
+              "bnd_synonym_mate_rows_lost": {
+                "excluded": 0
+              },
+              "cnv_tr_empty_expansion_dropped": {
+                "excluded": 0
+              },
+              "cnv_tr_rn_zero_allele_dropped": {
+                "excluded": 0
+              },
+              "dot_breakend_without_svtype_pair": {
+                "excluded": 0
+              },
+              "fasta_named_slice_intergenic": {
+                "excluded": 0
+              },
+              "gvcf_variant_site_dropped": {
+                "excluded": 0
+              },
+              "missing_alt_annotated": {
+                "excluded": 0
+              },
+              "non_integer_end_annotated": {
+                "excluded": 0
+              },
+              "non_numeric_pos_numified": {
+                "excluded": 0
+              },
+              "reference_skipped_record": {
+                "excluded": 278309
+              },
+              "star_alone_svtype_annotated": {
+                "excluded": 0
+              }
+            },
+            "excluded_bnd_own_rows_lost_by_file": {
+              "09_breakends": 1012
+            },
+            "excluded_bnd_own_rows_lost_rust": 1012,
+            "excluded_bnd_synonym_mate_rows_rust": 0,
+            "excluded_breakend_mate_local_read_by_file": {
+              "09_breakends": {
+                "cross_chromosome": 5794,
+                "perl": 6333,
+                "rust": 6333,
+                "same_chromosome": 539
+              },
+              "13_vcf45_features": {
+                "cross_chromosome": 0,
+                "perl": 27,
+                "rust": 27,
+                "same_chromosome": 27
+              },
+              "gnomad_sv_v4.1_chr21": {
+                "cross_chromosome": 4158,
+                "perl": 4158,
+                "rust": 4158,
+                "same_chromosome": 0
+              }
+            },
+            "excluded_breakend_mate_local_read_by_kind": {
+              "cross_chromosome": 9952,
+              "same_chromosome": 566
+            },
+            "excluded_breakend_mate_local_read_perl": 10518,
+            "excluded_breakend_mate_local_read_rust": 10518,
+            "excluded_cnv_tr_empty_expansion_rust": 0,
+            "excluded_cnv_tr_rn_zero_rust": 0,
+            "excluded_cnvtr_by_file": {
+              "07_cnv_repeat": 3751
+            },
+            "excluded_cnvtr_perl": 3751,
+            "excluded_cnvtr_rust": 3751,
+            "excluded_cross_chromosome_perl": 0,
+            "excluded_cross_chromosome_rust": 0,
+            "excluded_divergences": 293647,
+            "excluded_dot_breakend_pair_perl": 0,
+            "excluded_dot_breakend_pair_rust": 0,
+            "excluded_gvcf_variant_site_rust": 0,
+            "excluded_missing_alt_annotated_perl": 0,
+            "excluded_non_integer_end_perl": 0,
+            "excluded_non_integer_end_rust": 0,
+            "excluded_non_numeric_pos_perl": 0,
+            "excluded_non_ref_batch_perl": 0,
+            "excluded_non_ref_batch_rust": 0,
+            "excluded_perl_extra": 14326,
+            "excluded_reference_skipped_by_file": {
+              "10_special_alleles": {
+                "records": 200,
+                "rust": 200
+              },
+              "12_complex_imprecise": {
+                "records": 100,
+                "rust": 4981
+              },
+              "1kg_sv_chr21": {
+                "records": 49,
+                "rust": 662
+              },
+              "gnomad_sv_v4.1_chr21": {
+                "records": 245,
+                "rust": 272627
+              }
+            },
+            "excluded_reference_skipped_rust": 278309,
+            "excluded_registry_swap_by_bucket": {
+              "covered_splice_region_swap": 20,
+              "start_cooccurrence_swap": 37
+            },
+            "excluded_registry_swap_by_file": {
+              "02_mnp_complex": {
+                "covered_splice_region_swap": 20,
+                "perl": 20,
+                "rust": 20,
+                "start_cooccurrence_swap": 0
+              },
+              "05_symbolic_del_ins": {
+                "covered_splice_region_swap": 0,
+                "perl": 1,
+                "rust": 1,
+                "start_cooccurrence_swap": 1
+              },
+              "07_cnv_repeat": {
+                "covered_splice_region_swap": 0,
+                "perl": 5,
+                "rust": 5,
+                "start_cooccurrence_swap": 5
+              },
+              "12_complex_imprecise": {
+                "covered_splice_region_swap": 0,
+                "perl": 1,
+                "rust": 1,
+                "start_cooccurrence_swap": 1
+              },
+              "1kg_sv_chr21": {
+                "covered_splice_region_swap": 0,
+                "perl": 1,
+                "rust": 1,
+                "start_cooccurrence_swap": 1
+              },
+              "gnomad_sv_v4.1_chr21": {
+                "covered_splice_region_swap": 0,
+                "perl": 30,
+                "rust": 30,
+                "start_cooccurrence_swap": 30
+              }
+            },
+            "excluded_registry_swap_perl": 57,
+            "excluded_registry_swap_rust": 57,
+            "excluded_rust_extra": 293647,
+            "excluded_star_alone_svtype_perl": 0,
+            "excluded_transcript_selection_mate_rust": 0,
+            "excluded_transcript_selection_perl": 0,
+            "excluded_transcript_selection_rust": 0,
+            "fasta_named_slice_intergenic_records": 0,
+            "gvcf_variant_site_records": 0,
+            "intersection_union": 1424261,
+            "perl_tuples_union": 1424261,
+            "reference_skipped_records": 594,
+            "rust_tuples_union": 1424261,
+            "scored_engine_transcripts_absent_from_cache": 0,
+            "transcript_selection_cnvtr_overlap_rust": 0,
+            "transcript_selection_cross_chromosome_overlap_perl": 0
+          },
+          "overall": {
+            "cross_file_duplicate_perl": 16731,
+            "cross_file_duplicate_rust": 16892,
+            "intersection_union": 1424261,
+            "perl_tuples_union": 1438587,
+            "rust_tuples_union": 1717908
+          },
+          "per_file_sums": {
+            "cnvtr_swap_pairs_total_by_file": {
+              "perl": 3751,
+              "rust": 3751
+            },
+            "excluded_bnd_own_rows_lost_by_file": 1012,
+            "excluded_breakend_mate_local_read_by_file": {
+              "cross_chromosome": 9952,
+              "perl": 10518,
+              "rust": 10518,
+              "same_chromosome": 566
+            },
+            "excluded_cnvtr_by_file": 3751,
+            "excluded_reference_skipped_by_file": {
+              "records": 594,
+              "rust": 278470
+            },
+            "excluded_registry_swap_by_file": {
+              "covered_splice_region_swap": 20,
+              "perl": 58,
+              "rust": 58,
+              "start_cooccurrence_swap": 38
+            }
+          }
+        }
+      }
+    },
+    "release": "v0.4.0",
+    "sweep_id": "sweep-20261022T161358Z"
+  },
+  "previous_release_concordance_sweep_id": "sweep-20261022T161358Z",
+  "public_build_inputs": {
+    "cargo_config_blob": "c299836220d7cf94ad6855595c220b9109004d55",
+    "cargo_lock_blob": "68a36ad02168232b91be93f8a62d67fa01bc3d09",
+    "cargo_lock_sha256": "de3d15b7a7b6f5b63f01da0c34a38e06f5760af5ce98e28d3b605a7e2e2188c1",
+    "cargo_toml_blob": "53c721a5b85cad28bba5dce96098846d4fed074c",
+    "crates_tree_id": "4b6c807fc8dad4263714fe8ed3b33ec87c692a8b",
+    "source_commit": "f00cff869952b82862768d5663c176ecb4720e40",
+    "source_tree": "public",
+    "src_tree_ids": {
+      "crates/vep-builtins/src": "8ab82e682639513c7637fc7d8f00c26514b68aab",
+      "crates/vep-cache-builder/src": "fcd63d69d08beba2f9f21c82f03c523badf742c1",
+      "crates/vep-cache-converter/src": "3a79fdaf73024a9983517921e56cda459dbf3e3e",
+      "crates/vep-cli/src": "75bf8af4ea049942a6245ef6f1e61bf39c965fd0",
+      "crates/vep-core/src": "55f0fbad24c638be86e979a66c1f800cb71e8f41",
+      "crates/vep-effects/src": "231e65250242b2d867e713560911645c6f57ef39",
+      "crates/vep-fasta/src": "444dbccfff25cbdfe7d29a503e084fa3039f70db",
+      "crates/vep-io/src": "ba4651df331be72b9b767682ffa9cd9ab31f84cb",
+      "crates/vep-plugin/src": "aa0d75b7cbfb995e6ede21a494029b14f4689c0f"
+    }
+  },
+  "public_build_inputs_note": "Git object ids of the build inputs at source_commit (crates tree, Cargo.toml, Cargo.lock, .cargo/config.toml), re-derived by the build host from the extracted source and recorded with the binary; a tag whose inputs equal these carries the code that was measured. src_tree_ids are the git tree ids of each crate's source directory at source_commit; a release tag whose crates/<name>/src trees equal them and whose Cargo.toml, Cargo.lock and .cargo/config.toml blobs equal the ids above carries the code that was measured, whatever its crates tree id: test and documentation files under crates/ changed after the measurement and none of them enters the binary.",
+  "record": "release-addendum",
+  "release": "v0.5.0",
+  "rustc": "1.97.1",
+  "rustc_note": "The compiler of the measured binaries, read from the build markers of both architectures; it is the toolchain the release workflow pins, so the release assets are builds of the same source, lockfile and compiler, identified by their own digests in SHA256SUMS.",
+  "same_day_control": {
+    "note": "Both binaries under the release protocol on the same day (--walltime-only, the discarded warmup's output flushed and deleted before the timed run), on the same instance types and images: the released version (5 + 5 clones) and the previous release (3 + 3 clones) agree within 7.3% in median wall time on 6 of 8 cells and within 18.4% in median user CPU time on every cell above 60 CPU-seconds; on the other 2 (ratios of the released median over the previous), the released version is faster on s01 arm64 at 0.889, s01 x86_64 at 0.797: 0.5.0 streams each batch through the worker pool by default where 0.4.0 ran whole-batch passes, renders rows as bytes once per record and evaluates the coding predicate once per allele; on these cells its median user CPU is 1.08 (arm64) and 1.07 (x86_64) times 0.4.0's while its wall time is lower, so the worker pool stays busier.",
+    "per_cell": [
+      {
+        "arch": "arm64",
+        "previous_release_max": 3.9,
+        "previous_release_median_sec": 3.86,
+        "previous_release_min": 3.86,
+        "previous_release_n": 3,
+        "previous_release_user_cpu_sec_median": 55.02,
+        "ratio_release_over_previous": 0.889,
+        "release_median_sec": 3.43,
+        "release_n": 5,
+        "release_p5": 3.42,
+        "release_p95": 4.04,
+        "release_user_cpu_sec_median": 59.2,
+        "suite_id": "s01"
+      },
+      {
+        "arch": "arm64",
+        "previous_release_max": 11.58,
+        "previous_release_median_sec": 11.56,
+        "previous_release_min": 11.5,
+        "previous_release_n": 3,
+        "previous_release_user_cpu_sec_median": 160.65,
+        "ratio_release_over_previous": 0.981,
+        "release_median_sec": 11.34,
+        "release_n": 5,
+        "release_p5": 11.3,
+        "release_p95": 11.44,
+        "release_user_cpu_sec_median": 190.17,
+        "suite_id": "s02"
+      },
+      {
+        "arch": "arm64",
+        "previous_release_max": 1.17,
+        "previous_release_median_sec": 1.16,
+        "previous_release_min": 1.15,
+        "previous_release_n": 3,
+        "previous_release_user_cpu_sec_median": 10.4,
+        "ratio_release_over_previous": 1.069,
+        "release_median_sec": 1.24,
+        "release_n": 5,
+        "release_p5": 1.23,
+        "release_p95": 1.25,
+        "release_user_cpu_sec_median": 10.67,
+        "suite_id": "s07"
+      },
+      {
+        "arch": "arm64",
+        "previous_release_max": 3.28,
+        "previous_release_median_sec": 3.2,
+        "previous_release_min": 3.13,
+        "previous_release_n": 3,
+        "previous_release_user_cpu_sec_median": 27.96,
+        "ratio_release_over_previous": 1.059,
+        "release_median_sec": 3.39,
+        "release_n": 5,
+        "release_p5": 3.32,
+        "release_p95": 3.46,
+        "release_user_cpu_sec_median": 29.33,
+        "suite_id": "s08"
+      },
+      {
+        "arch": "x86_64",
+        "previous_release_max": 6.48,
+        "previous_release_median_sec": 6.46,
+        "previous_release_min": 6.45,
+        "previous_release_n": 3,
+        "previous_release_user_cpu_sec_median": 88.04,
+        "ratio_release_over_previous": 0.797,
+        "release_median_sec": 5.15,
+        "release_n": 5,
+        "release_p5": 5.08,
+        "release_p95": 5.22,
+        "release_user_cpu_sec_median": 94.09,
+        "suite_id": "s01"
+      },
+      {
+        "arch": "x86_64",
+        "previous_release_max": 16.65,
+        "previous_release_median_sec": 16.65,
+        "previous_release_min": 16.65,
+        "previous_release_n": 3,
+        "previous_release_user_cpu_sec_median": 236.94,
+        "ratio_release_over_previous": 0.927,
+        "release_median_sec": 15.43,
+        "release_n": 5,
+        "release_p5": 15.3,
+        "release_p95": 15.57,
+        "release_user_cpu_sec_median": 269.52,
+        "suite_id": "s02"
+      },
+      {
+        "arch": "x86_64",
+        "previous_release_max": 1.78,
+        "previous_release_median_sec": 1.76,
+        "previous_release_min": 1.73,
+        "previous_release_n": 3,
+        "previous_release_user_cpu_sec_median": 15.41,
+        "ratio_release_over_previous": 1.051,
+        "release_median_sec": 1.85,
+        "release_n": 5,
+        "release_p5": 1.84,
+        "release_p95": 1.87,
+        "release_user_cpu_sec_median": 16.21,
+        "suite_id": "s07"
+      },
+      {
+        "arch": "x86_64",
+        "previous_release_max": 4.61,
+        "previous_release_median_sec": 4.59,
+        "previous_release_min": 4.54,
+        "previous_release_n": 3,
+        "previous_release_user_cpu_sec_median": 43.92,
+        "ratio_release_over_previous": 1.05,
+        "release_median_sec": 4.82,
+        "release_n": 5,
+        "release_p5": 4.77,
+        "release_p95": 4.87,
+        "release_user_cpu_sec_median": 46.29,
+        "suite_id": "s08"
+      }
+    ],
+    "previous_release_binary_md5": {
+      "arm64": "a96d5b61a8f0f6d66fc20bc3d9c3ccbb",
+      "x86_64": "3d95a528e3b350cc8dd0fe80826a4ab1"
+    },
+    "previous_release_sweep_id": "sweep-20261025T005749Z",
+    "release_sweep_id": "sweep-20261025T005746Z",
+    "worst_cell_user_cpu_ratio_deviation": 0.1838,
+    "worst_cell_wall_ratio_deviation": 0.2028
+  },
+  "scope": "vep-rs alone: the released version's concordance on the cells s01, s02, s07, s08, s09, s10 against Ensembl VEP 116.2's archived output (perl_reference names the sets) and its own wall times on both architectures, stated in the README beside the paper's figures, which do not change. Perl VEP and fastVEP are not re-measured here, and no ratio against the paper's medians is stated: the release protocol deletes the discarded warmup's output before the timed run and the paper's did not. The same-day control below is the comparison the README cites.",
+  "sites_only_note": "Every timed input is sites-only; s09 and s10 are pointer suites into the per-file structural-variant results of s07 and s08.",
+  "source_commit": "f00cff869952b82862768d5663c176ecb4720e40",
+  "source_tree": "public",
+  "unstable_cells": [],
+  "wall_time_sweep_id": "sweep-20261025T005746Z",
+  "warmup_output_discarded": true,
+  "warmup_output_discarded_note": "Before each timed run the harness flushes and deletes the discarded warmup's output (scripts/concordance/run_clone_measurement.sh, discard_warmup_output), so the timed run starts with the memory the warmup had.",
+  "warmup_run_discarded_per_clone": 1
+}

@@ -1,0 +1,250 @@
+{
+  "arches": [
+    "arm64"
+  ],
+  "binary_md5": {
+    "arm64": "d6ad0ff10a58496d45e42bb094d84f08"
+  },
+  "binary_sha256": {
+    "arm64": "72362bf61d631490e7f51bbbd252e00fbc93c79724947634a46c5bfbb8705a16"
+  },
+  "cache_prefix": "caches/fastvep-v0.4.0-ensembl116",
+  "clone_manifest_note": "Instance ids are positional (clone-<arch>-<index>); every clone ran the sweep and binary this record pins.",
+  "clones": [
+    {
+      "arch": "arm64",
+      "binary_md5": "d6ad0ff10a58496d45e42bb094d84f08",
+      "clone": "clone-arm64-1",
+      "completed_at_utc": "2026-10-22T17:17:31Z",
+      "dataset_inventory_sha256": "e79f934f701f03d41983a09e69079b3193b232e555cddbfffd85362a2097221c",
+      "engine": "fastvep",
+      "role": "comparator_concordance",
+      "source_sweep_id": "sweep-20261022T161359Z"
+    }
+  ],
+  "concordance": {
+    "s01": {
+      "adjusted": {
+        "engine_tuples": 33746453,
+        "excluded_categories": {
+          "bnd_bare_reference_allele_row": {
+            "count": 0,
+            "excluded": 0
+          },
+          "bnd_mate_32bit_buffer_intergenic": {
+            "count": 0,
+            "excluded": 0
+          },
+          "bnd_own_chromosome_rows_lost": {
+            "count": 0,
+            "excluded": 0
+          },
+          "bnd_synonym_mate_rows_lost": {
+            "count": 0,
+            "excluded": 0
+          },
+          "cnv_tr_empty_expansion_dropped": {
+            "count": 0,
+            "excluded": 0
+          },
+          "cnv_tr_rn_zero_allele_dropped": {
+            "count": 0,
+            "excluded": 0
+          },
+          "dot_breakend_without_svtype_pair": {
+            "count": 0,
+            "excluded": 0
+          },
+          "fasta_named_slice_intergenic": {
+            "count": 9,
+            "excluded": 0
+          },
+          "frameshift_splice_cascade_swap": {
+            "count": 0,
+            "excluded": 0
+          },
+          "gvcf_variant_site_dropped": {
+            "count": 0,
+            "excluded": 0
+          },
+          "intronic_overcall_swap": {
+            "count": 2581,
+            "excluded": 0
+          },
+          "missing_alt_annotated": {
+            "count": 0,
+            "excluded": 0
+          },
+          "non_integer_end_annotated": {
+            "count": 0,
+            "excluded": 0
+          },
+          "non_numeric_pos_numified": {
+            "count": 0,
+            "excluded": 0
+          },
+          "ppt_overcall_swap": {
+            "count": 206,
+            "excluded": 0
+          },
+          "reference_skipped_record": {
+            "count": 1999,
+            "excluded": 1999
+          },
+          "splice_lastwrite_swap": {
+            "count": 0,
+            "excluded": 0
+          },
+          "star_alone_svtype_annotated": {
+            "count": 0,
+            "excluded": 0
+          },
+          "start_cooccurrence_swap": {
+            "count": 0,
+            "excluded": 0
+          }
+        },
+        "excluded_engine": 1999,
+        "excluded_perl": 0,
+        "f1": 0.971919461,
+        "intersection": 32671235,
+        "perl": 33483881
+      },
+      "assembly": "GRCh37",
+      "engine_tuples": 33748452,
+      "intersection": 32671235,
+      "perl": 33483881,
+      "raw_f1": 0.971890563,
+      "suite": "ClinVar full"
+    },
+    "s02": {
+      "adjusted": {
+        "engine_tuples": 126185379,
+        "excluded_categories": {
+          "bnd_bare_reference_allele_row": {
+            "count": 0,
+            "excluded": 0
+          },
+          "bnd_mate_32bit_buffer_intergenic": {
+            "count": 0,
+            "excluded": 0
+          },
+          "bnd_own_chromosome_rows_lost": {
+            "count": 0,
+            "excluded": 0
+          },
+          "bnd_synonym_mate_rows_lost": {
+            "count": 0,
+            "excluded": 0
+          },
+          "cnv_tr_empty_expansion_dropped": {
+            "count": 0,
+            "excluded": 0
+          },
+          "cnv_tr_rn_zero_allele_dropped": {
+            "count": 0,
+            "excluded": 0
+          },
+          "dot_breakend_without_svtype_pair": {
+            "count": 0,
+            "excluded": 0
+          },
+          "fasta_named_slice_intergenic": {
+            "count": 11,
+            "excluded": 0
+          },
+          "frameshift_splice_cascade_swap": {
+            "count": 0,
+            "excluded": 0
+          },
+          "gvcf_variant_site_dropped": {
+            "count": 0,
+            "excluded": 0
+          },
+          "intronic_overcall_swap": {
+            "count": 433,
+            "excluded": 0
+          },
+          "missing_alt_annotated": {
+            "count": 0,
+            "excluded": 0
+          },
+          "non_integer_end_annotated": {
+            "count": 0,
+            "excluded": 0
+          },
+          "non_numeric_pos_numified": {
+            "count": 0,
+            "excluded": 0
+          },
+          "ppt_overcall_swap": {
+            "count": 31,
+            "excluded": 0
+          },
+          "reference_skipped_record": {
+            "count": 18334,
+            "excluded": 18334
+          },
+          "splice_lastwrite_swap": {
+            "count": 0,
+            "excluded": 0
+          },
+          "star_alone_svtype_annotated": {
+            "count": 0,
+            "excluded": 0
+          },
+          "start_cooccurrence_swap": {
+            "count": 0,
+            "excluded": 0
+          }
+        },
+        "excluded_engine": 18334,
+        "excluded_perl": 0,
+        "f1": 0.974360417,
+        "intersection": 122651514,
+        "perl": 125572619
+      },
+      "assembly": "GRCh38",
+      "engine_tuples": 126203713,
+      "intersection": 122651514,
+      "perl": 125572619,
+      "raw_f1": 0.974289466,
+      "suite": "ClinVar full"
+    }
+  },
+  "concordance_note": "Per suite: raw counts (perl, engine_tuples, intersection) and the adjusted counts after the documented classes are set aside; raw_f1 and adjusted.f1 are 2I/(A+B) from those integers at nine decimal places.",
+  "dataset_inventory_sha256": "e79f934f701f03d41983a09e69079b3193b232e555cddbfffd85362a2097221c",
+  "dataset_inventory_sha256_fastvep_arm64": "e79f934f701f03d41983a09e69079b3193b232e555cddbfffd85362a2097221c",
+  "date": "2026-10-24",
+  "engine": "fastvep",
+  "engine_version": "v0.4.0",
+  "generated_at_utc": "2026-10-24T11:44:26.622448+00:00",
+  "ground_truth": {
+    "snp_indel": "ground_truth/perl/canonical_116_20261008"
+  },
+  "measurement_entrypoint": "scripts/concordance/run_clone_measurement.sh",
+  "methodology": "cross_instance_parallel_clone",
+  "methodology_note": "1 fresh clone(s) on the paper's ARM instance type booting the stock base image, each syncing the dataset to local NVMe and running scripts/concordance/run_clone_measurement.sh --engine fastvep on the suites below, the comparator scripts scoring the engine's output against the archived Ensembl VEP 116.2 ground truth with the same cache and reference FASTA. F1 is deterministic per binary and independent of architecture; every clone reported identical counts.",
+  "n_clones": 1,
+  "perl_reference": {
+    "snv_indel": {
+      "cache_version": 116,
+      "digest": "sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+      "fork": 16,
+      "image": "ensemblorg/ensembl-vep:release_116.2",
+      "prefix": "ground_truth/perl/canonical_116_20261008"
+    }
+  },
+  "pool_arch": "arm64",
+  "record": "comparator-suites",
+  "scope": "fastvep v0.4.0 scored against Ensembl VEP 116.2's output on the cells the whole-genome campaign does not cover: ClinVar full (GRCh37 and GRCh38). Concordance only; wall time is not measured here. Raw F1 counts every tuple; the adjusted figure sets aside the documented classes of docs/intended-divergences.md, the same comparator and classes the vep-rs figures use.",
+  "scored_with_release": {
+    "note": "The clones ran the concordance harness of vep-rs v0.5.0's release clones, so this engine and vep-rs v0.5.0 are scored by the same comparator on the same ground truth.",
+    "version": "v0.5.0"
+  },
+  "suites": [
+    "s01",
+    "s02"
+  ],
+  "sweep_id": "sweep-20261022T161359Z"
+}

@@ -730,6 +730,17 @@ def test_headline_states_the_speed_up_range_against_each_other_series():
     )
 
 
+def test_title_names_the_base_machine_count_and_every_series_measured_on_another():
+    assert chart.title_text(chart.read_chart(chart_record(), "record.json", VERSION)) == (
+        "Wall time, sum of per-chromosome medians over 5 machines at 16 threads, ARM"
+    )
+    record = chart_record()
+    record["wall_time"]["ensembl_vep"]["n_clones_per_cell"] = 1
+    assert chart.title_text(chart.read_chart(record, "record.json", VERSION)) == (
+        "Wall time, sum of per-chromosome medians over 5 machines (Ensembl VEP over 1) at 16 threads, ARM"
+    )
+
+
 def probe_record(**overrides):
     rec = {
         "tiles": ["index-375-light-top.png", "index-375-light-s1.png"],

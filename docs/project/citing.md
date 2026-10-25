@@ -4,7 +4,7 @@ If you use vep-rs in published work, cite the paper:
 
 > Porter M, Borkowski R. _vep-rs: high-throughput Rust variant annotation with population-scale concordance to Ensembl VEP._ bioRxiv (2026). [doi:10.64898/2026.09.22.753614](https://doi.org/10.64898/2026.09.22.753614).
 
-The journal DOI will be added here on acceptance. The paper's figures are in [docs/published-figures.md](../published-figures.md) and re-derive from `manuscript/data/*.csv` in the repository ([manuscript/data/README.md](../../manuscript/data/README.md)). The current release's own measurements are in [Current release](../benchmarks/current-release.md#current-release-v040).
+The journal DOI will be added here on acceptance. The paper's figures are in [docs/published-figures.md](../published-figures.md) and re-derive from `manuscript/data/*.csv` in the repository ([manuscript/data/README.md](../../manuscript/data/README.md)). The current release's own measurements are in [Current release](../benchmarks/current-release.md#current-release-v050).
 
 The software itself is archived at Zenodo, and that archive is the citation for the code and the released data files:
 

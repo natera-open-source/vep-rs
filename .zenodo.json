@@ -3,7 +3,7 @@
   "upload_type": "software",
   "license": "Apache-2.0",
   "access_right": "open",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "creators": [
     {
       "name": "Porter, Matthew",
@@ -15,7 +15,7 @@
       "affiliation": "Natera, Inc."
     }
   ],
-  "description": "vep-rs is a fast, memory-efficient variant effect predictor written in Rust. It annotates genomic variants with their predicted functional effects on genes, transcripts, and protein sequences, implementing the Ensembl Variant Effect Predictor (VEP) algorithm, reading a JSON transcript cache built from Ensembl release files or converted from an Ensembl VEP cache, and producing compatible output. Its concordance with Ensembl VEP release 116.2 is measured on the whole genome: 11,838,755,797 VEP consequence tuples from gnomAD, 1000 Genomes and ClinVar data on GRCh37 and GRCh38, reported per dataset, with raw F1 of at least 0.999972446 on each of the six whole-genome datasets and adjusted F1 of 1.000000000 on every dataset and every structural-variant file set once the documented divergence classes are set aside. Wall time is measured on the whole genome on twenty independently provisioned machines per chromosome and architecture and stated beside Ensembl VEP's and fastVEP's. Every published aggregate re-derives from the provenance records released with the code, and the intended-divergences page documents every class set aside.",
+  "description": "vep-rs is a fast, memory-efficient variant effect predictor written in Rust. It annotates genomic variants with their predicted functional effects on genes, transcripts, and protein sequences, implementing the Ensembl Variant Effect Predictor (VEP) algorithm, reading a JSON transcript cache built from Ensembl release files or converted from an Ensembl VEP cache, and producing compatible output. Its concordance with Ensembl VEP release 116.2 is measured on the whole genome: 11,838,755,797 VEP consequence tuples from gnomAD, 1000 Genomes and ClinVar data on GRCh37 and GRCh38, reported per dataset, with raw F1 of at least 0.999972446 on each of the six whole-genome datasets and adjusted F1 of 1.000000000 on every dataset and every structural-variant file set once the documented divergence classes are set aside. Wall time is measured on the whole genome on five independently provisioned machines per chromosome and architecture and stated beside Ensembl VEP's and fastVEP's. Every published aggregate re-derives from the provenance records released with the code, and the intended-divergences page documents every class set aside.",
   "keywords": [
     "variant annotation",
     "variant effect prediction",

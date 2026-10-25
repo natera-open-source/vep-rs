@@ -43,7 +43,7 @@ Each published release from 0.2.0 on is also an image on the GitHub Container Re
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" \
   -v "$PWD/tests/golden/116/GRCh37:/corpus:ro" -v "$PWD:/data" \
-  ghcr.io/natera-open-source/vep-rs:0.4.0 \
+  ghcr.io/natera-open-source/vep-rs:0.5.0 \
   vep --json_cache /corpus/json_cache --assembly GRCh37 \
   -i /corpus/variants.vcf -o /data/output.txt
 ```
@@ -55,7 +55,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
 Each image carries a build-provenance attestation:
 
 ```bash
-gh attestation verify oci://ghcr.io/natera-open-source/vep-rs:0.4.0 \
+gh attestation verify oci://ghcr.io/natera-open-source/vep-rs:0.5.0 \
   --repo natera-open-source/vep-rs
 ```
 

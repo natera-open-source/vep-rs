@@ -1036,11 +1036,10 @@ fn fasta_dir_exclusion_is_documented() {
              order (`BaseVEP.pm` lines 500-509), so on such a directory the two engines can \
              read different files",
             "Here the filter reads the same assembly as the redirect, where Ensembl VEP reads \
-             its assembly parameter alone (line 497), set by `--assembly`, `--grch37` or the \
-             layout directory's name (`CacheDir.pm` line 356)",
-            "Under `--offline --full_cache_dir` without `--assembly` or `--grch37`, Ensembl \
-             VEP's filter passes every file naming the species (line 508), and its preferences \
-             and the listing's order choose among every assembly's files",
+             its assembly parameter alone (line 497)",
+            "With that parameter unset, Ensembl VEP's filter passes every file naming the \
+             species (line 508), and its preferences and the listing's order choose among \
+             every assembly's files",
         ],
     );
     assert_flag_row_states(
@@ -1275,9 +1274,11 @@ fn chromosome_synonyms_two_hop_exclusion_is_documented() {
 /// assembly to the one `cache_resolve::resolve` took, `info.json` first), where
 /// BaseVEP.pm:525 (`-ASSEMBLY => $self->param('assembly'),`) and
 /// FastaSequence.pm:254 (`$pars ||= $PARS{$assembly} if $assembly && ...`) arm it
-/// from `--assembly` alone, which CacheDir.pm:356 fills in the `--dir_cache` scan
-/// alone, so `--offline --full_cache_dir` without `--assembly` leaves it unarmed
-/// there (FastaSequence.pm:550 `$Bio::EnsEMBL::Slice::_fasta_PARs &&`).
+/// from the assembly parameter, set by `--assembly`, `--grch37`
+/// (Config.pm:399-403) or the layout scan (CacheDir.pm:303-356), which runs for
+/// `--dir_cache` and `--dir` and not under `--full_cache_dir`, so
+/// `--offline --full_cache_dir` without either flag leaves it unset, the redirect
+/// unarmed there (FastaSequence.pm:550 `$Bio::EnsEMBL::Slice::_fasta_PARs &&`).
 ///
 /// A FASTA record is also reached through the aliases `contig_aliases` in
 /// vep-fasta's `lib.rs` builds in (`chr` added or removed, and the
@@ -1299,13 +1300,14 @@ fn fasta_exclusion_is_documented() {
         "cache-setup.md",
         &[
             "The redirect is armed by the assembly the cache resolves to, its `info.json` first, \
-             then its directory name, then `--assembly`, where Ensembl VEP arms it from \
-             `--assembly` alone (`BaseVEP.pm` line 525, `Utils/FastaSequence.pm` line 254)",
-            "Under `--offline --full_cache_dir` (`--json_cache` here) without `--assembly` that \
-             parameter stays unset there, since the directory scan that fills it runs for \
-             `--dir_cache` alone (`CacheDir.pm` line 356)",
-            "So there Ensembl VEP reads a `Y` span inside the region as written and vep-rs reads \
-             `X`",
+             then its directory name, then `--assembly`; Ensembl VEP arms it from its assembly \
+             parameter (`BaseVEP.pm` line 525, `Utils/FastaSequence.pm` line 254)",
+            "That parameter is set by `--assembly`, `--grch37` (`Config.pm` lines 399-403) or \
+             the layout scan (`CacheDir.pm` lines 303-356), which runs for `--dir_cache` and \
+             `--dir`, not under `--full_cache_dir`",
+            "Under `--offline --full_cache_dir` (`--json_cache` here) without `--assembly` or \
+             `--grch37` it stays unset, so Ensembl VEP reads a `Y` span inside the region as \
+             written and vep-rs reads `X`",
             "Beyond the table, a record is reached by its name with the prefix `chr` added or \
              removed and, for a record named `MT`, `M`, `chrM` or `chrMT`, by any of the four \
              names, matched in any letter case: aliases vep-rs builds in",
@@ -1324,11 +1326,11 @@ fn fasta_exclusion_is_documented() {
     assert_page_states(
         "intended-divergences.md",
         &[
-            "Under `--full_cache_dir` with no `--assembly`, Ensembl VEP's assembly stays unset, \
-             so its JSON prints `\"assembly_name\":null` and its pseudoautosomal redirect of `Y` \
-             reads to `X` is not armed",
+            "Under `--full_cache_dir` with neither `--assembly` nor `--grch37`, Ensembl VEP's \
+             assembly stays unset, so its JSON prints `\"assembly_name\":null`, its \
+             pseudoautosomal redirect of `Y` reads to `X` is not armed",
             "vep-rs takes the assembly the cache's `info.json` names, as it does under \
-             `--json_cache`, prints it and arms the redirect from it",
+             `--json_cache`, prints it, arms the redirect from it",
             "on the FASTA side vep-rs also reaches a record by the name with the prefix `chr` \
              added or removed or, for a record named `MT`, `M`, `chrM` or `chrMT`, by any of the \
              four names in any letter case, where Ensembl VEP tries the exact name, a synonym \
