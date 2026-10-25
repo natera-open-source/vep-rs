@@ -9,7 +9,8 @@
 # (docs/SUMMARY.md, index.md, changelog.md, contributing.md, 404.md, docs/assets/)
 # takes it from the checkout. A SUMMARY.md entry naming a page the tag does not
 # have is dropped. So is a redirect whose destination page the tag does not
-# have, or whose source anchor is still a heading of the tag's own page. Each
+# have, whose source anchor is still a heading of the tag's own page, or whose
+# fragment source names a page the build omits and that has no bare entry. Each
 # drop prints a line; a redirect entry the filter cannot read (anything but
 # "source" = "destination" on one line), or whose destination leaves the site,
 # fails the build. A tag whose
@@ -138,14 +139,31 @@ build_site() {
     )
 }
 
-# mdBook writes a redirect without checking that its destination exists, and it
-# redirects a fragment even when the source page still has that heading, so an
-# unfiltered table would send a reader to a 404 page or away from the heading
-# they asked for. The ids a page has come from a first build: mdBook slugifies
-# the headings and the preprocessor replaces whole pages, so the Markdown alone
-# does not show them.
+# mdBook writes a redirect without checking that its destination exists, it
+# redirects a fragment even when the source page still has that heading, and it
+# refuses a fragment source whose page is not in the book unless a bare entry
+# for that page gives the default destination, so an unfiltered table would
+# send a reader to a 404 page or away from the heading they asked for, or fail
+# the build of a tag that predates the page. The ids a page has come from a
+# first build: mdBook slugifies the headings and the preprocessor replaces
+# whole pages, so the Markdown alone does not show them. That build runs
+# without the redirect table, which only the final build needs.
 if grep -q '^\[output\.html\.redirect\]' "$out/book.toml"; then
+    cp "$out/book.toml" "$out/book.toml.redirects"
+    python3 - "$out/book.toml" <<'EOF'
+import sys
+
+toml = sys.argv[1]
+kept, in_table = [], False
+for line in open(toml, encoding="utf-8"):
+    if line.lstrip().startswith("["):
+        in_table = line.strip() == "[output.html.redirect]"
+    if not in_table:
+        kept.append(line)
+open(toml, "w", encoding="utf-8").writelines(kept)
+EOF
     build_site
+    mv "$out/book.toml.redirects" "$out/book.toml"
     python3 - "$out/book.toml" "$out/docs" "$out/target/book" "$docs_ref" "$site_url" <<'EOF'
 import html.parser, os, posixpath, re, sys
 
@@ -176,6 +194,10 @@ def ids_of(page):
     return page_ids[page]
 
 
+def in_docs(page):
+    return os.path.exists(os.path.join(docs, re.sub(r"\.html$", ".md", page)))
+
+
 def destination_exists(key, dest):
     page = dest.split("#")[0]
     if not page or SCHEME.match(page):
@@ -194,17 +216,26 @@ def destination_exists(key, dest):
         resolved = posixpath.normpath(posixpath.join(posixpath.dirname(key.lstrip("/")), page))
     if page.endswith("/"):
         resolved = posixpath.join(resolved, "index.md")
-    return os.path.exists(os.path.join(docs, re.sub(r"\.html$", ".md", resolved)))
+    return in_docs(resolved)
 
 
-kept, in_table, seen, dropped = [], False, 0, 0
+lines, in_table = [], False
 for line in open(toml, encoding="utf-8"):
+    m = None
     if line.lstrip().startswith("["):
         in_table = line.strip() == "[output.html.redirect]"
     elif in_table and line.strip() and not line.lstrip().startswith("#"):
         m = ENTRY.match(line)
         if not m:
             sys.exit(f"ERROR: [build_release_site] unrecognised redirect entry: {line.rstrip()}")
+    lines.append((line, m))
+# A fragment source whose page the build lacks needs a bare entry for that page
+# in the final table, else mdBook refuses it, so a bare entry the destination
+# rule drops counts for nothing.
+bare = {m[1].lstrip("/") for _, m in lines if m and "#" not in m[1] and destination_exists(m[1], m[2])}
+kept, seen, dropped = [], 0, 0
+for line, m in lines:
+    if m:
         seen += 1
         key, dest = m[1], m[2]
         source, _, fragment = key.lstrip("/").partition("#")
@@ -214,6 +245,10 @@ for line in open(toml, encoding="utf-8"):
             continue
         if fragment and fragment in ids_of(source):
             print(f"dropped redirect, anchor still on the {ref} page: {key} -> {dest}")
+            dropped += 1
+            continue
+        if fragment and source not in bare and not os.path.isfile(os.path.join(site, source)):
+            print(f"dropped redirect, source page not in {ref} and no bare entry for it: {key} -> {dest}")
             dropped += 1
             continue
     kept.append(line)
