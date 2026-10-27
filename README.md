@@ -53,8 +53,6 @@ Against Ensembl VEP 116.2. A population dataset is scored per chromosome and its
 | vep-rs v0.5.0 | ClinVar | GRCh37 | 1 | 0.999979065 | 1.000000000 | 4,388,172 | 33,483,881 | 33,483,881 | 33,483,180 |
 | vep-rs v0.5.0 | ClinVar | GRCh38 | 1 | 0.999972446 | 1.000000000 | 4,398,127 | 125,572,619 | 125,572,619 | 125,569,159 |
 | vep-rs v0.5.0 | All six | GRCh37 and GRCh38 | 97 | 0.999998408 | 1.000000000 | 1,188,425,523 | 11,838,755,797 | 11,838,770,647 | 11,838,744,378 |
-| vep-rs v0.4.0 (re-scored) | ClinVar | GRCh37 | 1 | 0.999979065 | 1.000000000 | 4,388,172 | 33,483,881 | 33,483,881 | 33,483,180 |
-| vep-rs v0.4.0 (re-scored) | ClinVar | GRCh38 | 1 | 0.999972446 | 1.000000000 | 4,398,127 | 125,572,619 | 125,572,619 | 125,569,159 |
 | fastVEP v0.4.0 | gnomAD v4.1 | GRCh38 | 24 | 0.923598441 | 0.923598441 | 759,336,320 | 9,601,562,823 | 9,646,230,422 | 8,888,615,919 |
 | fastVEP v0.4.0 | gnomAD v2.1.1 | GRCh37 | 23 | 0.939631987 | 0.939631987 | 261,942,336 | 885,664,902 | 889,340,923 | 833,926,125 |
 | fastVEP v0.4.0 | 1000 Genomes Phase 3 | GRCh37 | 25 | 0.977591321 | 0.978015902 | 84,805,772 | 286,649,478 | 287,933,154 | 280,853,497 |
@@ -69,7 +67,7 @@ Seconds: a population dataset as the sum of its per-chromosome medians, each Cli
 
 - vep-rs and fastVEP ran the population datasets on `c9gd.8xlarge` (ARM Graviton5) and `c8id.8xlarge` (x86 Intel), the newest available class per architecture (Graviton5 against 8th-generation Intel), 32 vCPU with local NVMe.
 - Ensembl VEP 116.2's figures are its single reference run per chromosome of the same inputs under the same protocol, on `c9gd.8xlarge` and `c8id.8xlarge` (the same processors with 64 GiB), the newest available class per architecture (Graviton5 against 8th-generation Intel), except gnomAD v4.1 chromosomes 1, 2 and 3 on `c9gd.12xlarge` (ARM, 48 vCPU / 96 GiB; peak memory 77.9, 76.4 and 80.2 GiB) and `c8id.12xlarge` (x86, 48 vCPU / 96 GiB; peak memory 73.2, 75.7 and 77.3 GiB), over the standard class's 64 GiB. The concordance tables compare against this run's output.
-- The ClinVar rows are the released version's whole-file medians on `c9gd.8xlarge` and `c8id.8xlarge`, the newest available class per architecture (Graviton5 against 8th-generation Intel); no comparator time is stated on them.
+- The ClinVar rows are the released version's whole-file medians on `c9gd.8xlarge` and `c8id.8xlarge`, the newest available class per architecture (Graviton5 against 8th-generation Intel); the comparators' times on them were measured on the same classes under the same protocol, fastVEP v0.4.0 as the median over 5 machines and Ensembl VEP 116.2 as one machine's timed run.
 
 | Dataset | Assembly | Variants | Arch | vep-rs v0.5.0 (s) | fastVEP v0.4.0 (s) | Ensembl VEP 116.2 (s) | vep-rs, largest cell median (s) | P5 to P95 (s) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -81,23 +79,21 @@ Seconds: a population dataset as the sum of its per-chromosome medians, each Cli
 | 1000 Genomes Phase 3 | GRCh37 | 84,805,772 | x86 | 43 | 397 (9.2x) | 7,039 (162x) | 3.54 (chromosome 2) | 3.53 to 3.55 |
 | 1000 Genomes high-coverage | GRCh38 | 73,554,796 | ARM | 60 | 951 (15.8x) | 15,817 (264x) | 5.02 (chromosome 1) | 4.99 to 5.02 |
 | 1000 Genomes high-coverage | GRCh38 | 73,554,796 | x86 | 92 | 917 (10.0x) | 17,660 (193x) | 7.62 (chromosome 2) | 7.42 to 7.70 |
-| ClinVar | GRCh37 | 4,388,172 | ARM | 3.43 |  |  | 3.43 (whole file) | 3.42 to 4.04 |
-| ClinVar | GRCh37 | 4,388,172 | x86 | 5.15 |  |  | 5.15 (whole file) | 5.08 to 5.22 |
-| ClinVar | GRCh38 | 4,398,127 | ARM | 11.34 |  |  | 11.34 (whole file) | 11.30 to 11.44 |
-| ClinVar | GRCh38 | 4,398,127 | x86 | 15.43 |  |  | 15.43 (whole file) | 15.30 to 15.57 |
+| ClinVar | GRCh37 | 4,388,172 | ARM | 3.43 | 40.52 (11.8x) | 719.22 (210x) | 3.43 (whole file) | 3.42 to 4.04 |
+| ClinVar | GRCh37 | 4,388,172 | x86 | 5.15 | 38.02 (7.4x) | 837.80 (163x) | 5.15 (whole file) | 5.08 to 5.22 |
+| ClinVar | GRCh38 | 4,398,127 | ARM | 11.34 | 120.01 (10.6x) | 2,543.75 (224x) | 11.34 (whole file) | 11.30 to 11.44 |
+| ClinVar | GRCh38 | 4,398,127 | x86 | 15.43 | 109.64 (7.1x) | 3,093.35 (200x) | 15.43 (whole file) | 15.30 to 15.57 |
 | All four population datasets | GRCh37 and GRCh38 | 1,179,639,224 | ARM | 924 | 18,149 (19.6x) | 366,422 (396x) | | |
 | All four population datasets | GRCh37 and GRCh38 | 1,179,639,224 | x86 | 1,551 | 18,284 (11.8x) | 393,720 (254x) | | |
 
 ### Structural variants
 
-The structural-variant per-VCF sets (16 files per assembly, the files' counts pooled), against Ensembl VEP 116.2. vep-rs v0.4.0's rows are its re-scoring against the same reference.
+The structural-variant per-VCF sets (16 files per assembly, the files' counts pooled), against Ensembl VEP 116.2.
 
 | Engine | Assembly | Raw F1 | Adjusted F1 | Ensembl VEP tuples | Engine tuples | Matched |
 | --- | --- | --- | --- | --- | --- | --- |
 | vep-rs v0.5.0 | GRCh37 | 0.964042027 | 1.000000000 | 317,047 | 337,773 | 315,637 |
 | vep-rs v0.5.0 | GRCh38 | 0.905760853 | 1.000000000 | 1,455,318 | 1,734,800 | 1,444,742 |
-| vep-rs v0.4.0 (re-scored) | GRCh37 | 0.959863779 | 1.000000000 | 317,047 | 337,773 | 314,269 |
-| vep-rs v0.4.0 (re-scored) | GRCh38 | 0.903409216 | 1.000000000 | 1,455,318 | 1,734,800 | 1,440,991 |
 
 ### Structural-variant wall time
 
@@ -116,7 +112,7 @@ The released version on `c9gd.8xlarge` and `c8id.8xlarge`, the newest available 
 - **Concordance.** One run per dataset of a build of the released version, against Ensembl VEP 116.2's output on the same inputs, with the same comparator, cache and reference FASTA. F1 is deterministic per binary and independent of architecture.
 - **Adjusted F1.** The tuples it sets aside are the documented classes of [docs/intended-divergences.md](docs/intended-divergences.md). Every tuple outside those classes is matched.
 - **fastVEP v0.4.0** was scored on the same Ensembl VEP output, with the same comparator, cache and reference and the same classes set aside. Its rows state its own tuple counts. Its adjusted figure differs from its raw one where the documented classes reach its whole-genome rows (1000 Genomes Phase 3 on GRCh37; 1000 Genomes high-coverage on GRCh38; ClinVar on GRCh37; ClinVar on GRCh38; All six on both assemblies). It was scored on the ClinVar cells and not on the structural-variant cells, whose tables carry no fastVEP v0.4.0 row.
-- **Previous release.** vep-rs v0.4.0's rows are its re-scoring against the same Ensembl VEP 116.2 reference on the cells this release's record pairs (`previous_release_concordance`), measured under the same protocol; tuple counts move against v0.4.0 on SV per-VCF (16 files) GRCh37, SV per-VCF (16 files) GRCh38; its published figures were scored against the same reference and equal the re-scoring.
+- **Previous release.** vep-rs v0.4.0 was re-scored against the same Ensembl VEP 116.2 reference on the cells this release's record pairs (`previous_release_concordance`); tuple counts move against v0.4.0 on SV per-VCF (16 files) GRCh37, SV per-VCF (16 files) GRCh38.
 - **Wall time.** For vep-rs and fastVEP, the median of 5 independent machine measurements per cell on both architectures, with `--fork 16` on sites-only inputs; for Ensembl VEP, its one reference run per cell. Each measurement runs on a fresh instance after a discarded warmup, whose output is flushed and deleted before the timed run.
 
 ### Provenance records
@@ -126,6 +122,7 @@ Every value above is recorded in these files:
 - [`docs/concordance-provenance/2026-10-25-release-v0.5.0.json`](docs/concordance-provenance/2026-10-25-release-v0.5.0.json): the ClinVar and structural-variant cells, the per-column field agreement, the compiler and build inputs of the measured binaries, the reference sets, the same-day wall-time control and the re-scoring of v0.4.0, and the whole-genome concordance per chromosome.
 - [`docs/concordance-provenance/2026-10-25-population-v0.5.0.json`](docs/concordance-provenance/2026-10-25-population-v0.5.0.json): every chromosome's wall-time median, P5 and P95 for all three engines, with the 5 wall times behind vep-rs's and fastVEP's, and fastVEP's concordance per chromosome.
 - [`docs/concordance-provenance/2026-10-24-comparator-fastvep-v0.4.0.json`](docs/concordance-provenance/2026-10-24-comparator-fastvep-v0.4.0.json): fastVEP v0.4.0's ClinVar figures, scored on the same Ensembl VEP output with the same comparator, cache and reference, the same classes set aside.
+- [`docs/concordance-provenance/2026-10-27-comparator-walltime-v0.5.0.json`](docs/concordance-provenance/2026-10-27-comparator-walltime-v0.5.0.json): the comparators' ClinVar wall times, measured on the same classes as vep-rs under the same protocol.
 - [`docs/concordance-provenance/2026-10-16-release-v0.4.0.json`](docs/concordance-provenance/2026-10-16-release-v0.4.0.json): vep-rs v0.4.0's own record, with the figures it published.
 - [`docs/concordance-provenance/2026-10-16-population-v0.4.0.json`](docs/concordance-provenance/2026-10-16-population-v0.4.0.json): vep-rs v0.4.0's whole-genome measurement.
 
