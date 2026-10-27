@@ -36,6 +36,36 @@ vep-rs takes the same input files and flag names as Ensembl VEP and writes the s
 - **The transcript cache.** The cache is a directory built by `vep-cache-builder` or converted from an Ensembl VEP cache ([docs/cache-setup.md](docs/cache-setup.md)), found under `--dir_cache`, `--species` and `--cache_version` in Ensembl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout or named directly with `--json_cache`; a run with no cache stops with an error, and vep-rs never contacts a database.
 - **Some flags are accepted but not implemented.** Among them are `--regulatory`, `--custom` and the statistics flags (vep-rs writes no summary file); `--refseq` and `--merged` select the `_refseq` or `_merged` species directory, and `--refseq` also resolves an HGVS gene name among RefSeq transcripts first. [docs/cli-reference.md](docs/cli-reference.md) marks every such flag. [docs/getting-started/what-vep-rs-does-not-do.md](docs/getting-started/what-vep-rs-does-not-do.md) says in plain words what a run does when asked for each missing feature, and which of them the next release, 0.6.0, adds.
 
+## Installation
+
+Pre-built binaries for Linux x86_64, Linux aarch64 and macOS aarch64 are on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page; each Linux architecture has a measured archive and a generic one, and both run on glibc 2.17 or later. Building from source needs Rust 1.89+ ([rustup](https://rustup.rs/)):
+
+```bash
+git clone https://github.com/natera-open-source/vep-rs.git
+cd vep-rs
+cargo build --release
+# Binary at target/release/vep
+```
+
+Each release from 0.2.0 on is also a container image, `ghcr.io/natera-open-source/vep-rs`, multi-platform from 0.5.0: the `X.Y.Z`, `X.Y` and `latest` tags carry the generic Linux binaries for linux/amd64 and linux/arm64 and run on Apple silicon and Graviton2 without a platform flag; `X.Y.Z-x86-64-v3` and `X.Y.Z-neoverse-v1` carry the measured binaries. The [Installation](docs/getting-started/installation.md) page covers each archive's CPU floor, how much slower the generic archives are (each release page reports it, or that the release did not time them), how to build for an older CPU, and the image's tags, platforms and attestation.
+
+## Quick start
+
+### 1. Try the bundled corpus
+
+This needs no download. It runs the bundled 1,008-record excerpt of the benchmark datasets against the pruned GRCh37 cache that ships in `tests/golden/`:
+
+```bash
+target/release/vep \
+  --json_cache tests/golden/116/GRCh37/json_cache \
+  --assembly GRCh37 \
+  -i tests/golden/116/GRCh37/variants.vcf -o output.txt
+```
+
+### 2. Annotate your own data
+
+Real data needs a JSON transcript cache, built natively with `vep-cache-builder` or converted from an Ensembl VEP cache. Then run the same VEP command you run, with `--json_cache` naming the cache directory. The [Quick start](docs/getting-started/quick-start.md) page gives the cache-builder command, the annotation command and the plugin and HGVS options. [Cache setup](docs/cache-setup.md) explains each input of the cache build.
+
 ## Current release: v0.5.0
 
 These are the released version's own figures, measured against Ensembl VEP 116.2 under the release protocol stated under Method. The figures the paper reports, measured at its pinned build, are in [docs/published-figures.md](docs/published-figures.md) and stay as published. How each number was produced is under [Method](#method).
@@ -131,36 +161,6 @@ Every value above is recorded in these files:
 - `scripts/concordance/run_clone_measurement.sh` re-measures the ClinVar and structural-variant cells on your own machines.
 - `scripts/concordance/run_concordance.sh` times both engines on a directory of your own VCFs.
 - [scripts/README.md](scripts/README.md#reproducing-the-published-concordance) is the runbook for reproducing the concordance numbers.
-
-## Installation
-
-Pre-built binaries for Linux x86_64, Linux aarch64 and macOS aarch64 are on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page; each Linux architecture has a measured archive and a generic one, and both run on glibc 2.17 or later. Building from source needs Rust 1.89+ ([rustup](https://rustup.rs/)):
-
-```bash
-git clone https://github.com/natera-open-source/vep-rs.git
-cd vep-rs
-cargo build --release
-# Binary at target/release/vep
-```
-
-Each release from 0.2.0 on is also a container image, `ghcr.io/natera-open-source/vep-rs`, multi-platform from 0.5.0: the `X.Y.Z`, `X.Y` and `latest` tags carry the generic Linux binaries for linux/amd64 and linux/arm64 and run on Apple silicon and Graviton2 without a platform flag; `X.Y.Z-x86-64-v3` and `X.Y.Z-neoverse-v1` carry the measured binaries. The [Installation](docs/getting-started/installation.md) page covers each archive's CPU floor, how much slower the generic archives are (each release page reports it, or that the release did not time them), how to build for an older CPU, and the image's tags, platforms and attestation.
-
-## Quick start
-
-### 1. Try the bundled corpus
-
-This needs no download. It runs the bundled 1,008-record excerpt of the benchmark datasets against the pruned GRCh37 cache that ships in `tests/golden/`:
-
-```bash
-target/release/vep \
-  --json_cache tests/golden/116/GRCh37/json_cache \
-  --assembly GRCh37 \
-  -i tests/golden/116/GRCh37/variants.vcf -o output.txt
-```
-
-### 2. Annotate your own data
-
-Real data needs a JSON transcript cache, built natively with `vep-cache-builder` or converted from an Ensembl VEP cache. Then run the same VEP command you run, with `--json_cache` naming the cache directory. The [Quick start](docs/getting-started/quick-start.md) page gives the cache-builder command, the annotation command and the plugin and HGVS options. [Cache setup](docs/cache-setup.md) explains each input of the cache build.
 
 ## Documentation
 
