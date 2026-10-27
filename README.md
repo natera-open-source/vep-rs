@@ -164,7 +164,14 @@ Every value above is recorded in these files:
 
 ## Documentation
 
-The documentation site, https://natera-open-source.github.io/vep-rs/, describes the latest release; its pages are the `docs/` tree of this repository, in six sections. [Getting started](docs/getting-started/installation.md) covers installation, the transcript cache, the move from Ensembl VEP and, on the [Examples](docs/examples.md) page, the common shapes of a run. The reference pages cover [every flag](docs/cli-reference.md), with the option rules, the flags refused or accepted without effect and the exit-status contract, [every output format](docs/output-formats.md) and [every plugin](docs/plugins.md). [Concordance with Ensembl VEP](docs/intended-divergences.md) documents each divergence class the adjusted F1 sets aside, the [Current release](#current-release-v050) section above states the release's figures beside [the paper's](docs/published-figures.md), [Writing a plugin](docs/developers/writing-a-plugin.md) is the developer guide, and [Project](docs/project/citing.md) holds the citation and the changelog.
+The documentation site, https://natera-open-source.github.io/vep-rs/, describes the latest release; its pages are the `docs/` tree of this repository, in six sections.
+
+- **Getting started**: [Installation](docs/getting-started/installation.md), the transcript cache and the move from Ensembl VEP; [Examples](docs/examples.md), the common shapes of a run.
+- **Reference**: [every flag](docs/cli-reference.md), with the option rules, the flags refused or accepted without effect and the exit-status contract; [every output format](docs/output-formats.md); [every plugin](docs/plugins.md).
+- **Concordance with Ensembl VEP**: [the divergence classes](docs/intended-divergences.md) the adjusted F1 sets aside.
+- **Benchmarks**: the [Current release](#current-release-v050) figures above, also on the site's [Benchmarks](docs/benchmarks/current-release.md) page, beside [the paper's figures](docs/published-figures.md).
+- **Developers**: [Writing a plugin](docs/developers/writing-a-plugin.md).
+- **Project**: [Citing vep-rs](docs/project/citing.md) and the [changelog](CHANGELOG.md).
 
 ## Crates
 
