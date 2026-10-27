@@ -7,7 +7,7 @@
 # for (GLIBC_FLOOR) and vep-cache-builder OpenSSL 3; any current Debian release
 # meets both.
 
-FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS duckdb
+FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS duckdb
 ARG TARGETARCH
 # A DuckDB bump changes all four: the sha256s are of the two release tarballs
 # and of LICENSE at the release tag.
@@ -31,7 +31,7 @@ RUN case "$TARGETARCH" in \
  && printf '%s  duckdb.tar.gz\n%s  LICENSE\n' "$sha" "$DUCKDB_LICENSE_SHA256" | sha256sum --check --strict - \
  && tar -xzf duckdb.tar.gz duckdb
 
-FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
 ARG VERSION
 LABEL org.opencontainers.image.title="vep-rs" \
       org.opencontainers.image.description="Ensembl Variant Effect Predictor in Rust: vep, vep-cache-builder, vep-cache-converter, bgzip, tabix and the duckdb CLI for Parquet output" \
@@ -48,17 +48,8 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates libssl3t64 libstdc++6 tabix zlib1g \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 1000 --user-group vep
-# eMudhra (October 2026): its intermediates were issued from near-zero-entropy
-# keys, so anyone on-path can forge a certificate for any domain, and OpenSSL
-# clients never consult revocation. Distrust the two roots those chains hang
-# from until trixie ships ca-certificates 20250419+deb13u1 (Debian bug #1151413,
-# https://emudhra.we-have-a-problem.com/). Drop this once it lands: #69.
-RUN sed -i \
-      -e 's|^mozilla/emSign_ECC_Root_CA_-_G3.crt|!&|' \
-      -e 's|^mozilla/Comodo_AAA_Services_root.crt|!&|' \
-      /etc/ca-certificates.conf \
- && update-ca-certificates
-# Gate: the store must never (re)activate those roots, workaround or not.
+# Gate: the store must never activate these two roots, whichever
+# ca-certificates version apt installs.
 RUN ! grep -qE '^(mozilla/emSign_ECC_Root_CA_-_G3|mozilla/Comodo_AAA_Services_root)\.crt$' /etc/ca-certificates.conf
 COPY --from=duckdb /tmp/duckdb/duckdb /usr/local/bin/duckdb
 COPY --from=duckdb /tmp/duckdb/LICENSE /usr/share/doc/duckdb/LICENSE
