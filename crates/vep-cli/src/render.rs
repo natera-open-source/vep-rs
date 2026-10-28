@@ -21,8 +21,9 @@ use vep_io::OutputFormatter;
 
 /// Renders one input record: the alleles split from one line, written together
 /// so every format emits a record the way VEP does (one VCF line or JSON
-/// object per record; default and tab rows transcript-major then allele-minor,
-/// intergenic rows last).
+/// object per record; default and tab rows in `fields::record_rows`'s order:
+/// transcript, regulatory and motif rows, each kind feature-major then
+/// allele-minor, intergenic rows last).
 pub(crate) fn render_record<'a>(
     out: &mut Vec<u8>,
     record: &[&'a InputVariant],
@@ -145,9 +146,13 @@ pub(crate) fn render_default_record<'a>(
             None => {
                 // Intergenic: no feature columns, the most severe consequence, and
                 // an Extra column carrying IMPACT alone (no STRAND), as VEP does.
-                let consequence = variant
-                    .most_severe_consequence
-                    .unwrap_or(Consequence::IntergenicVariant);
+                let consequence = if variant.intergenic_overlap {
+                    Consequence::IntergenicVariant
+                } else {
+                    variant
+                        .most_severe_consequence
+                        .unwrap_or(Consequence::IntergenicVariant)
+                };
                 out.extend_from_slice(b"\t-\t-\t-\t");
                 out.extend_from_slice(plan.options.terms.term(consequence).as_bytes());
                 out.extend_from_slice(b"\t-\t-\t-\t-\t-\t");
@@ -155,7 +160,16 @@ pub(crate) fn render_default_record<'a>(
             Some(tc) => {
                 out.push(b'\t');
                 write_encoded(out, |out| {
-                    write_versioned_id(out, &tc.gene_id, tc.gene_version, plan.options.gene_version)
+                    if tc.gene_id.is_empty() {
+                        out.push(b'-');
+                    } else {
+                        write_versioned_id(
+                            out,
+                            &tc.gene_id,
+                            tc.gene_version,
+                            plan.options.gene_version,
+                        );
+                    }
                 });
                 out.push(b'\t');
                 write_encoded(out, |out| {
@@ -245,7 +259,7 @@ mod tests {
     use std::borrow::Cow;
     use std::sync::Arc;
 
-    use vep_core::consequence::{Impact, TranscriptConsequence};
+    use vep_core::consequence::{FeatureType, Impact, TranscriptConsequence};
     use vep_core::terms::Vocabulary;
     use vep_core::variant::{ColocatedVariant, MatchedAllele, VariantClass};
     use vep_io::output::fields::{
@@ -345,9 +359,13 @@ mod tests {
                 }
                 (None, None) => {
                     out.extend_from_slice(allele_text.as_bytes());
-                    let consequence = variant
-                        .most_severe_consequence
-                        .unwrap_or(Consequence::IntergenicVariant);
+                    let consequence = if variant.intergenic_overlap {
+                        Consequence::IntergenicVariant
+                    } else {
+                        variant
+                            .most_severe_consequence
+                            .unwrap_or(Consequence::IntergenicVariant)
+                    };
                     let consequence_str = plan.options.terms.term(consequence);
                     out.extend_from_slice(b"\t-\t-\t-\t");
                     out.extend_from_slice(consequence_str.as_bytes());
@@ -360,14 +378,18 @@ mod tests {
                 (Some(tc), _) => {
                     out.extend_from_slice(allele_text.as_bytes());
                     out.push(b'\t');
-                    out.extend_from_slice(
-                        versioned_id_string(
-                            &tc.gene_id,
-                            tc.gene_version,
-                            plan.options.gene_version,
-                        )
-                        .as_bytes(),
-                    );
+                    if tc.gene_id.is_empty() {
+                        out.push(b'-');
+                    } else {
+                        out.extend_from_slice(
+                            versioned_id_string(
+                                &tc.gene_id,
+                                tc.gene_version,
+                                plan.options.gene_version,
+                            )
+                            .as_bytes(),
+                        );
+                    }
                     out.push(b'\t');
                     out.extend_from_slice(
                         versioned_id_string(
@@ -722,6 +744,61 @@ mod tests {
             positions_of_own_span: false,
             clin_sig_allele: ClinSigAllele::PerAllele,
         }
+    }
+
+    /// A record inside a regulatory feature and no transcript writes its
+    /// `RegulatoryFeature` row with `-` in the Gene cell and then its intergenic
+    /// companion row with `-` in the Gene, Feature and Feature_type cells and
+    /// `intergenic_variant` as its consequence (`OutputFactory.pm:1986-2000`
+    /// sets no Gene, Feature or Feature_type key on the intergenic hash and
+    /// `VEP_output.pm` prints `-` for an absent key; `VariationFeature.pm:822-867`
+    /// orders the companion row last), in both renderers, byte for byte.
+    #[test]
+    fn intergenic_companion_row_prints_dashes_in_the_default_format() {
+        let mut variant = InputVariant::new("21".into(), 110, 110, b"A".to_vec(), b"G".to_vec());
+        variant.id = Some("reg".to_string());
+        variant.transcript_consequences.push(TranscriptConsequence {
+            transcript_id: "ENSR_FIXTURE".into(),
+            feature_type: FeatureType::RegulatoryFeature,
+            consequences: std::iter::once(Consequence::RegulatoryRegionVariant).collect(),
+            impact: Impact::MODIFIER,
+            biotype: Some("enhancer".into()),
+            feature_start: 100,
+            feature_end: 120,
+            ..Default::default()
+        });
+        variant.intergenic_overlap = true;
+        variant.most_severe_consequence = Some(Consequence::RegulatoryRegionVariant);
+        let options = FieldOptions {
+            regulatory: true,
+            ..Default::default()
+        };
+        let (strings, bytes) = render_both(std::slice::from_ref(&variant), options);
+        assert_eq!(bytes, strings);
+        let rows: Vec<Vec<&str>> = bytes
+            .lines()
+            .map(|line| line.split('\t').collect())
+            .collect();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(
+            &rows[0][..7],
+            [
+                "reg",
+                "21:110",
+                "G",
+                "-",
+                "ENSR_FIXTURE",
+                "RegulatoryFeature",
+                "regulatory_region_variant"
+            ]
+        );
+        assert_eq!(
+            &rows[1][..7],
+            ["reg", "21:110", "G", "-", "-", "-", "intergenic_variant"]
+        );
+        assert_eq!(rows[1][7..13], ["-", "-", "-", "-", "-", "-"]);
+        assert_eq!(rows[1][13], "IMPACT=MODIFIER");
+        assert_eq!(rows[0][13], "IMPACT=MODIFIER;BIOTYPE=enhancer");
     }
 
     /// The default-format bytes of a multi-allelic record with shared and

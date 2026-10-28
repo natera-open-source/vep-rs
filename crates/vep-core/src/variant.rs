@@ -179,6 +179,12 @@ pub struct InputVariant {
     pub variant_class: VariantClass,
     /// Consequence annotations computed during annotation phase.
     pub transcript_consequences: Vec<TranscriptConsequence>,
+    /// The allele overlaps no transcript and its rows are regulatory and motif
+    /// rows alone, so it carries an `intergenic_variant` row beside them: Perl's
+    /// intergenic row is decided by transcripts alone
+    /// (VariationFeature.pm:826-839; StructuralVariationFeature.pm:674-690).
+    #[serde(default)]
+    pub intergenic_overlap: bool,
     /// Most severe consequence across all transcripts.
     pub most_severe_consequence: Option<Consequence>,
     /// The known variants co-located with the whole input record, in the cache's
@@ -549,6 +555,7 @@ impl Default for InputVariant {
             id: None,
             variant_class: VariantClass::Snv,
             transcript_consequences: Vec::new(),
+            intergenic_overlap: false,
             most_severe_consequence: None,
             colocated_variants: Vec::new(),
             hgvsg: None,
@@ -644,6 +651,7 @@ impl InputVariant {
             id: None,
             variant_class,
             transcript_consequences: Vec::new(),
+            intergenic_overlap: false,
             most_severe_consequence: None,
             colocated_variants: Vec::new(),
             hgvsg: None,

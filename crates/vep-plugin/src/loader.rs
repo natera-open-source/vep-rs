@@ -12,7 +12,7 @@ use std::path::Path;
 use libloading::{Library, Symbol};
 
 use crate::abi::{self, ffi};
-use crate::PluginError;
+use crate::{FeatureType, PluginError};
 
 /// A loaded plugin dylib with its instance pointer and function pointers.
 ///
@@ -28,6 +28,9 @@ pub struct LoadedPlugin {
     init_fn: ffi::PluginInitFn,
     run_fn: ffi::PluginRunFn,
     free_fn: ffi::PluginFreeFn,
+    feature_types_fn: Option<ffi::PluginFeatureTypesFn>,
+    feature_types: Vec<FeatureType>,
+    declares_regulatory: bool,
 }
 
 impl std::fmt::Debug for LoadedPlugin {
@@ -35,6 +38,7 @@ impl std::fmt::Debug for LoadedPlugin {
         f.debug_struct("LoadedPlugin")
             .field("name", &self.name)
             .field("version", &self.version)
+            .field("feature_types", &self.feature_types)
             .finish_non_exhaustive()
     }
 }
@@ -86,6 +90,10 @@ impl LoadedPlugin {
             let free_fn: ffi::PluginFreeFn = *lib
                 .get::<ffi::PluginFreeFn>(abi::symbol_names::FREE)
                 .map_err(|e| PluginError::Load(format!("missing vep_plugin_free: {e}")))?;
+            let feature_types_fn: Option<ffi::PluginFeatureTypesFn> = lib
+                .get::<ffi::PluginFeatureTypesFn>(abi::symbol_names::FEATURE_TYPES)
+                .ok()
+                .map(|symbol| *symbol);
 
             let instance = create_fn();
             if instance.is_null() {
@@ -104,8 +112,53 @@ impl LoadedPlugin {
                 init_fn,
                 run_fn,
                 free_fn,
+                feature_types_fn,
+                feature_types: vec![FeatureType::Transcript],
+                declares_regulatory: false,
             })
         }
+    }
+
+    /// Reads the feature types the plugin declares, after its parameters have
+    /// been given; a plugin without the symbol keeps `Transcript` alone.
+    pub fn read_feature_types(&mut self) -> Result<(), PluginError> {
+        let Some(feature_types_fn) = self.feature_types_fn else {
+            return Ok(());
+        };
+        let text = unsafe { read_c_string(feature_types_fn(self.instance), "feature types")? };
+        self.feature_types = FeatureType::parse_list(&text).map_err(|e| match e {
+            PluginError::Load(reason) => {
+                PluginError::Load(format!("plugin '{}': {reason}", self.name))
+            }
+            other => other,
+        })?;
+        // Ensembl VEP reads the declared words, not the classes they cover
+        // (Runner.pm:998 greps them for motif or regulatory), so `Feature`
+        // alone switches nothing on.
+        self.declares_regulatory = text
+            .split(',')
+            .map(str::trim)
+            .any(|word| matches!(word, "RegulatoryFeature" | "MotifFeature"));
+        Ok(())
+    }
+
+    /// Whether the plugin's declared list names `RegulatoryFeature` or
+    /// `MotifFeature` by word, which switches regulatory annotation on for the
+    /// run (`Runner.pm:998-1002`); `Feature`, which covers both, does not.
+    pub fn declares_regulatory_features(&self) -> bool {
+        self.declares_regulatory
+    }
+
+    /// The feature types the plugin annotates ([`Self::read_feature_types`]).
+    pub fn feature_types(&self) -> &[FeatureType] {
+        &self.feature_types
+    }
+
+    /// Whether the plugin runs on a row of `kind`, as Ensembl VEP runs a plugin
+    /// only on the feature classes it declares (`OutputFactory.pm` `run_plugins`
+    /// through `check_feature_type`).
+    pub fn annotates(&self, kind: vep_core::consequence::FeatureType) -> bool {
+        self.feature_types.iter().any(|t| t.row_kind() == kind)
     }
 
     /// Initialize the plugin with the given parameters.

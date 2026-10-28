@@ -677,6 +677,11 @@ pub struct TranscriptConsequence {
     /// See [`LofteeContext`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loftee_ctx: Option<Box<LofteeContext>>,
+    /// The motif fields of a `MotifFeature` row of a sequence variant
+    /// (`MotifFeatureVariationAllele_to_output_hash`, OutputFactory.pm:1910-1942):
+    /// `None` on every other row, a structural variant's motif row included.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub motif: Option<Box<MotifFields>>,
     /// The source transcript's [`Transcript::id_rank`]: `transcript_id`'s
     /// position in the byte order of its chromosome's transcript ids, so two
     /// rows of one chromosome compare by rank as they compare by id; rows of
@@ -697,11 +702,29 @@ pub struct TranscriptConsequence {
     pub record_span_in_cds: bool,
 }
 
+/// The fields a `MotifFeature` row of a sequence variant carries beside its
+/// terms: `MOTIF_NAME`, the binding matrix's stable id; `MOTIF_POS`, the
+/// variant's first base as a position in the matrix, counted along the motif's
+/// strand, `None` when it falls outside the matrix; `TRANSCRIPTION_FACTORS`,
+/// the matrix's factor names, which print as an empty value when there are none.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MotifFields {
+    pub name: Arc<str>,
+    pub pos: Option<u32>,
+    pub factors: Arc<[Arc<str>]>,
+}
+
 /// Type of genomic feature that a consequence is annotated against.
 ///
 /// Most consequences are against `Transcript` features; `RegulatoryFeature`
-/// and `MotifFeature` are used for regulatory consequence annotation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+/// and `MotifFeature` are used for regulatory consequence annotation. The
+/// variants are declared in the order Ensembl VEP lists a variant's feature
+/// overlaps (`VariationFeature.pm:855-864`: the transcript rows, then the
+/// regulatory rows, then the motif rows), which `Ord` follows: the writers and
+/// the picks order a record's rows by it.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum FeatureType {
     Transcript,
     RegulatoryFeature,
@@ -806,6 +829,7 @@ impl Default for TranscriptConsequence {
             feature_start: 0,
             feature_end: 0,
             loftee_ctx: None,
+            motif: None,
             id_rank: 0,
             record_span_in_cds: false,
         }
@@ -878,6 +902,7 @@ impl TranscriptConsequence {
             feature_start: transcript.start,
             feature_end: transcript.end,
             loftee_ctx: None,
+            motif: None,
             id_rank: transcript.id_rank,
             record_span_in_cds: false,
         }
@@ -1106,5 +1131,25 @@ mod tests {
         assert_eq!(csqs[0], Consequence::StopGained);
         assert_eq!(csqs[1], Consequence::MissenseVariant);
         assert_eq!(csqs[2], Consequence::IntergenicVariant);
+    }
+
+    /// The feature kinds order as Ensembl VEP lists a variant's overlaps
+    /// (`VariationFeature.pm:855-864`): transcript, regulatory, motif.
+    #[test]
+    fn feature_types_order_as_the_overlap_list() {
+        let mut kinds = [
+            FeatureType::MotifFeature,
+            FeatureType::Transcript,
+            FeatureType::RegulatoryFeature,
+        ];
+        kinds.sort();
+        assert_eq!(
+            kinds,
+            [
+                FeatureType::Transcript,
+                FeatureType::RegulatoryFeature,
+                FeatureType::MotifFeature
+            ]
+        );
     }
 }

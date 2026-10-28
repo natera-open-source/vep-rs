@@ -72,7 +72,7 @@ Ensembl VEP's option rules are applied as data, from `Config.pm:327-645` at rele
 | `--mane` | `--mane_select`, `--mane_plus_clinical` |
 | `--use_given_ref` | `--use_transcript_ref 0` |
 
-`--everything` therefore reaches `--hgvsc` and `--hgvsp` through `--hgvs`, `--mane_select` and `--mane_plus_clinical` through `--mane`, and `--check_existing` through the frequency flags; it does not switch on `--allele_number` or `--hgvsg`. `--regulatory` is switched on and annotates nothing: its columns appear in the tab and VCF headers and stay empty, no `Extra` key is written for them, and no RegulatoryFeature or MotifFeature row is written.
+`--everything` therefore reaches `--hgvsc` and `--hgvsp` through `--hgvs`, `--mane_select` and `--mane_plus_clinical` through `--mane`, and `--check_existing` through the frequency flags; it does not switch on `--allele_number` or `--hgvsg`. `--regulatory` is switched on and emits RegulatoryFeature and MotifFeature rows when the converted cache carries regulatory data. Motif scores, high-information positions and cell-type activity are omitted.
 
 ### Incompatible flags (`Config.pm:615-632`)
 

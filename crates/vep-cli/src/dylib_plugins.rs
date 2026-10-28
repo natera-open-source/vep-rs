@@ -50,7 +50,9 @@ pub fn load_unresolved(
     crate::annotator::plugin_warning(message, safe)
 }
 
-/// Runs every loaded dylib plugin on every transcript consequence in `batch`.
+/// Runs every loaded dylib plugin on the consequences in `batch` whose feature
+/// type it declares (`OutputFactory.pm:2223` `check_feature_type`; a plugin
+/// declares `Transcript` unless its `vep_plugin_feature_types` says otherwise).
 ///
 /// The variant is serialised once and that text is handed to every plugin for
 /// every consequence of the variant; only the consequence is serialised per call.
@@ -63,13 +65,21 @@ pub fn run(registry: &PluginRegistry, batch: &mut [InputVariant]) -> anyhow::Res
             format!("serialising variant {} for plugins", variant.allele_string)
         })?;
         for tc in variant.transcript_consequences.iter_mut() {
+            let plugins: Vec<_> = registry
+                .plugins()
+                .iter()
+                .filter(|plugin| plugin.annotates(tc.feature_type))
+                .collect();
+            if plugins.is_empty() {
+                continue;
+            }
             let consequence_json = serde_json::to_string(&*tc).with_context(|| {
                 format!(
                     "serialising consequence on {} for plugins",
                     tc.transcript_id
                 )
             })?;
-            for plugin in registry.plugins() {
+            for plugin in plugins {
                 let result = plugin
                     .run(&consequence_json, &variant_json)
                     .with_context(|| format!("plugin '{}' run failed", plugin.name()))?;
@@ -199,8 +209,8 @@ mod tests {
     /// other: every field of `TranscriptConsequence` except `id_rank` and
     /// `record_span_in_cds`, with `cdna_total`, `cds_total`, `protein_total`,
     /// `plugin_data`, `loftee_ctx`, `cds_length`, `source_cache`,
-    /// `own_span_positions`, `used_ref` and `shifted_allele` present only when
-    /// populated.
+    /// `own_span_positions`, `used_ref`, `shifted_allele` and `motif` present
+    /// only when populated.
     #[test]
     fn consequence_json_carries_every_documented_key_and_nothing_else() {
         const ALWAYS: [&str; 46] = [
@@ -286,6 +296,11 @@ mod tests {
         }));
         tc.used_ref = Some(std::sync::Arc::from("A"));
         tc.shifted_allele = Some(std::sync::Arc::from("GAA"));
+        tc.motif = Some(Box::new(vep_core::consequence::MotifFields {
+            name: std::sync::Arc::from("ENSPFM0290"),
+            pos: Some(7),
+            factors: std::sync::Arc::from([std::sync::Arc::from("HNF4A")]),
+        }));
         expected.extend(
             [
                 "plugin_data",
@@ -298,6 +313,7 @@ mod tests {
                 "own_span_positions",
                 "used_ref",
                 "shifted_allele",
+                "motif",
             ]
             .map(str::to_string),
         );

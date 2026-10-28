@@ -2576,6 +2576,7 @@ version = "0.5.0"
 dependencies = [
  "anyhow",
  "clap",
+ "flate2",
  "noodles",
  "rand",
  "serde",

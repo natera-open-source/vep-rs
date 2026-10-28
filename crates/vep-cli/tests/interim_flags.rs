@@ -201,28 +201,11 @@ fn custom_is_accepted_and_changes_no_output() {
     }
 }
 
-/// `--regulatory`, given or implied by `--everything`, is accepted, warns once
-/// and annotates no regulatory feature. The default and tab outputs declare
-/// [`REGULATORY_COLUMNS`]: [`MOTIF_COLUMNS`] empty on every row, `BIOTYPE` too
-/// unless `--biotype` fills it. The `--vcf` CSQ, which lists `BIOTYPE` already,
-/// gains [`MOTIF_COLUMNS`] alone, and the JSON output is unchanged.
-///
-/// Documented: "`--regulatory`, alone or through `--everything`, is accepted and
-/// warns that regulatory-feature annotation is not implemented: the motif columns
-/// stay empty, no `RegulatoryFeature` or `MotifFeature` row is written" (What
-/// vep-rs does not do, Regulatory and motif features) and "Under `--regulatory`
-/// it writes the five motif columns empty on every row and no `RegulatoryFeature`
-/// or `MotifFeature` row, writes one warnings-file line saying so" (the
-/// divergence page). Ensembl VEP declares the columns for the flag
-/// (`Constants.pm:136`), switches the flag on under `--everything`
-/// (`Config.pm:362`) and writes a `RegulatoryFeature` or `MotifFeature` row per
-/// feature a record overlaps (`OutputFactory.pm:1867-1942`).
+/// A cache without regulatory data warns and writes empty motif columns.
 #[test]
-fn regulatory_warns_and_writes_only_empty_motif_columns() {
-    const NOTICE: &str =
-        "--regulatory has no effect: regulatory-feature annotation is not implemented";
-    const EVERYTHING_NOTICE: &str = "--everything implies --regulatory, which has no effect: \
-                                     regulatory-feature annotation is not implemented";
+fn missing_regulatory_data_warns_and_writes_empty_motif_columns() {
+    const NOTICE: &str = "--regulatory: this cache holds no regulatory data; no RegulatoryFeature or MotifFeature row is written";
+    const EVERYTHING_NOTICE: &str = NOTICE;
     let dir = tempfile::tempdir().unwrap();
     write_input(dir.path());
 

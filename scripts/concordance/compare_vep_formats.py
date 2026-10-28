@@ -36,11 +36,11 @@ Masks, floors and field pairs (comparison mode):
   reference skipped keeps its record-level line and object uncompared; a key of a class not
   named is compared like any other. The class ``regulatory_feature_rows`` is built in rather
   than read from a manifest: it drops the expected ``RegulatoryFeature`` and ``MotifFeature``
-  rows in every format (the candidate annotates no regulatory feature under
-  ``--regulatory``, which ``--everything`` switches on), recomputes the
+  rows in every format for a candidate cache without regulatory data, recomputes the
   ``most_severe_consequence`` of each JSON record that lost a row from the rows that remain,
-  and in ``--warnings`` mode requires the candidate's notice about the exclusion and leaves
-  it out of the comparison. The class ``order_only`` is built in too: the set-valued columns
+  and in ``--warnings`` mode requires the candidate's notice about missing regulatory data
+  (or the notice of releases 0.1.0 to 0.5.0) and leaves it out of the comparison. The class
+  ``order_only`` is built in too: the set-valued columns
   ``DOMAINS``, ``FREQS`` and ``ZYG`` (and the ``Extra`` text carrying them) agree when their
   items agree as a multiset in any order, since Ensembl VEP prints the protein features in
   the order of the cache's array and the frequencies and the per-sample zygosities in hash
@@ -76,6 +76,12 @@ Masks, floors and field pairs (comparison mode):
   value. Ensembl VEP names one transcript per winning site, whichever its interval tree held
   first, and the candidate names every transcript at the site, so the ids differ where the
   sites agree.
+* ``--keep-only regulatory_feature_rows`` in comparison mode inverts the built-in row mask:
+  both inputs retain only ``RegulatoryFeature`` and ``MotifFeature`` consequence rows,
+  plus the VCF/JSON record entries of records retaining such a row. A JSON record that
+  loses non-regulatory rows has its ``most_severe_consequence`` recomputed from its retained
+  rows. Other record fields compare verbatim. This cannot be combined with
+  ``--masks regulatory_feature_rows`` or used in warnings or self-parity mode.
 
 A comparison is green when no expected entry is missing, no actual entry is unexpected
 (the two one-sided key counts), every compared field agrees after masks and field pairs,
@@ -130,8 +136,10 @@ REFERENCE_SKIPPED_RECORD = "reference_skipped_record"
 # The built-in mask class dropping the reference's regulatory rows (``without_regulatory_rows``).
 REGULATORY_FEATURE_ROWS = "regulatory_feature_rows"
 REGULATORY_KINDS = {"regulatory_feature", "motif_feature"}
-# The phrase of the warnings-file line the candidate writes when --regulatory is on.
+# The 0.1.0-to-0.5.0 and the cache-aware warnings-file phrases for --regulatory on a cache
+# without regulatory data.
 REGULATORY_NOTICE = "regulatory-feature annotation is not implemented"
+MISSING_REGULATORY_NOTICE = "this cache holds no regulatory data"
 EXAMPLES_PER_GROUP = 4
 
 # OutputFactory/JSON.pm:98-112 at release/116.2.
@@ -1366,29 +1374,54 @@ def is_regulatory_row(e: Entry) -> bool:
     return feature_kind(last_segment) in REGULATORY_KINDS
 
 
-def without_regulatory_rows(expected: list[Entry]) -> list[Entry]:
-    """The reference entries without their regulatory rows (``regulatory_feature_rows``). A
-    JSON record that lost a row has its ``most_severe_consequence`` recomputed from the
-    consequence entries that remain, as the candidate computes it from the rows it writes,
-    so a record the reference annotates against a regulatory feature and no transcript
-    compares as its intergenic row; every other record keeps the reference's value. Mutates
-    the kept record entries; raises ``ComparatorError`` on a term ``CONSEQUENCE_RANK`` lacks."""
-    kept = [e for e in expected if not is_regulatory_row(e)]
-    lost_rows = {e.key.split("|", 1)[0] for e in expected if is_regulatory_row(e)}
+def filter_consequence_rows(
+    entries: list[Entry], keep: Callable[[Entry], bool], keep_bare_records: bool
+) -> list[Entry]:
+    """The entries whose consequence rows ``keep`` accepts, in their order, with the VCF/JSON
+    record entries: every one when ``keep_bare_records``, else those of a record that kept a
+    row. A record that lost a row has its ``most_severe_consequence`` recomputed from the
+    rows it kept, as the candidate computes it from the rows it writes. Mutates the kept
+    record entries; raises ``ComparatorError`` on a term ``CONSEQUENCE_RANK`` lacks."""
     terms_by_record: dict[str, set[str]] = defaultdict(set)
-    for e in kept:
-        if not e.key.endswith("|record"):
-            terms_by_record[e.key.split("|", 1)[0]].update(t for t in re.split(r"[&,]", e.consequence) if t)
-    for e in kept:
-        record = e.key.split("|", 1)[0]
-        if not e.key.endswith("|record") or record not in lost_rows or "most_severe_consequence" not in e.fields:
+    lost_rows: set[str] = set()
+    for e in entries:
+        if e.key.endswith("|record"):
             continue
-        terms = terms_by_record.get(record, set())
-        unranked = sorted(terms.difference(CONSEQUENCE_RANK))
-        if unranked:
-            raise ComparatorError(f"{e.key}: no rank for the consequence terms {unranked}")
-        e.fields = {**e.fields, "most_severe_consequence": most_severe(terms)}
+        record = e.key.split("|", 1)[0]
+        if keep(e):
+            terms_by_record[record].update(t for t in re.split(r"[&,]", e.consequence) if t)
+        else:
+            lost_rows.add(record)
+    kept: list[Entry] = []
+    for e in entries:
+        if not e.key.endswith("|record"):
+            if keep(e):
+                kept.append(e)
+            continue
+        record = e.key.split("|", 1)[0]
+        if not keep_bare_records and record not in terms_by_record:
+            continue
+        if record in lost_rows and "most_severe_consequence" in e.fields:
+            terms = terms_by_record.get(record, set())
+            unranked = sorted(terms.difference(CONSEQUENCE_RANK))
+            if unranked:
+                raise ComparatorError(f"{e.key}: no rank for the consequence terms {unranked}")
+            e.fields = {**e.fields, "most_severe_consequence": most_severe(terms)}
+        kept.append(e)
     return kept
+
+
+def without_regulatory_rows(expected: list[Entry]) -> list[Entry]:
+    """The reference entries without their regulatory rows (``regulatory_feature_rows``): a
+    record the reference annotates against a regulatory feature and no transcript compares
+    as its intergenic row, every record entry stays (``filter_consequence_rows``)."""
+    return filter_consequence_rows(expected, lambda e: not is_regulatory_row(e), True)
+
+
+def only_regulatory_rows(entries: list[Entry]) -> list[Entry]:
+    """The regulatory rows of either side and the record entries of the records that have
+    one (``--keep-only regulatory_feature_rows``; ``filter_consequence_rows``)."""
+    return filter_consequence_rows(entries, is_regulatory_row, False)
 
 
 def compare_files(
@@ -1403,10 +1436,15 @@ def compare_files(
     examples: int,
     nearest_sites: NearestSites | None = None,
     unordered: bool = False,
+    keep_only: str | None = None,
 ) -> dict:
     """The comparison-mode report for one format. ``unordered`` compares the shared entries
     without their order (a run whose reference rows Ensembl VEP emits in hash order); a
     Parquet actual is compared without order in any case."""
+    if keep_only is not None and keep_only != REGULATORY_FEATURE_ROWS:
+        raise ComparatorError(f"unknown --keep-only class: {keep_only}")
+    if keep_only == REGULATORY_FEATURE_ROWS and REGULATORY_FEATURE_ROWS in masks:
+        raise ComparatorError("--keep-only regulatory_feature_rows conflicts with --masks regulatory_feature_rows")
     documented.masks |= masks
     expected_format = "tab" if fmt == "parquet" else fmt
     expected = parse_format(expected_format, expected_path, inputs)
@@ -1417,6 +1455,9 @@ def compare_files(
         if len(kept) < len(expected):
             documented.applied[REGULATORY_FEATURE_ROWS] += len(expected) - len(kept)
         expected = kept
+    if keep_only == REGULATORY_FEATURE_ROWS:
+        expected = only_regulatory_rows(expected)
+        actual = only_regulatory_rows(actual)
     report = compare_entries(
         expected,
         actual,
@@ -1444,6 +1485,7 @@ def compare_files(
             "field_pairs": {name: sorted(pairs) for name, pairs in sorted(field_pairs.items())},
             "nearest_sites": None if nearest_sites is None else len(nearest_sites.sites),
             "unordered": unordered,
+            "keep_only": keep_only,
         }
     )
     return report
@@ -2017,7 +2059,10 @@ def compare_warning_files(expected_path: Path, actual_path: Path, masks: Collect
     actual = parse_warning_lines(read_text(actual_path))
     notice_missing = False
     if REGULATORY_FEATURE_ROWS in masks:
-        notice = {entry for entry in actual if REGULATORY_NOTICE in entry[1]}
+        notice = {
+            entry for entry in actual
+            if REGULATORY_NOTICE in entry[1] or MISSING_REGULATORY_NOTICE in entry[1]
+        }
         notice_missing = not notice
         actual -= notice
 
@@ -2142,6 +2187,10 @@ def build_parser() -> argparse.ArgumentParser:
         "alleles compared as a set)",
     )
     ap.add_argument(
+        "--keep-only", choices=(REGULATORY_FEATURE_ROWS,),
+        help="comparison mode: retain only RegulatoryFeature/MotifFeature rows and their records on both sides",
+    )
+    ap.add_argument(
         "--floors",
         help="COL=MIN,... minimum populated counts per default-format column, both sides; in JSON "
         "counted under the column's JSON key, a column with no row count there (record-level, "
@@ -2170,6 +2219,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run(args: argparse.Namespace) -> dict:
+    if args.keep_only is not None and (args.warnings or args.self_parity):
+        raise ComparatorError("--keep-only is available only in --format comparison mode")
     if args.warnings:
         if args.expected is None or args.actual is None:
             raise ComparatorError("--warnings needs --expected and --actual")
@@ -2214,6 +2265,7 @@ def run(args: argparse.Namespace) -> dict:
         args.examples,
         nearest_sites,
         unordered=args.unordered,
+        keep_only=args.keep_only,
     )
 
 

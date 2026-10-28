@@ -25,6 +25,51 @@ pub enum FeatureType {
     MotifFeature,
 }
 
+impl FeatureType {
+    /// The feature types a plugin declares, from the comma-separated list its
+    /// `vep_plugin_feature_types` symbol returns: the words Ensembl VEP's
+    /// `feature_types` takes (`BaseVepPlugin.pm` `_check_types`), where
+    /// `Feature` is every feature class and `Intergenic` names the rows that
+    /// have no feature, which the host hands to no plugin. Any other word is a
+    /// load error.
+    pub fn parse_list(text: &str) -> Result<Vec<Self>, PluginError> {
+        let mut types = Vec::new();
+        for word in text.split(',').map(str::trim).filter(|w| !w.is_empty()) {
+            let declared: &[Self] = match word {
+                "Transcript" => &[Self::Transcript],
+                "RegulatoryFeature" => &[Self::RegulatoryFeature],
+                "MotifFeature" => &[Self::MotifFeature],
+                "Feature" => &[
+                    Self::Transcript,
+                    Self::RegulatoryFeature,
+                    Self::MotifFeature,
+                ],
+                "Intergenic" => &[],
+                other => {
+                    return Err(PluginError::Load(format!(
+                        "unknown feature type {other:?} in vep_plugin_feature_types"
+                    )))
+                }
+            };
+            for kind in declared {
+                if !types.contains(kind) {
+                    types.push(*kind);
+                }
+            }
+        }
+        Ok(types)
+    }
+
+    /// The row kind this feature type annotates.
+    pub fn row_kind(self) -> vep_core::consequence::FeatureType {
+        match self {
+            Self::Transcript => vep_core::consequence::FeatureType::Transcript,
+            Self::RegulatoryFeature => vep_core::consequence::FeatureType::RegulatoryFeature,
+            Self::MotifFeature => vep_core::consequence::FeatureType::MotifFeature,
+        }
+    }
+}
+
 /// Errors from plugin execution.
 #[derive(Debug, thiserror::Error)]
 pub enum PluginError {

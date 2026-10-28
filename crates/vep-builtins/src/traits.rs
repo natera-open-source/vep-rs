@@ -32,6 +32,15 @@ pub enum PluginError {
     Io(#[from] std::io::Error),
 }
 
+/// Whether a consequence row is one the built-in plugins annotate: every
+/// built-in's Ensembl VEP module declares `feature_types` of `['Transcript']`,
+/// except CADD, gnomADc and GWAS, which declare `['Feature', 'Intergenic']`
+/// and write record-level values that print on every row, so a plugin that
+/// writes per row writes on transcript rows alone.
+pub fn annotates_row(consequence: &TranscriptConsequence) -> bool {
+    consequence.feature_type == vep_core::consequence::FeatureType::Transcript
+}
+
 /// Type-erased container for data returned by [`BuiltinPlugin::prefetch`].
 ///
 /// Each plugin stores its own concrete type (e.g., `BatchQueryResult`) inside
@@ -170,6 +179,9 @@ pub trait BuiltinPlugin: Send + Sync {
     fn run_batch(&self, variants: &mut [InputVariant]) -> Result<(), PluginError> {
         for variant in variants.iter_mut() {
             for tc_idx in 0..variant.transcript_consequences.len() {
+                if !annotates_row(&variant.transcript_consequences[tc_idx]) {
+                    continue;
+                }
                 let result = self.run(&variant.transcript_consequences[tc_idx], variant)?;
                 for (k, v) in result {
                     variant.transcript_consequences[tc_idx]
@@ -191,5 +203,80 @@ pub trait BuiltinPlugin: Send + Sync {
         _variant: &InputVariant,
     ) -> Result<IndexMap<String, String>, PluginError> {
         Ok(IndexMap::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vep_core::consequence::FeatureType;
+
+    /// A per-consequence plugin whose `run` marks every row it is handed.
+    struct MarkerPlugin;
+
+    impl BuiltinPlugin for MarkerPlugin {
+        fn name(&self) -> &str {
+            "Marker"
+        }
+        fn header_info(&self) -> Vec<(String, String)> {
+            vec![]
+        }
+        fn init(&mut self, _params: &[String]) -> Result<(), PluginError> {
+            Ok(())
+        }
+        fn run(
+            &self,
+            _consequence: &TranscriptConsequence,
+            _variant: &InputVariant,
+        ) -> Result<IndexMap<String, String>, PluginError> {
+            let mut result = IndexMap::new();
+            result.insert("Marker".to_string(), "1".to_string());
+            Ok(result)
+        }
+    }
+
+    fn row(feature_type: FeatureType) -> TranscriptConsequence {
+        TranscriptConsequence {
+            feature_type,
+            ..TranscriptConsequence::default()
+        }
+    }
+
+    #[test]
+    fn annotates_row_accepts_transcript_rows_alone() {
+        assert!(annotates_row(&row(FeatureType::Transcript)));
+        assert!(!annotates_row(&row(FeatureType::RegulatoryFeature)));
+        assert!(!annotates_row(&row(FeatureType::MotifFeature)));
+    }
+
+    /// Ensembl VEP hands a row to a plugin only when the plugin's
+    /// `feature_types` names the row's feature class (OutputFactory.pm:2223,
+    /// BaseVepPlugin.pm `check_feature_type`), so the per-consequence `run`
+    /// path writes on the transcript row of a record and on neither of its
+    /// regulatory rows.
+    #[test]
+    fn default_run_batch_writes_on_transcript_rows_alone() {
+        let mut variants = vec![InputVariant::new(
+            "21".into(),
+            100,
+            100,
+            b"A".to_vec(),
+            b"G".to_vec(),
+        )];
+        variants[0].transcript_consequences.extend([
+            row(FeatureType::Transcript),
+            row(FeatureType::RegulatoryFeature),
+            row(FeatureType::MotifFeature),
+        ]);
+
+        MarkerPlugin.run_batch(&mut variants).unwrap();
+
+        let written: Vec<bool> = variants[0]
+            .transcript_consequences
+            .iter()
+            .map(|tc| tc.plugin_data.contains_key("Marker"))
+            .collect();
+        assert_eq!(written, [true, false, false]);
+        assert!(variants[0].plugin_data.is_empty());
     }
 }

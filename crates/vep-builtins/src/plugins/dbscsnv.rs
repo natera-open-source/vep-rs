@@ -198,6 +198,9 @@ impl BuiltinPlugin for DbscSnvPlugin {
             }
 
             for tc in &mut variant.transcript_consequences {
+                if !crate::traits::annotates_row(tc) {
+                    continue;
+                }
                 for (k, v) in &variant_result {
                     tc.plugin_data.insert(k.clone(), v.clone());
                 }
@@ -434,5 +437,57 @@ mod tests {
 
         let mut plugin = DbscSnvPlugin::new();
         plugin.init(&[g37.to_string_lossy().to_string()]).unwrap();
+    }
+
+    /// dbscSNV.pm declares `feature_types` of `['Transcript']`, so a record's
+    /// scores land on its transcript rows and on no regulatory or motif row.
+    #[test]
+    fn writes_on_transcript_rows_alone() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+        use vep_core::consequence::FeatureType;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_tabix_fixture(
+            dir.path(),
+            "dbscsnv.txt.gz",
+            &[
+                "chr\tpos\tref\talt\tada_score\trf_score",
+                "21\t10907039\tG\tA\t0.00106\t0.028",
+            ],
+            IndexSpec::standard().bare_header(),
+        );
+
+        let mut plugin = DbscSnvPlugin::new();
+        plugin.init(&[path.to_string_lossy().to_string()]).unwrap();
+
+        let mut variants = vec![InputVariant::new(
+            "21".into(),
+            10907039,
+            10907039,
+            b"G".to_vec(),
+            b"A".to_vec(),
+        )];
+        for feature_type in [
+            FeatureType::RegulatoryFeature,
+            FeatureType::Transcript,
+            FeatureType::MotifFeature,
+        ] {
+            variants[0]
+                .transcript_consequences
+                .push(TranscriptConsequence {
+                    feature_type,
+                    ..TranscriptConsequence::default()
+                });
+        }
+
+        plugin.run_batch(&mut variants).unwrap();
+
+        let scores: Vec<Option<&str>> = variants[0]
+            .transcript_consequences
+            .iter()
+            .map(|tc| tc.plugin_data.get(ADA_FIELD).map(String::as_str))
+            .collect();
+        assert_eq!(scores, [None, Some("0.00106"), None]);
+        assert!(variants[0].plugin_data.is_empty());
     }
 }

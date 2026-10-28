@@ -39,9 +39,9 @@ The Format list is VEP's fixed prefix, `Allele` to `Existing_variation`, followe
 3. `IMPACT`: `HIGH`, `MODERATE`, `LOW` or `MODIFIER`.
 4. `SYMBOL`: the gene symbol (`--symbol`).
 5. `Gene`: the Ensembl gene stable ID.
-6. `Feature_type`: `Transcript`.
-7. `Feature`: the Ensembl transcript stable ID.
-8. `BIOTYPE`: the transcript biotype (`--biotype`).
+6. `Feature_type`: `Transcript`; `RegulatoryFeature` or `MotifFeature` on the rows `--regulatory` adds ([Regulatory and motif features](../regulatory.md)).
+7. `Feature`: the Ensembl transcript stable ID, or the regulatory or motif feature's.
+8. `BIOTYPE`: the transcript biotype (`--biotype`), or a regulatory feature's type whatever `--biotype` says.
 9. `EXON`: `n/total` or `a-b/total` over the exons the variant strictly overlaps (`--numbers`).
 10. `INTRON`: the same over the introns (`--numbers`).
 11. `HGVSc`: empty unless `--hgvs`.

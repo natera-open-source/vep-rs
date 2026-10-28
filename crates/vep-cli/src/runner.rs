@@ -1403,15 +1403,21 @@ pub(crate) fn apply_record_rules(
         // feature's and leaves that feature's reference allele behind
         // (OutputFactory.pm:2323-2338), so of the reference rows
         // (`--process_ref_homs`) the split features carry, the first that overlaps
-        // no feature writes the record's intergenic row and the others none.
+        // no transcript writes the record's intergenic row and the others none.
+        // A feature with regulatory or motif rows alone is intergenic too
+        // (VariationFeature.pm:826-839), and the rejoin moves its regulatory
+        // variations whole, reference allele included (:2311-2318), so a later
+        // such row loses its intergenic row and keeps the rest.
         let intergenic_reference_rows = alleles.iter_mut().filter(|v| {
             v.reference_allele_row
                 && v.original_start.is_some()
-                && v.transcript_consequences.is_empty()
-                && v.most_severe_consequence.is_some()
+                && (v.intergenic_overlap
+                    || (v.transcript_consequences.is_empty()
+                        && v.most_severe_consequence.is_some()))
         });
         for later_row in intergenic_reference_rows.skip(1) {
-            later_row.most_severe_consequence = None;
+            later_row.intergenic_overlap = false;
+            crate::row_filter::settle_verdict(later_row);
         }
     }
 }
@@ -1453,8 +1459,10 @@ impl Runner {
 
     /// Which optional output fields the configuration switches on, shared by
     /// every output format; `run` replaces `hgvs` with the value
-    /// [`fasta_setup_checks`] settled once the FASTA is known, and `sift` and
-    /// `polyphen` with the values [`prediction_checks`] settled against the cache.
+    /// [`fasta_setup_checks`] settled once the FASTA is known, `sift` and
+    /// `polyphen` with the values [`prediction_checks`] settled against the
+    /// cache, and `regulatory` with the value a loaded plugin may switch on
+    /// ([`crate::annotator::regulatory_enabled`]).
     fn field_options(&self) -> FieldOptions {
         let c = &self.config;
         FieldOptions {
@@ -1707,6 +1715,7 @@ impl Runner {
         let LoadedPlugins { builtin, dylib } = self.load_plugins(plugin_fasta)?;
         let builtin_plugins = Arc::new(builtin);
         let dylib_plugins = Arc::new(dylib);
+        let regulatory = crate::annotator::regulatory_enabled(&self.config, &dylib_plugins);
         if builtin_plugins.plugin_count() > 0 {
             info!(
                 "Loaded {} built-in plugin(s)",
@@ -1831,6 +1840,7 @@ impl Runner {
         let plugin_headers = builtin_plugins.all_header_info();
         let plugin_fields = vep_io::output::fields::plugin_field_names(&plugin_headers);
         let mut options = self.field_options();
+        options.regulatory = regulatory;
         options.hgvs = checks.hgvs;
         options.sift = predictions.sift.is_some();
         options.polyphen = predictions.polyphen.is_some();
@@ -1935,6 +1945,7 @@ impl Runner {
         let annotation_resources = AnnotationResources {
             transcripts,
             variation_source,
+            regulatory_source: crate::regulatory::RegulatorySource::open(&self.cache, regulatory)?,
             sv_source,
             colocation: ColocationRules::from_config(&self.config),
             effects_config,
@@ -2009,6 +2020,7 @@ impl Runner {
             no_headers: self.config.no_headers,
             vcf_formatter: vcf_formatter.as_ref(),
             transcripts: &annotation_resources.transcripts,
+            regulatory: annotation_resources.regulatory_source.as_deref(),
             synonyms: &self.cache.synonyms,
             prewarm_order: &prewarm_order,
             checks: &checks,
@@ -2784,6 +2796,7 @@ fn check_gnomad_columns(config: &Config, info: &CacheInfo) -> Result<(), CliErro
 pub(crate) struct AnnotationResources {
     transcripts: Arc<LazyTranscriptIndexes>,
     variation_source: Option<Arc<VariationSource>>,
+    regulatory_source: Option<Arc<crate::regulatory::RegulatorySource>>,
     /// The known structural variants of `--check_svs`, `None` without the flag.
     sv_source: Option<Arc<SvSource>>,
     /// Which known variants of a window co-locate with an input variant.
@@ -2825,6 +2838,11 @@ pub(crate) fn compile_transcript_filter(
 impl AnnotationResources {
     pub(crate) fn transcripts(&self) -> &LazyTranscriptIndexes {
         &self.transcripts
+    }
+
+    /// Materialize chromosome-scoped caches before either streaming or batch workers run.
+    pub(crate) fn prewarm_chromosome(&self, chr: &str) -> anyhow::Result<()> {
+        pipeline::prewarm_chromosome(&self.transcripts, self.regulatory_source.as_deref(), chr)
     }
 
     pub(crate) fn synonyms(&self) -> &ChromosomeSynonyms {
@@ -2928,7 +2946,7 @@ pub(crate) fn prewarm_batch(
     pool: &ThreadPool,
 ) -> anyhow::Result<()> {
     for variant in batch {
-        resources.transcripts.prewarm(&variant.chr)?;
+        resources.prewarm_chromosome(&variant.chr)?;
         if let Some(mate_chr) = variant.mate_chr.as_deref() {
             resources.transcripts.prewarm(mate_chr)?;
         }
@@ -3006,7 +3024,11 @@ pub(crate) fn annotate_one(
         &resources.effects_config,
         transcript_filter,
     );
-    let csq_count = variant.transcript_consequences.len() as u64;
+    if let Some(source) = &resources.regulatory_source {
+        source.annotate_variant(variant, &resources.effects_config);
+    }
+    let csq_count =
+        variant.transcript_consequences.len() as u64 + u64::from(variant.intergenic_overlap);
 
     // Under `--check_frequency` the filter stage co-located the batch before
     // annotation, as Ensembl VEP's variation source runs before its transcripts.
@@ -3418,6 +3440,7 @@ pub(crate) fn annotate_batch_for_test(
     let resources = AnnotationResources {
         transcripts,
         variation_source: None,
+        regulatory_source: None,
         sv_source: None,
         colocation: ColocationRules::default(),
         effects_config: Arc::new(vep_effects::EffectsConfig {
@@ -3475,6 +3498,7 @@ pub(crate) fn default_rows_for_test(
     let resources = AnnotationResources {
         transcripts,
         variation_source,
+        regulatory_source: None,
         sv_source: None,
         colocation: ColocationRules::default(),
         effects_config: Arc::new(vep_effects::EffectsConfig {
@@ -3508,6 +3532,7 @@ pub(crate) fn resources_over(transcripts: Arc<LazyTranscriptIndexes>) -> Annotat
     AnnotationResources {
         transcripts,
         variation_source: None,
+        regulatory_source: None,
         sv_source: None,
         colocation: ColocationRules::default(),
         effects_config: Arc::new(vep_effects::EffectsConfig {
@@ -5770,6 +5795,7 @@ mod tests {
         let resources = AnnotationResources {
             transcripts,
             variation_source: None,
+            regulatory_source: None,
             sv_source: None,
             colocation: ColocationRules::default(),
             effects_config,
@@ -5827,6 +5853,7 @@ mod tests {
         let resources = AnnotationResources {
             transcripts,
             variation_source: None,
+            regulatory_source: None,
             sv_source: None,
             colocation: ColocationRules::default(),
             effects_config,
@@ -5884,6 +5911,7 @@ mod tests {
             let resources = AnnotationResources {
                 transcripts: Arc::new(LazyTranscriptIndexes::from_indexes(by_chr)),
                 variation_source: None,
+                regulatory_source: None,
                 sv_source: None,
                 colocation: ColocationRules::default(),
                 effects_config: Arc::new(vep_effects::EffectsConfig::default()),
@@ -6583,6 +6611,160 @@ mod tests {
             .map(|v| v.most_severe_consequence.is_some())
             .collect();
         assert_eq!(verdicts, [true, true, true, true]);
+    }
+
+    /// A split feature that overlaps a regulatory or motif feature and no
+    /// transcript has an intergenic variation of its own
+    /// (VariationFeature.pm:826-839), so the record's one intergenic reference
+    /// row is the first feature's that overlaps no transcript, whether that
+    /// feature carries regulatory rows or none: the rejoin appends a later
+    /// feature's intergenic alleles to the first intergenic variation and leaves
+    /// its reference allele behind (OutputFactory.pm:2323-2338) but moves its
+    /// regulatory variation whole, reference allele included (:2311-2318). A
+    /// later reference row with regulatory rows alone keeps those rows and
+    /// writes no intergenic row, in either order of the two features, and a
+    /// record whose first feature overlaps a transcript takes the one intergenic
+    /// reference row from the first feature without one.
+    #[test]
+    fn a_split_record_writes_one_intergenic_reference_row_beside_regulatory_rows() {
+        use crate::individuals::RecordReading;
+        use crate::vcf_parser::{parse_vcf_line_with, split_minimal_record, VcfParse};
+        use vep_core::consequence::{FeatureType, TranscriptConsequence};
+        use vep_io::output::fields::record_rows;
+
+        let parse = VcfParse {
+            minimal: true,
+            reading: RecordReading {
+                individuals: None,
+                process_ref_homs: true,
+            },
+            ..VcfParse::default_run(false)
+        };
+        // One reference row before each split feature: `T/T`, `T/A`, `-/-`,
+        // `-/AA` and, for the third allele, `-/-`, `-/G`.
+        let split = |line: &str| -> Vec<InputVariant> {
+            let mut batch = split_minimal_record(parse_vcf_line_with(line, &parse).unwrap());
+            for v in &mut batch {
+                v.input_record = 1;
+            }
+            batch
+        };
+        let row =
+            |id: &str, feature_type: FeatureType, consequence: Consequence| TranscriptConsequence {
+                transcript_id: id.into(),
+                feature_type,
+                consequences: std::iter::once(consequence).collect(),
+                ..Default::default()
+            };
+        let intergenic = |v: &mut InputVariant| {
+            v.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        };
+        let regulatory_only = |v: &mut InputVariant| {
+            v.transcript_consequences.push(row(
+                "ENSR1",
+                FeatureType::RegulatoryFeature,
+                Consequence::RegulatoryRegionVariant,
+            ));
+            v.intergenic_overlap = true;
+            v.most_severe_consequence = Some(Consequence::RegulatoryRegionVariant);
+        };
+        let genic = |v: &mut InputVariant| {
+            v.transcript_consequences.push(row(
+                "ENST1",
+                FeatureType::Transcript,
+                Consequence::IntronVariant,
+            ));
+            v.most_severe_consequence = Some(Consequence::IntronVariant);
+        };
+        // Per allele: its string, `ref` or `alt`, `overlap` when it carries the
+        // intergenic overlap, its verdict and its feature row count; then the
+        // alleles whose intergenic row prints.
+        let shape = |batch: &[InputVariant]| {
+            let alleles: Vec<String> = batch
+                .iter()
+                .map(|v| {
+                    format!(
+                        "{} {} {} {} {}",
+                        v.allele_string,
+                        if v.reference_allele_row { "ref" } else { "alt" },
+                        if v.intergenic_overlap { "overlap" } else { "-" },
+                        v.most_severe_consequence.map_or("-", |c| c.so_term()),
+                        v.transcript_consequences.len(),
+                    )
+                })
+                .collect();
+            let record: Vec<&InputVariant> = batch.iter().collect();
+            let intergenic_rows: Vec<usize> = record_rows(&record)
+                .iter()
+                .filter(|(_, tc)| tc.is_none())
+                .map(|(v, _)| batch.iter().position(|a| std::ptr::eq(a, *v)).unwrap())
+                .collect();
+            (alleles, intergenic_rows)
+        };
+        let two_alleles = "21\t20000326\tx\tTT\tTA,TTAA\t.\t.\t.";
+
+        let mut batch = split(two_alleles);
+        assert_eq!(batch.len(), 4);
+        intergenic(&mut batch[0]);
+        intergenic(&mut batch[1]);
+        regulatory_only(&mut batch[2]);
+        regulatory_only(&mut batch[3]);
+        apply_record_rules(&mut batch, None);
+        assert_eq!(
+            shape(&batch),
+            (
+                vec![
+                    "T/T ref - intergenic_variant 0".to_string(),
+                    "T/A alt - intergenic_variant 0".to_string(),
+                    "-/- ref - regulatory_region_variant 1".to_string(),
+                    "-/AA alt overlap regulatory_region_variant 1".to_string(),
+                ],
+                vec![0, 1, 3]
+            )
+        );
+
+        let mut batch = split(two_alleles);
+        regulatory_only(&mut batch[0]);
+        regulatory_only(&mut batch[1]);
+        intergenic(&mut batch[2]);
+        intergenic(&mut batch[3]);
+        apply_record_rules(&mut batch, None);
+        assert_eq!(
+            shape(&batch),
+            (
+                vec![
+                    "T/T ref overlap regulatory_region_variant 1".to_string(),
+                    "T/A alt overlap regulatory_region_variant 1".to_string(),
+                    "-/- ref - - 0".to_string(),
+                    "-/AA alt - intergenic_variant 0".to_string(),
+                ],
+                vec![0, 1, 3]
+            )
+        );
+
+        let mut batch = split("21\t20000326\tx\tTT\tTA,TTAA,TTG\t.\t.\t.");
+        assert_eq!(batch.len(), 6);
+        genic(&mut batch[0]);
+        genic(&mut batch[1]);
+        regulatory_only(&mut batch[2]);
+        regulatory_only(&mut batch[3]);
+        intergenic(&mut batch[4]);
+        intergenic(&mut batch[5]);
+        apply_record_rules(&mut batch, None);
+        assert_eq!(
+            shape(&batch),
+            (
+                vec![
+                    "T/T ref - intron_variant 1".to_string(),
+                    "T/A alt - intron_variant 1".to_string(),
+                    "-/- ref overlap regulatory_region_variant 1".to_string(),
+                    "-/AA alt overlap regulatory_region_variant 1".to_string(),
+                    "-/- ref - - 0".to_string(),
+                    "-/G alt - intergenic_variant 0".to_string(),
+                ],
+                vec![2, 3, 5]
+            )
+        );
     }
 
     /// `--max_sv_size -1` lifts the size limit: the 10.6 Mb deletion of the

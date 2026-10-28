@@ -25,8 +25,9 @@ structural variant over the line's span. A VCF record follows the same path
 through the `vep-cli` crate's line parser. Annotation happens outside this
 crate, and the two variants return as one record slice.
 `OutputFormatter::format_record` receives that slice: `fields::record_rows`
-orders the rows transcript-major (by transcript id) and allele-minor (ALT order),
-then adds one intergenic row per allele that overlapped nothing, and
+orders the rows by feature kind (transcript, regulatory, motif), each kind
+feature-major (by stable id) and allele-minor (ALT order), then adds one
+intergenic row per allele that overlapped no transcript, and
 `fields::write_field_value` answers every column name from the row as bytes
 (`fields::field_value` collects them into a `String`), reading plugin data for a
 name the table lacks. The tab formatter prints each column with `-` for an

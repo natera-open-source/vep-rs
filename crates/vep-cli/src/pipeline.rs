@@ -509,6 +509,9 @@ pub(crate) struct ReaderConfig<'a> {
     /// Warmed per chromosome as the reader first meets it, so a chromosome's
     /// shards parse while the coordinator annotates the batches before it.
     pub transcripts: &'a LazyTranscriptIndexes,
+    /// Warmed beside the transcripts under `--regulatory`, so a chromosome
+    /// crossing never stalls the coordinator on the regulatory shards.
+    pub regulatory: Option<&'a crate::regulatory::RegulatorySource>,
     /// The chromosome synonyms an input name is resolved through
     /// ([`name_source_chromosomes`]).
     pub synonyms: &'a ChromosomeSynonyms,
@@ -665,6 +668,7 @@ impl<'env> Prewarmer<'env> {
     fn spawn<'scope>(
         scope: &'scope thread::Scope<'scope, 'env>,
         transcripts: &'env LazyTranscriptIndexes,
+        regulatory: Option<&'env crate::regulatory::RegulatorySource>,
         synonyms: &'env ChromosomeSynonyms,
         order: &'env [String],
     ) -> Self {
@@ -673,7 +677,7 @@ impl<'env> Prewarmer<'env> {
             .name("vep-prewarm".into())
             .spawn_scoped(scope, move || {
                 for chr in requests {
-                    let _ = transcripts.prewarm(&chr);
+                    let _ = prewarm_chromosome(transcripts, regulatory, &chr);
                 }
             })
             .expect("spawn the prewarm thread");
@@ -704,6 +708,30 @@ impl<'env> Prewarmer<'env> {
         self.started.insert(chr.to_string());
         let _ = self.queue.send(chr.to_string());
     }
+}
+
+/// Warms one chromosome's transcript index and, under `--regulatory`, its
+/// regulatory features, the two loads a chromosome crossing needs.
+pub(crate) fn prewarm_chromosome(
+    transcripts: &LazyTranscriptIndexes,
+    regulatory: Option<&crate::regulatory::RegulatorySource>,
+    chr: &str,
+) -> anyhow::Result<()> {
+    transcripts.prewarm(chr)?;
+    if let Some(source) = regulatory {
+        source.prewarm(chr).map_err(regulatory_load_error)?;
+    }
+    Ok(())
+}
+
+/// A regulatory load's failure as the run prints it, under the `cache`
+/// component; a refusal the loader already made under the error contract (a
+/// checksum mismatch) keeps its own line.
+fn regulatory_load_error(error: anyhow::Error) -> anyhow::Error {
+    if error.is::<crate::config::CliError>() {
+        return error;
+    }
+    crate::config::CliError::new("cache", format!("{error:#}")).into()
 }
 
 /// Output configuration shared by the render tasks.
@@ -1274,7 +1302,13 @@ fn read_vcf(
     buffers_back: Receiver<LineBuffers>,
 ) -> anyhow::Result<()> {
     thread::scope(|scope| {
-        let prewarmer = Prewarmer::spawn(scope, cfg.transcripts, cfg.synonyms, cfg.prewarm_order);
+        let prewarmer = Prewarmer::spawn(
+            scope,
+            cfg.transcripts,
+            cfg.regulatory,
+            cfg.synonyms,
+            cfg.prewarm_order,
+        );
         // Dropping the prewarmer closes its queue, so the helper exits once the
         // loads it was asked for are done.
         read_vcf_lines(reader, cfg, tx, buffers_back, prewarmer)
@@ -1660,7 +1694,7 @@ fn read_parsed(
                     // the row goes in per allele here, and `close_record` finds it
                     // in place.
                     if outcome != MinimalSplit::Unchanged && cfg.process_ref_homs {
-                        cfg.transcripts.prewarm(&variant.chr)?;
+                        prewarm_chromosome(cfg.transcripts, cfg.regulatory, &variant.chr)?;
                         batch.variants.push(split_reference_row(&variant, own));
                     }
                     // The feature of a `*` or `<DEL:*>` allele builds its reference
@@ -1670,7 +1704,7 @@ fn read_parsed(
                         continue;
                     }
                 }
-                cfg.transcripts.prewarm(&variant.chr)?;
+                prewarm_chromosome(cfg.transcripts, cfg.regulatory, &variant.chr)?;
                 batch.variants.push(variant);
             }
             Some(Err(vep_io::IoError::Unsupported(message))) => {
@@ -2807,7 +2841,7 @@ fn coordinate_streaming(
                         c.resources.transcripts(),
                     );
                     for chr in chromosomes {
-                        c.resources.transcripts().prewarm(&chr)?;
+                        c.resources.prewarm_chromosome(&chr)?;
                     }
                     let chunk_units = fused_chunk_units(lines.items.len(), c);
                     (lines.seq, split_lines(lines, chunk_units))
@@ -3306,6 +3340,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
@@ -3451,6 +3486,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
@@ -3499,6 +3535,55 @@ mod tests {
         assert_eq!(
             crate::config::CliError::from_run(&other),
             "ERROR: [run] outer: inner"
+        );
+    }
+
+    /// A regulatory shard whose bytes differ from the cache manifest's entry
+    /// ends the run with the manifest's own refusal, one `cache` line, as a
+    /// transcript shard's mismatch does; a regulatory load's other failures
+    /// print under the `cache` component with their cause chain.
+    #[test]
+    fn a_regulatory_shard_mismatch_prints_the_manifest_refusal_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let shard = dir.path().join("regulatory/21/1-1000000.json");
+        std::fs::create_dir_all(shard.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(dir.path().join("transcripts/21")).unwrap();
+        std::fs::write(dir.path().join("transcripts/21/0-1000.json"), "[]").unwrap();
+        std::fs::write(
+            &shard,
+            include_bytes!("../tests/fixtures/regulatory/1-1000000.json"),
+        )
+        .unwrap();
+        vep_core::cache_manifest::CacheManifest::write(dir.path()).unwrap();
+        std::fs::write(&shard, "[]").unwrap();
+        let cache = crate::cache_resolve::ResolvedCache {
+            dir: dir.path().to_string_lossy().into_owned(),
+            manifest: Arc::new(vep_core::cache_manifest::CacheManifest::load(dir.path()).unwrap()),
+            info: vep_core::cache_info::CacheInfo {
+                regulatory: true,
+                ..Default::default()
+            },
+            assembly: Some("GRCh38".into()),
+            fasta: None,
+            synonyms: Arc::new(Default::default()),
+        };
+        let regulatory = crate::regulatory::RegulatorySource::open(&cache, true)
+            .unwrap()
+            .unwrap();
+        let transcripts = LazyTranscriptIndexes::new(dir.path().to_str().unwrap(), 0, 0).unwrap();
+        let error = prewarm_chromosome(&transcripts, Some(&regulatory), "21").unwrap_err();
+        assert_eq!(
+            crate::config::CliError::from_run(&error),
+            format!(
+                "ERROR: [cache] checksum mismatch for regulatory/21/1-1000000.json in {}",
+                dir.path().display()
+            )
+        );
+
+        let other = regulatory_load_error(anyhow::anyhow!("inner").context("outer"));
+        assert_eq!(
+            crate::config::CliError::from_run(&other),
+            "ERROR: [cache] outer: inner"
         );
     }
 
@@ -4582,6 +4667,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
@@ -4633,6 +4719,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
@@ -4699,6 +4786,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
@@ -4789,6 +4877,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
@@ -4945,6 +5034,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
@@ -5010,6 +5100,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: Some(&fmt),
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
@@ -5067,6 +5158,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
@@ -5548,6 +5640,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: Some(&fmt),
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
@@ -5597,7 +5690,7 @@ mod tests {
         let no_synonyms = ChromosomeSynonyms::new();
         let order = ["21".to_string(), "22".to_string(), "X".to_string()];
         let started = thread::scope(|scope| {
-            let mut prewarmer = Prewarmer::spawn(scope, &transcripts, &no_synonyms, &order);
+            let mut prewarmer = Prewarmer::spawn(scope, &transcripts, None, &no_synonyms, &order);
             prewarmer.reached("21");
             prewarmer.reached("21");
             prewarmer.reached("22");
@@ -5628,6 +5721,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
@@ -5688,6 +5782,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
@@ -5765,6 +5860,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &crate::validate::NO_CHECKS,
@@ -5848,6 +5944,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &checks,
@@ -5929,6 +6026,7 @@ mod tests {
             no_headers: false,
             vcf_formatter: None,
             transcripts: &transcripts,
+            regulatory: None,
             synonyms: &ChromosomeSynonyms::new(),
             prewarm_order: &[],
             checks: &checks,
@@ -6019,6 +6117,7 @@ mod tests {
                 no_headers: false,
                 vcf_formatter: None,
                 transcripts: &transcripts,
+                regulatory: None,
                 synonyms: &ChromosomeSynonyms::new(),
                 prewarm_order: &[],
                 checks: &crate::validate::NO_CHECKS,

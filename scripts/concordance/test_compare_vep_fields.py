@@ -111,3 +111,43 @@ def test_missing_input_is_a_single_line_error(tmp_path: Path):
     )
     assert proc.returncode == 2
     assert proc.stderr.startswith("ERROR: [compare_vep_fields]")
+
+
+@pytest.mark.parametrize("compressed", [False, True])
+def test_cli_keep_only_regulatory_feature_rows_filters_both_sides(pair, tmp_path, compressed):
+    perl, rust = pair
+    shared = row("reg", "1:700", "T", "-", "ENSR1", "RegulatoryFeature", "regulatory_region_variant", extra="BIOTYPE=promoter")
+    motif = row("motif", "1:700", "T", "-", "ENSM1", "MotifFeature", "TF_binding_site_variant", extra="MOTIF_POS=3")
+    missing = row("missing", "1:800", "G", "-", "ENSR2", "RegulatoryFeature", "regulatory_region_variant")
+    unexpected = row("extra", "1:900", "G", "-", "ENSM2", "MotifFeature", "TF_binding_site_variant")
+    perl.write_text(perl.read_text() + shared + shared + motif + missing, encoding="utf-8")
+    rust.write_text(rust.read_text() + shared + motif.replace("MOTIF_POS=3", "MOTIF_POS=4") + unexpected, encoding="utf-8")
+    if compressed:
+        import gzip
+
+        for source in (perl, rust):
+            with gzip.open(source.with_suffix(".txt.gz"), "wt", encoding="utf-8") as fh:
+                fh.write(source.read_text(encoding="utf-8"))
+        perl, rust = perl.with_suffix(".txt.gz"), rust.with_suffix(".txt.gz")
+    out = tmp_path / "regulatory.json"
+    assert cvf.main([
+        "--perl", str(perl), "--rust", str(rust), "--out", str(out),
+        "--keep-only", "regulatory_feature_rows",
+    ]) == 0
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["keep_only"] == "regulatory_feature_rows"
+    assert report["totals"] == {
+        "reference_keys": 3, "scored_keys": 3, "intersection": 2,
+        "reference_only": 1, "scored_only": 1,
+        "reference_duplicate_keys": 1, "scored_duplicate_keys": 0,
+    }
+    assert report["fields"]["Uploaded_variation"]["compared"] == 2
+    assert report["fields"]["Uploaded_variation"]["differ"] == 0
+    assert report["extra"]["MOTIF_POS"]["top_mismatches"] == [{"reference": "3", "scored": "4", "count": 1}]
+    assert "DISTANCE" not in report["extra"]
+
+
+def test_keep_only_regulatory_rows_on_transcript_only_inputs_is_empty(pair):
+    report = cvf.compare(*pair, examples=5, tmp_dir=None, keep_only="regulatory_feature_rows")
+    assert all(count == 0 for count in report["totals"].values())
+    assert report["fields"]["Gene"]["agreement"] is None

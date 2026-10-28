@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 
+use vep_core::consequence::FeatureType;
 use vep_core::coordinate::Strand;
 use vep_core::minimal::rowless_first_feature;
 use vep_core::sv_routing::perl_true;
@@ -396,10 +397,13 @@ fn cached_to_colocated(
 /// This is the hot path for the default `-o vep` format: it runs once per
 /// (variant x transcript consequence). For a sequence variant with no optional
 /// field group active, no plugin data and a vocabulary that prints DISTANCE as
-/// the SO terms do, it writes the four fixed keys directly; every other row
+/// the SO terms do, it writes the four fixed keys directly, and so does a
+/// transcript or intergenic row when the `regulatory` group is the only other
+/// one active, since its six fields are empty on such a row; every other row
 /// writes each value through [`vep_io::output::fields::write_field_value`], and
 /// a row without plugin data that is not structural carries the plan's flag
-/// fields alone, so its key list is not rebuilt.
+/// fields alone (a transcript row without the five motif fields), so its key
+/// list is not rebuilt.
 pub fn write_extra_fields(
     variant: &InputVariant,
     tc: Option<&vep_core::consequence::TranscriptConsequence>,
@@ -409,7 +413,8 @@ pub fn write_extra_fields(
     let has_plugin_data =
         !variant.plugin_data.is_empty() || tc.is_some_and(|t| !t.plugin_data.is_empty());
     let summary_row = tc.is_none() && variant.summary_terms.is_some();
-    if !plan.any_optional_group
+    let transcript_row = tc.is_none_or(|t| t.feature_type == FeatureType::Transcript);
+    if (!plan.any_optional_group || (plan.transcript_fast_path && transcript_row))
         && !has_plugin_data
         && !variant.is_structural
         && !summary_row
@@ -426,7 +431,12 @@ pub fn write_extra_fields(
             write_extra_pair(out, key, variant, tc, options, &mut first);
         }
     } else {
-        for key in &plan.flag_fields {
+        let keys = if transcript_row {
+            &plan.transcript_flag_fields
+        } else {
+            &plan.flag_fields
+        };
+        for key in keys {
             write_extra_pair(out, key, variant, tc, options, &mut first);
         }
     }
@@ -1429,6 +1439,83 @@ mod tests {
         assert_eq!(
             extra(&variant, Some(&tc), &FieldOptions::default()),
             "IMPACT=MODIFIER;DISTANCE=2500;STRAND=1;FLAGS=cds_start_NF,cds_end_NF"
+        );
+    }
+
+    /// Under `--regulatory` alone a transcript row and the intergenic companion
+    /// row print what they print without the flag, through the fast path, while
+    /// a motif row prints its own fields and a regulatory row its BIOTYPE, and
+    /// `--biotype` beside the flag sends the transcript row down the general
+    /// path, where its BIOTYPE prints.
+    #[test]
+    fn transcript_rows_keep_the_fast_path_under_the_regulatory_group_alone() {
+        let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let transcript = TranscriptConsequence {
+            impact: Impact::MODIFIER,
+            strand: 1,
+            consequences: std::iter::once(vep_core::consequence::Consequence::UpstreamGeneVariant)
+                .collect(),
+            distance: Some(120),
+            biotype: Some("protein_coding".into()),
+            ..Default::default()
+        };
+        let regulatory = FieldOptions {
+            regulatory: true,
+            ..Default::default()
+        };
+        let plan = ExtraFieldsPlan::new(regulatory.clone());
+        assert!(plan.any_optional_group && plan.transcript_fast_path);
+        assert!(
+            !ExtraFieldsPlan::new(FieldOptions {
+                regulatory: true,
+                biotype: true,
+                ..Default::default()
+            })
+            .transcript_fast_path
+        );
+        assert_eq!(
+            extra(&variant, Some(&transcript), &regulatory),
+            extra(&variant, Some(&transcript), &FieldOptions::default())
+        );
+        assert_eq!(extra(&variant, None, &regulatory), "IMPACT=MODIFIER");
+        assert_eq!(
+            extra(
+                &variant,
+                Some(&transcript),
+                &FieldOptions {
+                    regulatory: true,
+                    biotype: true,
+                    ..Default::default()
+                }
+            ),
+            "IMPACT=MODIFIER;DISTANCE=120;STRAND=1;BIOTYPE=protein_coding"
+        );
+        let motif = TranscriptConsequence {
+            transcript_id: "ENSM1".into(),
+            feature_type: FeatureType::MotifFeature,
+            impact: Impact::MODIFIER,
+            strand: -1,
+            motif: Some(Box::new(vep_core::consequence::MotifFields {
+                name: "ENSPFM1".into(),
+                pos: Some(3),
+                factors: ["A".into(), "B".into()].into(),
+            })),
+            ..Default::default()
+        };
+        assert_eq!(
+            extra(&variant, Some(&motif), &regulatory),
+            "IMPACT=MODIFIER;STRAND=-1;MOTIF_NAME=ENSPFM1;MOTIF_POS=3;TRANSCRIPTION_FACTORS=A,B"
+        );
+        let enhancer = TranscriptConsequence {
+            transcript_id: "ENSR1".into(),
+            feature_type: FeatureType::RegulatoryFeature,
+            impact: Impact::MODIFIER,
+            biotype: Some("enhancer".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            extra(&variant, Some(&enhancer), &regulatory),
+            "IMPACT=MODIFIER;BIOTYPE=enhancer"
         );
     }
 

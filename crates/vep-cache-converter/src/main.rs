@@ -11,7 +11,11 @@
 //!   The variation files are the Ensembl VEP dumper's own, copied unchanged to
 //!   `variations/<chr>/`: `all_vars.gz` with its `.csi` or `.tbi`, or
 //!   `{start}-{end}_var.gz`, read from `variations/<chr>/`, or with a `{chr}_`
-//!   prefix from directly under `variations/`. The checksum manifest
+//!   prefix from directly under `variations/`. Regulatory shards,
+//!   `<start>-<end>.json` or `.json.gz` arrays of regulatory and motif features,
+//!   are copied unchanged to `regulatory/<chr>/` once each parses as the
+//!   annotator parses it; metadata advertises them only after that tree has
+//!   been written. The checksum manifest
 //!   `CHECKSUMS.sha256` is written last, over every file then under the output
 //!   directory: the files this conversion wrote and any an earlier use of the
 //!   same `--output-dir` left there.
@@ -446,7 +450,12 @@ fn convert_cache(json_dir: &Path, output_dir: &str, _region_size: u64) -> Result
     let output_path = Path::new(output_dir);
     fs::create_dir_all(output_path).context("Failed to create output directory")?;
 
-    copy_info_json(json_dir, output_path)?;
+    // A failed conversion must not leave an earlier run's availability marker.
+    match fs::remove_file(output_path.join("info.json")) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error).context("Failed to remove previous info.json"),
+    }
 
     let (transcript_regions, transcript_entries) = convert_data_files(
         &json_dir.join("transcripts"),
@@ -459,32 +468,62 @@ fn convert_cache(json_dir: &Path, output_dir: &str, _region_size: u64) -> Result
         &output_path.join("variations"),
     )?;
 
+    let regulatory_regions = copy_regulatory_files(
+        &json_dir.join("regulatory"),
+        &output_path.join("regulatory"),
+    )?;
+    copy_info_json(json_dir, output_path, regulatory_regions != 0)?;
+
     let listed = CacheManifest::write(output_path).context("Failed to write CHECKSUMS.sha256")?;
 
     info!(
         "Conversion complete: {} transcript regions ({} transcripts), \
-         {} variation files on {} chromosomes, {} files in the checksum manifest",
-        transcript_regions, transcript_entries, variation_files, variation_chromosomes, listed
+         {} variation files on {} chromosomes, {} regulatory regions, \
+         {} files in the checksum manifest",
+        transcript_regions,
+        transcript_entries,
+        variation_files,
+        variation_chromosomes,
+        regulatory_regions,
+        listed
     );
 
     Ok(())
 }
 
 /// Copy `info.json`, and `chr_synonyms.txt` when the source has one, once
-/// [`validate_info`] accepts the metadata.
-fn copy_info_json(json_dir: &Path, output_path: &Path) -> Result<()> {
+/// [`validate_info`] accepts the metadata. Regulatory availability describes the
+/// successfully written output, not the source's potentially stale marker.
+fn copy_info_json(json_dir: &Path, output_path: &Path, regulatory_written: bool) -> Result<()> {
     let src = json_dir.join("info.json");
     let dst = output_path.join("info.json");
 
     let content =
         fs::read_to_string(&src).with_context(|| format!("Failed to read {}", src.display()))?;
 
-    let value: serde_json::Value = serde_json::from_str(&content)
+    let mut value: serde_json::Value = serde_json::from_str(&content)
         .with_context(|| format!("Failed to parse info.json at {}", src.display()))?;
     validate_info(&value).with_context(|| format!("{} is not a cache's info", src.display()))?;
     let species = value["species"].as_str().unwrap_or_default();
     let assembly = value["assembly"].as_str().unwrap_or_default();
     info!("Cache info: species={}, assembly={}", species, assembly);
+
+    let regulatory_changed = if regulatory_written {
+        value.get("regulatory").and_then(|value| value.as_bool()) != Some(true)
+    } else {
+        value.get("regulatory").is_some()
+    };
+    let content = if regulatory_changed {
+        let metadata = value.as_object_mut().expect("validated metadata object");
+        if regulatory_written {
+            metadata.insert("regulatory".into(), serde_json::Value::Bool(true));
+        } else {
+            metadata.remove("regulatory");
+        }
+        serde_json::to_string_pretty(&value).context("Failed to encode info.json")?
+    } else {
+        content
+    };
 
     fs::write(&dst, &content).with_context(|| format!("Failed to write {}", dst.display()))?;
     info!("Copied info.json");
@@ -528,6 +567,84 @@ fn validate_info(value: &serde_json::Value) -> Result<()> {
     Ok(())
 }
 
+/// The `<start>-<end>` range of a regulatory shard name, `.json` or `.json.gz`;
+/// `None` for any other name.
+fn regulatory_shard_range(name: &str) -> Option<(u64, u64)> {
+    let stem = name
+        .strip_suffix(".json.gz")
+        .or_else(|| name.strip_suffix(".json"))?;
+    let (start, end) = stem.split_once('-')?;
+    Some((start.parse().ok()?, end.parse().ok()?))
+}
+
+/// Preserve the Storable converter's regulatory JSON tree byte for byte.
+/// A shard must parse as the annotator parses it (`vep_cli::regulatory`)
+/// before it counts toward cache availability: an array of regulatory and
+/// motif features, inflated first when it is a `.json.gz`.
+fn copy_regulatory_files(src_dir: &Path, dst_dir: &Path) -> Result<usize> {
+    if !src_dir.exists() {
+        return Ok(0);
+    }
+    let mut chromosomes: Vec<_> = fs::read_dir(src_dir)
+        .with_context(|| format!("Failed to read {}", src_dir.display()))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    chromosomes.sort_by_key(|entry| entry.file_name());
+    let mut written = 0;
+    for chromosome in chromosomes {
+        let file_name = chromosome.file_name();
+        let chr_name = file_name.to_string_lossy();
+        if !chromosome.path().is_dir() {
+            warn!(
+                "Skipping file with unexpected name: regulatory/{}",
+                chr_name
+            );
+            continue;
+        }
+        // A record names its chromosome as text, so a directory whose name is
+        // not UTF-8 names no chromosome; its lossy spelling would name one no
+        // record reaches. The loader passes over a directory whose name starts
+        // with a dot, so copying one would write a chromosome never read.
+        let Some(chr) = file_name
+            .to_str()
+            .filter(|name| is_cache_path_component(name) && !name.starts_with('.'))
+        else {
+            warn!(
+                "Skipping directory with unexpected name: regulatory/{}",
+                chr_name
+            );
+            continue;
+        };
+        let mut shards: Vec<_> = fs::read_dir(chromosome.path())
+            .with_context(|| format!("Failed to read regulatory chromosome {chr}"))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        shards.sort_by_key(|entry| entry.file_name());
+        for shard in shards {
+            let path = shard.path();
+            let shard_name = shard.file_name().to_string_lossy().into_owned();
+            let is_shard = path.is_file() && regulatory_shard_range(&shard_name).is_some();
+            if !is_shard {
+                warn!(
+                    "Skipping file with unexpected name: regulatory/{}/{}",
+                    chr, shard_name
+                );
+                continue;
+            }
+            vep_cli::regulatory::count_shard_features(&path)
+                .with_context(|| format!("{} is not a regulatory shard", path.display()))?;
+            let content =
+                fs::read(&path).with_context(|| format!("Failed to read {}", path.display()))?;
+            let out_chr = dst_dir.join(chr);
+            fs::create_dir_all(&out_chr)
+                .with_context(|| format!("Failed to create {}", out_chr.display()))?;
+            let out = out_chr.join(shard.file_name());
+            fs::write(&out, &content)
+                .with_context(|| format!("Failed to write {}", out.display()))?;
+            written += 1;
+        }
+    }
+    Ok(written)
+}
+
 /// Copy the variation files into the runtime layout `variations/<chr>/`.
 ///
 /// Copies, byte for byte, `all_vars.gz` with its `.csi` or `.tbi` and
@@ -550,9 +667,22 @@ fn copy_variation_files(src_dir: &Path, dst_dir: &Path) -> Result<(usize, usize)
     let mut planned: Vec<(String, String, PathBuf)> = Vec::new();
     for entry in &entries {
         let path = entry.path();
-        let name = entry.file_name().to_string_lossy().into_owned();
+        let entry_name = entry.file_name();
+        // The chromosome is read from the entry's name, a directory's or a flat
+        // file's prefix, and a record names its chromosome as text, so a name
+        // that is not UTF-8 names none; its lossy spelling would name one no
+        // record reaches.
+        let Some(name) = entry_name.to_str() else {
+            let lossy = entry_name.to_string_lossy();
+            if path.is_dir() {
+                warn!("Skipping directory with unexpected name: {}", lossy);
+            } else {
+                warn!("Skipping file with unexpected name: {}", lossy);
+            }
+            continue;
+        };
         if path.is_dir() {
-            if !is_cache_path_component(&name) {
+            if !is_cache_path_component(name) {
                 warn!("Skipping directory with unexpected name: {}", name);
                 continue;
             }
@@ -563,7 +693,7 @@ fn copy_variation_files(src_dir: &Path, dst_dir: &Path) -> Result<(usize, usize)
             for file in files {
                 let file_name = file.file_name().to_string_lossy().into_owned();
                 if variation_file_kind(&file_name).is_some() {
-                    planned.push((name.clone(), file_name, file.path()));
+                    planned.push((name.to_string(), file_name, file.path()));
                 } else if file_name.ends_with(".json") {
                     return Err(json_shard_error(&file.path()));
                 } else {
@@ -572,7 +702,7 @@ fn copy_variation_files(src_dir: &Path, dst_dir: &Path) -> Result<(usize, usize)
             }
         } else if name.ends_with(".json") {
             return Err(json_shard_error(&path));
-        } else if let Some((chr, file_name)) = split_flat_variation_name(&name) {
+        } else if let Some((chr, file_name)) = split_flat_variation_name(name) {
             planned.push((chr, file_name, path));
         } else {
             warn!("Skipping file with unexpected name: {}", name);
@@ -684,14 +814,17 @@ fn convert_data_files(src_dir: &Path, dst_dir: &Path, label: &str) -> Result<(us
 
     for entry in &entries {
         let path = entry.path();
-        let ext = path.extension().and_then(|e| e.to_str());
-        if ext != Some("json") {
-            continue;
-        }
-
-        let filestem = match path.file_stem().and_then(|s| s.to_str()) {
-            Some(s) => s.to_string(),
-            None => continue,
+        let extension = path.extension().and_then(|e| e.to_str());
+        let stem = path.file_stem().and_then(|s| s.to_str());
+        let filestem = match (extension, stem) {
+            (Some("json"), Some(filestem)) => filestem.to_string(),
+            _ => {
+                warn!(
+                    "Skipping file with unexpected name: {}",
+                    entry.file_name().to_string_lossy()
+                );
+                continue;
+            }
         };
 
         let (chr, start, end) = match parse_region_filename(&filestem) {
@@ -865,6 +998,137 @@ mod tests {
         assert_eq!(entries(&out.join("21")), ["all_vars.gz", "all_vars.gz.csi"]);
     }
 
+    /// A chromosome directory, or a flat variation file, whose name is not
+    /// UTF-8 is skipped with the warning every unexpected name gets, in the
+    /// regulatory tree and the variations tree alike: a record names its
+    /// chromosome as text, so the lossy spelling of such a name would name a
+    /// chromosome no record reaches. The entries beside it are copied. A Linux
+    /// file system stores the name's bytes as they are; other platforms refuse
+    /// such a name.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_chromosome_whose_name_is_not_utf8_is_skipped() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        let tmp = Scratch::new();
+        let names = [OsStr::new("21"), OsStr::from_bytes(b"21\xff")];
+        let regulatory = tmp.path().join("regulatory");
+        for chr in names {
+            let dir = regulatory.join(chr);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(dir.join("1-1000000.json"), b"[]").unwrap();
+        }
+        let out = tmp.path().join("out");
+        assert_eq!(
+            copy_regulatory_files(&regulatory, &out.join("regulatory")).unwrap(),
+            1
+        );
+        assert_eq!(entries(&out.join("regulatory")), ["21"]);
+
+        let variations = tmp.path().join("variations");
+        for chr in names {
+            let dir = variations.join(chr);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(dir.join("all_vars.gz"), b"gz").unwrap();
+            fs::write(dir.join("all_vars.gz.csi"), b"csi").unwrap();
+        }
+        fs::write(
+            variations.join(OsStr::from_bytes(b"22\xff_all_vars.gz")),
+            b"gz",
+        )
+        .unwrap();
+        fs::write(
+            variations.join(OsStr::from_bytes(b"22\xff_all_vars.gz.csi")),
+            b"csi",
+        )
+        .unwrap();
+        assert_eq!(
+            copy_variation_files(&variations, &out.join("variations")).unwrap(),
+            (1, 2)
+        );
+        assert_eq!(entries(&out.join("variations")), ["21"]);
+    }
+
+    /// A transcripts entry without the `.json` extension is skipped with the
+    /// warning every unexpected name gets, naming the entry; the region file
+    /// beside it is converted. A directory of region files alone raises no
+    /// warning.
+    #[test]
+    fn a_transcripts_entry_without_the_json_extension_is_skipped_with_a_warning() {
+        let tmp = Scratch::new();
+        let src = tmp.path().join("transcripts");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("21_1-1000000.json"), b"[]").unwrap();
+        fs::write(src.join("notes.txt"), b"notes").unwrap();
+        let out = tmp.path().join("out");
+        let (converted, warnings) =
+            warnings_during(|| convert_data_files(&src, &out, "transcripts"));
+        assert_eq!(converted.unwrap(), (1, 0));
+        assert_eq!(entries(&out), ["21"]);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            warnings[0].contains("Skipping file with unexpected name: notes.txt"),
+            "{warnings:?}"
+        );
+
+        fs::remove_file(src.join("notes.txt")).unwrap();
+        fs::write(src.join("LRG_485_1-1000000.json"), b"[]").unwrap();
+        let (converted, warnings) =
+            warnings_during(|| convert_data_files(&src, &tmp.path().join("flat"), "transcripts"));
+        assert_eq!(converted.unwrap(), (2, 0));
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    /// A transcripts entry whose stem is not UTF-8 is skipped with the warning
+    /// every unexpected name gets, its name spelled lossily; the region file
+    /// beside it is converted. A Linux file system stores the name's bytes as
+    /// they are; other platforms refuse such a name.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_transcripts_entry_whose_stem_is_not_utf8_is_skipped_with_a_warning() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        let tmp = Scratch::new();
+        let src = tmp.path().join("transcripts");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("21_1-1000000.json"), b"[]").unwrap();
+        fs::write(src.join(OsStr::from_bytes(b"21\xff_1-1000000.json")), b"[]").unwrap();
+        let out = tmp.path().join("out");
+        let (converted, warnings) =
+            warnings_during(|| convert_data_files(&src, &out, "transcripts"));
+        assert_eq!(converted.unwrap(), (1, 0));
+        assert_eq!(entries(&out), ["21"]);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            warnings[0].contains("Skipping file with unexpected name: 21\u{fffd}_1-1000000.json"),
+            "{warnings:?}"
+        );
+    }
+
+    /// A regulatory chromosome directory whose name starts with a dot is
+    /// skipped with the warning every unexpected name gets: the annotator
+    /// passes over such a directory, so copying it would write a chromosome
+    /// never read. The directory beside it is copied.
+    #[test]
+    fn a_dot_named_regulatory_directory_is_skipped_with_a_warning() {
+        let tmp = Scratch::new();
+        let regulatory = tmp.path().join("regulatory");
+        for chr in [".hidden", "21"] {
+            let dir = regulatory.join(chr);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(dir.join("1-1000000.json"), b"[]").unwrap();
+        }
+        let out = tmp.path().join("out");
+        let (written, warnings) = warnings_during(|| copy_regulatory_files(&regulatory, &out));
+        assert_eq!(written.unwrap(), 1);
+        assert_eq!(entries(&out), ["21"]);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(
+            warnings[0].contains("Skipping directory with unexpected name: regulatory/.hidden"),
+            "{warnings:?}"
+        );
+    }
+
     #[test]
     fn flat_variation_names_split_into_chromosome_and_file() {
         assert_eq!(
@@ -930,6 +1194,39 @@ mod tests {
         names
     }
 
+    /// Runs `work` under a subscriber that keeps its warnings, returning the
+    /// result with the warning lines in the order they were emitted.
+    fn warnings_during<T>(work: impl FnOnce() -> T) -> (T, Vec<String>) {
+        use std::sync::{Arc, Mutex};
+
+        #[derive(Clone, Default)]
+        struct Kept(Arc<Mutex<Vec<u8>>>);
+
+        impl std::io::Write for Kept {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let kept = Kept::default();
+        let writer = kept.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::WARN)
+            .with_ansi(false)
+            .without_time()
+            .with_target(false)
+            .with_writer(move || writer.clone())
+            .finish();
+        let result = tracing::subscriber::with_default(subscriber, work);
+        let text = String::from_utf8(kept.0.lock().unwrap().clone()).unwrap();
+        (result, text.lines().map(str::to_owned).collect())
+    }
+
     #[test]
     fn variation_files_pass_through_and_json_shards_are_refused() {
         let tmp = Scratch::new();
@@ -974,6 +1271,12 @@ mod tests {
         let src = tmp.path().join("src");
         fs::create_dir_all(src.join("transcripts")).unwrap();
         fs::create_dir_all(src.join("variations")).unwrap();
+        fs::create_dir_all(src.join("regulatory/21")).unwrap();
+        fs::write(
+            src.join("regulatory/21/1-1000000.json"),
+            br#"[{"stable_id":"ENSR_FIXTURE","start":10,"end":20,"strand":0,"feature_type":"RegulatoryFeature","biotype":"enhancer"}]"#,
+        )
+        .unwrap();
         fs::write(
             src.join("info.json"),
             r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":116}"#,
@@ -985,12 +1288,16 @@ mod tests {
         fs::write(src.join("variations/21_all_vars.gz.csi"), b"csi").unwrap();
         let out = tmp.path().join("out");
         convert_cache(&src, out.to_str().unwrap(), 1_000_000).unwrap();
+        let metadata: serde_json::Value =
+            serde_json::from_slice(&fs::read(out.join("info.json")).unwrap()).unwrap();
+        assert_eq!(metadata["regulatory"], true);
 
         let manifest = CacheManifest::load(&out).unwrap();
         assert!(manifest.is_present());
         let listed = [
             "chr_synonyms.txt",
             "info.json",
+            "regulatory/21/1-1000000.json",
             "transcripts/21/1-1000000.json",
             "variations/21/all_vars.gz",
             "variations/21/all_vars.gz.csi",
@@ -1040,7 +1347,7 @@ mod tests {
         fs::write(src.join("chr_synonyms.txt"), "21\tNC_000021.9\n").unwrap();
         let dst = tmp.path().join("dst");
         fs::create_dir_all(&dst).unwrap();
-        copy_info_json(&src, &dst).unwrap();
+        copy_info_json(&src, &dst, false).unwrap();
         assert_eq!(fs::read_to_string(dst.join("info.json")).unwrap(), good);
         assert_eq!(
             fs::read_to_string(dst.join("chr_synonyms.txt")).unwrap(),
@@ -1067,6 +1374,99 @@ mod tests {
                 "{text}: {error} should name {reason}"
             );
         }
+    }
+
+    #[test]
+    fn regulatory_shards_preserve_raw_matrices_and_empty_arrays() {
+        use std::io::Write;
+        let tmp = Scratch::new();
+        let src = tmp.path().join("src");
+        fs::create_dir_all(src.join("LRG_485")).unwrap();
+        let raw = br#"[{
+          "stable_id":"ENSM00000587149","start":45009809,"end":45009823,"strand":-1,
+          "feature_type":"MotifFeature","binding_matrix":{
+            "stable_id":"ENSPFM0363","name":"MAFF_fixture","transcription_factors":["MAFK"],
+            "frequencies":{"1":{"A":137,"C":73,"G":62,"T":250}}}}]"#;
+        fs::write(src.join("LRG_485/1-1000000.json"), raw).unwrap();
+        fs::write(src.join("LRG_485/1000001-2000000.json"), b"[]\n").unwrap();
+        fs::write(src.join("LRG_485/not-a-region.json"), b"{}").unwrap();
+        // A gzip-compressed shard is copied as it is, once its inflated content parses.
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(raw).unwrap();
+        let compressed = encoder.finish().unwrap();
+        fs::write(src.join("LRG_485/2000001-3000000.json.gz"), &compressed).unwrap();
+        let dst = tmp.path().join("dst");
+        assert_eq!(copy_regulatory_files(&src, &dst).unwrap(), 3);
+        assert_eq!(fs::read(dst.join("LRG_485/1-1000000.json")).unwrap(), raw);
+        assert_eq!(
+            fs::read(dst.join("LRG_485/1000001-2000000.json")).unwrap(),
+            b"[]\n"
+        );
+        assert_eq!(
+            fs::read(dst.join("LRG_485/2000001-3000000.json.gz")).unwrap(),
+            compressed
+        );
+        assert!(!dst.join("LRG_485/not-a-region.json").exists());
+        assert_eq!(
+            regulatory_shard_range("1-1000000.json"),
+            Some((1, 1_000_000))
+        );
+        assert_eq!(
+            regulatory_shard_range("1000001-2000000.json.gz"),
+            Some((1_000_001, 2_000_000))
+        );
+        assert_eq!(regulatory_shard_range("1-1000000.json.bak"), None);
+        assert_eq!(regulatory_shard_range("not-a-region.json"), None);
+    }
+
+    /// The converter refuses what the annotator refuses: a shard that is not an
+    /// array, a transcript-typed element and a motif without a binding matrix.
+    #[test]
+    fn regulatory_shards_are_parsed_as_the_annotator_parses_them() {
+        for (shard, phrase) in [
+            (&b"{}"[..], "expected a sequence"),
+            (
+                br#"[{"stable_id":"T1","start":1,"end":2,"strand":1,"feature_type":"Transcript"}]"#,
+                "unknown variant `Transcript`",
+            ),
+            (
+                br#"[{"stable_id":"ENSM_X","start":1,"end":2,"strand":1,"feature_type":"MotifFeature"}]"#,
+                "motif feature ENSM_X has no binding matrix",
+            ),
+        ] {
+            let tmp = Scratch::new();
+            let src = tmp.path().join("src");
+            fs::create_dir_all(src.join("21")).unwrap();
+            fs::write(src.join("21/1-1000000.json"), shard).unwrap();
+            let error = copy_regulatory_files(&src, &tmp.path().join("dst")).unwrap_err();
+            let text = format!("{error:#}");
+            assert!(text.contains("is not a regulatory shard"), "{text}");
+            assert!(text.contains(phrase), "{text}");
+        }
+    }
+
+    #[test]
+    fn regulatory_marker_requires_written_shards_and_failures_leave_no_info() {
+        let tmp = Scratch::new();
+        let src = tmp.path().join("src");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(
+            src.join("info.json"),
+            r#"{"species":"homo_sapiens","assembly":"GRCh38","regulatory":true}"#,
+        )
+        .unwrap();
+        let dst = tmp.path().join("dst");
+        convert_cache(&src, dst.to_str().unwrap(), 1_000_000).unwrap();
+        let metadata: serde_json::Value =
+            serde_json::from_slice(&fs::read(dst.join("info.json")).unwrap()).unwrap();
+        assert!(metadata.get("regulatory").is_none());
+
+        fs::create_dir_all(src.join("regulatory/21")).unwrap();
+        fs::write(src.join("regulatory/21/1-1000000.json"), b"{}").unwrap();
+        fs::write(dst.join("info.json"), br#"{"regulatory":true}"#).unwrap();
+        let error = convert_cache(&src, dst.to_str().unwrap(), 1_000_000).unwrap_err();
+        assert!(error.to_string().contains("is not a regulatory shard"));
+        assert!(!dst.join("info.json").exists());
     }
 
     /// A plugin data file whose second data line is one byte over the cap

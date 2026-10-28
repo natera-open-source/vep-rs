@@ -1631,21 +1631,21 @@ fn svlen_nan_deletion_exclusion_is_documented() {
     );
 }
 
-/// `spdi`, `regulatory`: on a regulatory-only record's intergenic row under
+/// `spdi`, `regulatory`: on a regulatory-only record's rows under
 /// `--regulatory`, Ensembl VEP's SPDI names the chromosome as the cache does,
 /// since AnnotationType/RegFeat.pm:126 `$vf->{slice} ||= $slice;` hands the
 /// variation feature the regulatory feature's slice before InputBuffer.pm:518
 /// builds one from the FASTA, where vep-rs (`reference_name` in
-/// `vep-effects/src/spdi.rs`) has no regulatory slice and names an intergenic
-/// row's chromosome as the FASTA does.
+/// `vep-effects/src/spdi.rs`) has no regulatory slice and names the
+/// chromosome as the FASTA does.
 #[test]
 fn regulatory_spdi_chromosome_name_exclusion_is_documented() {
     assert_page_states(
         "divergences/regulatory-rows.md",
         &[
-            "When the FASTA names a chromosome unlike the cache, such a record's intergenic row \
-             under `--spdi` names it as the cache does in Ensembl VEP and as the FASTA does here, \
-             `21:30234968:A:G` against `chr21:30234968:A:G`",
+            "When the FASTA names a chromosome unlike the cache, a regulatory-only record's rows \
+             under `--spdi` name it as the cache does in Ensembl VEP and as the FASTA does here, \
+             `21:30234967:A:G` against `chr21:30234967:A:G`",
             "The regulatory feature hands the variant its slice there (`AnnotationType/RegFeat.pm` \
              line 126), a slice vep-rs never has",
         ],

@@ -220,6 +220,9 @@ impl BuiltinPlugin for DbNsfpPlugin {
             }
 
             for tc_idx in 0..variant.transcript_consequences.len() {
+                if !crate::traits::annotates_row(&variant.transcript_consequences[tc_idx]) {
+                    continue;
+                }
                 let transcript_id = variant.transcript_consequences[tc_idx]
                     .transcript_id
                     .clone();
@@ -388,5 +391,62 @@ mod tests {
         reverse.strand = vep_core::coordinate::Strand::Reverse;
         assert!(plugin.allele_matches(&row("A", "G"), &reverse));
         assert!(!plugin.allele_matches(&row("T", "C"), &reverse));
+    }
+
+    /// dbNSFP.pm declares `feature_types` of `['Transcript']`, so a record's
+    /// fields land on its transcript rows and on no regulatory or motif row,
+    /// although a row whose id matches no `Ensembl_transcriptid` entry would
+    /// otherwise take the record's whole value.
+    #[test]
+    fn writes_on_transcript_rows_alone() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+        use vep_core::consequence::FeatureType;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_tabix_fixture(
+            dir.path(),
+            "dbnsfp.gz",
+            &[
+                "#chr\tpos\tref\talt\tSIFT_score\tEnsembl_transcriptid",
+                "21\t100\tA\tG\t0.01;0.02\tENST1;ENST2",
+            ],
+            IndexSpec::standard(),
+        );
+
+        let mut plugin = DbNsfpPlugin::new();
+        plugin
+            .init(&[path.to_string_lossy().to_string(), "SIFT_score".to_string()])
+            .unwrap();
+
+        let mut variants = vec![InputVariant::new(
+            "21".into(),
+            100,
+            100,
+            b"A".to_vec(),
+            b"G".to_vec(),
+        )];
+        for (feature_type, id) in [
+            (FeatureType::Transcript, "ENST2"),
+            (FeatureType::RegulatoryFeature, "ENSR1"),
+            (FeatureType::MotifFeature, "ENSM1"),
+        ] {
+            variants[0]
+                .transcript_consequences
+                .push(TranscriptConsequence {
+                    feature_type,
+                    transcript_id: id.into(),
+                    ..TranscriptConsequence::default()
+                });
+        }
+
+        plugin.run_batch(&mut variants).unwrap();
+
+        let scores: Vec<Option<&str>> = variants[0]
+            .transcript_consequences
+            .iter()
+            .map(|tc| tc.plugin_data.get("dbNSFP_SIFT_score").map(String::as_str))
+            .collect();
+        assert_eq!(scores, [Some("0.02"), None, None]);
+        assert!(variants[0].plugin_data.is_empty());
     }
 }

@@ -209,3 +209,94 @@ fn echo_plugin_under_dir_plugins_annotates_every_transcript_row() {
         );
     }
 }
+
+/// A plugin runs on the rows whose feature type it declares, `Transcript` alone
+/// without a `vep_plugin_feature_types` symbol or list, as Ensembl VEP runs a
+/// plugin only on the feature classes its `feature_types` names
+/// (`OutputFactory.pm:2223`, `BaseVepPlugin.pm` `_check_types`); and a plugin
+/// that declares regulatory or motif features switches regulatory annotation
+/// on for the run without `--regulatory` (`Runner.pm:998-1002`).
+#[test]
+fn plugins_run_on_the_rows_their_feature_types_declare() {
+    let Some(dir) = echo_plugin_dir() else {
+        return;
+    };
+    let tmp = tempfile::tempdir().unwrap();
+    let cache = common::regulatory_cache(tmp.path());
+    let input = tmp.path().join("in.vcf");
+    std::fs::write(
+        &input,
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t106\tinside\tC\tG\t.\t.\t.\n",
+    )
+    .unwrap();
+    let run = |plugin: &str, regulatory: bool| -> Vec<(String, String, String)> {
+        let out = tmp
+            .path()
+            .join(format!("out-{}-{regulatory}.txt", plugin.len()));
+        let mut command = common::isolated_vep(tmp.path());
+        command
+            .arg("-i")
+            .arg(&input)
+            .arg("-o")
+            .arg(&out)
+            .args(["--json_cache", cache.to_str().unwrap()])
+            .args(["--assembly", "GRCh38", "--no_fasta", "--no_stats"])
+            .args(["--force_overwrite", "--plugin", plugin])
+            .args(["--dir_plugins", dir.to_str().unwrap()]);
+        if regulatory {
+            command.arg("--regulatory");
+        }
+        let output = command.output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{stderr}");
+        assert!(!stderr.contains("Failed to"), "{stderr}");
+        data_lines(&out)
+            .iter()
+            .map(|line| {
+                let cols: Vec<&str> = line.split('\t').collect();
+                let echo = cols[13]
+                    .split(';')
+                    .find_map(|f| f.strip_prefix("ECHO_FEATURE="))
+                    .unwrap_or("-")
+                    .to_string();
+                (cols[4].to_string(), cols[5].to_string(), echo)
+            })
+            .collect()
+    };
+    let rows = |echo_regulatory: &str, echo_motif: &str| {
+        vec![
+            (
+                "ENSR_FIXTURE".to_string(),
+                "RegulatoryFeature".to_string(),
+                echo_regulatory.to_string(),
+            ),
+            (
+                "ENSM_FORWARD".to_string(),
+                "MotifFeature".to_string(),
+                echo_motif.to_string(),
+            ),
+            ("-".to_string(), "-".to_string(), "-".to_string()),
+        ]
+    };
+    // No declaration: transcript rows alone, and the record has none.
+    assert_eq!(run("echo_plugin", true), rows("-", "-"));
+    // `Feature` is every feature class.
+    assert_eq!(
+        run("echo_plugin,feature_types=Feature", true),
+        rows("ENSR_FIXTURE", "ENSM_FORWARD")
+    );
+    // One class, declared without --regulatory, switches the annotation on.
+    assert_eq!(
+        run("echo_plugin,feature_types=MotifFeature", false),
+        rows("-", "ENSM_FORWARD")
+    );
+    // Without a plugin that names them and without the flag, no regulatory row:
+    // `Feature` covers the classes but names neither word (Runner.pm:998).
+    for plugin in ["echo_plugin", "echo_plugin,feature_types=Feature"] {
+        assert_eq!(
+            run(plugin, false),
+            vec![("-".to_string(), "-".to_string(), "-".to_string())],
+            "{plugin}"
+        );
+    }
+}

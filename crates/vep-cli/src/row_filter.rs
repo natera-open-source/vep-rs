@@ -86,10 +86,13 @@ pub fn apply_to_record(record: &mut [InputVariant], filters: RowFilters) {
             .any(|(v, has_alternate)| writes_a_row(v, *has_alternate, filters, true));
     for (variant, has_alternate) in record.iter_mut().zip(feature_has_alternate) {
         variant.split_first_feature_rowless = first_feature_rowless;
-        if filters.no_intergenic && variant.transcript_consequences.is_empty() {
+        if filters.no_intergenic && !overlaps_a_transcript(variant) {
+            variant.transcript_consequences.clear();
+            variant.intergenic_overlap = false;
             variant.most_severe_consequence = None;
         }
         if filters.coding_only {
+            variant.intergenic_overlap = false;
             if variant.reference_allele_row && !has_alternate {
                 variant.transcript_consequences.clear();
             }
@@ -120,6 +123,9 @@ fn writes_a_row(
     if variant.no_allele {
         return false;
     }
+    if filters.no_intergenic && !overlaps_a_transcript(variant) {
+        return false;
+    }
     if variant.transcript_consequences.is_empty() {
         return !filters.no_intergenic
             && !filters.coding_only
@@ -138,8 +144,24 @@ fn writes_a_row(
         .any(|tc| affects_cds(start, end, tc, own_span))
 }
 
-/// Sets the allele's `most_severe_consequence` from the transcript rows it has
-/// left: the most severe of their terms, or `None` for an allele with no row,
+/// Whether the allele has a row against a transcript, which is what decides
+/// Ensembl VEP's intergenic variation (VariationFeature.pm:826-839) and so
+/// `--no_intergenic`. An allele with regulatory and motif rows alone overlaps
+/// none whether or not it carries the intergenic row
+/// ([`InputVariant::intergenic_overlap`]): of a `--minimal` split record, a
+/// later feature's reference row keeps those rows and loses the intergenic one
+/// (`crate::runner::apply_record_rules`).
+fn overlaps_a_transcript(variant: &InputVariant) -> bool {
+    variant
+        .transcript_consequences
+        .iter()
+        .any(|tc| tc.feature_type == FeatureType::Transcript)
+}
+
+/// Sets the allele's `most_severe_consequence` from the rows it has left: the
+/// most severe of their terms, `intergenic_variant` among them for the
+/// intergenic row of an allele that overlaps no transcript
+/// ([`InputVariant::intergenic_overlap`]), or `None` for an allele with no row,
 /// which no writer then prints.
 pub(crate) fn settle_verdict(variant: &mut InputVariant) {
     variant.most_severe_consequence = Consequence::most_severe(
@@ -147,6 +169,11 @@ pub(crate) fn settle_verdict(variant: &mut InputVariant) {
             .transcript_consequences
             .iter()
             .flat_map(|tc| tc.consequences.iter().copied())
+            .chain(
+                variant
+                    .intergenic_overlap
+                    .then_some(Consequence::IntergenicVariant),
+            )
             .collect::<Vec<_>>(),
     );
 }
@@ -683,6 +710,95 @@ mod tests {
         assert_eq!(
             sorted(&record),
             [(0, "ENST1".to_string()), (1, "ENST1".to_string())]
+        );
+        assert!(record.iter().all(|v| !v.split_first_feature_rowless));
+    }
+
+    /// `--no_intergenic` judges an allele by its transcript rows alone: Ensembl
+    /// VEP's intergenic variation exists where the transcript variations are
+    /// none (VariationFeature.pm:826-839), whatever regulatory and motif
+    /// variations the feature carries, and `:482` then drops every row. Of a
+    /// `--minimal` split record under `--process_ref_homs --regulatory`, the
+    /// record rules leave a later feature's reference row with regulatory rows
+    /// alone and no intergenic row (`crate::runner::apply_record_rules`); it
+    /// loses its regulatory rows as its alternate sibling does, and the
+    /// transcript rows of another feature stay.
+    #[test]
+    fn no_intergenic_drops_the_regulatory_rows_of_an_allele_without_a_transcript_row() {
+        let regulatory = || {
+            let mut row = tc(
+                "ENSR1",
+                smallvec![Consequence::RegulatoryRegionVariant],
+                None,
+                None,
+            );
+            row.feature_type = FeatureType::RegulatoryFeature;
+            row
+        };
+        let genic = || {
+            vec![tc(
+                "ENST1",
+                smallvec![Consequence::IntronVariant],
+                None,
+                Some(900),
+            )]
+        };
+        // The reference row and the alternate row of one split feature, as
+        // annotation leaves them: with `rows` of a regulatory feature alone,
+        // the intergenic row beside the regulatory row on both.
+        let feature =
+            |alt: &[u8], index: usize, prefix: Option<&str>, rows: Vec<TranscriptConsequence>| {
+                let mut alternate = allele(alt, index, rows);
+                alternate.original_start = Some(2999);
+                alternate.original_end = Some(3001);
+                alternate.rejoin_key_prefix = prefix.map(Into::into);
+                alternate.intergenic_overlap = alternate
+                    .transcript_consequences
+                    .iter()
+                    .any(|r| r.feature_type != FeatureType::Transcript);
+                if !alternate.transcript_consequences.is_empty() {
+                    settle_verdict(&mut alternate);
+                }
+                let mut reference = alternate.clone();
+                reference.reference_allele_row = true;
+                reference.allele_index = 0;
+                [reference, alternate]
+            };
+
+        let mut record = feature(b"A", 0, None, Vec::new()).to_vec();
+        record.extend(feature(b"AA", 1, Some("-/AA_"), vec![regulatory()]));
+        crate::runner::apply_record_rules(&mut record, None);
+        assert!(
+            record[2].reference_allele_row
+                && !record[2].intergenic_overlap
+                && record[2].transcript_consequences.len() == 1
+                && record[3].intergenic_overlap
+        );
+        apply_to_record(&mut record, NO_INTERGENIC);
+        assert_eq!(kept(&record), []);
+        assert!(record.iter().all(|v| v.most_severe_consequence.is_none()));
+        assert!(record.iter().all(|v| v.split_first_feature_rowless));
+
+        let mut record = feature(b"A", 0, None, genic()).to_vec();
+        record.extend(feature(b"AA", 1, Some("-/AA_"), vec![regulatory()]));
+        crate::runner::apply_record_rules(&mut record, None);
+        assert!(record[2].intergenic_overlap && record[3].intergenic_overlap);
+        apply_to_record(&mut record, NO_INTERGENIC);
+        assert_eq!(
+            kept(&record),
+            [(0, "ENST1".to_string()), (0, "ENST1".to_string())]
+        );
+        assert_eq!(
+            record
+                .iter()
+                .map(|v| v.most_severe_consequence)
+                .collect::<Vec<_>>(),
+            [
+                Some(Consequence::IntronVariant),
+                Some(Consequence::IntronVariant),
+                None,
+                None
+            ]
         );
         assert!(record.iter().all(|v| !v.split_first_feature_rowless));
     }

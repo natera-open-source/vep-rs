@@ -152,10 +152,6 @@ const GROUPS: &[Group] = &[
 /// table and a new compatibility flag enters it.
 const COMPATIBILITY_FLAGS: &[(&str, &str)] = &[
     (
-        "regulatory",
-        "Reports overlaps with regulatory regions and transcription factor binding sites",
-    ),
-    (
         "custom",
         "Adds annotation from a tabix-indexed or bigWig file",
     ),
@@ -616,9 +612,9 @@ fn render_landing(command: &Command) -> String {
         "`--everything` therefore reaches `--hgvsc` and `--hgvsp` through `--hgvs`, \
          `--mane_select` and `--mane_plus_clinical` through `--mane`, and `--check_existing` \
          through the frequency flags; it does not switch on `--allele_number` or `--hgvsg`. \
-         `--regulatory` is switched on and annotates nothing: its columns appear in the tab and \
-         VCF headers and stay empty, no `Extra` key is written for them, and no RegulatoryFeature \
-         or MotifFeature row is written.\n\n",
+         `--regulatory` is switched on and emits RegulatoryFeature and MotifFeature rows when \
+         the converted cache carries regulatory data. Motif scores, high-information positions \
+         and cell-type activity are omitted.\n\n",
     );
     out.push_str("### Incompatible flags (`Config.pm:615-632`)\n\n");
     out.push_str(
@@ -755,16 +751,11 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
 
     out.push_str("## Consequence terms never assigned\n\n");
     out.push_str(
-        "Six regulatory-feature terms need a regulatory-feature cache that is not loaded: \
-         `TFBS_ablation`, `TFBS_amplification`, `TF_binding_site_variant`, \
-         `regulatory_region_ablation`, `regulatory_region_amplification` and \
-         `regulatory_region_variant`. `--regulatory`, alone or through `--everything`, is \
-         accepted and warns that regulatory-feature annotation is not implemented.\n\n",
-    );
-    out.push_str(
-        "The root term `sequence_variant` has no predicate, and Ensembl VEP's consequence engine \
-         never assigns it either. The other 34 of Ensembl VEP's 41 Sequence Ontology terms are \
-         assigned.\n\n",
+        "One term is never assigned: the root `sequence_variant` has no predicate, and Ensembl \
+         VEP's consequence engine never assigns it either. The other 40 of Ensembl VEP's 41 \
+         Sequence Ontology terms are assigned; the six regulatory and motif terms need \
+         `--regulatory` (or `--everything`) and a cache converted with its regulatory features \
+         ([Regulatory and motif features](../regulatory.md)).\n\n",
     );
 
     out.push_str("## Input formats\n\n");

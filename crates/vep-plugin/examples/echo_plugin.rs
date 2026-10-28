@@ -1,16 +1,20 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Example C-ABI plugin: echoes the consequence's transcript id, and the first
+//! Example C-ABI plugin: echoes the consequence's feature id, and the first
 //! `--plugin` parameter when one was given, back as Extra-column fields.
 //!
-//! Built as a `cdylib`, so the eight `vep_plugin_*` symbols below are exactly what
+//! Built as a `cdylib`, so the `vep_plugin_*` symbols below are exactly what
 //! `LoadedPlugin::load` looks up, with the signatures in `vep_plugin::abi::ffi`.
-//! Every string handed to the host is a `CString::into_raw`, which
-//! `vep_plugin_free` reclaims with `CString::from_raw`; the name and version
-//! pointers stay valid because their `CString`s live inside the boxed instance.
-//! The consequence JSON is read with a string scan for the one field the plugin
-//! echoes, so the example adds no dependency to the crate.
+//! The optional `vep_plugin_feature_types` names the rows the plugin runs on: a
+//! parameter `feature_types=Transcript;RegulatoryFeature` (semicolon-separated,
+//! since the `--plugin` list splits on commas) sets the list, and without one
+//! the plugin declares `Transcript`, the host's default.
+//! The result `vep_plugin_run` hands to the host is a `CString::into_raw`, which
+//! `vep_plugin_free` reclaims with `CString::from_raw`; the name, version and
+//! feature-type pointers stay valid because their `CString`s live inside the
+//! boxed instance. The consequence JSON is read with a string scan for the one
+//! field the plugin echoes, so the example adds no dependency to the crate.
 
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::ptr;
@@ -18,6 +22,7 @@ use std::ptr;
 struct EchoPlugin {
     name: CString,
     version: CString,
+    feature_types: CString,
     param: Option<String>,
 }
 
@@ -31,6 +36,7 @@ pub extern "C" fn vep_plugin_create() -> *mut c_void {
     let plugin = EchoPlugin {
         name: CString::new("echo").expect("no interior NUL"),
         version: CString::new("0.1.0").expect("no interior NUL"),
+        feature_types: CString::new("Transcript").expect("no interior NUL"),
         param: None,
     };
     Box::into_raw(Box::new(plugin)).cast()
@@ -61,6 +67,13 @@ pub unsafe extern "C" fn vep_plugin_version(instance: *const c_void) -> *const c
 }
 
 /// # Safety
+/// `instance` must be a live pointer returned by [`vep_plugin_create`].
+#[no_mangle]
+pub unsafe extern "C" fn vep_plugin_feature_types(instance: *const c_void) -> *const c_char {
+    (*instance.cast::<EchoPlugin>()).feature_types.as_ptr()
+}
+
+/// # Safety
 /// `instance` must be a live pointer returned by [`vep_plugin_create`], and
 /// `params` must point to `count` valid NUL-terminated strings.
 #[no_mangle]
@@ -69,17 +82,21 @@ pub unsafe extern "C" fn vep_plugin_init(
     params: *const *const c_char,
     count: usize,
 ) -> i32 {
-    if count == 0 {
-        return 0;
-    }
     let plugin = &mut *instance.cast::<EchoPlugin>();
-    match CStr::from_ptr(*params).to_str() {
-        Ok(first) => {
-            plugin.param = Some(first.to_owned());
-            0
+    for i in 0..count {
+        let Ok(param) = CStr::from_ptr(*params.add(i)).to_str() else {
+            return 1;
+        };
+        if let Some(types) = param.strip_prefix("feature_types=") {
+            let Ok(c_types) = CString::new(types.replace(';', ",")) else {
+                return 1;
+            };
+            plugin.feature_types = c_types;
+        } else if plugin.param.is_none() {
+            plugin.param = Some(param.to_owned());
         }
-        Err(_) => 1,
     }
+    0
 }
 
 /// # Safety

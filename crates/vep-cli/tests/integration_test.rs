@@ -345,16 +345,20 @@ fn test_output_file_exists_without_force() {
 }
 
 /// The three regulatory and custom-annotation flags vep-rs declares but refuses
-/// exit 1 with the contract's one line, naming the feature they belong to,
-/// before any input is read.
+/// exit 1 with the contract's one line, naming why (the regulatory features
+/// come from the cache alone; custom annotation is not supported), before any
+/// input is read.
 #[test]
 fn refused_flags_exit_with_their_message() {
     for (flag, feature) in [
         (
             vec!["--regulatory_gff", "reg.gff3.gz"],
-            "regulatory annotation",
+            "regulatory features are read from the cache alone",
         ),
-        (vec!["--extended_promoters"], "regulatory annotation"),
+        (
+            vec!["--extended_promoters"],
+            "regulatory features are read from the cache alone",
+        ),
         (vec!["--custom_suppress_filter"], "custom annotation"),
     ] {
         let result = vep_binary()

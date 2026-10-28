@@ -100,7 +100,7 @@ The two records of the [default format example](vep-and-tab.md#example) as vep-r
 }
 ```
 
-An allele gets an `intergenic_consequences` entry only when it overlaps no transcript, so a record never carries both kinds of entry for the same allele.
+An allele gets an `intergenic_consequences` entry only when it overlaps no transcript, so a record never carries both kinds of entry for the same allele. Under `--regulatory` ([Regulatory and motif features](../regulatory.md)), an allele inside a regulatory feature or a binding motif adds a `regulatory_feature_consequences` or `motif_feature_consequences` entry, and keeps its intergenic entry when it overlaps no transcript.
 
 ### The record object
 
@@ -116,6 +116,8 @@ An allele gets an `intergenic_consequences` entry only when it overlaps no trans
 | `variant_class`           | string  | Under `--variant_class`                                                                          |
 | `transcript_consequences` | array   | One object per (allele, transcript); absent when no allele overlaps a transcript                 |
 | `intergenic_consequences` | array   | One object per allele that overlaps no transcript                                                |
+| `regulatory_feature_consequences` | array | Under `--regulatory`, one object per (allele, regulatory feature); its id key is `regulatory_feature_id`, and `biotype` is the feature's type whatever `--biotype` says |
+| `motif_feature_consequences` | array | Under `--regulatory`, one object per (allele, binding motif); its id key is `motif_feature_id`, with `motif_name`, `motif_pos` and `transcription_factors` (an array, empty when the matrix names none) beside `strand` |
 | `most_severe_consequence` | string  | The most severe term over every entry; `?` for a record that [names no allele](structural-variants.md#records-that-name-no-allele) |
 | `colocated_variants`      | array   | Under `--check_existing`, one object per co-located variant                                      |
 | `vep_rs_version`          | string  | The vep-rs release that wrote the object; on every object, see Field Details                    |

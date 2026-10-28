@@ -79,7 +79,7 @@ An allele whose frequency is 0 in every population gets no entry. The release fi
 
 ## Convert an existing Ensembl VEP cache
 
-`scripts/data/storable_to_json.pl` reads an Ensembl VEP Storable cache directory and writes the same JSON layout for every chromosome directory the cache holds: the assembled chromosomes and the patch, alternate-locus, unplaced-scaffold and `LRG_` directories alike, as Ensembl VEP itself lists them. Beside the transcripts it writes an `info.json` derived from the cache's `info.txt`, with `contig_order` (the converted contigs as autosomes by number, then X, Y and MT, then every other contig by name), and copies the cache's `chr_synonyms.txt`. The script runs inside the `ensemblorg/ensembl-vep` container ([scripts/README.md](../scripts/README.md) gives the invocation), and its output goes straight to `--json_cache`.
+`scripts/data/storable_to_json.pl` reads an Ensembl VEP Storable cache directory and writes the same JSON layout for every chromosome directory the cache holds: the assembled chromosomes and the patch, alternate-locus, unplaced-scaffold and `LRG_` directories alike, as Ensembl VEP itself lists them. It writes the regulatory build as `regulatory/<chr>/<start>-<end>.json` shards ([Regulatory and motif features](regulatory.md#the-cache)), an `info.json` derived from the cache's `info.txt`, and a copy of the cache's `chr_synonyms.txt`. The script runs inside the `ensemblorg/ensembl-vep` container ([scripts/README.md](../scripts/README.md) gives the invocation), and its output goes straight to `--json_cache`.
 
 Every field the cache dumper keeps on a transcript is carried, flattened or dropped under a rule the parity audit names (`scripts/concordance/cache_parity_audit.pl`):
 
@@ -198,4 +198,5 @@ Beyond the table, a record is reached by its name with the prefix `chr` added or
 - `sift` and `polyphen`, markers written only for a tool whose matrices the cache holds; a converted cache keeps a marker only beside the tool's `source_versions` entry ([SIFT and PolyPhen predictions](cache-predictions.md)).
 - `source_versions`: on a native cache the core `meta` table's `assembly`, `gencode` and `genebuild`, or the GTF header's. The dbSNP, ClinVar, COSMIC and gnomAD versions an Ensembl cache's `info.txt` lists come from the variation database, which the builder does not read, so a native cache's headers print none.
 - `variation_cols` and `var_type tabix`, only when the cache holds variation files; `variation_cols` names their columns.
+- `regulatory`, written only when the cache holds the `regulatory/<chr>/` tree.
 - `contig_order`: the cache's chromosome directories as autosomes by number, then X, Y and MT, then every other contig by name.

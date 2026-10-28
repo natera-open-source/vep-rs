@@ -10,6 +10,7 @@
 
 use std::collections::HashMap;
 
+use vep_core::consequence::FeatureType;
 use vep_core::coordinate::Strand;
 use vep_core::spdi::{ga4gh_vrs_from_spdi, spdi_genomic, SiblingSpdi};
 use vep_core::variant::InputVariant;
@@ -101,9 +102,15 @@ pub fn annotate(variant: &mut InputVariant, config: &EffectsConfig) {
 /// 122); one that overlaps none is given a slice built from the reference FASTA
 /// under the FASTA's own name for the input chromosome (InputBuffer.pm 518,
 /// BaseVEP.pm 409-437). Without a FASTA Ensembl VEP has no slice for such a
-/// variant and stops; the cache's name is the one value left to print.
+/// variant and stops; the cache's name is the one value left to print. A
+/// regulatory or motif row is not a transcript, so an allele with such rows
+/// alone takes the FASTA's name as an intergenic one does.
 fn reference_name(variant: &InputVariant, config: &EffectsConfig) -> String {
-    if variant.transcript_consequences.is_empty() {
+    let overlaps_a_transcript = variant
+        .transcript_consequences
+        .iter()
+        .any(|tc| tc.feature_type == FeatureType::Transcript);
+    if !overlaps_a_transcript {
         if let Some(name) = config
             .reference_fasta
             .as_deref()
@@ -184,6 +191,17 @@ mod tests {
         let mut intergenic = variant("21", 50, 50, "A", "C");
         assert_eq!(
             spdi_of(&mut intergenic, &with_fasta).as_deref(),
+            Some("chr21:49:A:C")
+        );
+        let mut regulatory_only = variant("21", 50, 50, "A", "C");
+        regulatory_only
+            .transcript_consequences
+            .push(TranscriptConsequence {
+                feature_type: FeatureType::RegulatoryFeature,
+                ..TranscriptConsequence::default()
+            });
+        assert_eq!(
+            spdi_of(&mut regulatory_only, &with_fasta).as_deref(),
             Some("chr21:49:A:C")
         );
         let mut intergenic = variant("chr21", 50, 50, "A", "C");

@@ -6,7 +6,7 @@ These flags choose which annotation fields appear in the output. `--everything` 
 
 | Flag | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--everything`, `-e` | bool | false | Shorthand for Ensembl VEP's `--everything` set: `--sift` b, `--polyphen` b, `--ccds`, `--hgvs`, `--symbol`, `--numbers`, `--domains`, `--regulatory`, `--canonical`, `--protein`, `--biotype`, `--af`, `--af_1kg`, `--af_gnomade`, `--af_gnomadg`, `--max_af`, `--pubmed`, `--uniprot`, `--mane`, `--tsl`, `--appris`, `--variant_class`, `--gene_phenotype` and `--mirna`, each overriding an explicit value as in Ensembl VEP. Every column of Ensembl VEP's `--everything` except the regulatory columns: `--regulatory` is switched on and annotates nothing, so no RegulatoryFeature or MotifFeature row is written |
+| `--everything`, `-e` | bool | false | Shorthand for Ensembl VEP's `--everything` set: `--sift` b, `--polyphen` b, `--ccds`, `--hgvs`, `--symbol`, `--numbers`, `--domains`, `--regulatory`, `--canonical`, `--protein`, `--biotype`, `--af`, `--af_1kg`, `--af_gnomade`, `--af_gnomadg`, `--max_af`, `--pubmed`, `--uniprot`, `--mane`, `--tsl`, `--appris`, `--variant_class`, `--gene_phenotype` and `--mirna`, each overriding an explicit value as in Ensembl VEP. Includes cache-backed regulatory and motif rows; motif scores and cell-type activity are omitted |
 | `--symbol` | bool | false | Add gene symbol to output |
 | `--biotype` | bool | false | Add transcript biotype to output |
 | `--canonical` | bool | false | Flag canonical transcripts |
@@ -35,11 +35,11 @@ These flags choose which annotation fields appear in the output. `--everything` 
 | `--nearest` | `transcript`, `gene`, `symbol` | none | Add the NEAREST column: the protein-coding transcription start site(s) nearest each variant as a transcript stable id, gene stable id or gene symbol; the site above the variant and the site below are measured to the nearer end of the variant, both are reported when they tie, and every transcript starting at a reported site is listed in stable-id order where Ensembl VEP lists one |
 | `--numbers` | bool | false | Add exon/intron numbers |
 | `--domains` | bool | false | Add the DOMAINS column: on a coding row, the protein features whose residues the variant overlaps, each as label:identifier (Pfam:PF00080, Gene3D:1.10.510.10; a native cache carries the features only when built with `--core-dumps`) |
-| `--regulatory` | bool | false | Accepted for VEP compatibility; regulatory-feature annotation is not implemented and the flag warns |
-| `--regulatory_gff` | String | none | Refused with an error: `--regulatory_gff` is not supported: it would annotate regulatory features and motifs from a GFF3 file in place of the cache, and regulatory annotation is not supported |
-| `--extended_promoters` | bool | false | Refused with an error: `--extended_promoters` is not supported: it would widen the promoters read with `--regulatory_gff` to their extended bounds, and regulatory annotation is not supported |
+| `--regulatory` | bool | false | Annotate overlaps with cached regulatory and motif features; warns when the cache has no regulatory data |
+| `--regulatory_gff` | String | none | Refused with an error: `--regulatory_gff` is not supported: it would annotate regulatory features and motifs from a GFF3 file in place of the cache; regulatory features are read from the cache alone |
+| `--extended_promoters` | bool | false | Refused with an error: `--extended_promoters` is not supported: it would widen the promoters read with `--regulatory_gff` to their extended bounds; regulatory features are read from the cache alone |
 | `--variant_class` | bool | false | Add variant class from SO |
-| `--overlaps` | bool | false | Add the OverlapBP and OverlapPC columns to the tab, VCF and Parquet outputs: the bases of a structural variant inside the transcript and the percentage of the transcript they cover (transcript rows only; regulatory features are not annotated) |
+| `--overlaps` | bool | false | Add the OverlapBP and OverlapPC columns to the tab, VCF and Parquet outputs: the bases of a structural variant inside the transcript and the percentage of the transcript they cover (also reported for cached regulatory and motif features) |
 | `--check_existing` | bool | false | Check for co-located known variants |
 | `--no_check_alleles` | bool | false | Report a known variant as co-located when its start and end equal the input variant's, whatever its alleles; such a variant prints on every allele's row |
 | `--exclude_null_alleles` | bool | false | Never report a known variant whose alleles the cache does not hold (COSMIC and HGMD records, dbSNP records without variation); without the flag such a variant is reported when its start and end equal the input variant's |

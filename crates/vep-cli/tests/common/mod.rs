@@ -203,11 +203,8 @@ impl Corpus {
     }
 }
 
-/// The mask class of a corpus run under `--regulatory` (which `--everything`
-/// switches on): vep-rs annotates no regulatory feature, so the reference's
-/// `RegulatoryFeature` and `MotifFeature` rows are dropped before the
-/// comparison, in every format ([`apply_masks`]), and the notice vep-rs writes
-/// to its warnings file about the exclusion is expected ([`compare_warnings`]).
+/// The mask class of a corpus whose cache holds no regulatory shards: the
+/// reference's `RegulatoryFeature` and `MotifFeature` rows are set aside.
 pub const REGULATORY_FEATURE_ROWS: &str = "regulatory_feature_rows";
 
 /// The mask class of a run whose list-valued columns carry the same items in
@@ -251,11 +248,9 @@ const REGULATORY_JSON_ARRAYS: [&str; 2] = [
     "regulatory_feature_consequences",
     "motif_feature_consequences",
 ];
-/// The phrase of the warnings-file line vep-rs writes when `--regulatory` is on
-/// (`crates/vep-cli/src/config.rs`, the notice `--everything` implies):
-/// [`REGULATORY_FEATURE_ROWS`] requires the line and compares the rest of the
-/// file without it.
-const REGULATORY_NOTICE: &str = "regulatory-feature annotation is not implemented";
+/// The warnings-file phrase vep-rs writes when the cache holds no regulatory
+/// data; [`REGULATORY_FEATURE_ROWS`] requires the line.
+const REGULATORY_NOTICE: &str = "this cache holds no regulatory data";
 
 /// Applies a run's mask classes to the reference entries of one format.
 /// Under [`REGULATORY_FEATURE_ROWS`] the default and tab rows and the VCF CSQ
@@ -954,6 +949,41 @@ fn base_args(run: &Run, out_dir: &Path) -> Vec<String> {
         args.extend(["--fasta".to_string(), fasta.display().to_string()]);
     }
     args
+}
+
+/// A cache under `dir` with no transcript on chromosome 21, the regulatory
+/// fixture shard (`fixtures/regulatory/1-1000000.json`: an enhancer at 100-120
+/// and two motifs inside it) on chromosome 21, and a corrupt regulatory shard
+/// on chromosome 22, which the command line's lazy loader reads only for a
+/// record of that chromosome.
+pub fn regulatory_cache(dir: &Path) -> PathBuf {
+    regulatory_cache_with(dir, include_bytes!("../fixtures/regulatory/1-1000000.json"))
+}
+
+/// [`regulatory_cache`] over the slice of the converted chromosome 21 cache
+/// (`fixtures/regulatory/chr21-slice.json`, described in the fixtures' README):
+/// seven features as the converter wrote them.
+pub fn regulatory_cache_of_real_features(dir: &Path) -> PathBuf {
+    regulatory_cache_with(
+        dir,
+        include_bytes!("../fixtures/regulatory/chr21-slice.json"),
+    )
+}
+
+fn regulatory_cache_with(dir: &Path, shard: &[u8]) -> PathBuf {
+    let cache = dir.join("cache");
+    fs::create_dir_all(cache.join("transcripts/21")).unwrap();
+    fs::create_dir_all(cache.join("regulatory/21")).unwrap();
+    fs::create_dir_all(cache.join("regulatory/22")).unwrap();
+    fs::write(cache.join("transcripts/21/1-1000000.json"), "[]").unwrap();
+    fs::write(cache.join("regulatory/21/1-50000000.json"), shard).unwrap();
+    fs::write(cache.join("regulatory/22/1-1000000.json"), "[").unwrap();
+    fs::write(
+        cache.join("info.json"),
+        r#"{"assembly":"GRCh38","regulatory":true}"#,
+    )
+    .unwrap();
+    cache
 }
 
 /// The binary with no `VEP_*` variable and no `vep.ini` of the machine's own

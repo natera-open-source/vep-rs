@@ -22,6 +22,8 @@ pub mod symbol_names {
     pub const INIT: &[u8] = b"vep_plugin_init\0";
     pub const RUN: &[u8] = b"vep_plugin_run\0";
     pub const FREE: &[u8] = b"vep_plugin_free\0";
+    /// Optional: a plugin without it annotates transcript rows alone.
+    pub const FEATURE_TYPES: &[u8] = b"vep_plugin_feature_types\0";
 }
 
 /// C function signatures that a plugin dylib must export.
@@ -61,6 +63,16 @@ pub mod ffi {
 
     /// Free a string returned by [`PluginRunFn`].
     pub type PluginFreeFn = unsafe extern "C" fn(*mut c_char);
+
+    /// Optional. Returns the feature types the plugin annotates as a
+    /// null-terminated, comma-separated list of `Transcript`,
+    /// `RegulatoryFeature`, `MotifFeature`, `Feature` (the three together) and
+    /// `Intergenic`, the words Ensembl VEP's `feature_types` takes; read once
+    /// after [`PluginInitFn`], so the list may depend on the parameters. The
+    /// returned pointer must remain valid for the lifetime of the instance. A
+    /// plugin that does not export the symbol annotates `Transcript` rows
+    /// alone, Ensembl VEP's default.
+    pub type PluginFeatureTypesFn = unsafe extern "C" fn(*const c_void) -> *const c_char;
 }
 
 #[cfg(test)]
@@ -84,6 +96,7 @@ mod tests {
             symbol_names::INIT,
             symbol_names::RUN,
             symbol_names::FREE,
+            symbol_names::FEATURE_TYPES,
         ] {
             assert_eq!(
                 name.last().copied(),

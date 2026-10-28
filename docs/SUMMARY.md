@@ -37,6 +37,7 @@
   - [Flat-file plugins](plugins/flat-file.md)
   - [SpliceAI](plugins/spliceai.md)
   - [Preparing data files](plugins/data-files.md)
+- [Regulatory and motif features](regulatory.md)
 
 # Concordance with Ensembl VEP
 
@@ -66,7 +67,7 @@
   - [An empty `CSQ` entry in an input VCF's INFO](divergences/empty-csq-entry.md)
   - [`--filter_common` and `--freq_pop 1KG_ALL` read the 1000 Genomes `AF` column](divergences/filter-common-1kg-all.md)
   - [HGVS transcript and protein notation resolved from the cache](divergences/hgvs-transcript-input.md)
-  - [`--regulatory`, and `--everything` through it, write no regulatory rows](divergences/regulatory-rows.md)
+  - [`--regulatory` writes no motif scores](divergences/regulatory-rows.md)
   - [A range in `--chr`](divergences/chr-range.md)
   - [An empty REF column at POS 0](divergences/empty-ref-pos-0.md)
   - [Records `--dont_skip` cannot keep](divergences/dont-skip-cannot-keep.md)
