@@ -7,7 +7,7 @@
 # for (GLIBC_FLOOR) and vep-cache-builder OpenSSL 3; any current Debian release
 # meets both.
 
-FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS duckdb
+FROM debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 AS duckdb
 ARG TARGETARCH
 # A DuckDB bump changes all four: the sha256s are of the two release tarballs
 # and of LICENSE at the release tag.
@@ -31,7 +31,7 @@ RUN case "$TARGETARCH" in \
  && printf '%s  duckdb.tar.gz\n%s  LICENSE\n' "$sha" "$DUCKDB_LICENSE_SHA256" | sha256sum --check --strict - \
  && tar -xzf duckdb.tar.gz duckdb
 
-FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
+FROM debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 ARG VERSION
 LABEL org.opencontainers.image.title="vep-rs" \
       org.opencontainers.image.description="Ensembl Variant Effect Predictor in Rust: vep, vep-cache-builder, vep-cache-converter, bgzip, tabix and the duckdb CLI for Parquet output" \
