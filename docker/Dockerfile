@@ -49,8 +49,10 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 1000 --user-group vep
 # Gate: the store must never activate these two roots, whichever
-# ca-certificates version apt installs.
-RUN ! grep -qE '^(mozilla/emSign_ECC_Root_CA_-_G3|mozilla/Comodo_AAA_Services_root)\.crt$' /etc/ca-certificates.conf
+# ca-certificates version apt installs. test -s first: `!` also inverts
+# grep's exit 2, so the bare negation passes when the file is missing.
+RUN test -s /etc/ca-certificates.conf \
+ && ! grep -qE '^(mozilla/emSign_ECC_Root_CA_-_G3|mozilla/Comodo_AAA_Services_root)\.crt$' /etc/ca-certificates.conf
 COPY --from=duckdb /tmp/duckdb/duckdb /usr/local/bin/duckdb
 COPY --from=duckdb /tmp/duckdb/LICENSE /usr/share/doc/duckdb/LICENSE
 COPY LICENSE NOTICE /usr/share/doc/vep-rs/
