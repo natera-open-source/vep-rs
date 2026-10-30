@@ -7,7 +7,7 @@
 # for (GLIBC_FLOOR) and vep-cache-builder OpenSSL 3; any current Debian release
 # meets both.
 
-FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS duckdb
+FROM debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 AS duckdb
 ARG TARGETARCH
 # A DuckDB bump changes all four: the sha256s are of the two release tarballs
 # and of LICENSE at the release tag.
@@ -31,7 +31,7 @@ RUN case "$TARGETARCH" in \
  && printf '%s  duckdb.tar.gz\n%s  LICENSE\n' "$sha" "$DUCKDB_LICENSE_SHA256" | sha256sum --check --strict - \
  && tar -xzf duckdb.tar.gz duckdb
 
-FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+FROM debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 ARG VERSION
 LABEL org.opencontainers.image.title="vep-rs" \
       org.opencontainers.image.description="Ensembl Variant Effect Predictor in Rust: vep, vep-cache-builder, vep-cache-converter, bgzip, tabix and the duckdb CLI for Parquet output" \
@@ -48,18 +48,11 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates libssl3t64 libstdc++6 tabix zlib1g \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 1000 --user-group vep
-# eMudhra (October 2026): its intermediates were issued from near-zero-entropy
-# keys, so anyone on-path can forge a certificate for any domain, and OpenSSL
-# clients never consult revocation. Distrust the two roots those chains hang
-# from until trixie ships ca-certificates 20250419+deb13u1 (Debian bug #1151413,
-# https://emudhra.we-have-a-problem.com/). Drop this once it lands: #69.
-RUN sed -i \
-      -e 's|^mozilla/emSign_ECC_Root_CA_-_G3.crt|!&|' \
-      -e 's|^mozilla/Comodo_AAA_Services_root.crt|!&|' \
-      /etc/ca-certificates.conf \
- && update-ca-certificates
-# Gate: the store must never (re)activate those roots, workaround or not.
-RUN ! grep -qE '^(mozilla/emSign_ECC_Root_CA_-_G3|mozilla/Comodo_AAA_Services_root)\.crt$' /etc/ca-certificates.conf
+# Gate: the store must never activate these two roots, whichever
+# ca-certificates version apt installs. test -s first: `!` also inverts
+# grep's exit 2, so the bare negation passes when the file is missing.
+RUN test -s /etc/ca-certificates.conf \
+ && ! grep -qE '^(mozilla/emSign_ECC_Root_CA_-_G3|mozilla/Comodo_AAA_Services_root)\.crt$' /etc/ca-certificates.conf
 COPY --from=duckdb /tmp/duckdb/duckdb /usr/local/bin/duckdb
 COPY --from=duckdb /tmp/duckdb/LICENSE /usr/share/doc/duckdb/LICENSE
 COPY LICENSE NOTICE /usr/share/doc/vep-rs/
