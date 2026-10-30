@@ -21,6 +21,9 @@ counted under `*_duplicate_keys`. Values are compared verbatim: `-` and an
 empty string are different values, and no normalisation is applied to any
 column, so a systematic formatting difference surfaces as its own example.
 
+``--keep-only regulatory_feature_rows`` restricts both inputs to RegulatoryFeature and
+MotifFeature rows before sorting, duplicate counting and field comparison.
+
 Report: per field, the compared count, the equal count, the differing count
 and the most frequent (reference value, scored value) pairs.
 """
@@ -67,7 +70,7 @@ def normalize_consequence_set(raw: str) -> str:
     return ",".join(sorted(set(terms)))
 
 
-def iter_rows(path: Path) -> Iterator[str]:
+def iter_rows(path: Path, keep_only: str | None = None) -> Iterator[str]:
     """Yield one tab-joined line per output row: the 5 key columns, then the 9 value columns.
 
     Rows with fewer than 7 columns are skipped as the key comparator skips them;
@@ -80,6 +83,8 @@ def iter_rows(path: Path) -> Iterator[str]:
                 continue
             fields = line.rstrip("\n").split("\t")
             if len(fields) < 7:
+                continue
+            if keep_only == "regulatory_feature_rows" and fields[5].strip() not in {"RegulatoryFeature", "MotifFeature"}:
                 continue
             while len(fields) < 14:
                 fields.append("")
@@ -266,16 +271,18 @@ def merge(perl_sorted: Path, rust_sorted: Path, examples: int) -> dict:
     }
 
 
-def compare(perl: Path, rust: Path, examples: int, tmp_dir: Path | None) -> dict:
+def compare(perl: Path, rust: Path, examples: int, tmp_dir: Path | None, keep_only: str | None = None) -> dict:
     with tempfile.TemporaryDirectory(prefix="vep_fields_", dir=tmp_dir) as tmp:
         ps = Path(tmp) / "reference.sorted"
         rs = Path(tmp) / "scored.sorted"
-        sort_to_file(iter_rows(perl), ps)
-        sort_to_file(iter_rows(rust), rs)
+        sort_to_file(iter_rows(perl, keep_only), ps)
+        sort_to_file(iter_rows(rust, keep_only), rs)
         report = merge(ps, rs, examples)
     report["inputs"] = {"reference": str(perl), "scored": str(rust)}
     report["key"] = ["Location", "Allele", "Feature", "Feature_type", "consequence_set"]
     report["comparison"] = "verbatim per field on tuples both sides emit under the same key"
+    if keep_only is not None:
+        report["keep_only"] = keep_only
     return report
 
 
@@ -286,12 +293,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", required=True, type=Path, help="JSON report path")
     ap.add_argument("--examples", type=int, default=20, help="mismatch shapes kept per field")
     ap.add_argument("--tmp-dir", type=Path, default=None, help="directory for the sorted intermediates")
+    ap.add_argument(
+        "--keep-only", choices=("regulatory_feature_rows",),
+        help="compare only RegulatoryFeature and MotifFeature rows on both sides",
+    )
     args = ap.parse_args(argv)
     for p in (args.perl, args.rust):
         if not p.is_file():
             print(f"ERROR: [compare_vep_fields] not a file: {p}", file=sys.stderr)
             return 2
-    report = compare(args.perl, args.rust, args.examples, args.tmp_dir)
+    report = compare(args.perl, args.rust, args.examples, args.tmp_dir, args.keep_only)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     t = report["totals"]

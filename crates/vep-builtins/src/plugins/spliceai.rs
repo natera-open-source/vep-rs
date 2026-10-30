@@ -356,6 +356,9 @@ impl BuiltinPlugin for SpliceAiPlugin {
             }
 
             for tc_idx in 0..variant.transcript_consequences.len() {
+                if !crate::traits::annotates_row(&variant.transcript_consequences[tc_idx]) {
+                    continue;
+                }
                 let gene_symbol = variant.transcript_consequences[tc_idx]
                     .gene_symbol
                     .as_deref();
@@ -571,5 +574,73 @@ mod tests {
 
         let del = InputVariant::new("1".into(), 100, 102, b"ACG".to_vec(), b"-".to_vec());
         assert!(plugin.store_for(&del).is_none());
+    }
+
+    /// SpliceAI.pm declares `feature_types` of `['Transcript']`, so a record's
+    /// scores land on its transcript rows and on no regulatory or motif row,
+    /// although a row without a gene symbol would otherwise take the record's
+    /// first entry.
+    #[test]
+    fn writes_on_transcript_rows_alone() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+        use vep_core::consequence::FeatureType;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_tabix_fixture(
+            dir.path(),
+            "spliceai_snv.vcf.gz",
+            &[
+                "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO",
+                "21\t100\t.\tA\tG\t.\t.\tSpliceAI=G|SOD1|0.10|0.20|0.30|0.40|1|2|3|4",
+            ],
+            IndexSpec::standard(),
+        );
+
+        let mut plugin = SpliceAiPlugin::new();
+        plugin
+            .init(&[format!("snv={}", path.to_string_lossy())])
+            .unwrap();
+
+        let mut variants = vec![InputVariant::new(
+            "21".into(),
+            100,
+            100,
+            b"A".to_vec(),
+            b"G".to_vec(),
+        )];
+        for (feature_type, symbol) in [
+            (FeatureType::Transcript, Some("SOD1")),
+            (FeatureType::RegulatoryFeature, None),
+            (FeatureType::MotifFeature, None),
+        ] {
+            variants[0]
+                .transcript_consequences
+                .push(TranscriptConsequence {
+                    feature_type,
+                    gene_symbol: symbol.map(Into::into),
+                    ..TranscriptConsequence::default()
+                });
+        }
+
+        plugin.run_batch(&mut variants).unwrap();
+
+        let symbols: Vec<Option<&str>> = variants[0]
+            .transcript_consequences
+            .iter()
+            .map(|tc| {
+                tc.plugin_data
+                    .get("SpliceAI_pred_SYMBOL")
+                    .map(String::as_str)
+            })
+            .collect();
+        assert_eq!(symbols, [Some("SOD1"), None, None]);
+        assert_eq!(
+            variants[0].transcript_consequences[0]
+                .plugin_data
+                .get("SpliceAI_pred_DS_DL")
+                .map(String::as_str),
+            Some("0.40")
+        );
+        assert!(variants[0].plugin_data.is_empty());
     }
 }

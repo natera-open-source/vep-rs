@@ -130,8 +130,8 @@ leading `#`.
 
 ## AlphaMissense {#alphamissense}
 
-AlphaMissense adds DeepMind's AlphaMissense pathogenicity prediction to a
-variant.
+AlphaMissense adds DeepMind's AlphaMissense pathogenicity prediction to each
+transcript consequence of a variant.
 
 | Property      | Value                                                       |
 | ------------- | ----------------------------------------------------------- |

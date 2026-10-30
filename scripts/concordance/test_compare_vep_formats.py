@@ -476,6 +476,151 @@ def test_regulatory_feature_rows_mask_drops_the_reference_rows(texts, inputs, tm
     assert report["masks"]["applied"] == {} and report["masks"]["unused"] == ["regulatory_feature_rows"]
 
 
+@pytest.fixture(params=cvf.FORMATS)
+def regulatory_pair(request, tmp_path, monkeypatch):
+    """Mixed records, an unrelated transcript-only record and a motif-only record."""
+    fmt = request.param
+    inputs = [f"1\t{100 + i}\tv{i}\tA\tT\t.\t.\t." for i in range(3)]
+    input_path = tmp_path / "input.vcf"
+    input_path.write_text("\n".join(inputs) + "\n", encoding="utf-8")
+    rows = [
+        (0, "ENSR1", "RegulatoryFeature", "regulatory_region_variant", "-"),
+        (0, "ENSM1", "MotifFeature", "TF_binding_site_variant", "matrix1"),
+        (0, "ENST1", "Transcript", "missense_variant", "-"),
+        (1, "ENST2", "Transcript", "intron_variant", "-"),
+        (2, "ENSM2", "MotifFeature", "TF_binding_site_variant", "matrix1"),
+    ]
+
+    def render(actual):
+        selected = [
+            (i, feature, kind, "stop_gained" if actual and kind == "Transcript" else term, matrix)
+            for i, feature, kind, term, matrix in rows if not (actual and i == 1)
+        ]
+        if fmt in ("default", "tab", "parquet"):
+            columns = ["Location", "Allele", "Feature", "Feature_type", "Consequence", "MOTIF_NAME"]
+            lines = [
+                f"1:{100 + i}\tT\t{feature}\t{kind}\t{term}\t{matrix}"
+                for i, feature, kind, term, matrix in selected
+            ]
+            return "#" + "\t".join(columns) + "\n" + "\n".join(lines) + "\n"
+        if fmt == "vcf":
+            header = (
+                '##INFO=<ID=CSQ,Number=.,Type=String,Description="Format: Allele|Feature|Feature_type|Consequence|MOTIF_NAME">\n'
+                "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+            )
+            lines = []
+            for i, inp in enumerate(inputs):
+                chunks = [
+                    f"T|{feature}|{kind}|{term}|{matrix}"
+                    for record, feature, kind, term, matrix in selected if record == i
+                ]
+                if chunks:
+                    lines.append(inp.rsplit("\t", 1)[0] + "\tCSQ=" + ",".join(chunks))
+            return header + "\n".join(lines) + "\n"
+        objects = []
+        for i, inp in enumerate(inputs):
+            selected_rows = [r for r in selected if r[0] == i]
+            if not selected_rows:
+                continue
+            obj = {
+                "input": inp, "id": f"v{i}",
+                "most_severe_consequence": (
+                    "stop_gained" if actual else "missense_variant"
+                ) if i == 0 else selected_rows[0][3],
+            }
+            for _, feature, kind, term, matrix in selected_rows:
+                kind = cvf.feature_kind(kind)
+                item = {"variant_allele": "T", f"{kind}_id": feature, "consequence_terms": [term]}
+                if matrix != "-":
+                    item["motif_name"] = matrix
+                obj.setdefault(f"{kind}_consequences", []).append(item)
+            objects.append(json.dumps(obj))
+        return "\n".join(objects) + "\n"
+
+    expected = tmp_path / "expected.txt"
+    actual = tmp_path / "actual.txt"
+    expected.write_text(render(False), encoding="utf-8")
+    actual.write_text(render(True), encoding="utf-8")
+    if fmt == "parquet":
+        monkeypatch.setattr(cvf, "parquet_as_tab", lambda path: path.read_text(encoding="utf-8"))
+    return fmt, expected, actual, input_path
+
+
+def test_cli_keep_only_regulatory_rows_in_every_format(regulatory_pair, tmp_path):
+    fmt, expected, actual, inputs = regulatory_pair
+    report_path = tmp_path / "report.json"
+    args = [
+        "--format", fmt, "--expected", str(expected), "--actual", str(actual),
+        "--input", str(inputs), "--report", str(report_path),
+    ]
+    assert cvf.main(args) == 1
+    assert cvf.main(args + ["--keep-only", "regulatory_feature_rows"]) == 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["keep_only"] == "regulatory_feature_rows"
+    assert report["counts"]["compared"] == (5 if fmt in ("vcf", "json") else 3)
+    assert report["counts"]["expected_entries"] == report["counts"]["actual_entries"] == report["counts"]["compared"]
+    assert report["one_sided"] == {"expected_only": 0, "actual_only": 0}
+    assert report["masks"]["requested"] == []
+    # A motif-field disagreement is reported under the selector.
+    original = actual.read_text(encoding="utf-8")
+    actual.write_text(original.replace("matrix1", "matrix2"), encoding="utf-8")
+    assert cvf.main(args + ["--keep-only", "regulatory_feature_rows"]) == 1
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["columns"]["motif_name" if fmt == "json" else "MOTIF_NAME"]["differing"] == 2
+    # One-sided regulatory feature identities must not be masked out.
+    actual.write_text(original.replace("ENSR1", "ENSR2"), encoding="utf-8")
+    assert cvf.main(args + ["--keep-only", "regulatory_feature_rows"]) == 1
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["one_sided"] == {"expected_only": 1, "actual_only": 1}
+
+
+def test_keep_only_json_retains_record_checks_and_drops_unrelated_records():
+    inputs = ["1\t100\tv0\tA\tT\t.\t.\t.", "1\t101\tv1\tA\tT\t.\t.\t."]
+    motif = {"variant_allele": "T", "motif_feature_id": "ENSM1", "consequence_terms": ["TF_binding_site_variant"]}
+    obj = {"input": inputs[0], "id": "v0", "most_severe_consequence": "TF_binding_site_variant", "motif_feature_consequences": [motif]}
+    unrelated = {"input": inputs[1], "id": "v1", "most_severe_consequence": "intergenic_variant"}
+    expected = cvf.only_regulatory_rows(cvf.parse_json(json.dumps(obj) + "\n" + json.dumps(unrelated), inputs))
+    assert [e.key for e in expected] == ["rec0|record", "rec0|T|ENSM1|motif_feature"]
+    wrong_record = {**obj, "id": "wrong", "most_severe_consequence": "stop_gained"}
+    actual = cvf.only_regulatory_rows(cvf.parse_json(json.dumps(wrong_record), inputs))
+    report = cvf.compare_entries(expected, actual, no_documented())
+    assert report["columns"]["id"]["differing"] == 1
+    assert report["columns"]["most_severe_consequence"]["differing"] == 1
+    # A record without regulatory rows is not retained merely to match the other side.
+    actual = cvf.only_regulatory_rows(cvf.parse_json(json.dumps({"input": inputs[0], "id": "v0"}), inputs))
+    assert actual == []
+    assert cvf.compare_entries(expected, actual, no_documented())["one_sided"]["expected_only"] == 2
+
+
+@pytest.mark.parametrize("mode", ["--warnings", "--self-parity"])
+def test_keep_only_rejects_non_comparison_modes(mode, capsys):
+    assert cvf.main([mode, "--keep-only", "regulatory_feature_rows"]) == 2
+    assert "--keep-only is available only in --format comparison mode" in capsys.readouterr().err
+
+
+def test_keep_only_rejects_regulatory_exclusion_mask(tmp_path, capsys):
+    assert cvf.main([
+        "--format", "default", "--expected", str(tmp_path / "unused"), "--actual", str(tmp_path / "unused"),
+        "--keep-only", "regulatory_feature_rows", "--masks", "regulatory_feature_rows",
+    ]) == 2
+    assert "conflicts with --masks regulatory_feature_rows" in capsys.readouterr().err
+
+
+def test_regulatory_mask_accepts_cache_unavailable_warning(tmp_path):
+    expected = tmp_path / "expected_warnings.txt"
+    actual = tmp_path / "actual_warnings.txt"
+    expected.write_text("", encoding="utf-8")
+    actual.write_text(
+        "WARNING: --regulatory: this cache holds no regulatory data; no RegulatoryFeature or MotifFeature row is written\n",
+        encoding="utf-8",
+    )
+    assert cvf.compare_warnings(expected, actual, None, None)["verdict"] == "red"
+    report = cvf.compare_warnings(expected, actual, None, None, {"regulatory_feature_rows"})
+    assert report["verdict"] == "green"
+    assert report["warnings"]["regulatory_notice_missing"] is False
+    assert report["warnings"]["actual_entries"] == 0
+
+
 def test_field_divergence_is_held_to_the_documented_value(texts, manifest):
     documented = dict(manifest)
     documented["field_divergences"] = [{
@@ -1829,3 +1974,26 @@ def test_self_parity_sets_freqs_aside_as_a_record_level_column():
     assert report["verdict"] == "green", report["reasons"]
     assert "FREQS" in report["not_compared"]["default_record_level"]
     assert "FREQS" in report["pairs"]["vcf"]["columns_compared"]
+
+
+def test_keep_only_does_not_hide_unsupported_motif_fields():
+    inp = "1\t100\tv0\tA\tT\t.\t.\t."
+    motif = {
+        "variant_allele": "T", "motif_feature_id": "ENSM1",
+        "consequence_terms": ["TF_binding_site_variant"], "high_inf_pos": "N",
+        "motif_score_change": 0.25,
+    }
+    expected = {"input": inp, "motif_feature_consequences": [motif]}
+    actual = {
+        "input": inp, "motif_feature_consequences": [
+            {key: value for key, value in motif.items() if key not in {"high_inf_pos", "motif_score_change"}}
+        ],
+    }
+    report = cvf.compare_entries(
+        cvf.only_regulatory_rows(cvf.parse_json(json.dumps(expected), [inp])),
+        cvf.only_regulatory_rows(cvf.parse_json(json.dumps(actual), [inp])),
+        no_documented(),
+    )
+    assert report["verdict"] == "red"
+    assert report["columns"]["high_inf_pos"]["differing"] == 1
+    assert report["columns"]["motif_score_change"]["differing"] == 1

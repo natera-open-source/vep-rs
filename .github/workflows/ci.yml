@@ -45,7 +45,7 @@ jobs:
         with:
           toolchain: 1.97.1
           components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       # The Parquet round-trip test skips itself without the DuckDB CLI; the
       # Test job installs it so the skip cannot hide a regression.
       - if: matrix.name == 'Test'
@@ -65,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - run: pip install --quiet pytest
@@ -84,8 +84,8 @@ jobs:
           check scripts/validation/test_compare_sv_concordance.py 248
           check scripts/concordance/test_reference_release.py 17
           check scripts/validation/test_breakend_mate_context.py 24
-          check scripts/concordance/test_compare_vep_formats.py 49
-          check scripts/concordance/test_compare_vep_fields.py 6
+          check scripts/concordance/test_compare_vep_formats.py 64
+          check scripts/concordance/test_compare_vep_fields.py 9
           check scripts/concordance/test_compare_plugin_outputs.py 3
           check scripts/golden/test_golden_scripts.py 140
           check scripts/release/test_render_release_notes.py 137
@@ -222,7 +222,7 @@ jobs:
               *) echo "ERROR: [msrv] toolchain $actual is not the declared rust-version $declared in $manifest; update both the toolchain input and the manifest together" >&2; exit 1 ;;
             esac
           done
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo build --workspace --locked
       - run: cargo build --locked --manifest-path tools/vep-fields-compare/Cargo.toml
 
@@ -236,7 +236,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
           toolchain: 1.97.1
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo build --release --locked --bin vep
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

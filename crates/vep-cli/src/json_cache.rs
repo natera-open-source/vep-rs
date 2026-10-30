@@ -199,7 +199,7 @@ where
 
 /// Deserialize a string straight into the shared `Arc<str>` the `Transcript`
 /// field holds, without an intermediate `String`.
-fn deserialize_arc_str<'de, D>(deserializer: D) -> Result<Arc<str>, D::Error>
+pub(crate) fn deserialize_arc_str<'de, D>(deserializer: D) -> Result<Arc<str>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -222,7 +222,9 @@ where
     deserializer.deserialize_str(ArcStrVisitor)
 }
 
-fn deserialize_optional_arc_str<'de, D>(deserializer: D) -> Result<Option<Arc<str>>, D::Error>
+pub(crate) fn deserialize_optional_arc_str<'de, D>(
+    deserializer: D,
+) -> Result<Option<Arc<str>>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -1049,7 +1051,7 @@ fn cache_serialiser_type(json_cache_dir: &str) -> String {
 }
 
 /// A shard is `<start>-<end>.json`, optionally gzip-compressed as `.json.gz`.
-fn is_shard_path(path: &Path) -> bool {
+pub(crate) fn is_shard_path(path: &Path) -> bool {
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
     name.ends_with(".json") || name.ends_with(".json.gz")
 }
@@ -1072,7 +1074,7 @@ fn shard_start(path: &Path) -> (u64, String) {
 
 /// Read a shard's bytes, checking them against the cache's manifest before a
 /// `.json.gz` shard is inflated.
-fn read_shard(path: &Path, manifest: &CacheManifest) -> anyhow::Result<Vec<u8>> {
+pub(crate) fn read_shard(path: &Path, manifest: &CacheManifest) -> anyhow::Result<Vec<u8>> {
     let raw = std::fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?;
     manifest.verify_bytes(path, &raw).map_err(manifest_error)?;
     if path.extension().is_some_and(|e| e == "gz") {

@@ -3,9 +3,10 @@
 # reads: transcripts/<chr>/<start>-<end>.json for every chromosome directory,
 # the variation files copied as they are into variations/<chr>/ (all_vars.gz with
 # its index, or the <start>-<end>_var.gz region files of a cache dumped without
-# the tabix conversion), info.json from the cache's info.txt, and its
-# chr_synonyms.txt copied beside them. Every field the cache dumper keeps on a
-# transcript is written under its own or a renamed key, flattened (a UTR object
+# the tabix conversion), regulatory/<chr>/<start>-<end>.json from *_reg.gz,
+# info.json from the cache's info.txt, and chr_synonyms.txt copied beside them.
+# Every field the cache dumper keeps on a transcript is written under its own or
+# a renamed key, flattened (a UTR object
 # to its sequence, a protein feature's analysis to its display label) or dropped
 # under a rule the parity audit names (the DROPPED table of
 # scripts/concordance/cache_parity_audit.pl).
@@ -366,8 +367,89 @@ sub extract_transcript {
 
     return \%out;
 }
-
 my $json = JSON->new->utf8->canonical->allow_blessed->convert_blessed;
+
+# RegFeat.pm stores chromosome => feature class => array of blessed hashes.
+# OutputFactory.pm uses feature_type (or its so_name) for regulatory BIOTYPE,
+# and complex display_name, not component gene names, for TRANSCRIPTION_FACTORS.
+sub extract_regulatory_feature {
+    my ($feature, $type) = @_;
+    die "invalid $type object\n" unless (reftype($feature) // '') eq 'HASH';
+    my %out = (feature_type => $type);
+    for my $key (qw(stable_id start end strand)) {
+        die "$type lacks $key\n" unless defined $feature->{$key};
+        $out{$key} = $key eq 'stable_id' ? "$feature->{$key}" : $feature->{$key} + 0;
+    }
+    if ($type eq 'RegulatoryFeature') {
+        my $biotype = $feature->{feature_type};
+        $biotype = $biotype->{so_name} if (reftype($biotype) // '') eq 'HASH';
+        $out{biotype} = "$biotype" if defined $biotype && !ref $biotype;
+    } elsif ($type eq 'MotifFeature') {
+        # Every motif feature carries a binding matrix: the funcgen schema requires
+        # one and the GFF route blesses a stub, so a motif without one is corrupt.
+        my $matrix = $feature->{binding_matrix};
+        die "MotifFeature $out{stable_id} lacks binding_matrix\n" unless defined $matrix;
+        die "invalid binding matrix\n" unless (reftype($matrix) // '') eq 'HASH';
+        die "binding matrix lacks stable_id\n" unless defined $matrix->{stable_id};
+        my %binding_matrix = (stable_id => "$matrix->{stable_id}");
+        $binding_matrix{name} = "$matrix->{name}" if defined $matrix->{name};
+        my $complexes = $matrix->{associated_transcription_factor_complexes} // [];
+        die "invalid transcription factor complexes\n" unless (reftype($complexes) // '') eq 'ARRAY';
+        $binding_matrix{transcription_factors} = [
+            map { "$_->{display_name}" }
+            grep { (reftype($_) // '') eq 'HASH' && defined $_->{display_name} }
+            @$complexes
+        ];
+        # Keep raw position keys and counts; these are not normalized
+        # probabilities. GFF-derived matrices can legitimately lack elements.
+        if (defined $matrix->{elements}) {
+            my $kind = reftype($matrix->{elements}) // '';
+            die "invalid binding matrix elements\n" unless $kind eq 'HASH' || $kind eq 'ARRAY';
+            $binding_matrix{frequencies} = $matrix->{elements};
+        }
+        $out{binding_matrix} = \%binding_matrix;
+    } else {
+        die "unknown regulatory feature type $type\n";
+    }
+    return \%out;
+}
+
+sub convert_regulatory_files {
+    my ($chr_path, $out_chr, $entries) = @_;
+    my @files = sort grep { /^\d+-\d+_reg\.gz$/ } @$entries;
+    return 0 unless @files;
+    make_path($out_chr);
+    for my $file (@files) {
+        my $in = "$chr_path/$file";
+        (my $base = $file) =~ s/_reg\.gz$/.json/;
+        my $out = "$out_chr/$base";
+        eval {
+            open my $fh, '-|', 'gzip', '-dc', $in or die "gzip pipe failed: $!";
+            my $data = fd_retrieve($fh);
+            close($fh) or die "gzip -dc failed (wait status $?)\n";
+            die "invalid regulatory Storable image\n" unless (reftype($data) // '') eq 'HASH';
+            my @features;
+            for my $chr (sort keys %$data) {
+                die "invalid regulatory chromosome entry\n" unless (reftype($data->{$chr}) // '') eq 'HASH';
+                for my $type (reverse sort keys %{$data->{$chr}}) {
+                    my $features = $data->{$chr}{$type};
+                    die "invalid regulatory feature list\n" unless (reftype($features) // '') eq 'ARRAY';
+                    push @features, map { extract_regulatory_feature($_, $type) } @$features;
+                }
+            }
+            open my $ofh, '>', $out or die "write failed: $!";
+            print $ofh $json->encode(\@features) or die "write failed: $!";
+            close($ofh) or die "write failed: $!";
+        };
+        if ($@) {
+            my $error = $@;
+            unlink $out;
+            fail("$in: $error");
+        }
+    }
+    return scalar @files;
+}
+
 
 my $info = read_info_txt("$cache_dir/info.txt");
 fail("$cache_dir uses the sereal serialiser; only a Storable cache converts")
@@ -394,6 +476,7 @@ my $total = 0;
 my $ok = 0;
 my $transcripts_total = 0;
 my $variation_files_total = 0;
+my $regulatory_files_total = 0;
 
 foreach my $chr (@chr_dirs) {
     my $chr_path = "$cache_dir/$chr";
@@ -458,7 +541,9 @@ foreach my $chr (@chr_dirs) {
     $transcripts_total += $chr_tx;
     my $variation_files = copy_variation_files($chr_path, "$output_dir/variations/$chr", \@entries);
     $variation_files_total += $variation_files;
-    print "  chr$chr: " . scalar(@files) . " files, $chr_tx transcripts, $variation_files variation files\n";
+    my $regulatory_files = convert_regulatory_files($chr_path, "$output_dir/regulatory/$chr", \@entries);
+    $regulatory_files_total += $regulatory_files;
+    print "  chr$chr: " . scalar(@files) . " files, $chr_tx transcripts, $variation_files variation files, $regulatory_files regulatory files\n";
 }
 fail("no transcript shards (<start>-<end>.gz) under $cache_dir") unless $total;
 my $failed_shards = $total - $ok;
@@ -485,9 +570,12 @@ $info->{contig_order} = [sort by_contig_order @chr_dirs];
 for my $tool (qw(sift polyphen)) {
     delete $info->{$tool} unless $matrices_written{$tool} && $info->{source_versions}{$tool};
 }
+# An input marker alone must not advertise a tree that was never converted.
+delete $info->{regulatory};
+$info->{regulatory} = JSON::true if $regulatory_files_total;
 write_info_json($info, "$output_dir/info.json");
 
-print "\nDone. Converted: $ok / $total files, $transcripts_total total transcripts, $variation_files_total variation files copied\n";
+print "\nDone. Converted: $ok / $total files, $transcripts_total total transcripts, $variation_files_total variation files copied, $regulatory_files_total regulatory files\n";
 
 # The variation files are read by vep-rs in the dumper's own format
 # (Pipeline/DumpVEP/Dumper/Variation.pm): all_vars.gz with the .csi or .tbi
@@ -516,6 +604,7 @@ sub copy_variation_files {
 # info.txt is translated the way VEP's own reader does (CacheDir.pm
 # read_cache_info_file): every `source_<key>` line becomes a source version,
 # `variation_cols` becomes a list, `-` means unset, `cell_types` is not carried.
+# Regulatory availability is set only after its shards have been written.
 sub read_info_txt {
     my ($info_txt) = @_;
     my %info = (source_versions => {});
@@ -530,7 +619,7 @@ sub read_info_txt {
             } elsif ($key eq 'variation_cols') {
                 $info{$key} = [grep { length } split /,/, $value];
             } elsif ($key eq 'regulatory') {
-                $info{$key} = ($value ne '' && $value ne '0' && $value ne '-') ? JSON::true : JSON::false;
+                next;
             } elsif ($value ne '-') {
                 $info{$key} = $value;
             }

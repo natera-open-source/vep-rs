@@ -6,7 +6,8 @@
 //! The thirteen default columns followed by every active flag field and plugin
 //! field as its own column, or the `--fields` list alone in its own order, `-`
 //! where a value is absent, lists joined by `,`. Rows come out in VEP's order
-//! (transcript-major, allele-minor, intergenic last).
+//! (transcript, regulatory and motif rows, each kind feature-major and
+//! allele-minor, intergenic rows last: [`super::fields::record_rows`]).
 
 use std::io::Write;
 

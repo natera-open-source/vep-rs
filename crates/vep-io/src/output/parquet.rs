@@ -23,9 +23,11 @@
 //!    plugin fields ([`super::fields::tab_columns`]).
 //!
 //! A value the tab format prints as `-` is an empty cell here, which the reader
-//! loads as NULL; `ref`, `alt` and the allele columns of
-//! [`super::fields::dash_is_a_value`] keep a literal `-`, since a dash is a real
-//! allele there (a deletion's ALT, an insertion's REF).
+//! loads as NULL, and so is a value the tab format writes as an empty cell (a
+//! motif row's empty factor list: [`super::fields::empty_value_is_written`]);
+//! `ref`, `alt` and the allele columns of [`super::fields::dash_is_a_value`]
+//! keep a literal `-`, since a dash is a real allele there (a deletion's ALT, an
+//! insertion's REF).
 //!
 //! ## Why a subprocess and not an embedded DuckDB
 //!

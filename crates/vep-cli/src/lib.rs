@@ -50,6 +50,7 @@ pub mod option_rules;
 pub mod output_compress;
 pub mod pick;
 pub(crate) mod pipeline;
+pub mod regulatory;
 pub(crate) mod render;
 pub mod row_filter;
 pub mod runner;

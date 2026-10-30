@@ -7,8 +7,9 @@
 //! `am_class` (likely_pathogenic/likely_benign/ambiguous) and `am_pathogenicity` (0.0-1.0).
 //! Uses allele matching to ensure the correct alt allele is matched.
 //!
-//! This is a variant-level plugin that writes directly to `variant.plugin_data`
-//! via [`crate::BuiltinPlugin::run_batch`], similar to CADD.
+//! The scores are per variant, and Ensembl VEP's plugin declares `Transcript`
+//! features, so they are written on each transcript row of the variant
+//! ([`crate::BuiltinPlugin::run_batch`]) and on no other row.
 
 use indexmap::IndexMap;
 use tracing::debug;
@@ -158,6 +159,7 @@ impl BuiltinPlugin for AlphaMissensePlugin {
         for variant in variants.iter_mut() {
             let records = batch_result.lookup(&variant.chr, variant.start, variant.end);
 
+            let mut values: Vec<(String, String)> = Vec::new();
             for record in records {
                 if !allele_match::matches_allele(record, variant, REF_COL, ALT_COL) {
                     continue;
@@ -165,21 +167,28 @@ impl BuiltinPlugin for AlphaMissensePlugin {
 
                 if let Some(pathogenicity) = record.columns.get(PATHOGENICITY_COL) {
                     if !pathogenicity.is_empty() && pathogenicity != "." {
-                        variant
-                            .plugin_data
-                            .insert("am_pathogenicity".to_string(), pathogenicity.clone());
+                        values.push(("am_pathogenicity".to_string(), pathogenicity.clone()));
                     }
                 }
 
                 if let Some(class) = record.columns.get(CLASS_COL) {
                     if !class.is_empty() && class != "." {
-                        variant
-                            .plugin_data
-                            .insert("am_class".to_string(), class.clone());
+                        values.push(("am_class".to_string(), class.clone()));
                     }
                 }
 
                 break;
+            }
+            if values.is_empty() {
+                continue;
+            }
+            for tc in &mut variant.transcript_consequences {
+                if !crate::traits::annotates_row(tc) {
+                    continue;
+                }
+                for (key, value) in &values {
+                    tc.plugin_data.insert(key.clone(), value.clone());
+                }
             }
         }
 
@@ -292,5 +301,71 @@ mod tests {
         plugin
             .init(&[hg19.to_string_lossy().to_string()])
             .expect("no --assembly must not block loading");
+    }
+
+    /// AlphaMissense.pm declares `feature_types` of `['Transcript']`, so a
+    /// record's score lands on each of its transcript rows and on no
+    /// regulatory or motif row; nothing is written at record level, where it
+    /// would print on every row of the record.
+    #[test]
+    fn writes_on_transcript_rows_alone() {
+        use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+        use vep_core::consequence::FeatureType;
+
+        let dir = tempfile::tempdir().unwrap();
+        let rows = [
+            "#CHROM\tPOS\tREF\tALT\tgenome\tuniprot_id\ttranscript_id\tprotein_variant\tam_pathogenicity\tam_class",
+            "chr21\t9068417\tC\tA\thg38\tQ9NQ38\tENST1\tA1B\t0.9123\tlikely_pathogenic",
+        ];
+        let path = write_tabix_fixture(dir.path(), "am.tsv.gz", &rows, IndexSpec::standard());
+
+        let mut plugin = AlphaMissensePlugin::new();
+        plugin.init(&[path.to_string_lossy().to_string()]).unwrap();
+
+        let mut variants = vec![InputVariant::new(
+            "21".into(),
+            9068417,
+            9068417,
+            b"C".to_vec(),
+            b"A".to_vec(),
+        )];
+        for feature_type in [
+            FeatureType::Transcript,
+            FeatureType::RegulatoryFeature,
+            FeatureType::MotifFeature,
+            FeatureType::Transcript,
+        ] {
+            variants[0]
+                .transcript_consequences
+                .push(TranscriptConsequence {
+                    feature_type,
+                    ..TranscriptConsequence::default()
+                });
+        }
+
+        plugin.run_batch(&mut variants).unwrap();
+
+        let classes: Vec<Option<&str>> = variants[0]
+            .transcript_consequences
+            .iter()
+            .map(|tc| tc.plugin_data.get("am_class").map(String::as_str))
+            .collect();
+        assert_eq!(
+            classes,
+            [
+                Some("likely_pathogenic"),
+                None,
+                None,
+                Some("likely_pathogenic")
+            ]
+        );
+        assert_eq!(
+            variants[0].transcript_consequences[0]
+                .plugin_data
+                .get("am_pathogenicity")
+                .map(String::as_str),
+            Some("0.9123")
+        );
+        assert!(variants[0].plugin_data.is_empty());
     }
 }

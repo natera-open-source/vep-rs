@@ -35,7 +35,7 @@ Five key columns, then exactly the default `--tab` columns in `--tab` order:
 | `pos`, `end`                                  | BIGINT  | the record's VEP start and end            |
 | `ref`, `alt`                                  | VARCHAR | this row's reference and alternate allele |
 | `Uploaded_variation` ... `Existing_variation` | VARCHAR | the 13 default columns                    |
-| `IMPACT`, `FLAGS`, flag and plugin fields     | VARCHAR | `-` is stored as NULL                     |
+| `IMPACT`, `FLAGS`, flag and plugin fields     | VARCHAR | `-` is stored as NULL, as is a value the tab format writes as an empty cell (a motif row's empty `TRANSCRIPTION_FACTORS`) |
 | `DISTANCE`                                    | INTEGER |                                           |
 | `STRAND`                                      | TINYINT |                                           |
 

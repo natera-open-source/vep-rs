@@ -170,11 +170,13 @@ impl JsonOutputFormatter {
                     format!("{}_consequences", feature_type_key(tc))
                 }
                 None => {
-                    all_terms.push(
+                    all_terms.push(if variant.intergenic_overlap {
+                        Consequence::IntergenicVariant
+                    } else {
                         variant
                             .most_severe_consequence
-                            .unwrap_or(Consequence::IntergenicVariant),
-                    );
+                            .unwrap_or(Consequence::IntergenicVariant)
+                    });
                     "intergenic_consequences".to_string()
                 }
             };
@@ -235,7 +237,10 @@ impl JsonOutputFormatter {
         // when `--shift_3prime 1` gave its insertion or deletion a shift length,
         // 0 included (:1991-1998), so those entries carry a `location`.
         let include_location = match tc {
-            Some(_) => self.options.shift_genomic,
+            Some(row) => {
+                self.options.shift_genomic
+                    && row.feature_type == vep_core::consequence::FeatureType::Transcript
+            }
             None => {
                 self.options.shift_3prime
                     && self.options.shift_genomic
@@ -271,6 +276,13 @@ impl JsonOutputFormatter {
         }
         for name in names {
             let value = fields::field_value(name, variant, tc, &self.options, ",");
+            if name == "TRANSCRIPTION_FACTORS"
+                && value.is_empty()
+                && fields::empty_value_is_written(name, variant, tc, &self.options)
+            {
+                obj.insert(json_key(name), Value::Array(Vec::new()));
+                continue;
+            }
             if value.is_empty() || (value == "-" && !fields::dash_is_a_value(name)) {
                 continue;
             }
@@ -330,8 +342,15 @@ impl JsonOutputFormatter {
                 // the one undefined element VEP can produce, the miRNA structure
                 // read one past its end, is `null`, while an empty element of a
                 // split accession list stays an empty string.
-                "FLAGS" | "MANE" | "RefSeq" | "SWISSPROT" | "TREMBL" | "UNIPARC"
-                | "UNIPROT_ISOFORM" | "miRNA" => {
+                "FLAGS"
+                | "MANE"
+                | "RefSeq"
+                | "SWISSPROT"
+                | "TREMBL"
+                | "UNIPARC"
+                | "UNIPROT_ISOFORM"
+                | "miRNA"
+                | "TRANSCRIPTION_FACTORS" => {
                     let empty_element_is_null = name == "miRNA";
                     let elements = value
                         .split(',')

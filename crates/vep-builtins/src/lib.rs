@@ -26,4 +26,4 @@ pub use annotation_store::AnnotationStore;
 pub use binary_store::BinaryAnnotator;
 pub use registry::{BuiltinRegistry, PluginTimings};
 pub use tabix::TabixAnnotator;
-pub use traits::{BuiltinPlugin, PluginError, PrefetchData};
+pub use traits::{annotates_row, BuiltinPlugin, PluginError, PrefetchData};

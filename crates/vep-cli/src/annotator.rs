@@ -38,6 +38,7 @@ pub(crate) const HGVS_NEEDS_FASTA: &str = "Cannot generate HGVS coordinates (--h
 pub struct AnnotationResources {
     pub transcripts: Arc<LazyTranscriptIndexes>,
     pub variation_source: Option<Arc<VariationSource>>,
+    pub regulatory_source: Option<Arc<crate::regulatory::RegulatorySource>>,
     /// The known structural variants of `--check_svs <file>`, `None` without
     /// the flag.
     pub sv_source: Option<Arc<SvSource>>,
@@ -233,11 +234,19 @@ impl Annotator {
     /// here (rather than per batch, and rather than in a `debug_assert!` that
     /// release builds drop) is what makes the invariant hold in production.
     /// `load_transcript_indexes` produces a conforming index via `from_loaded`.
+    ///
+    /// The regulatory source, when the configuration has one, is loaded whole
+    /// here for the same reason: a corrupt regulatory shard fails construction,
+    /// as a corrupt transcript shard does, instead of leaving every variant of
+    /// its chromosome without regulatory rows.
     pub fn new(resources: AnnotationResources, pool: Arc<ThreadPool>) -> anyhow::Result<Self> {
         // Verified at construction; the wrapper is dropped because the batch path
         // needs the `Arc` itself, and the check cannot be invalidated afterwards:
         // materialization only ever moves from empty to filled.
         MaterializedTranscriptIndexes::try_from_lazy(Arc::clone(&resources.transcripts))?;
+        if let Some(source) = &resources.regulatory_source {
+            source.prewarm_all()?;
+        }
         Ok(Self {
             inner: Arc::new(AnnotatorInner { resources, pool }),
         })
@@ -292,6 +301,7 @@ impl Annotator {
         )?;
         let builtin_plugins = Arc::new(builtin);
         let dylib_plugins = Arc::new(dylib);
+        let regulatory = regulatory_enabled(config, &dylib_plugins);
         let transcripts = load_transcript_indexes(
             &cache.dir,
             &effects_config,
@@ -304,6 +314,7 @@ impl Annotator {
             AnnotationResources {
                 transcripts,
                 variation_source,
+                regulatory_source: crate::regulatory::RegulatorySource::open(&cache, regulatory)?,
                 sv_source,
                 colocation: ColocationRules::from_config(config),
                 effects_config,
@@ -384,7 +395,8 @@ impl Annotator {
         let failure = ReadFailure::default();
         // No pre-warm pass: `annotate_batch` calls `transcripts.get` inside the
         // rayon closure and `get` never parses, so the index must already be
-        // materialized; `Annotator::new` enforces that, hence no per-batch check.
+        // materialized; `Annotator::new` enforces that, and loads the regulatory
+        // source whole, hence no per-batch check of either.
         let stats = pool.install(|| annotate_batch(batch, resources, use_parallel, &failure));
         (stats, failure.take_with_component())
     }
@@ -515,6 +527,21 @@ pub fn resolve_assembly(raw: Option<&str>) -> Option<vep_core::assembly::Assembl
 pub(crate) struct LoadedPlugins {
     pub(crate) builtin: BuiltinRegistry,
     pub(crate) dylib: PluginRegistry,
+}
+
+/// Whether the run annotates regulatory features: `--regulatory` (given or
+/// implied by `--everything`), or a loaded plugin that declares regulatory or
+/// motif features, which Ensembl VEP switches the option on for
+/// (`Runner.pm:998-1002`).
+pub(crate) fn regulatory_enabled(config: &Config, dylib: &PluginRegistry) -> bool {
+    if config.regulatory {
+        return true;
+    }
+    if dylib.wants_regulatory_features() {
+        info!("Fetching regulatory features for a plugin that declares them");
+        return true;
+    }
+    false
 }
 
 /// Load the `--plugin` arguments as `get_all_Plugins` does (Runner.pm:901-960):
@@ -797,6 +824,9 @@ pub fn annotate_batch(
             &resources.effects_config,
             transcript_filter,
         );
+        if let Some(source) = &resources.regulatory_source {
+            source.annotate_variant(variant, &resources.effects_config);
+        }
 
         if let Some(source) = &resources.variation_source {
             variation_matcher::annotate_colocated(variant, source, &resources.colocation, failure);
@@ -823,7 +853,11 @@ pub fn annotate_batch(
             .par_iter_mut()
             .map(|variant| {
                 annotate_one(variant);
-                (1u64, variant.transcript_consequences.len() as u64)
+                (
+                    1u64,
+                    variant.transcript_consequences.len() as u64
+                        + u64::from(variant.intergenic_overlap),
+                )
             })
             .reduce(|| (0u64, 0u64), |a, b| (a.0 + b.0, a.1 + b.1));
         AnnotationStats {
@@ -835,7 +869,8 @@ pub fn annotate_batch(
         for variant in batch.iter_mut() {
             annotate_one(variant);
             stats.variants_processed += 1;
-            stats.consequences_calculated += variant.transcript_consequences.len() as u64;
+            stats.consequences_calculated += variant.transcript_consequences.len() as u64
+                + u64::from(variant.intergenic_overlap);
         }
         stats
     };
@@ -883,6 +918,7 @@ mod tests {
         let resources = AnnotationResources {
             transcripts,
             variation_source: None,
+            regulatory_source: None,
             sv_source: None,
             colocation: ColocationRules::default(),
             effects_config: Arc::new(vep_effects::EffectsConfig::default()),
@@ -1239,6 +1275,7 @@ mod tests {
         let resources = AnnotationResources {
             transcripts: Arc::new(LazyTranscriptIndexes::empty()),
             variation_source: Some(Arc::new(source)),
+            regulatory_source: None,
             sv_source: None,
             colocation: ColocationRules::default(),
             effects_config: Arc::new(vep_effects::EffectsConfig::default()),

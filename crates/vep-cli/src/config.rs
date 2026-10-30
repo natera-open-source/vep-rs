@@ -248,13 +248,13 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
     },
     refused(
         "regulatory_gff",
-        "--regulatory_gff is not supported: it would annotate regulatory features and motifs from a GFF3 file in place of the cache, and regulatory annotation is not supported",
+        "--regulatory_gff is not supported: it would annotate regulatory features and motifs from a GFF3 file in place of the cache; regulatory features are read from the cache alone",
         "Config.pm:210; the option set at :434-439 switches on --regulatory",
         "none",
     ),
     refused(
         "extended_promoters",
-        "--extended_promoters is not supported: it would widen the promoters read with --regulatory_gff to their extended bounds, and regulatory annotation is not supported",
+        "--extended_promoters is not supported: it would widen the promoters read with --regulatory_gff to their extended bounds; regulatory features are read from the cache alone",
         "Config.pm:211",
         "none",
     ),
@@ -815,36 +815,6 @@ pub fn canonical_output_format(value: &str) -> String {
     }
 }
 
-/// The user-visible notice for `--regulatory`, which vep-rs accepts for Ensembl VEP
-/// command-line compatibility but does not implement.
-///
-/// No regulatory-feature cache is loaded, so none of the seven regulatory terms of
-/// VEP's vocabulary (`TFBS_ablation`, `TFBS_amplification`, `TF_binding_site_variant`,
-/// `regulatory_region_ablation`, `regulatory_region_amplification`,
-/// `regulatory_region_variant`, `sequence_variant`) is ever emitted; the flag's only
-/// effect is the extra CSQ header fields the VCF writer adds. Returns `None` when the
-/// flag was neither passed nor implied by `--everything`, so a run that never asked
-/// for regulatory annotation is not warned about it.
-pub(crate) fn regulatory_unimplemented_notice(
-    explicit: bool,
-    everything: bool,
-) -> Option<&'static str> {
-    if explicit {
-        Some(
-            "--regulatory has no effect: regulatory-feature annotation is not implemented, \
-             so no TFBS_* or regulatory_region_* consequence is emitted",
-        )
-    } else if everything {
-        Some(
-            "--everything implies --regulatory, which has no effect: regulatory-feature \
-             annotation is not implemented, so no TFBS_* or regulatory_region_* \
-             consequence is emitted",
-        )
-    } else {
-        None
-    }
-}
-
 /// The GENCODE primary set exists for human GRCh38 alone, so `--gencode_primary`
 /// and `--flag_gencode_primary` are each warned about when `--assembly` names
 /// another assembly (Config.pm:722-729), `hg38` read as the GRCh38 it stands
@@ -1012,10 +982,6 @@ impl Config {
             .unwrap_or(vep_core::VEP_VERSION);
 
         let fields = args.fields.as_deref().map(split_list_flag);
-
-        if let Some(notice) = regulatory_unimplemented_notice(args.regulatory, args.everything) {
-            tracing::warn!("{}", notice);
-        }
 
         // `uc($file) eq 'STDIN'` (Parser.pm:235): the literal in any case.
         let input_file = if args.input_file.eq_ignore_ascii_case("STDIN") {
@@ -1924,10 +1890,11 @@ mod tests {
         assert!(!plain.symbol && !plain.hgvs && !plain.mane_select && plain.sift.is_none());
     }
 
-    /// The `--everything` help, which the CLI reference prints, states the one
-    /// exclusion: the regulatory columns are not produced.
+    /// The `--everything` help, which the CLI reference prints, states what its
+    /// `--regulatory` part writes, the regulatory and motif rows, and the two
+    /// omissions, motif scores and cell-type activity.
     #[test]
-    fn everything_documents_the_regulatory_exclusion() {
+    fn everything_help_names_the_regulatory_rows_and_omissions() {
         let mut command = Args::command_with_error_table();
         command.build();
         let help = command
@@ -1936,11 +1903,14 @@ mod tests {
             .and_then(|a| a.get_long_help().or(a.get_help()))
             .map(|h| h.to_string())
             .unwrap();
-        assert!(
-            help.contains("except the regulatory columns")
-                && help.contains("no RegulatoryFeature or MotifFeature row is written"),
-            "{help}"
-        );
+        for phrase in [
+            "regulatory and motif rows",
+            "motif scores",
+            "cell-type activity",
+            "omitted",
+        ] {
+            assert!(help.contains(phrase), "{phrase:?} missing from {help}");
+        }
     }
 
     /// An option set overwrites an explicit value, as `apply_option_sets` does
@@ -2991,17 +2961,6 @@ mod tests {
             assert!(!expanded.starts_with('~'));
             assert!(expanded.ends_with("/test"));
         }
-    }
-
-    #[test]
-    fn regulatory_notice_fires_only_when_requested() {
-        assert!(regulatory_unimplemented_notice(false, false).is_none());
-        assert!(regulatory_unimplemented_notice(true, false)
-            .unwrap()
-            .starts_with("--regulatory has no effect"));
-        assert!(regulatory_unimplemented_notice(false, true)
-            .unwrap()
-            .starts_with("--everything implies --regulatory"));
     }
 
     /// A run error that is not a refusal prints under the `run` component with

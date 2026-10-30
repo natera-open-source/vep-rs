@@ -17,7 +17,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 
-use vep_core::consequence::{Consequence, OwnSpanPositions, TranscriptConsequence};
+use vep_core::consequence::{Consequence, FeatureType, OwnSpanPositions, TranscriptConsequence};
 use vep_core::spdi::VrsAllele;
 use vep_core::sv_routing::{perl_split, perl_true};
 use vep_core::terms::Vocabulary;
@@ -290,9 +290,8 @@ const FLAG_FIELD_GROUPS: &[FieldGroup] = &[
     group("overlaps", &["OverlapBP", "OverlapPC"]),
     group("shift_length", &["SHIFT_LENGTH"]),
     group("var_synonyms", &["VAR_SYNONYMS"]),
-    // BIOTYPE leads the regulatory group (Constants.pm:136), so `--regulatory`
-    // without `--biotype` adds the column; the value is written only under
-    // `--biotype` (OutputFactory.pm:1580), so the column prints `-`.
+    // A regulatory row's BIOTYPE is unconditional (OutputFactory.pm:1881); a transcript
+    // row's needs --biotype (OutputFactory.pm:1580).
     group(
         "regulatory",
         &[
@@ -391,6 +390,17 @@ impl FieldOptions {
             .any(|g| g.flag != "user" && self.group_active(g.flag))
     }
 
+    /// True when no group beyond `user` and `regulatory` is on: a transcript row
+    /// then carries IMPACT, DISTANCE, STRAND and FLAGS alone, since the
+    /// `regulatory` group's fields are empty on it (BIOTYPE prints on a transcript
+    /// row under its own `biotype` group), and only a regulatory or motif row
+    /// carries more.
+    pub fn only_regulatory_group_beyond_user(&self) -> bool {
+        FLAG_FIELD_GROUPS
+            .iter()
+            .all(|g| matches!(g.flag, "user" | "regulatory") || !self.group_active(g.flag))
+    }
+
     /// The frequency groups the configuration reports.
     pub fn frequency_groups(&self) -> FrequencyGroups {
         FrequencyGroups {
@@ -412,18 +422,42 @@ pub struct ExtraFieldsPlan {
     pub options: FieldOptions,
     /// [`flag_fields`] of `options`.
     pub flag_fields: Vec<&'static str>,
+    /// [`flag_fields`] without [`MOTIF_FIELDS`], which a motif row alone
+    /// carries: the keys a transcript or intergenic row can print.
+    pub transcript_flag_fields: Vec<&'static str>,
     /// [`FieldOptions::any_optional_group`] of `options`.
     pub any_optional_group: bool,
+    /// [`FieldOptions::only_regulatory_group_beyond_user`] of `options`: a
+    /// transcript row prints the `user` group alone, as it does with no optional
+    /// group, while a regulatory or motif row prints its own fields.
+    pub transcript_fast_path: bool,
 }
+
+/// The fields only a `MotifFeature` row carries.
+pub const MOTIF_FIELDS: [&str; 5] = [
+    "MOTIF_NAME",
+    "MOTIF_POS",
+    "HIGH_INF_POS",
+    "MOTIF_SCORE_CHANGE",
+    "TRANSCRIPTION_FACTORS",
+];
 
 impl ExtraFieldsPlan {
     pub fn new(options: FieldOptions) -> Self {
         let flag_fields = flag_fields(&options);
+        let transcript_flag_fields = flag_fields
+            .iter()
+            .copied()
+            .filter(|field| !MOTIF_FIELDS.contains(field))
+            .collect();
         let any_optional_group = options.any_optional_group();
+        let transcript_fast_path = options.only_regulatory_group_beyond_user();
         Self {
             options,
             flag_fields,
+            transcript_flag_fields,
             any_optional_group,
+            transcript_fast_path,
         }
     }
 }
@@ -963,15 +997,21 @@ pub fn row_ga4gh_vrs<'a>(
 /// or `--most_severe` row (the allele carrying [`InputVariant::summary_terms`]).
 pub type Row<'a> = (&'a InputVariant, Option<&'a TranscriptConsequence>);
 
-/// The rows one input record produces, in VEP's order: transcript-major (by
-/// transcript id) and allele-minor (the reference row of `--process_ref_homs`
-/// first, then ALT order) across every allele split from the record, then one
-/// intergenic row per allele that overlapped nothing, or the one `--summary` or
-/// `--most_severe` row the record's first allele carries.
-/// The alleles of a `--minimal` split sort by the keys Ensembl VEP's rejoin
-/// stores their transcript variations under ([`InputVariant::rejoin_key_prefix`]
-/// before the transcript id), so an allele whose key prefix sorts before the
-/// letters of a transcript id prints every one of its rows first.
+/// The rows one input record produces, in VEP's order
+/// (`VariationFeature.pm:855-864`): the transcript rows, then the regulatory
+/// rows, then the motif rows, each kind feature-major (by stable id) and
+/// allele-minor (the reference row of `--process_ref_homs` first, then ALT
+/// order) across every allele split from the record; then one intergenic row
+/// per allele that overlapped no transcript, including alleles with regulatory
+/// or motif rows, the reference row first and then ALT order; or the one
+/// `--summary` or `--most_severe` row the record's first allele carries.
+/// The feature rows of a `--minimal` split allele sort by the keys Ensembl
+/// VEP's rejoin stores its variations under ([`InputVariant::rejoin_key_prefix`]
+/// before the stable id, OutputFactory.pm:2316), so an allele whose key prefix
+/// sorts before the letters of a stable id prints every one of its feature rows
+/// first; the rejoin appends a later allele's intergenic alleles to the record's
+/// one intergenic variation (:2323-2338), so the intergenic rows keep ALT order
+/// whatever the prefixes.
 ///
 /// An allele whose chromosome had no transcripts at all (no `most_severe_consequence`
 /// and no summary row) produces no row, as VEP writes nothing for it.
@@ -998,22 +1038,40 @@ pub fn record_rows_into<'a>(record: &[&'a InputVariant], rows: &mut Vec<Row<'a>>
             .then(b.0.reference_allele_row.cmp(&a.0.reference_allele_row))
             .then(a.0.allele_index.cmp(&b.0.allele_index))
     });
-    // An allele with no feature row writes its intergenic row, or the record's
-    // `--summary` or `--most_severe` row, which stands even with no term
-    // (OutputFactory.pm:454-458).
+    let intergenic_start = rows.len();
+    // An allele that overlaps no transcript writes its intergenic row, beside its
+    // regulatory and motif rows or alone, or the record's `--summary` or
+    // `--most_severe` row, which stands even with no term (OutputFactory.pm:454-458).
     for variant in record {
-        if variant.transcript_consequences.is_empty()
-            && (variant.most_severe_consequence.is_some() || variant.summary_terms.is_some())
+        if variant.intergenic_overlap
+            || (variant.transcript_consequences.is_empty()
+                && (variant.most_severe_consequence.is_some() || variant.summary_terms.is_some()))
         {
             rows.push((variant, None));
         }
     }
+    // The record's one intergenic variation lists its reference allele, then its
+    // alternate alleles in ALT order (BaseVariationFeatureOverlap.pm:363-373);
+    // the rejoin of a `--minimal` split appends a later allele's alleles to it
+    // instead of rekeying them (OutputFactory.pm:2323-2338), so no rejoin key
+    // enters this order.
+    rows[intergenic_start..].sort_by(|a, b| {
+        b.0.reference_allele_row
+            .cmp(&a.0.reference_allele_row)
+            .then(a.0.allele_index.cmp(&b.0.allele_index))
+    });
 }
 
-/// The order of two feature rows' sort keys ([`rejoin_key`]): by the loader's
-/// ranks when both rows carry one that orders as the key does
-/// ([`orderable_rank`]), else by the keys themselves.
+/// The order of two feature rows: by feature type first ([`FeatureType`]'s
+/// order, the one `VariationFeature.pm:855-864` lists the kinds in), then by
+/// their sort keys ([`rejoin_key`]): the loader's ranks when both rows carry one
+/// that orders as the key does ([`orderable_rank`]), else the keys themselves.
 fn transcript_order(a: &Row<'_>, b: &Row<'_>) -> std::cmp::Ordering {
+    let (feature_a, feature_b) = (a.1.expect("feature row"), b.1.expect("feature row"));
+    let type_order = feature_a.feature_type.cmp(&feature_b.feature_type);
+    if !type_order.is_eq() {
+        return type_order;
+    }
     match (orderable_rank(a), orderable_rank(b)) {
         (Some(rank_a), Some(rank_b)) => rank_a.cmp(&rank_b),
         _ => rejoin_key(a).cmp(rejoin_key(b)),
@@ -1234,19 +1292,14 @@ fn write_row_field_value(
         "Consequence" => match tc {
             Some(x) => write_terms(out, &x.consequences, options.terms),
             None => {
-                let consequence = variant
-                    .most_severe_consequence
-                    .unwrap_or(Consequence::IntergenicVariant);
+                let consequence = intergenic_row_consequence(variant);
                 out.extend_from_slice(options.terms.term(consequence).as_bytes());
             }
         },
         "IMPACT" => {
             let impact = match tc {
                 Some(x) => x.impact,
-                None => variant
-                    .most_severe_consequence
-                    .unwrap_or(Consequence::IntergenicVariant)
-                    .impact(),
+                None => intergenic_row_consequence(variant).impact(),
             };
             out.extend_from_slice(impact.as_str().as_bytes());
         }
@@ -1267,7 +1320,9 @@ fn write_row_field_value(
                 );
             }
         }
-        "BIOTYPE" if !options.biotype => {}
+        "BIOTYPE"
+            if !options.biotype
+                && tc.is_none_or(|x| x.feature_type != FeatureType::RegulatoryFeature) => {}
         "BIOTYPE" => push_opt(out, tc.and_then(|x| x.biotype.as_deref())),
         "EXON" => push_opt(out, tc.and_then(|x| x.exon.as_deref())),
         "INTRON" => push_opt(out, tc.and_then(|x| x.intron.as_deref())),
@@ -1355,6 +1410,11 @@ fn write_row_field_value(
                 out.extend_from_slice(format!("{pc:.2}").as_bytes());
             }
         }
+        "STRAND"
+            if tc.is_some_and(|x| {
+                x.feature_type == FeatureType::RegulatoryFeature
+                    || (variant.is_structural && x.feature_type == FeatureType::MotifFeature)
+            }) => {}
         "STRAND" => {
             if let Some(x) = tc {
                 push_signed(out, i64::from(x.strand));
@@ -1547,11 +1607,18 @@ fn write_row_field_value(
         "FREQS" => push_joined(out, variant.freqs.iter().map(String::as_str), list_sep),
         "SIFT" => push_opt(out, tc.and_then(|x| x.sift.as_deref())),
         "PolyPhen" => push_opt(out, tc.and_then(|x| x.polyphen.as_deref())),
-        "MOTIF_NAME"
-        | "MOTIF_POS"
-        | "HIGH_INF_POS"
-        | "MOTIF_SCORE_CHANGE"
-        | "TRANSCRIPTION_FACTORS" => {}
+        "HIGH_INF_POS" | "MOTIF_SCORE_CHANGE" => {}
+        "MOTIF_NAME" => push_opt(out, tc.and_then(|x| x.motif.as_deref()).map(|m| &*m.name)),
+        "MOTIF_POS" => {
+            if let Some(pos) = tc.and_then(|x| x.motif.as_deref()).and_then(|m| m.pos) {
+                push_decimal(out, u64::from(pos));
+            }
+        }
+        "TRANSCRIPTION_FACTORS" => {
+            if let Some(motif) = tc.and_then(|x| x.motif.as_deref()) {
+                push_joined(out, motif.factors.iter().map(AsRef::as_ref), list_sep);
+            }
+        }
         "MAX_AF" => {
             if let Some((max, _)) = frequency::max_af(variant, &options.frequency_groups()) {
                 out.extend_from_slice(max.as_bytes());
@@ -1576,6 +1643,20 @@ fn write_row_field_value(
                     .map(String::as_str),
             ),
         },
+    }
+}
+
+/// The consequence an allele's intergenic row prints: `intergenic_variant` for an
+/// allele that overlaps no transcript ([`InputVariant::intergenic_overlap`]), else
+/// the verdict of an allele with no feature row, `intergenic_variant` when it
+/// carries none.
+fn intergenic_row_consequence(variant: &InputVariant) -> Consequence {
+    if variant.intergenic_overlap {
+        Consequence::IntergenicVariant
+    } else {
+        variant
+            .most_severe_consequence
+            .unwrap_or(Consequence::IntergenicVariant)
     }
 }
 
@@ -1821,9 +1902,11 @@ fn sv_overlap(variant: &InputVariant, tc: Option<&TranscriptConsequence>) -> Opt
 /// empty list, which is a value (`OutputFactory.pm:1017`), and under
 /// `--clinvar_somatic_classification` it sets `CLINVAR_SOMATIC_CLASSIFICATION`
 /// to every defined `clinical_impact` of the row's variants in turn (:1093),
-/// the empty cell of a region file included; the default and tab writers print
-/// every key set (`VEP_output.pm:117`, `Tab.pm:128`). Every other empty value
-/// stands for an absent key. A `--summary` or `--most_severe` row is the
+/// the empty cell of a region file included, and on a motif row it sets
+/// `TRANSCRIPTION_FACTORS` to the binding matrix's factor list, empty when the
+/// matrix names none (:1920-1925); the default and tab writers print every key
+/// set (`VEP_output.pm:117`, `Tab.pm:128`). Every other empty value stands for
+/// an absent key. A `--summary` or `--most_severe` row is the
 /// record's hash alone (`summary_only`, OutputFactory.pm:426-458) and carries
 /// the variant-level fields and nothing else, as [`write_field_value`] writes
 /// it, so only a variant-level field's empty value is written on it; `tc` is
@@ -1839,6 +1922,7 @@ pub fn empty_value_is_written(
         return false;
     }
     match field {
+        "TRANSCRIPTION_FACTORS" => tc.is_some_and(|row| row.motif.is_some()),
         "NEAREST" => variant.nearest.as_ref().is_some_and(Vec::is_empty),
         "CLINVAR_SOMATIC_CLASSIFICATION" => {
             options.clinvar_somatic_classification
@@ -2530,8 +2614,14 @@ mod tests {
                 None => variant.location(),
             },
             "Allele" => string_row_allele(variant, tc, options),
+            // An allele that overlaps no transcript prints `intergenic_variant` on
+            // its intergenic row whatever its regulatory rows made its verdict.
             "Consequence" => match tc {
                 Some(x) => consequence_string(x, options),
+                None if variant.intergenic_overlap => options
+                    .terms
+                    .term(Consequence::IntergenicVariant)
+                    .to_string(),
                 None => {
                     let consequence = variant
                         .most_severe_consequence
@@ -2539,14 +2629,17 @@ mod tests {
                     options.terms.term(consequence).to_string()
                 }
             },
-            "IMPACT" => tc
-                .map(|x| x.impact.to_string())
-                .or_else(|| {
-                    variant
-                        .most_severe_consequence
-                        .map(|c| c.impact().to_string())
-                })
-                .unwrap_or_else(|| Consequence::IntergenicVariant.impact().to_string()),
+            "IMPACT" => match tc {
+                Some(x) => x.impact.to_string(),
+                None if variant.intergenic_overlap => {
+                    Consequence::IntergenicVariant.impact().to_string()
+                }
+                None => variant
+                    .most_severe_consequence
+                    .unwrap_or(Consequence::IntergenicVariant)
+                    .impact()
+                    .to_string(),
+            },
             "SYMBOL" => string_identifier(tc.and_then(|x| x.gene_symbol.as_deref())),
             "Gene" => tc
                 .map(|x| string_versioned_id(&x.gene_id, x.gene_version, options.gene_version))
@@ -2561,7 +2654,14 @@ mod tests {
                     )
                 })
                 .unwrap_or_default(),
-            "BIOTYPE" if !options.biotype => String::new(),
+            // A regulatory row's BIOTYPE is unconditional (OutputFactory.pm:1881); a
+            // transcript row's needs --biotype (:1580).
+            "BIOTYPE"
+                if !options.biotype
+                    && tc.is_none_or(|x| x.feature_type != FeatureType::RegulatoryFeature) =>
+            {
+                String::new()
+            }
             "BIOTYPE" => tc
                 .and_then(|x| x.biotype.as_deref())
                 .unwrap_or("")
@@ -2648,6 +2748,17 @@ mod tests {
             "OverlapPC" => sv_overlap(variant, tc)
                 .map(|(_, pc)| format!("{pc:.2}"))
                 .unwrap_or_default(),
+            // A regulatory row sets no STRAND (OutputFactory.pm:1867-1884); a motif
+            // row sets its feature's (:1926) unless the record is structural, whose
+            // overlap hash carries none (:2069-2102).
+            "STRAND"
+                if tc.is_some_and(|x| {
+                    x.feature_type == FeatureType::RegulatoryFeature
+                        || (variant.is_structural && x.feature_type == FeatureType::MotifFeature)
+                }) =>
+            {
+                String::new()
+            }
             "STRAND" => tc.map(|x| x.strand.to_string()).unwrap_or_default(),
             "FLAGS" => tc
                 .map(|x| {
@@ -2828,11 +2939,20 @@ mod tests {
             "FREQS" => variant.freqs.join(list_sep),
             "SIFT" => tc.and_then(|x| x.sift.clone()).unwrap_or_default(),
             "PolyPhen" => tc.and_then(|x| x.polyphen.clone()).unwrap_or_default(),
-            "MOTIF_NAME"
-            | "MOTIF_POS"
-            | "HIGH_INF_POS"
-            | "MOTIF_SCORE_CHANGE"
-            | "TRANSCRIPTION_FACTORS" => String::new(),
+            "HIGH_INF_POS" | "MOTIF_SCORE_CHANGE" => String::new(),
+            "MOTIF_NAME" => tc
+                .and_then(|x| x.motif.as_deref())
+                .map(|m| m.name.to_string())
+                .unwrap_or_default(),
+            "MOTIF_POS" => tc
+                .and_then(|x| x.motif.as_deref())
+                .and_then(|m| m.pos)
+                .map(|pos| pos.to_string())
+                .unwrap_or_default(),
+            "TRANSCRIPTION_FACTORS" => tc
+                .and_then(|x| x.motif.as_deref())
+                .map(|m| m.factors.join(list_sep))
+                .unwrap_or_default(),
             "MAX_AF" => frequency::max_af(variant, &options.frequency_groups())
                 .map(|(max, _)| max)
                 .unwrap_or_default(),
@@ -2924,32 +3044,67 @@ mod tests {
     /// The byte writer agrees with the string table on every column, with both
     /// list separators, with and without HGVS escaping, under the whole-variant
     /// ClinVar rule, with the own-span positions, in the display vocabulary, on
-    /// a bare row, an empty consequence and the default options; and between the
-    /// populated sequence row and the structural row every column but the
-    /// regulatory ones and the name nothing produces prints a value.
+    /// a bare row, an empty consequence and the default options, on a motif
+    /// row with factors and a matrix position and one with neither, on a
+    /// regulatory row, and on the motif and regulatory rows of a structural
+    /// record; and between the populated sequence row, the structural row and
+    /// the motif rows every column but the two motif scores and the name
+    /// nothing produces prints a value. A regulatory row prints its BIOTYPE
+    /// without `--biotype` and no STRAND; a structural record's motif row prints
+    /// no STRAND either.
     #[test]
     fn write_field_value_matches_the_string_table_on_every_column() {
         let variant = populated_variant();
         let tc = populated_consequence();
         let structural = structural_variant();
         let options = all_options();
+        let regulatory = TranscriptConsequence {
+            transcript_id: Arc::from("ENSR00000001"),
+            consequences: std::iter::once(Consequence::RegulatoryRegionVariant).collect(),
+            feature_type: FeatureType::RegulatoryFeature,
+            biotype: Some(Arc::from("promoter")),
+            strand: 0,
+            ..TranscriptConsequence::default()
+        };
+        let motif = TranscriptConsequence {
+            transcript_id: Arc::from("ENSM00000001"),
+            consequences: std::iter::once(Consequence::TfBindingSiteVariant).collect(),
+            feature_type: FeatureType::MotifFeature,
+            strand: -1,
+            motif: Some(Box::new(vep_core::consequence::MotifFields {
+                name: Arc::from("ENSPFM0001"),
+                pos: Some(7),
+                factors: Arc::from([Arc::from("CTCF"), Arc::from("ZNF143")]),
+            })),
+            ..TranscriptConsequence::default()
+        };
+        let unbound = TranscriptConsequence {
+            motif: Some(Box::new(vep_core::consequence::MotifFields {
+                name: Arc::from("ENSPFM0002"),
+                pos: None,
+                factors: Arc::from([]),
+            })),
+            ..motif.clone()
+        };
         let mut populated: Vec<&str> = Vec::new();
         for sep in [",", "&"] {
             populated.extend(assert_writer_matches(&variant, Some(&tc), &options, sep));
             populated.extend(assert_writer_matches(&variant, None, &options, sep));
             populated.extend(assert_writer_matches(&structural, Some(&tc), &options, sep));
             populated.extend(assert_writer_matches(&structural, None, &options, sep));
+            populated.extend(assert_writer_matches(&variant, Some(&motif), &options, sep));
+            populated.extend(assert_writer_matches(
+                &variant,
+                Some(&unbound),
+                &options,
+                sep,
+            ));
+            assert_writer_matches(&variant, Some(&regulatory), &options, sep);
+            assert_writer_matches(&structural, Some(&regulatory), &options, sep);
+            assert_writer_matches(&structural, Some(&motif), &options, sep);
         }
         for column in every_column() {
-            let never = matches!(
-                column,
-                "MOTIF_NAME"
-                    | "MOTIF_POS"
-                    | "HIGH_INF_POS"
-                    | "MOTIF_SCORE_CHANGE"
-                    | "TRANSCRIPTION_FACTORS"
-                    | "Unknown"
-            );
+            let never = matches!(column, "HIGH_INF_POS" | "MOTIF_SCORE_CHANGE" | "Unknown");
             assert_eq!(populated.contains(&column), !never, "{column}");
         }
         for options in [
@@ -2978,6 +3133,28 @@ mod tests {
         ] {
             assert_writer_matches(&variant, Some(&tc), &options, ",");
             assert_writer_matches(&structural, Some(&tc), &options, ",");
+            assert_writer_matches(&variant, Some(&motif), &options, ",");
+            assert_writer_matches(&variant, Some(&unbound), &options, ",");
+            assert_writer_matches(&variant, Some(&regulatory), &options, ",");
+            assert_writer_matches(&structural, Some(&motif), &options, ",");
+        }
+        for options in [all_options(), FieldOptions::default()] {
+            assert_eq!(
+                field_value("BIOTYPE", &variant, Some(&regulatory), &options, ","),
+                "promoter"
+            );
+            assert_eq!(
+                field_value("STRAND", &variant, Some(&regulatory), &options, ","),
+                ""
+            );
+            assert_eq!(
+                field_value("STRAND", &variant, Some(&motif), &options, ","),
+                "-1"
+            );
+            assert_eq!(
+                field_value("STRAND", &structural, Some(&motif), &options, ","),
+                ""
+            );
         }
         let bare = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         let empty = TranscriptConsequence::default();
@@ -2986,6 +3163,52 @@ mod tests {
             assert_writer_matches(&bare, None, &options, ",");
             assert_writer_matches(&variant, Some(&empty), &options, ",");
         }
+        // The empty `TRANSCRIPTION_FACTORS` of a matrix that lists no factor is
+        // a value; a row without a matrix has no such key.
+        assert_eq!(
+            field_value("MOTIF_NAME", &variant, Some(&motif), &options, ","),
+            "ENSPFM0001"
+        );
+        assert_eq!(
+            field_value("MOTIF_POS", &variant, Some(&motif), &options, ","),
+            "7"
+        );
+        assert_eq!(
+            field_value(
+                "TRANSCRIPTION_FACTORS",
+                &variant,
+                Some(&motif),
+                &options,
+                "&"
+            ),
+            "CTCF&ZNF143"
+        );
+        assert_eq!(
+            field_value("MOTIF_POS", &variant, Some(&unbound), &options, ","),
+            ""
+        );
+        assert_eq!(
+            field_value(
+                "TRANSCRIPTION_FACTORS",
+                &variant,
+                Some(&unbound),
+                &options,
+                ","
+            ),
+            ""
+        );
+        assert!(empty_value_is_written(
+            "TRANSCRIPTION_FACTORS",
+            &variant,
+            Some(&unbound),
+            &options
+        ));
+        assert!(!empty_value_is_written(
+            "TRANSCRIPTION_FACTORS",
+            &variant,
+            Some(&tc),
+            &options
+        ));
         // An individual's copy without the `--individual_zyg` list prints its own
         // zygosity.
         let mut own_copy = variant.clone();
@@ -3052,7 +3275,8 @@ mod tests {
 
     /// The byte writer agrees with the string table on a `--summary` row, whose
     /// columns are the record's identity, location, consequence list and
-    /// variant-level fields alone, and on a flagged intergenic row.
+    /// variant-level fields alone, on a flagged intergenic row, and on the
+    /// intergenic row of an allele that overlaps regulatory features alone.
     #[test]
     fn write_field_value_matches_the_string_table_on_summary_and_intergenic_rows() {
         let mut summary = populated_variant();
@@ -3110,6 +3334,23 @@ mod tests {
         assert_eq!(
             field_value("Location", &intergenic, None, &all_options(), ","),
             "21:102"
+        );
+
+        // The intergenic row of an allele whose regulatory rows made its verdict
+        // prints `intergenic_variant` and its MODIFIER impact, not the verdict.
+        let mut overlap = intergenic.clone();
+        overlap.intergenic_overlap = true;
+        overlap.most_severe_consequence = Some(Consequence::RegulatoryRegionVariant);
+        for options in [all_options(), FieldOptions::default(), display] {
+            assert_writer_matches(&overlap, None, &options, ",");
+        }
+        assert_eq!(
+            field_value("Consequence", &overlap, None, &all_options(), ","),
+            "intergenic_variant"
+        );
+        assert_eq!(
+            field_value("IMPACT", &overlap, None, &all_options(), ","),
+            "MODIFIER"
         );
     }
 
@@ -3958,6 +4199,61 @@ mod tests {
         );
     }
 
+    /// The intergenic rows of a record keep the reference row first and then ALT
+    /// order whatever the rejoin prefixes of a `--minimal` split, an allele that
+    /// overlaps nothing beside alleles whose regulatory rows come with an
+    /// intergenic row: the rejoin rekeys the feature rows alone
+    /// (OutputFactory.pm:2311-2317) and appends a later allele's intergenic
+    /// alleles to the record's one intergenic variation (:2323-2338), so a prefix
+    /// that sorts an allele's regulatory row first leaves its intergenic row in
+    /// place.
+    #[test]
+    fn intergenic_rows_keep_allele_order_under_minimal_rejoin_prefixes() {
+        let regulatory = || TranscriptConsequence {
+            transcript_id: Arc::from("ENSR1"),
+            feature_type: FeatureType::RegulatoryFeature,
+            consequences: smallvec::smallvec![Consequence::RegulatoryRegionVariant],
+            ..Default::default()
+        };
+        let mut a = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        a.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        let mut b = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"T".to_vec());
+        b.allele_index = 1;
+        b.rejoin_key_prefix = Some(Arc::from("C/T_"));
+        b.transcript_consequences = vec![regulatory()];
+        b.intergenic_overlap = true;
+        b.most_severe_consequence = Some(Consequence::RegulatoryRegionVariant);
+        let mut c = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"-".to_vec());
+        c.allele_index = 2;
+        c.rejoin_key_prefix = Some(Arc::from("A/-_"));
+        c.transcript_consequences = vec![regulatory()];
+        c.intergenic_overlap = true;
+        c.most_severe_consequence = Some(Consequence::RegulatoryRegionVariant);
+        let mut reference = a.reference_allele_row();
+        reference.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        let order: Vec<(&str, usize, bool)> = record_rows(&[&reference, &a, &b, &c])
+            .iter()
+            .map(|(v, tc)| {
+                (
+                    tc.map_or("", |tc| &*tc.transcript_id),
+                    v.allele_index,
+                    v.reference_allele_row,
+                )
+            })
+            .collect();
+        assert_eq!(
+            order,
+            [
+                ("ENSR1", 2, false),
+                ("ENSR1", 1, false),
+                ("", 0, true),
+                ("", 0, false),
+                ("", 1, false),
+                ("", 2, false),
+            ]
+        );
+    }
+
     /// The reference row of `--process_ref_homs` leads each transcript's rows
     /// (BaseVariationFeatureOverlap.pm:363-373 lists the reference allele first),
     /// then the alternates in allele order.
@@ -4047,6 +4343,64 @@ mod tests {
             extra_keys_with(&plan.flag_fields, &v, None, &options),
             extra_keys(&v, None, &options)
         );
+    }
+
+    /// The transcript fast path is on under `--regulatory` alone and with no
+    /// optional group, and off once any other group is on; a transcript row's
+    /// key list is the flag fields without the five motif fields, which are the
+    /// `regulatory` group's members after `BIOTYPE`.
+    #[test]
+    fn extra_fields_plan_keeps_the_transcript_fast_path_under_regulatory_alone() {
+        let regulatory = FieldOptions {
+            regulatory: true,
+            ..Default::default()
+        };
+        let plan = ExtraFieldsPlan::new(regulatory.clone());
+        assert!(plan.transcript_fast_path && plan.any_optional_group);
+        assert_eq!(
+            plan.flag_fields,
+            ["IMPACT", "DISTANCE", "STRAND", "FLAGS", "BIOTYPE"]
+                .into_iter()
+                .chain(MOTIF_FIELDS)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            plan.transcript_flag_fields,
+            ["IMPACT", "DISTANCE", "STRAND", "FLAGS", "BIOTYPE"]
+        );
+        assert!(ExtraFieldsPlan::new(FieldOptions::default()).transcript_fast_path);
+        let one_group = [
+            |o: &mut FieldOptions| o.individual = true,
+            |o: &mut FieldOptions| o.biotype = true,
+            |o: &mut FieldOptions| o.symbol = true,
+            |o: &mut FieldOptions| o.af = true,
+            |o: &mut FieldOptions| o.check_existing = true,
+            |o: &mut FieldOptions| o.overlaps = true,
+            |o: &mut FieldOptions| o.dont_skip = true,
+            |o: &mut FieldOptions| o.var_synonyms = true,
+        ];
+        for (i, set) in one_group.iter().enumerate() {
+            for regulatory in [false, true] {
+                let mut options = FieldOptions {
+                    regulatory,
+                    ..Default::default()
+                };
+                set(&mut options);
+                assert!(!options.only_regulatory_group_beyond_user(), "{i}");
+            }
+        }
+        let every = ExtraFieldsPlan::new(all_options());
+        assert!(!every.transcript_fast_path);
+        assert_eq!(
+            every.transcript_flag_fields,
+            every
+                .flag_fields
+                .iter()
+                .copied()
+                .filter(|field| !MOTIF_FIELDS.contains(field))
+                .collect::<Vec<_>>()
+        );
+        assert!(MOTIF_FIELDS.iter().all(|f| every.flag_fields.contains(f)));
     }
 
     /// `GENCODE_PRIMARY` is the literal `1` on a transcript carrying the

@@ -44,9 +44,13 @@ before any transcript is read. Each remaining variant then passes through `annot
 Intolerant From Tolerant) and PolyPhen (Polymorphism Phenotyping) predictions, a breakend
 gains its mate's consequences, `variation_matcher` attaches the co-located known variants,
 `sv_source` the known structural variants of `--check_svs`, and a variant on a cached
-chromosome that overlaps nothing becomes `intergenic_variant`. Built-in
+chromosome that overlaps nothing becomes `intergenic_variant`. Under `--regulatory`,
+`RegulatorySource::annotate_variant` then adds the variant's `RegulatoryFeature` and
+`MotifFeature` rows after its transcript rows, keeping the `intergenic_variant` row of an
+allele that overlaps no transcript. Built-in
 plugins see the whole batch in one `run_batch` call and dynamic-library plugins run per
-consequence; `pick::apply_to_batch` applies the pick flags and summaries to each record's
+consequence whose feature type they declare (transcript rows unless the plugin exports
+`vep_plugin_feature_types`); `pick::apply_to_batch` applies the pick flags and summaries to each record's
 alleles together; `render_record` hands each record's alleles to the chosen `vep-io` formatter
 (the tab format's byte path, `render_tab_record`, included), or to
 `render_default_record` for VEP's default text format. Without plugins or a known-variant
@@ -79,6 +83,7 @@ has drained.
 | `src/output_compress.rs`    | `OutputCompression`: `--compress_output` gzip or bgzip encoding of the output in process, in place of the `gzip -c` or `bgzip -c` pipe Ensembl VEP opens; `CompressedOutput::finish` writes the stream's trailer once every line is written |
 | `src/annotator.rs`          | The embedding entry point: `Annotator` over `AnnotationResources` and a scoped pool, the `RawRow` simple-allele input, the per-row `AnnotationError`, and the shared loaders for FASTA, plugins and transcripts            |
 | `src/json_cache.rs`         | Deserializes the JSON cache: enumerates `transcripts/<chr>/<start>-<end>.json` shards and loads one chromosome's transcripts                                                                                                 |
+| `src/regulatory.rs`         | `RegulatorySource`: the cache's regulatory and motif features under `regulatory/<chr>/`, one chromosome's shards parsed on first use into a start-sorted index, and `annotate`, which adds a record's `RegulatoryFeature` and `MotifFeature` rows with their terms and motif fields |
 | `src/variation_source.rs`   | `VariationSource`: the cache's variation files under `variations/<chr>/`, opened on first use and read through their index for the records a variant's window reaches, with a per-batch prefetch                           |
 | `src/variation_name_index.rs` | `resolve_names`: the `--format id` pass over the cache's variation files, every name of the list held in memory and every file read once, each name mapped to its variation features                                   |
 | `src/transcript_lookup.rs`  | `TranscriptLookup`: the stable-id, translation-id and gene-name index over the run's transcript cache behind HGVS `c.`, `n.` and `p.` input, built on the first lookup from the reference sequences' shards and extended to the alternate loci, patches and LRG regions only when a stable id is found on none of them |
@@ -120,8 +125,8 @@ the full list, with every flag's parity note, is
 
 Three declared flags are refused with an error rather than ignored, because the feature they
 belong to is not implemented: `--regulatory_gff`, `--extended_promoters` and
-`--custom_suppress_filter`. `--regulatory` is accepted and warns that no regulatory consequence
-is emitted.
+`--custom_suppress_filter`. `--regulatory` annotates the regulatory and motif features of a cache
+converted with them, and warns once when the cache holds none.
 
 ```bash
 vep -i input.vcf -o output.txt --json_cache /path/to/json_cache --offline --everything
@@ -139,8 +144,8 @@ binaries and tests, and their contents may move between releases.
 | Item                                                                                        | Use                                                                                                                                                                                                                 |
 | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Config`, `Config::from_argv`                                                               | The resolved run configuration; `config::resolve_fork` applies the same automatic thread count to an embedder's own setting                                                                                        |
-| `Annotator`                                                                                 | One loaded cache plus a scoped thread pool, reused across batches: `from_config` loads every chromosome up front, `annotate_batch` annotates `InputVariant`s in place, `try_annotate_rows` takes `RawRow`s         |
-| `AnnotationResources`, `build_thread_pool`                                                  | The shared transcripts, variation data, effects configuration and plugins behind an `Annotator`, and the pool it runs on                                                                                           |
+| `Annotator`                                                                                 | One loaded cache plus a scoped thread pool, reused across batches: `from_config` loads every chromosome up front (the regulatory tree whole under `--regulatory`, so a corrupt shard fails construction), `annotate_batch` annotates `InputVariant`s in place, `try_annotate_rows` takes `RawRow`s |
+| `AnnotationResources`, `build_thread_pool`                                                  | The shared transcripts, variation data, regulatory source, effects configuration and plugins behind an `Annotator`, and the pool it runs on                                                                        |
 | `AnnotationStats`, `AnnotationError`, `RawRow`, `validate_raw_row`, `row_to_input_variant`  | The per-batch counts, the row-level error taxonomy, and the simple-allele input (chromosome, 1-based position, reference allele, alternate allele) with its validation and conversion                               |
 | `apply_to_record`, `apply_to_batch`, `FilterConfig`, `RowFilters`, `PickCriterion` | The record-level steps over the annotated alleles of one input record: the `--coding_only` and `--no_intergenic` row filters, then VEP's pick algorithm and summaries |
 | `LazyTranscriptIndexes`, `MaterializedTranscriptIndexes`, `TranscriptSet` | The per-chromosome transcript index, the guard that an `Annotator` requires before fanning out to the pool, and the transcript set (every transcript, or a GENCODE set) the indexes keep |
@@ -164,7 +169,9 @@ them; `pipeline_parity.rs` checks that the output bytes do not change with the b
 thread count, the pipeline mode, depth and task size or the writer strategy; `parity_matrix.rs`
 checks that every long flag has a row in
 `tests/parity/matrix.tsv` at the repository root; `dylib_plugins.rs` exercises the
-dynamic-library plugin path. `cargo bench -p vep-cli --bench cache_load_bench` times cache
+dynamic-library plugin path; `regulatory.rs` checks the regulatory and motif rows, the picks
+and row filters over them and the cache shapes the loader refuses, against Ensembl VEP's rows
+on a slice of a converted cache. `cargo bench -p vep-cli --bench cache_load_bench` times cache
 loading and skips itself when `$VEP_JSON_CACHE_DIR` names no cache. The repository's standard
 commands (the workspace test run, clippy, fmt, the release build) are in
 [CONTRIBUTING.md](../../CONTRIBUTING.md).

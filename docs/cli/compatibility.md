@@ -20,9 +20,7 @@ vep-rs reads a local cache and never contacts a database. Each database flag is 
 
 ## Consequence terms never assigned
 
-Six regulatory-feature terms need a regulatory-feature cache that is not loaded: `TFBS_ablation`, `TFBS_amplification`, `TF_binding_site_variant`, `regulatory_region_ablation`, `regulatory_region_amplification` and `regulatory_region_variant`. `--regulatory`, alone or through `--everything`, is accepted and warns that regulatory-feature annotation is not implemented.
-
-The root term `sequence_variant` has no predicate, and Ensembl VEP's consequence engine never assigns it either. The other 34 of Ensembl VEP's 41 Sequence Ontology terms are assigned.
+One term is never assigned: the root `sequence_variant` has no predicate, and Ensembl VEP's consequence engine never assigns it either. The other 40 of Ensembl VEP's 41 Sequence Ontology terms are assigned; the six regulatory and motif terms need `--regulatory` (or `--everything`) and a cache converted with its regulatory features ([Regulatory and motif features](../regulatory.md)).
 
 ## Input formats
 
@@ -48,8 +46,8 @@ Every flag vep-rs refuses, with the line it prints and what Ensembl VEP does wit
 | `--gp` | `ERROR: [cli] --gp is not supported: it reads a GRCh37 chr:pos from the INFO/GP field that some 1000 Genomes VCFs carry` | Config.pm:120; Parser/VCF.pm:271-285 takes chr:pos from INFO/GP and skips lines without it |
 | `--ambiguous_hgvs` | `ERROR: [cli] --ambiguous_hgvs is not supported: it resolves an HGVSp input to every matching variant through the Ensembl database; HGVS input is genomic (g., m.), transcript (c., n.) and protein (p.) notation, each resolved to one variant, a protein change with several equally short nucleotide paths skipped with Ensembl VEP's message` | Config.pm:202; Parser/HGVS.pm:178-186, 224 resolves the protein notation to every variant through the database; VariationFeatureAdaptor.pm:1956 refuses an ambiguous one without it |
 | `--af_exac` (not declared; caught before parsing) | `ERROR: [cli] --af_exac was removed in Ensembl VEP release 107: use --af_gnomade` | Config.pm:618 names it among `--database`'s incompatibilities while @VEP\_PARAMS (:73-276) does not declare it, so Ensembl VEP refuses it as an unexpected parameter (vep:30) |
-| `--regulatory_gff` | `ERROR: [cli] --regulatory_gff is not supported: it would annotate regulatory features and motifs from a GFF3 file in place of the cache, and regulatory annotation is not supported` | Config.pm:210; the option set at :434-439 switches on `--regulatory` |
-| `--extended_promoters` | `ERROR: [cli] --extended_promoters is not supported: it would widen the promoters read with --regulatory_gff to their extended bounds, and regulatory annotation is not supported` | Config.pm:211 |
+| `--regulatory_gff` | `ERROR: [cli] --regulatory_gff is not supported: it would annotate regulatory features and motifs from a GFF3 file in place of the cache; regulatory features are read from the cache alone` | Config.pm:210; the option set at :434-439 switches on `--regulatory` |
+| `--extended_promoters` | `ERROR: [cli] --extended_promoters is not supported: it would widen the promoters read with --regulatory_gff to their extended bounds; regulatory features are read from the cache alone` | Config.pm:211 |
 | `--custom_suppress_filter` | `ERROR: [cli] --custom_suppress_filter is not supported: it would keep a --custom VCF source's FILTER column out of the output unless the --custom source's fields argument names it, and custom annotation is not supported` | Config.pm:268 |
 
 ## Accepted without effect
@@ -73,7 +71,6 @@ The flags below are declared with the description their group page shows, which 
 
 | Flag | Ensembl VEP |
 | --- | --- |
-| `--regulatory` | Reports overlaps with regulatory regions and transcription factor binding sites |
 | `--custom` | Adds annotation from a tabix-indexed or bigWig file |
 | `--no_stats` | Writes no statistics file |
 | `--stats_file` | Names the statistics file |

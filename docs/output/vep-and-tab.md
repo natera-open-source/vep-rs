@@ -50,7 +50,7 @@ Every text format opens with a header block. `--no_headers` suppresses it whole,
 | 3   | Allele             | The ALT allele of this row; a structural variant prints the SO term of its class (see below)   |
 | 4   | Gene               | Ensembl gene stable ID                                                                          |
 | 5   | Feature            | Ensembl transcript stable ID                                                                    |
-| 6   | Feature_type       | `Transcript`, or `-` on an intergenic row; VEP's `RegulatoryFeature` and `MotifFeature` rows are not produced |
+| 6   | Feature_type       | `Transcript`, `RegulatoryFeature`, `MotifFeature`, or `-` on an intergenic row; regulatory and motif rows require `--regulatory` and a converted regulatory cache |
 | 7   | Consequence        | SO consequence term(s), comma-separated                                                         |
 | 8   | cDNA_position      | Position or range in the cDNA; `?` for an unmappable end                                        |
 | 9   | CDS_position       | Position or range in the coding sequence                                                        |
@@ -142,7 +142,7 @@ Every formatter follows Ensembl VEP's own rules, cited to their Perl sources in 
 
 ### Row order
 
-Rows of one input record are transcript-major and allele-minor: sorted by transcript stable id, then by ALT order within a transcript. Intergenic rows come last. A record's rows are contiguous in the default and tab formats; the VCF output folds them into one line and the JSON output into one object.
+Rows of one input record come by feature kind, transcript rows, then regulatory-feature rows, then motif-feature rows, each kind feature-major and allele-minor: sorted by stable id, then by ALT order within a feature. Intergenic rows come last, one per allele that overlapped no transcript. A record's rows are contiguous in the default and tab formats; the VCF output folds them into one line and the JSON output into one object.
 
 ### Uploaded_variation
 
@@ -170,7 +170,7 @@ The value is the shortest gap between the variant and the transcript: the smalle
 
 `FLAGS` lists every `cds_` transcript attribute (`cds_start_NF,cds_end_NF`).
 
-**OverlapBP** and **OverlapPC** appear on every structural variant row that overlaps its feature, breakends excepted, in the default Extra column and in JSON (`bp_overlap`, `percentage_overlap`). `--overlaps` adds them as columns to the `tab` and `vcf` outputs, as in Ensembl VEP, and to Parquet. They are reported on transcript rows only: Ensembl VEP also reports them on regulatory-feature and motif-feature rows, and regulatory annotation is not implemented.
+**OverlapBP** and **OverlapPC** appear on every structural variant row that overlaps its feature, breakends excepted, in the default Extra column and in JSON (`bp_overlap`, `percentage_overlap`). `--overlaps` adds them as columns to `tab`, `vcf` and Parquet. They are reported on transcript, regulatory-feature and motif-feature rows, as in Ensembl VEP.
 
 ### ENSP
 
@@ -196,7 +196,7 @@ The pick family acts on a whole input record, as Ensembl VEP's `filter_Variation
 | `--flag_pick_allele`      | groups the rows by the Allele column first, then flags            | collapses to `--flag_pick`                      |
 | `--flag_pick_allele_gene` | groups the rows by allele, then gene, then flags                  | one flagged row per gene over the whole record  |
 
-The ranking follows `--pick_order` (default `mane_select,mane_plus_clinical,canonical,appris,tsl,biotype,ccds,rank,length,ensembl,refseq`): each criterion in turn, a lower value better, the rows tied on it compared on the next. `rank` is the lowest consequence rank of the row. `length` is the translateable-sequence length of a translated transcript and the spliced length otherwise, longer better. `ensembl` and `refseq` read the source cache of a merged cache and tie on every other cache. A shorter list falls through to the first row in Ensembl VEP's order, transcript-major by stable id and allele-minor, so a full tie keeps the lexicographically first stable id.
+The ranking follows `--pick_order` (default `mane_select,mane_plus_clinical,canonical,appris,tsl,biotype,ccds,rank,length,ensembl,refseq`): each criterion in turn, a lower value better, the rows tied on it compared on the next. `rank` is the lowest consequence rank of the row. `length` is the translateable-sequence length of a translated transcript and the spliced length otherwise, longer better. `ensembl` and `refseq` read the source cache of a merged cache and tie on every other cache. A shorter list falls through to the first row in Ensembl VEP's order: transcript rows, then regulatory-feature and motif-feature rows, each kind by stable id and allele. A full tie keeps the transcript row with the lexicographically first stable id, else a regulatory-feature row over a motif-feature or intergenic row.
 
 A record overlapping no transcript has one intergenic row per allele, which `--pick` keeps for the first allele alone and the flagging variants mark like a transcript row. Ensembl VEP emits the gene buckets of `--per_gene`, the allele buckets of `--pick_allele` and both of `--pick_allele_gene` in Perl hash order, which differs from run to run. vep-rs keeps the row order above, and the golden runs of those three sets compare the rows without their order (`"unordered": true` in the corpus manifest).
 

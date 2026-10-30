@@ -616,8 +616,7 @@ pub struct Args {
     /// --numbers, --domains, --regulatory, --canonical, --protein, --biotype, --af, --af_1kg,
     /// --af_gnomade, --af_gnomadg, --max_af, --pubmed, --uniprot, --mane, --tsl, --appris,
     /// --variant_class, --gene_phenotype and --mirna, each overriding an explicit value as in Ensembl VEP.
-    /// Every column of Ensembl VEP's --everything except the regulatory columns: --regulatory is
-    /// switched on and annotates nothing, so no RegulatoryFeature or MotifFeature row is written
+    /// Includes cache-backed regulatory and motif rows; motif scores and cell-type activity are omitted
     #[arg(help_heading = "Output Control", short = 'e', long)]
     pub everything: bool,
 
@@ -780,7 +779,7 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long)]
     pub domains: bool,
 
-    /// Accepted for VEP compatibility; regulatory-feature annotation is not implemented and the flag warns
+    /// Annotate overlaps with cached regulatory and motif features; warns when the cache has no regulatory data
     #[arg(help_heading = "Output Control", long)]
     pub regulatory: bool,
 
@@ -800,7 +799,7 @@ pub struct Args {
 
     /// Add the OverlapBP and OverlapPC columns to the tab, VCF and Parquet outputs: the
     /// bases of a structural variant inside the transcript and the percentage of the
-    /// transcript they cover (transcript rows only; regulatory features are not annotated)
+    /// transcript they cover (also reported for cached regulatory and motif features)
     #[arg(help_heading = "Output Control", long)]
     pub overlaps: bool,
 
@@ -1884,27 +1883,27 @@ mod tests {
         );
     }
 
-    /// `--regulatory_gff` is refused: regulatory annotation is not supported.
+    /// `--regulatory_gff` is refused: regulatory features are read from the cache alone.
     #[test]
     fn regulatory_gff_is_refused() {
         let err = Config::from_argv(["vep", "--regulatory_gff", "reg.gff3.gz"]).unwrap_err();
         assert_eq!(
             err.to_string(),
             "ERROR: [cli] --regulatory_gff is not supported: it would annotate regulatory features \
-             and motifs from a GFF3 file in place of the cache, and regulatory annotation \
-             is not supported"
+             and motifs from a GFF3 file in place of the cache; regulatory features are read \
+             from the cache alone"
         );
     }
 
-    /// `--extended_promoters` is refused: regulatory annotation is not supported.
+    /// `--extended_promoters` is refused: regulatory features are read from the cache alone.
     #[test]
     fn extended_promoters_is_refused() {
         let err = Config::from_argv(["vep", "--extended_promoters"]).unwrap_err();
         assert_eq!(
             err.to_string(),
             "ERROR: [cli] --extended_promoters is not supported: it would widen the promoters read \
-             with --regulatory_gff to their extended bounds, and regulatory annotation is \
-             not supported"
+             with --regulatory_gff to their extended bounds; regulatory features are read from \
+             the cache alone"
         );
     }
 

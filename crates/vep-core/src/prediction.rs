@@ -464,7 +464,7 @@ mod tests {
         // Verify every standard AA has a valid index
         for &aa in b"ACDEFGHIKLMNPQRSTVWY" {
             assert!(
-                AMINO_ACIDS.iter().position(|&b| b == aa).is_some(),
+                AMINO_ACIDS.contains(&aa),
                 "AA '{}' not found in index",
                 aa as char
             );

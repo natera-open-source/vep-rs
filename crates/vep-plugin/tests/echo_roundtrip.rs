@@ -145,3 +145,51 @@ fn registry_reports_a_bare_name_missing_from_the_plugin_dir_as_not_found() {
     );
     assert!(registry.is_empty());
 }
+
+/// The feature types a plugin declares are read after its parameters, so a list
+/// may depend on them: the example declares `Transcript` unless a
+/// `feature_types=` parameter names others, `Feature` is every feature class,
+/// `Intergenic` adds no class, and an unknown word fails the load.
+#[test]
+fn feature_types_are_read_after_init_and_default_to_transcript() {
+    use vep_plugin::FeatureType;
+    let path = echo_plugin_path().display().to_string();
+    let types = |arg: String| -> Vec<FeatureType> {
+        let mut registry = PluginRegistry::new();
+        registry.load_from_args(&[arg], None).expect("load");
+        registry.plugins()[0].feature_types().to_vec()
+    };
+    assert_eq!(types(path.clone()), [FeatureType::Transcript]);
+    assert_eq!(
+        types(format!(
+            "{path},feature_types=RegulatoryFeature;MotifFeature"
+        )),
+        [FeatureType::RegulatoryFeature, FeatureType::MotifFeature]
+    );
+    assert_eq!(
+        types(format!("{path},feature_types=Feature;Intergenic")),
+        [
+            FeatureType::Transcript,
+            FeatureType::RegulatoryFeature,
+            FeatureType::MotifFeature
+        ]
+    );
+    let mut registry = PluginRegistry::new();
+    let error = registry
+        .load_from_args(&[format!("{path},feature_types=Gene")], None)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("unknown feature type \"Gene\""), "{error}");
+    let mut registry = PluginRegistry::new();
+    registry
+        .load_from_args(&[format!("{path},feature_types=MotifFeature")], None)
+        .unwrap();
+    assert!(registry.wants_regulatory_features());
+    // `Feature` covers the regulatory classes but names neither word, so it
+    // leaves regulatory annotation off, as Ensembl VEP's word check does.
+    let mut registry = PluginRegistry::new();
+    registry
+        .load_from_args(&[format!("{path},feature_types=Feature")], None)
+        .unwrap();
+    assert!(!registry.wants_regulatory_features());
+}

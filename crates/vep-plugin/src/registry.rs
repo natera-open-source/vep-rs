@@ -46,10 +46,12 @@ impl PluginRegistry {
             if !params.is_empty() {
                 plugin.init(&params)?;
             }
+            plugin.read_feature_types()?;
 
             tracing::info!(
                 name = plugin.name(),
                 version = plugin.version(),
+                feature_types = ?plugin.feature_types(),
                 "loaded plugin"
             );
             self.plugins.push(plugin);
@@ -70,6 +72,14 @@ impl PluginRegistry {
     /// Returns an iterator over the loaded plugins.
     pub fn plugins(&self) -> &[LoadedPlugin] {
         &self.plugins
+    }
+
+    /// Whether a loaded plugin declares regulatory or motif features, which
+    /// switches regulatory annotation on for the run (`Runner.pm:998-1002`).
+    pub fn wants_regulatory_features(&self) -> bool {
+        self.plugins
+            .iter()
+            .any(LoadedPlugin::declares_regulatory_features)
     }
 
     /// Run all loaded plugins on the given consequence/variant pair (both as JSON).

@@ -60,6 +60,38 @@ documented in `tests/sv_validation/README.md`.
 | `extract_perl_reference.sh`  | Extracts five Ensembl VEP modules from the Docker image into a local directory for debugging and tracing.                                                                                                                                                                              |
 | `prepare_benchmark_vcfs.py`  | Prepares input VCFs: decompresses bgzipped files, normalizes chromosome names, truncates for smoke mode                                                                                                                                                                                |
 
+## Comparing regulatory feature rows
+
+Both field comparators accept `--keep-only regulatory_feature_rows` to compare only
+`RegulatoryFeature` and `MotifFeature` consequence rows from **both** inputs:
+
+```bash
+python3 scripts/concordance/compare_vep_fields.py \
+  --perl perl.txt --rust rust.txt --out regulatory-fields.json \
+  --keep-only regulatory_feature_rows
+
+python3 scripts/concordance/compare_vep_formats.py \
+  --format json --expected perl.jsonl --actual rust.jsonl --input variants.vcf \
+  --report regulatory-json.json --keep-only regulatory_feature_rows
+```
+
+The formats comparator supports this selector for `default`, `tab`, `vcf`, `json` and
+`parquet` (a tab-format expected file against the Parquet actual). VCF and JSON retain
+record-level entries only for records with retained regulatory or motif rows; on a JSON
+record that loses non-regulatory rows, `most_severe_consequence` is recomputed from the
+remaining rows on each side. Other record fields and every retained consequence field
+still compare normally, including `HIGH_INF_POS` and `MOTIF_SCORE_CHANGE` if present.
+Floors apply to the filtered entries; set an appropriate populated-count floor when an
+empty regulatory comparison should fail. Both reports record the selector as `keep_only`.
+The fields comparator still reports one-sided keys without comparing their fields and
+exits zero after writing its report; the formats comparator exits by its green/red verdict.
+
+The selector is available only in the formats comparator's comparison mode, not
+`--self-parity` or `--warnings`, and cannot be combined with
+`--masks regulatory_feature_rows`. That mask instead excludes the **reference's**
+regulatory rows for caches without regulatory data. Its warnings comparison accepts
+either the cache-unavailable notice or the notice of releases 0.1.0 to 0.5.0.
+
 ## Generating the Perl ground truth
 
 `run_clone_measurement.sh` only reads the ground-truth trees under `<data>/ground_truth/perl/`.
