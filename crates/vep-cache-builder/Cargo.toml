@@ -29,7 +29,7 @@ anyhow = { workspace = true }
 vep-fasta = { workspace = true }
 vep-core = { workspace = true }
 mysql = { version = "28", default-features = false, features = ["default-rust"] }
-md5 = "0.7"
+md5 = "0.8"
 
 [dev-dependencies]
 tempfile = { workspace = true }
