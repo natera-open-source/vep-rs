@@ -70,7 +70,7 @@ bigtools = { version = "0.5", default-features = false, features = ["read"] }
 clap = { version = "4", features = ["derive", "env", "string"] }
 
 # Plugin system
-libloading = "0.8"
+libloading = "0.9"
 
 # Encoding
 base64 = "0.22"
