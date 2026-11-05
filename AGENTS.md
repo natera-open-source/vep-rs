@@ -37,23 +37,32 @@ parts that fail CI or review when missed.
 
 ## Before pushing
 
-Run, and quote the result in the pull request's Verification section:
+Run these on CI's toolchain, Rust 1.97.1 (the `toolchain:` input in `.github/workflows/ci.yml`), and
+quote the result in the pull request's Verification section:
 
 ```bash
 cargo fmt --all -- --check && cargo clippy --workspace -- -D warnings
-cargo test --workspace
+cargo test --workspace --no-fail-fast
 python3 scripts/parity/check_parity_matrix.py && scripts/check_module_docs.sh
 ```
+
+A failure that reproduces on a clean checkout of `origin/main` is pre-existing. Name it under
+Verification with that reproduction, and leave it out of this change. A newer local toolchain adds
+clippy lints and can move type sizes, so compare like with like.
 
 Fill in [.github/pull_request_template.md](.github/pull_request_template.md) for the description.
 
 ## Scope
 
-- One matrix row or one issue per branch, cut from `origin/main`.
+- One matrix row or one issue per branch, cut from `origin/main`. Rows that share one mechanism, one
+  message shape or one docs sentence (`gff` and `gtf`; the unported plugins) are a **family** and land
+  together in one branch.
 - A row's `target` is the maintainers' call. When the Perl source or the code shows the target is
-  wrong, stop and report it as a **target decision**, with the evidence, and keep the row as it is.
+  wrong, or another row contradicts it, stop and report it as a **target decision**, with the
+  evidence, and keep the row as it is.
 - Parallel branches collide on `tests/parity/matrix.tsv`, `CHANGELOG.md`,
-  `crates/vep-cli/src/args.rs`, `docs/cli-reference.md` and `docs/cli/`. Rebase onto `origin/main`
-  immediately before pushing and regenerate the CLI reference after the rebase.
+  `crates/vep-cli/src/args.rs`, `crates/vep-cli/src/config.rs`, `docs/cli-reference.md` and
+  `docs/cli/`. Rebase onto `origin/main` before the first push; once the pull request exists, merge
+  `origin/main` in instead. Regenerate the CLI reference after either.
 - Releases stay with the maintainers: the version in `Cargo.toml`, tags, crates.io publishing, and the
   `release.yml`, `docker.yml` and `pages.yml` workflows.
