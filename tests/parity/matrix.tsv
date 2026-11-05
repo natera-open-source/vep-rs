@@ -208,7 +208,7 @@ GeneBe	GeneBe.pm	error	open
 GeneSplicer	GeneSplicer.pm	error	open			
 Geno2MP	Geno2MP.pm	error	open			
 genomes	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::genomes_is_refused		
-gff	Config.pm	error	open			
+gff	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::gff_is_refused		
 gff-gtf-transcript-source	BaseGXF.pm	documented_subset	open			
 given-ref-used-ref-columns	OutputFactory.pm	documented_subset	landed:documented_subset	crates/vep-io/src/output/fields.rs::given_ref_and_used_ref_columns_follow_the_flag;crates/vep-io/src/output/parquet.rs::reference_allele_columns_keep_their_dash;crates/vep-effects/src/consequences.rs::used_ref_of_a_shifted_coding_deletion_is_rotated_by_the_shift;crates/vep-effects/src/consequences.rs::documented_subset_names_the_bam_edited_cache_auto_enable	tests/golden/116/GRCh38-vcf-check-ref	
 gnomADc	gnomADc.pm	implemented	open			
@@ -218,7 +218,7 @@ gnomADMt	gnomADMt.pm	implemented	open
 GO	GO.pm	error	open			
 gp	Parser/VCF.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::gp_is_refused		
 grch37	Config.pm	implemented	landed:implemented	crates/vep-cli/src/option_rules.rs::grch37_sets_assembly;crates/vep-cli/src/config.rs::grch37_sets_the_assembly	tests/golden/116/GRCh37	
-gtf	Config.pm	error	open			
+gtf	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::gtf_is_refused		
 gvcf-non-ref-alleles	VCF.pm	implemented	landed:implemented	crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_star_ref_block_not_filtered;crates/vep-cli/src/vcf_parser.rs::test_parse_vcf_line_non_ref_is_a_reference_block;crates/vep-cli/src/vcf_parser.rs::classify_symbolic_alt_reference_block;crates/vep-cli/src/vcf_parser.rs::a_gvcf_variant_site_is_its_real_alleles;crates/vep-cli/src/vcf_parser.rs::a_gvcf_sites_allele_keeps_its_written_position;crates/vep-core/src/sv_routing.rs::a_non_ref_block_beside_an_allele_names_no_variant;crates/vep-core/src/sv_routing.rs::routing_follows_the_reference_and_alleles_and_a_true_svtype	tests/golden/116/GRCh38-vcf-edge-cases	
 GWAS	GWAS.pm	implemented	open			
 Gwava	Gwava.pm	error	open			

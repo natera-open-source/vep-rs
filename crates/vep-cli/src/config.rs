@@ -264,6 +264,18 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
         "Config.pm:268",
         "none",
     ),
+    refused(
+        "gff",
+        "--gff is not supported: it would annotate against the transcripts of a GFF3 file, read as a --custom source; transcripts are read from the cache alone",
+        "Config.pm:260; the option set at :531-536 turns it into a --custom source of format gff, which File.pm:96-99 opens with File/GFF.pm, a transcript source (BaseGXF.pm:69-72)",
+        "the cache's transcripts",
+    ),
+    refused(
+        "gtf",
+        "--gtf is not supported: it would annotate against the transcripts of a GTF file, read as a --custom source; transcripts are read from the cache alone",
+        "Config.pm:261; the option set at :538-543 turns it into a --custom source of format gtf, which File.pm:96-99 opens with File/GTF.pm, a transcript source (BaseGXF.pm:69-72)",
+        "the cache's transcripts",
+    ),
     noop(
         "condel",
         "Ensembl VEP declares it and reads nothing from it",
@@ -2609,9 +2621,9 @@ mod tests {
     #[test]
     fn custom_follows_the_state_the_option_sets_append_to() {
         let mut parsed = parse_command_line(["vep", "--custom", "x.bed,X,bed"]).unwrap();
-        parsed.state.set("gff", "a.gff");
+        parsed.state.set("bigwig", "a.bw");
         let c = Config::from_parsed(parsed).unwrap();
-        assert_eq!(c.custom, ["x.bed,X,bed", "file=a.gff,format=gff"]);
+        assert_eq!(c.custom, ["x.bed,X,bed", "a.bw,,bigwig,exact"]);
         assert_eq!(
             config(&["vep", "--custom", "y.bed,Y,bed"]).custom,
             ["y.bed,Y,bed"]

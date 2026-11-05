@@ -218,6 +218,16 @@ fn genomes_is_refused() {
     );
 }
 
+/// `--gff` reads a GFF3 file as a `--custom` source of transcripts
+/// (Config.pm:531-536; File.pm:96-99 opens it with File/GFF.pm, a transcript
+/// source by BaseGXF.pm:69-72).
+#[test]
+fn gff_is_refused() {
+    let message = "--gff is not supported: it would annotate against the transcripts of a GFF3 file, read as a --custom source; transcripts are read from the cache alone";
+    assert_refused(&["--gff", "genes.gff3.gz"], message);
+    assert_refused(&["--gff=genes.gff3.gz"], message);
+}
+
 /// `--gp` reads coordinates from INFO/GP (Parser/VCF.pm:271-285).
 #[test]
 fn gp_is_refused() {
@@ -225,6 +235,16 @@ fn gp_is_refused() {
         &["--gp"],
         "--gp is not supported: it reads a GRCh37 chr:pos from the INFO/GP field that some 1000 Genomes VCFs carry",
     );
+}
+
+/// `--gtf` reads a GTF file as a `--custom` source of transcripts
+/// (Config.pm:538-543; File.pm:96-99 opens it with File/GTF.pm, a transcript
+/// source by BaseGXF.pm:69-72).
+#[test]
+fn gtf_is_refused() {
+    let message = "--gtf is not supported: it would annotate against the transcripts of a GTF file, read as a --custom source; transcripts are read from the cache alone";
+    assert_refused(&["--gtf", "genes.gtf.gz"], message);
+    assert_refused(&["--gtf=genes.gtf.gz"], message);
 }
 
 /// `--is_multispecies` describes a multi-species database (Config.pm:101).
