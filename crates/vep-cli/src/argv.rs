@@ -833,7 +833,7 @@ fn glued_short<'a, 'n>(body: &'n str, declared: &'a [Declared]) -> Option<(&'a D
 /// pushes back a value that is not a number and passes an unknown option
 /// through (`--fork --help` and `--pipeline_depth --help` ask for the help); an
 /// option Ensembl VEP declares and the parser does not takes its value as
-/// `@VEP_PARAMS` declares it (`--gff --help` names the file `--help`), so the
+/// `@VEP_PARAMS` declares it (`--bigwig --help` names the file `--help`), so the
 /// parser refuses it by name; a name that is a prefix of several options is
 /// written with two dashes, so clap refuses it; a short flag with its value
 /// attached is written as the long form; `--` ends the options. Anything else,
@@ -1948,7 +1948,7 @@ mod tests {
     /// `pass_through` leaves in `@ARGV` with its would-be value unread; a string
     /// option takes the token as its value, as `=s` takes anything (`-i --help`
     /// names the file `--help`), an option of `@VEP_PARAMS` the parser lacks
-    /// included (`gff=s`, Config.pm:260), and a number is a number's value.
+    /// included (`bigwig=s`, Config.pm:262), and a number is a number's value.
     #[test]
     fn a_numeric_option_leaves_a_usage_token_unread() {
         let dir = tempfile::tempdir().unwrap();
@@ -1971,7 +1971,7 @@ mod tests {
                 &["--input_file", "--help"],
                 &["--symbol", "--input_file=--help"],
             ),
-            (&["--gff", "--help"], &["--symbol", "--gff=--help"]),
+            (&["--bigwig", "--help"], &["--symbol", "--bigwig=--help"]),
         ];
         for (args, expected) in cases {
             let mut argv = vec!["vep"];
