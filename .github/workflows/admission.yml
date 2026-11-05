@@ -29,8 +29,10 @@ on:
         required: true
         type: number
 
+# A label is an Issues write, the comment and the close are Pull requests writes.
 permissions:
   contents: read
+  issues: write
   pull-requests: write
 
 jobs:
@@ -75,6 +77,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      issues: write
       pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

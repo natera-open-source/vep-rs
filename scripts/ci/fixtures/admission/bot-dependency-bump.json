@@ -42,10 +42,10 @@
     }
    ],
    "commit": {
-    "message": "Subject line 1\n\nSigned-off-by: dependency-bot[bot] <2+dependency-bot[bot]@users.noreply.example.com>\n",
+    "message": "Subject line 1\n\nSigned-off-by: dependency-bot[bot] <2+dependency-bot[bot]@users.noreply.example.org>\n",
     "author": {
      "name": "dependency-bot[bot]",
-     "email": "1+dependency-bot[bot]@users.noreply.example.com"
+     "email": "1+dependency-bot[bot]@users.noreply.example.org"
     }
    }
   }

@@ -839,6 +839,8 @@ def test_close_footer_exemptions():
     user = {"login": "someone", "type": "User"}
     maintainer = {"login": "First-Maintainer", "type": "User"}
     bot = {"login": "dependency-bot[bot]", "type": "Bot"}
+    assert adm.is_bot({"login": "app/dependabot", "type": "User"}) and adm.is_bot(bot)
+    assert not adm.is_bot(user)
     soft = [adm.Finding("signoff", "x", closes=False)]
     assert adm.close_footer([], user, set(), False, MAINTAINERS) == (False, None)
     assert adm.close_footer(FINDING, maintainer, set(), False, MAINTAINERS)[0] is False

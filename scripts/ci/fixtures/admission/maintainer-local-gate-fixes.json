@@ -35,10 +35,10 @@
     }
    ],
    "commit": {
-    "message": "Subject line 1\n\nCo-Authored-By: Example Model 1 <model@example.com>\nSigned-off-by: Person 1 <person1@example.com>\n",
+    "message": "Subject line 1\n\nCo-Authored-By: Example Model 1 <model@example.org>\nSigned-off-by: Person 1 <person1@example.org>\n",
     "author": {
      "name": "Person 1",
-     "email": "person1@example.com"
+     "email": "person1@example.org"
     }
    }
   },
@@ -50,10 +50,10 @@
     }
    ],
    "commit": {
-    "message": "Subject line 2\n\nCo-Authored-By: Example Model 1 <model@example.com>\nSigned-off-by: Person 1 <person1@example.com>\n",
+    "message": "Subject line 2\n\nCo-Authored-By: Example Model 1 <model@example.org>\nSigned-off-by: Person 1 <person1@example.org>\n",
     "author": {
      "name": "Person 1",
-     "email": "person1@example.com"
+     "email": "person1@example.org"
     }
    }
   },
@@ -65,10 +65,10 @@
     }
    ],
    "commit": {
-    "message": "Subject line 3\n\nCo-Authored-By: Example Model 1 <model@example.com>\nSigned-off-by: Person 1 <person1@example.com>\n",
+    "message": "Subject line 3\n\nCo-Authored-By: Example Model 1 <model@example.org>\nSigned-off-by: Person 1 <person1@example.org>\n",
     "author": {
      "name": "Person 1",
-     "email": "person1@example.com"
+     "email": "person1@example.org"
     }
    }
   },
@@ -80,10 +80,10 @@
     }
    ],
    "commit": {
-    "message": "Subject line 4\n\nCo-Authored-By: Example Model 1 <model@example.com>\nSigned-off-by: Person 1 <person1@example.com>\n",
+    "message": "Subject line 4\n\nCo-Authored-By: Example Model 1 <model@example.org>\nSigned-off-by: Person 1 <person1@example.org>\n",
     "author": {
      "name": "Person 1",
-     "email": "person1@example.com"
+     "email": "person1@example.org"
     }
    }
   }

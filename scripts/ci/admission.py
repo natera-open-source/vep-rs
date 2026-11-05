@@ -671,7 +671,9 @@ def maintainers_from_codeowners(text: str) -> set[str]:
 
 
 def is_bot(user: dict) -> bool:
-    return user.get("type") == "Bot" or (user.get("login") or "").endswith("[bot]")
+    """A GitHub App's user: type `Bot`, or a login of the `name[bot]` or `app/name` form."""
+    login = user.get("login") or ""
+    return user.get("type") == "Bot" or login.endswith("[bot]") or login.startswith("app/")
 
 
 def is_maintainer(user: dict, maintainers: set[str]) -> bool:
