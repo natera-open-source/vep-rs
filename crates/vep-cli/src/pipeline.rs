@@ -4447,7 +4447,7 @@ mod tests {
                 v.allele_string.clone(),
                 v.start,
                 v.end,
-                v.allele_num.map_or(v.allele_index as u32 + 1, |n| n),
+                v.allele_num.unwrap_or(v.allele_index as u32 + 1),
                 v.uploaded_allele_string
                     .as_deref()
                     .unwrap_or("")

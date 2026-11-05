@@ -1971,7 +1971,9 @@ fn perl_translate_codon(codon: &[u8], table: u8) -> u8 {
 }
 
 fn perl_translate(seq: &[u8], table: u8) -> Vec<u8> {
-    seq.chunks_exact(3)
+    seq.as_chunks::<3>()
+        .0
+        .iter()
         .map(|c| perl_translate_codon(c, table))
         .collect()
 }
