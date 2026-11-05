@@ -29,3 +29,4 @@ rand = "0.10"
 
 [dev-dependencies]
 flate2 = { workspace = true }
+tempfile = { workspace = true }
