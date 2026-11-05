@@ -236,6 +236,12 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
         "Config.pm:202; Parser/HGVS.pm:178-186, 224 resolves the protein notation to every variant through the database; VariationFeatureAdaptor.pm:1956 refuses an ambiguous one without it",
         "genomic, transcript and protein HGVS input, one variant per notation",
     ),
+    refused(
+        "bam",
+        "--bam is not supported: it edits each transcript's sequence to match the transcript's alignment in a BAM file, as a RefSeq cache needs, and switches on --use_transcript_ref; a transcript keeps the sequence the cache gives",
+        "Config.pm:253 declares it and the option set at :574-579 switches on use_transcript_ref; AnnotationType/Transcript.pm:391-399 opens the BAM through Bio::DB::HTS and :421-631 edits each overlapped transcript from its alignment, called at :119",
+        "the cache's transcript sequences",
+    ),
     ErrorTableEntry {
         flag: "af_exac",
         declared: false,
