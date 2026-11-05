@@ -1,0 +1,68 @@
+{
+ "pull_request": {
+  "number": 0,
+  "state": "open",
+  "draft": false,
+  "title": "Title",
+  "body": "Bumps a dependency from one version to the next.\n",
+  "user": {
+   "login": "dependency-bot[bot]",
+   "type": "Bot"
+  },
+  "author_association": "NONE",
+  "labels": [
+   {
+    "name": "dependencies"
+   },
+   {
+    "name": "rust"
+   }
+  ],
+  "head": {
+   "sha": "0000000000000000000000000000000000000001",
+   "ref": "topic",
+   "repo": {
+    "fork": false,
+    "owner": {
+     "login": "dependency-bot[bot]"
+    }
+   }
+  },
+  "base": {
+   "sha": "0000000000000000000000000000000000000002",
+   "ref": "main"
+  }
+ },
+ "commits": [
+  {
+   "sha": "0000000000000000000000000000000000000001",
+   "parents": [
+    {
+     "sha": "0000000000000000000000000000000000000002"
+    }
+   ],
+   "commit": {
+    "message": "Subject line 1\n\nSigned-off-by: dependency-bot[bot] <2+dependency-bot[bot]@users.noreply.example.com>\n",
+    "author": {
+     "name": "dependency-bot[bot]",
+     "email": "1+dependency-bot[bot]@users.noreply.example.com"
+    }
+   }
+  }
+ ],
+ "files": [
+  {
+   "filename": "Cargo.lock",
+   "status": "modified",
+   "additions": 12,
+   "deletions": 13
+  },
+  {
+   "filename": "Cargo.toml",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 1
+  }
+ ],
+ "contains_base_tip": false
+}

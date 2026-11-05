@@ -1,0 +1,228 @@
+{
+ "pull_request": {
+  "number": 0,
+  "state": "open",
+  "draft": false,
+  "title": "Title",
+  "body": "## Summary\n\nSummary text.\n\n## Verification\n\nVerification text.\n\n## Upgrade impact\n\nUpgrade impact text.\n",
+  "user": {
+   "login": "contributor",
+   "type": "User"
+  },
+  "author_association": "CONTRIBUTOR",
+  "labels": [],
+  "head": {
+   "sha": "0000000000000000000000000000000000000003",
+   "ref": "topic",
+   "repo": {
+    "fork": true,
+    "owner": {
+     "login": "contributor"
+    }
+   }
+  },
+  "base": {
+   "sha": "0000000000000000000000000000000000000002",
+   "ref": "main"
+  }
+ },
+ "commits": [
+  {
+   "sha": "0000000000000000000000000000000000000001",
+   "parents": [
+    {
+     "sha": "0000000000000000000000000000000000000002"
+    }
+   ],
+   "commit": {
+    "message": "Subject line 1\n\nSigned-off-by: Person 1 <person1@example.com>\n",
+    "author": {
+     "name": "Person 1",
+     "email": "person1@example.com"
+    }
+   }
+  },
+  {
+   "sha": "0000000000000000000000000000000000000003",
+   "parents": [
+    {
+     "sha": "0000000000000000000000000000000000000001"
+    }
+   ],
+   "commit": {
+    "message": "Subject line 2\n\nSigned-off-by: Person 1 <person1@example.com>\n",
+    "author": {
+     "name": "Person 1",
+     "email": "person1@example.com"
+    }
+   }
+  }
+ ],
+ "files": [
+  {
+   "filename": "CHANGELOG.md",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 0,
+   "patch": "@@ -24,6 +24,7 @@\n \n ### Changed\n \n+- Entry text (#0)\n - Entry text (#0)\n - Entry text (#0)\n - Entry text (#0)"
+  },
+  {
+   "filename": "crates/vep-cli/src/dylib_plugins.rs",
+   "status": "modified",
+   "additions": 106,
+   "deletions": 0,
+   "patch": "@@ -132,6 +132,7 @@\n x\n x\n x\n+x\n \n x\n x\n@@ -321,6 +322,111 @@\n x\n x\n \n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+\n x\n x\n x",
+   "regions": {
+    "new": [
+     [
+      132,
+      458
+     ]
+    ],
+    "old": [
+     [
+      132,
+      352
+     ]
+    ]
+   }
+  },
+  {
+   "filename": "crates/vep-cli/src/filter_set.rs",
+   "status": "modified",
+   "additions": 22,
+   "deletions": 18,
+   "patch": "@@ -137,13 +137,13 @@\n x\n x\n x\n-x\n-x\n+x\n+x\n x\n-x\n-x\n-x\n-x\n+x\n+x\n+x\n+x\n x\n x\n x\n@@ -685,6 +685,8 @@\n x\n x\n x\n+x\n+x\n \n x\n x\n@@ -1000,16 +1002,19 @@\n x\n x\n x\n-x\n-x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n+x\n x\n-x\n-x\n x\n-x\n-x\n-x\n-x\n x\n x\n x\n@@ -1034,7 +1039,6 @@\n x\n x\n x\n-x\n x\n x\n x\n@@ -1105,7 +1109,7 @@\n x\n x\n x\n-x\n+x\n x\n x\n x\n@@ -1115,10 +1119,10 @@\n x\n x\n x\n-x\n+x\n x\n x\n-x\n+x\n x\n x\n x",
+   "regions": {
+    "new": [
+     [
+      684,
+      1171
+     ]
+    ],
+    "old": [
+     [
+      684,
+      1167
+     ]
+    ]
+   }
+  },
+  {
+   "filename": "crates/vep-cli/src/json_cache.rs",
+   "status": "modified",
+   "additions": 45,
+   "deletions": 28
+  },
+  {
+   "filename": "crates/vep-cli/src/pick.rs",
+   "status": "modified",
+   "additions": 13,
+   "deletions": 9
+  },
+  {
+   "filename": "crates/vep-cli/src/render.rs",
+   "status": "modified",
+   "additions": 2,
+   "deletions": 1
+  },
+  {
+   "filename": "crates/vep-cli/src/runner.rs",
+   "status": "modified",
+   "additions": 2,
+   "deletions": 10
+  },
+  {
+   "filename": "crates/vep-cli/src/transcript_index.rs",
+   "status": "modified",
+   "additions": 2,
+   "deletions": 10
+  },
+  {
+   "filename": "crates/vep-cli/src/variation_matcher.rs",
+   "status": "modified",
+   "additions": 9,
+   "deletions": 6
+  },
+  {
+   "filename": "crates/vep-core/src/consequence.rs",
+   "status": "modified",
+   "additions": 270,
+   "deletions": 77
+  },
+  {
+   "filename": "crates/vep-core/src/transcript.rs",
+   "status": "modified",
+   "additions": 208,
+   "deletions": 31
+  },
+  {
+   "filename": "crates/vep-effects/benches/consequence_bench.rs",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 9
+  },
+  {
+   "filename": "crates/vep-effects/src/lib.rs",
+   "status": "modified",
+   "additions": 2,
+   "deletions": 18
+  },
+  {
+   "filename": "crates/vep-effects/src/overlap.rs",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 9
+  },
+  {
+   "filename": "crates/vep-effects/src/sv/breakend.rs",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 9
+  },
+  {
+   "filename": "crates/vep-effects/src/sv/mod.rs",
+   "status": "modified",
+   "additions": 4,
+   "deletions": 36
+  },
+  {
+   "filename": "crates/vep-io/src/input/hgvs/transcript.rs",
+   "status": "modified",
+   "additions": 9,
+   "deletions": 17
+  },
+  {
+   "filename": "crates/vep-io/src/output/fields.rs",
+   "status": "modified",
+   "additions": 84,
+   "deletions": 64
+  },
+  {
+   "filename": "crates/vep-io/src/output/json.rs",
+   "status": "modified",
+   "additions": 22,
+   "deletions": 9
+  },
+  {
+   "filename": "crates/vep-io/src/output/parquet.rs",
+   "status": "modified",
+   "additions": 49,
+   "deletions": 0
+  },
+  {
+   "filename": "crates/vep-io/src/output/vcf_output.rs",
+   "status": "modified",
+   "additions": 12,
+   "deletions": 2
+  },
+  {
+   "filename": "docs/developers/writing-a-plugin.md",
+   "status": "modified",
+   "additions": 12,
+   "deletions": 5
+  }
+ ],
+ "contains_base_tip": true,
+ "head_changelog": "# Changelog\n\nx\n\nx\nx\n\n## [Unreleased]\n\n### Added\n\n- Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n- Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n\n### Changed\n\n- Entry text (#0)\n- Entry text (#0)\n- Entry text (#0)\n- Entry text (#0)\n\n### Fixed\n\n- Entry text (#0)\n\n## [0.5.0] - 0000-00-00\n"
+}

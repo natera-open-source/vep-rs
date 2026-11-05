@@ -1,0 +1,178 @@
+{
+ "pull_request": {
+  "number": 0,
+  "state": "open",
+  "draft": false,
+  "title": "Title",
+  "body": "## Summary\n\nSummary text.\n\n## Verification\n\nVerification text.\n\n## Upgrade impact\n\nUpgrade impact text.\n",
+  "user": {
+   "login": "second-maintainer",
+   "type": "User"
+  },
+  "author_association": "COLLABORATOR",
+  "labels": [],
+  "head": {
+   "sha": "0000000000000000000000000000000000000005",
+   "ref": "topic",
+   "repo": {
+    "fork": false,
+    "owner": {
+     "login": "second-maintainer"
+    }
+   }
+  },
+  "base": {
+   "sha": "0000000000000000000000000000000000000002",
+   "ref": "main"
+  }
+ },
+ "commits": [
+  {
+   "sha": "0000000000000000000000000000000000000001",
+   "parents": [
+    {
+     "sha": "0000000000000000000000000000000000000002"
+    }
+   ],
+   "commit": {
+    "message": "Subject line 1\n\nCo-Authored-By: Example Model 1 <model@example.com>\nSigned-off-by: Person 1 <person1@example.com>\n",
+    "author": {
+     "name": "Person 1",
+     "email": "person1@example.com"
+    }
+   }
+  },
+  {
+   "sha": "0000000000000000000000000000000000000003",
+   "parents": [
+    {
+     "sha": "0000000000000000000000000000000000000001"
+    }
+   ],
+   "commit": {
+    "message": "Subject line 2\n\nCo-Authored-By: Example Model 1 <model@example.com>\nSigned-off-by: Person 1 <person1@example.com>\n",
+    "author": {
+     "name": "Person 1",
+     "email": "person1@example.com"
+    }
+   }
+  },
+  {
+   "sha": "0000000000000000000000000000000000000004",
+   "parents": [
+    {
+     "sha": "0000000000000000000000000000000000000003"
+    }
+   ],
+   "commit": {
+    "message": "Subject line 3\n\nCo-Authored-By: Example Model 1 <model@example.com>\nSigned-off-by: Person 1 <person1@example.com>\n",
+    "author": {
+     "name": "Person 1",
+     "email": "person1@example.com"
+    }
+   }
+  },
+  {
+   "sha": "0000000000000000000000000000000000000005",
+   "parents": [
+    {
+     "sha": "0000000000000000000000000000000000000004"
+    }
+   ],
+   "commit": {
+    "message": "Subject line 4\n\nCo-Authored-By: Example Model 1 <model@example.com>\nSigned-off-by: Person 1 <person1@example.com>\n",
+    "author": {
+     "name": "Person 1",
+     "email": "person1@example.com"
+    }
+   }
+  }
+ ],
+ "files": [
+  {
+   "filename": "Cargo.lock",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 0
+  },
+  {
+   "filename": "crates/vep-cache-converter/Cargo.toml",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 0
+  },
+  {
+   "filename": "crates/vep-cache-converter/src/main.rs",
+   "status": "modified",
+   "additions": 10,
+   "deletions": 19,
+   "patch": "@@ -1156,31 +1156,22 @@\n x\n x\n \n-x\n-x\n+x\n+x\n+x\n \n x\n x\n-x\n-x\n-x\n-x\n-x\n-x\n-x\n-x\n-x\n-x\n+x\n+x\n+x\n+x\n+x\n+x\n x\n \n x\n-x\n-x\n-x\n-\n-x\n-x\n-x\n+x\n x\n x\n ",
+   "regions": {
+    "new": [
+     [
+      901,
+      1519
+     ]
+    ],
+    "old": [
+     [
+      901,
+      1528
+     ]
+    ]
+   }
+  },
+  {
+   "filename": "crates/vep-cli/src/pipeline.rs",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 1
+  },
+  {
+   "filename": "crates/vep-cli/tests/pipeline_parity.rs",
+   "status": "modified",
+   "additions": 4,
+   "deletions": 2
+  },
+  {
+   "filename": "crates/vep-core/src/cache_manifest.rs",
+   "status": "modified",
+   "additions": 4,
+   "deletions": 3,
+   "patch": "@@ -301,9 +301,10 @@\n x\n x\n x\n-x\n-x\n-x\n+x\n+x\n+x\n+x\n x\n x\n x",
+   "regions": {
+    "new": [
+     [
+      411,
+      712
+     ]
+    ],
+    "old": [
+     [
+      410,
+      711
+     ]
+    ]
+   }
+  },
+  {
+   "filename": "crates/vep-core/src/transcript.rs",
+   "status": "modified",
+   "additions": 12,
+   "deletions": 3
+  },
+  {
+   "filename": "crates/vep-effects/src/coding.rs",
+   "status": "modified",
+   "additions": 3,
+   "deletions": 1
+  },
+  {
+   "filename": "crates/vep-effects/src/concordance_tests.rs",
+   "status": "modified",
+   "additions": 3,
+   "deletions": 1
+  }
+ ],
+ "contains_base_tip": true
+}
