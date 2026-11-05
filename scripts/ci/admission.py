@@ -1108,6 +1108,7 @@ def run_event(event: dict, gh: GitHub, git: Git, repo_dir: Path) -> int:
     commits = gh.paginate(f"/repos/{gh.repo}/pulls/{number}/commits")
     files = gh.paginate(f"/repos/{gh.repo}/pulls/{number}/files")
     models = declared_models(commits)
+    labels = label_names(pr)
     with tempfile.TemporaryDirectory() as tmp:
         tree = Path(tmp) / "tree"
         git.export_tree(head_sha, tree)
@@ -1117,7 +1118,7 @@ def run_event(event: dict, gh: GitHub, git: Git, repo_dir: Path) -> int:
         base_ref,
         commits,
         files,
-        label_names(pr),
+        labels,
         pr.get("body"),
         git_regions_for(git, head_sha, merge_base),
         git.show(head_sha, "CHANGELOG.md"),
@@ -1126,7 +1127,7 @@ def run_event(event: dict, gh: GitHub, git: Git, repo_dir: Path) -> int:
     )
     block = static_block(findings, head_sha, policy_url(gh.repo, base_ref))
     close = publish_findings(gh, pr, repo_dir, "static", block, findings)
-    sync_model_labels(gh, number, label_names(pr), models)
+    sync_model_labels(gh, number, labels, models)
     print(f"admission: {len(commits)} commits, {len(files)} files, head {head_sha[:7]}")
     return verdict(findings, close)
 
