@@ -187,12 +187,12 @@ git commit -s -m "Add CADD plugin support"
 The sign-off asserts, under the [Developer Certificate of Origin](https://developercertificate.org),
 that you have the right to submit the code under this project's Apache-2.0 license.
 A `DCO` workflow (`.github/workflows/dco.yml`) checks every commit of a pull request
-for the trailer and fails the check if one is missing. To add a missing sign-off, use
-`git commit --amend -s` for the last commit or `git rebase --signoff origin/main` for
-several, then force-push if the branch is already pushed: an unsigned commit is the one
-case where a pushed branch is rewritten. Otherwise bring `main` in with
-`git fetch origin && git merge --signoff origin/main`, and never rebase or force-push a
-pushed branch, since maintainers may push fixes onto it.
+for the trailer and fails the check if one is missing. To add a missing sign-off before
+the branch is pushed, use `git commit --amend -s` for the last commit or
+`git rebase --signoff origin/main` for several. A pushed branch with an unsigned commit is
+signed the same way on a new branch and opened as a new pull request: never rebase or
+force-push a pushed branch, since maintainers may push fixes onto it. Bring `main` in with
+`git fetch origin && git merge --signoff origin/main`.
 
 One commit of every pull request also declares the model that wrote the change, as a
 second trailer beside the sign-off; the squash merge carries both trailers onto `main`.
@@ -215,25 +215,16 @@ Before submitting a PR:
 3. Update the affected page under `docs/`: the format's page under `output/` for output layouts, the mechanism's page under `plugins/` and the plugin table in `plugins.md` for plugins, `cache-setup.md` for the cache builder and converter. A flag is documented by its help text in `crates/vep-cli/src/args.rs` and by the option tables, from which the CLI reference (`cli-reference.md` and the group pages under `cli/`) is generated: regenerate it with `VEP_UPDATE_CLI_REFERENCE=1 cargo test -p vep-cli --test cli_reference` and commit the result.
 4. For consequence or plugin changes, run concordance smoke to confirm no regressions.
 
-An `Admission` workflow checks every pull request when it is opened, pushed to or reopened, and
-again when CI finishes. A pull request from outside the maintainers is closed, with a comment naming
-each miss and its fix, on any of these:
-
-- the branch does not contain `main`'s tip (bring `main` in with a merge, not a rebase);
-- code under `crates/` or `scripts/` changes with no test added or updated in the same pull request
-  (a `tests/` file, a `#[test]`, a `test_*.py` or `test_*.sh`, or the golden expectation or corpus
-  `manifest.json` the change moves); a maintainer's `tests-not-needed` label waives it;
-- no commit declares its model (one new signed commit carrying the trailer clears it);
-- the body lacks one of the template's sections, or a crate change has no changelog line under
-  Unreleased;
-- a parity-matrix cell stops resolving, or a required check fails.
-
-Fix the miss and reopen the pull request; the check runs again. An unsigned commit draws the comment
-and no close, since the DCO check already blocks the merge and clearing it rewrites history (see Sign
-your commits). On a closed pull request, reopen before that rewrite, because GitHub cannot reopen a
-pull request whose head was force-pushed while it was closed. `python3 scripts/ci/admission.py --local`
-runs the static checks on your branch before you push. A maintainer's `admission-override` label
-records a justified exception.
+An admission check (the `Admission` workflow) runs on every pull request. It closes one that is
+behind `main`, changes code without a new or changed test, carries no model declaration, lacks a
+template section, changes a crate without a changelog line, fails the parity matrix or fails a
+required CI check. The comment it leaves names each miss and its fix; push the fixes to the same
+branch and reopen it. An unsigned commit is reported but never closes (the DCO check holds the
+merge; sign a pushed branch by opening a new pull request from a signed branch). Maintainers' and
+bots' pull requests and those opened before the check existed are commented but stay open; a
+maintainer's `tests-not-needed` label waives the test requirement and `admission-override` holds the
+close for a justified exception. `python3 scripts/ci/admission.py --local` applies the static rules
+to your branch before you push.
 
 ## Comment and write-up discipline
 

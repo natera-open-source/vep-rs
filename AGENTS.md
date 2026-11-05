@@ -85,32 +85,18 @@ A failure that reproduces on a clean checkout of `origin/main` is pre-existing. 
 Verification with that reproduction, and leave it out of this change. A newer local toolchain adds
 clippy lints and can move type sizes, so compare like with like.
 
-Cut the branch from a freshly fetched `origin/main`, and before pushing run
-`python3 scripts/ci/admission.py --local`: the static checks of the `Admission` workflow, on the
-local branch against `origin/main`. The workflow runs when a pull request is opened, pushed to or
-reopened, and again when CI finishes. A miss closes a pull request from outside the maintainers,
-with a comment naming each miss and its fix; fix it and press Reopen. The misses:
-
-- the branch does not contain `main`'s tip;
-- code under `crates/` or `scripts/` changes with no test added or updated in the same pull request
-  (a `tests/` file, a `#[test]`, a `test_*.py` or `test_*.sh`, or the golden expectation or corpus
-  `manifest.json` the change moves); a maintainer's `tests-not-needed` label waives it;
-- no commit declares its model (one new signed commit carrying the trailer clears it);
-- the body lacks one of the template's three sections, or a crate change has no `CHANGELOG.md` line
-  under Unreleased;
-- a parity-matrix cell stops resolving, or a required check fails.
-
-An unsigned commit draws the comment and no close: the DCO check already blocks the merge, and
-clearing it rewrites history (`git rebase --signoff origin/main`, then a force-push), the one case
-where a pushed branch is rewritten. On a pull request the check closed for another miss, fix that
-miss and press Reopen before the rewrite: GitHub cannot reopen a pull request whose head was
-force-pushed while it was closed.
+Cut the branch from a freshly fetched `origin/main`, and run `python3 scripts/ci/admission.py --local`
+before pushing. It applies the admission check's static rules to the local branch against
+`origin/main`: current with `main`, a new or changed test with every code change, every commit
+signed off, the model declared with a trailer form under Gotchas, the changelog line, the parity
+matrix. CONTRIBUTING.md's Pull Requests says what the `Admission` check closes and how a closed pull
+request reopens.
 
 On a pull request from a fork, the workflows do not start until a maintainer presses "Approve and
 run", after every push, and the checks read "no checks reported" until then, so Verification carries
 the local results. `main` requires the branch to be current with it and every review thread resolved
-before merge. Bring `main` in with `git fetch origin && git merge --signoff origin/main`; otherwise
-never rebase or force-push a pushed branch, since maintainers may push fixes onto it.
+before merge. Bring `main` in with `git fetch origin && git merge --signoff origin/main`; never rebase
+or force-push a pushed branch, since maintainers may push fixes onto it.
 
 Fill in [.github/pull_request_template.md](.github/pull_request_template.md) for the description.
 
