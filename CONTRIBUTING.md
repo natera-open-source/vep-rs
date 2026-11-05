@@ -5,7 +5,7 @@
 ```bash
 # Run the full test suite (the per-crate test counts are in
 # manuscript/data/code_metrics.csv)
-cargo test --workspace
+cargo test --workspace --locked
 
 # Build a release binary (target/release/vep)
 cargo build --release
@@ -187,17 +187,53 @@ git commit -s -m "Add CADD plugin support"
 The sign-off asserts, under the [Developer Certificate of Origin](https://developercertificate.org),
 that you have the right to submit the code under this project's Apache-2.0 license.
 A `DCO` workflow (`.github/workflows/dco.yml`) checks every commit of a pull request
-for the trailer and fails the check if one is missing. To add a missing sign-off to
-the commits on your branch, use `git rebase --signoff main` and force-push the branch.
+for the trailer and fails the check if one is missing. To add a missing sign-off, use
+`git commit --amend -s` for the last commit or `git rebase --signoff origin/main` for
+several, then force-push if the branch is already pushed: an unsigned commit is the one
+case where a pushed branch is rewritten. Otherwise bring `main` in with
+`git fetch origin && git merge --signoff origin/main`, and never rebase or force-push a
+pushed branch, since maintainers may push fixes onto it.
+
+One commit of every pull request also declares the model that wrote the change, as a
+second trailer beside the sign-off; the squash merge carries both trailers onto `main`.
+The declaration takes one of these forms, the first being the line a coding tool
+appends by default, any vendor's model named the same way, and the last for a change
+written without a model:
+
+```text
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Co-Authored-By: <model name> <the vendor's noreply address>
+Co-Authored-By: No LLM
+```
 
 ## Pull Requests
 
 Before submitting a PR:
 
-1. All CI checks pass: `cargo test --workspace`, `cargo clippy --workspace -- -D warnings`, `cargo fmt --all -- --check`.
+1. All CI checks pass on the toolchain `.github/workflows/ci.yml` pins: `cargo test --workspace --locked`, `cargo clippy --workspace -- -D warnings`, `cargo fmt --all -- --check`.
 2. Add tests for new features or bug fixes.
 3. Update the affected page under `docs/`: the format's page under `output/` for output layouts, the mechanism's page under `plugins/` and the plugin table in `plugins.md` for plugins, `cache-setup.md` for the cache builder and converter. A flag is documented by its help text in `crates/vep-cli/src/args.rs` and by the option tables, from which the CLI reference (`cli-reference.md` and the group pages under `cli/`) is generated: regenerate it with `VEP_UPDATE_CLI_REFERENCE=1 cargo test -p vep-cli --test cli_reference` and commit the result.
 4. For consequence or plugin changes, run concordance smoke to confirm no regressions.
+
+An `Admission` workflow checks every pull request when it is opened, pushed to or reopened, and
+again when CI finishes. A pull request from outside the maintainers is closed, with a comment naming
+each miss and its fix, on any of these:
+
+- the branch does not contain `main`'s tip (bring `main` in with a merge, not a rebase);
+- code under `crates/` or `scripts/` changes with no test added or updated in the same pull request
+  (a `tests/` file, a `#[test]`, a `test_*.py` or `test_*.sh`, or the golden expectation or corpus
+  `manifest.json` the change moves); a maintainer's `tests-not-needed` label waives it;
+- no commit declares its model (one new signed commit carrying the trailer clears it);
+- the body lacks one of the template's sections, or a crate change has no changelog line under
+  Unreleased;
+- a parity-matrix cell stops resolving, or a required check fails.
+
+Fix the miss and reopen the pull request; the check runs again. An unsigned commit draws the comment
+and no close, since the DCO check already blocks the merge and clearing it rewrites history (see Sign
+your commits). On a closed pull request, reopen before that rewrite, because GitHub cannot reopen a
+pull request whose head was force-pushed while it was closed. `python3 scripts/ci/admission.py --local`
+runs the static checks on your branch before you push. A maintainer's `admission-override` label
+records a justified exception.
 
 ## Comment and write-up discipline
 

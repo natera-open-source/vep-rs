@@ -1,0 +1,26 @@
+name: Question
+description: How to do something with vep-rs, or what a page means
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The documentation is at https://natera-open-source.github.io/vep-rs/. If vep-rs crashes or its output is wrong, use the **Bug report** or **Output differs from Ensembl VEP** form instead, so the report carries the fields a maintainer needs.
+  - type: textarea
+    id: goal
+    attributes:
+      label: What you are trying to do
+      description: The pipeline step or result you want, and the command you have so far if any.
+    validations:
+      required: true
+  - type: textarea
+    id: read
+    attributes:
+      label: What you read
+      description: The page or help text you tried, and where it stopped answering.
+  - type: textarea
+    id: question
+    attributes:
+      label: The question
+    validations:
+      required: true

@@ -47,5 +47,6 @@ with `--max-span` before growing the cache.
 ## Test 3
 
 For a consequence or plugin change, run the concordance smoke (`just concordance-smoke <perl_cache>
-<json_cache> <fasta>`) and quote its F1 summary in the pull request. Done when the smoke reports no
-regression against `main`, or the pull request states that it was not run and why.
+<json_cache> <fasta>`) and quote its F1 summary in the pull request, with the command, the image
+digest, the cache and the input it ran on. Done when the smoke's F1 is not below `main`'s on the
+same input, or the pull request states that it was not run and why.

@@ -1,12 +1,12 @@
 name: Feature request
-description: An Ensembl VEP flag or plugin you need, a new output, or some other change
+description: An Ensembl VEP flag you need, a new output, or some other change; a plugin has its own form
 labels: ["enhancement"]
 body:
   - type: textarea
     id: need
     attributes:
       label: What you need
-      description: What you are trying to do and what stops you today. If it's an Ensembl VEP flag or plugin, name it and say how your pipeline uses it.
+      description: What you are trying to do and what stops you. If it's an Ensembl VEP flag, name it and say how your pipeline uses it; a plugin goes on the **Plugin request** form, a speed or memory figure on **Performance report**.
     validations:
       required: true
   - type: textarea

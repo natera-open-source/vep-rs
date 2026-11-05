@@ -1,0 +1,55 @@
+name: Plugin request
+description: An Ensembl VEP plugin vep-rs does not run, or runs without a field you need
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        [docs/plugins.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/plugins.md) lists the plugins vep-rs runs and what each needs. A plugin is ported from its Ensembl VEP source, so the fields below name that source and the data it reads; [docs/developers/writing-a-plugin.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/developers/writing-a-plugin.md) describes how a plugin is added.
+  - type: dropdown
+    id: carried
+    attributes:
+      label: Already carried elsewhere
+      description: A release branch may carry this plugin before it reaches `main`. Ask here before writing code; in-flight maintainer work closes a duplicate with credit rather than merging it.
+      options:
+        - "A request only: I am not planning to port it"
+        - "No open pull request or release branch names this plugin, as far as I can see"
+        - "Unknown: please check before I start"
+    validations:
+      required: true
+  - type: input
+    id: plugin
+    attributes:
+      label: Plugin
+      description: The plugin's name as Ensembl VEP's `--plugin` takes it.
+      placeholder: UTRAnnotator
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Ensembl VEP plugin source
+      description: The `.pm` file in the `Ensembl/VEP_plugins` repository, at the `release/116` branch.
+      placeholder: https://github.com/Ensembl/VEP_plugins/blob/release/116/UTRAnnotator.pm
+    validations:
+      required: true
+  - type: textarea
+    id: data
+    attributes:
+      label: Data the plugin reads
+      description: The data files it needs, where they come from, their size, and the licence they are distributed under. Data behind a sign-in or a commercial licence is never committed to the repository, so say how a test could run without it.
+    validations:
+      required: true
+  - type: textarea
+    id: fields
+    attributes:
+      label: Fields you need
+      description: The output fields the plugin adds that your pipeline reads, and the flags you pass it. If vep-rs runs the plugin but a field is missing or differs, use the **Output differs from Ensembl VEP** form instead.
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I'm willing to open a pull request for this.

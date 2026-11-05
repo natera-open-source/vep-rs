@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Ask a question
+    url: https://github.com/natera-open-source/vep-rs/issues/new?template=question.yml
+    about: How to do something with vep-rs, or what a page means. The documentation is at https://natera-open-source.github.io/vep-rs/.
   - name: Report a security vulnerability
     url: https://github.com/natera-open-source/vep-rs/security/advisories/new
     about: Open a private vulnerability report on GitHub, or email the address in SECURITY.md. Please don't file a public issue.

@@ -49,9 +49,13 @@ The test lives in the crate the behaviour lives in. Follow the pattern already u
 | --- | --- | --- |
 | `error` | The refusal fires with its message, exit code 1 | `assert_refused` in `crates/vep-cli/tests/cli_errors.rs` |
 | `accepted_noop` | Output is byte-identical with and without the flag | `assert_no_effect` in `crates/vep-cli/tests/cli_noops.rs` |
-| `removed` | The flag is rejected and `args.rs` no longer declares it | `crates/vep-cli/tests/cli_errors.rs` |
+| `removed` | The flag is rejected and `args.rs` does not declare it | `crates/vep-cli/tests/cli_errors.rs` |
 | `implemented` | The effect on a hand-built variant and transcript, the expected value taken from Ensembl VEP's output on the same input and cited | the owning crate's unit tests |
 | `documented_subset` | The subset's effect, plus a test that the page states the exclusion | the `implemented` pattern, plus `crates/vep-cli/tests/documented_subsets.rs` |
+
+A test pins the literal expected value, the whole row, taken from Ensembl VEP's output or the built
+artefact, never from the function under test. A test that asserts a substring, or a value the code
+computed, proves nothing.
 
 Done when the test fails for the reason the row describes, and you have seen it fail.
 
@@ -77,7 +81,12 @@ Implement until Test 1 passes.
   undeclared, and name the new example in the pull request.
 - **The interim test**: once the real behaviour replaces the stop-gap, delete the test the row's
   `interim` names, and fix every doc comment, module doc or intra-doc link that names it, including
-  in tests that belong to other rows.
+  in tests that belong to other rows. Before deleting or renaming any test, grep
+  `tests/parity/matrix.tsv` for its name: another row's cell may name it.
+- **New row kinds**: a new kind of output row (a feature type, an intergenic or companion row) is
+  driven through every writer, the `--pick` family, the row filters and the plugin hosts, each
+  compared whole-row with Ensembl VEP's output for the same records. A row selector or mask is a
+  reporting aid, never the gate: the gate is every row of every format.
 
 Done when Test 1 passes and `cargo test -p <crate>` is green.
 
@@ -105,6 +114,8 @@ parity_matrix` pass.
 
 ## 7. Gate
 
-Run the full set in [AGENTS.md](../../../AGENTS.md#before-pushing), then commit with `-s` and open the
-pull request. Done when every command passes and its output is quoted in the pull request's
-Verification section.
+Run the full set in [AGENTS.md](../../../AGENTS.md#before-pushing), the admission check included,
+then commit with `-s` and the model declaration and open the pull request with the template's three
+sections and nothing else. A test added to a file under `scripts/` moves that file's floor in
+`.github/workflows/ci.yml`. Done when every command passes, its output is quoted in the pull
+request's Verification section, and the smoke's F1 is quoted there or stated as not run and why.

@@ -18,6 +18,17 @@ parts that fail CI or review when missed.
 ## Gotchas
 
 - Sign every commit: `git commit -s`. The DCO check fails a pull request with an unsigned commit.
+- Declare the model that wrote the change: one commit carries a trailer beside its sign-off, in
+  one of the three forms below, and the squash body carries both trailers onto `main`. The first
+  form is the line a coding tool appends by default; the last is for a change written without a
+  model.
+
+```text
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Co-Authored-By: <model name> <the vendor's noreply address>
+Co-Authored-By: No LLM
+```
+
 - A new `.rs` file opens with the two-line license header, a blank line, then its `//!` module doc
   (`scripts/check_module_docs.sh` checks the blank line).
 - A flag added or changed in `crates/vep-cli/src/args.rs` gets its matrix row in the same change, and
@@ -34,29 +45,85 @@ parts that fail CI or review when missed.
   concordance-smoke <perl_cache> <json_cache> <fasta>`), which needs Docker and an Ensembl VEP 116
   cache; on a host without them, the pull request's Verification section says the smoke was not run
   and why.
+- A test file under `scripts/` runs in CI only when `.github/workflows/ci.yml` lists it, with a floor
+  on the tests it collects (pytest) or the `ok` lines it prints (bash). Adding or deleting a test
+  moves that floor in the same change; a test file `ci.yml` does not list never runs.
+- Before deleting or renaming a test, grep `tests/parity/matrix.tsv` for its name: a cell naming a
+  test the tree lacks fails `check_parity_matrix.py`.
+- A docs edit runs `python3 scripts/docs/site_metrics.py --gate` and, after `mdbook build`,
+  `python3 scripts/docs/check_site_links.py` (CI adds `--tree HEAD`, which reads the committed tree,
+  so run it that way after committing). A page over 4,000 words, a paragraph over 120, a sentence
+  over 45, a table over 4 columns, a code line over 80 characters or a broken relative link fails the
+  Pages job. It also runs for `README.md`, `CHANGELOG.md` and `CONTRIBUTING.md`, where the table,
+  code-line and link checks apply; the page cap applies to all but `CHANGELOG.md`.
+- A `Cargo.toml` change is checked with `cargo package --list -p <crate>` for every workspace crate,
+  reading the list for what the package ships. `cargo package` takes the files under the crate's own
+  directory plus the file its manifest's `license-file` names, so the repository's `LICENSE` and
+  `NOTICE` ship only as a copy in the crate or, for `LICENSE`, through `license-file`. A scratch
+  `cargo install --path crates/vep-cli --root <dir>` shows which binaries a user gets.
 
 ## Before pushing
 
 Run these on CI's toolchain, Rust 1.97.1 (the `toolchain:` input in `.github/workflows/ci.yml`), and
-quote the result in the pull request's Verification section:
+quote the result in the pull request's Verification section. The MSRV job builds the workspace on
+Rust 1.89 (`rust-version` in `Cargo.toml`); `rustup toolchain install 1.97.1 1.89` installs both.
 
 ```bash
 cargo fmt --all -- --check && cargo clippy --workspace -- -D warnings
-cargo test --workspace --no-fail-fast
+cargo test --workspace --locked --no-fail-fast
 python3 scripts/parity/check_parity_matrix.py && scripts/check_module_docs.sh
+cargo +1.89 build --workspace --locked
 ```
+
+CI builds and tests with `--locked`: a dependency change commits `Cargo.lock` in the same change. A
+dependency whose newer release declares a higher `rust-version` fails the MSRV job, so a bump is
+built on 1.89 first. `tools/vep-fields-compare` is its own Cargo root: a change there runs the test,
+clippy (with `--all-targets`) and fmt commands and the 1.89 build again with
+`--manifest-path tools/vep-fields-compare/Cargo.toml`, and `scripts/check_module_docs.sh tools`.
 
 A failure that reproduces on a clean checkout of `origin/main` is pre-existing. Name it under
 Verification with that reproduction, and leave it out of this change. A newer local toolchain adds
 clippy lints and can move type sizes, so compare like with like.
 
+Cut the branch from a freshly fetched `origin/main`, and before pushing run
+`python3 scripts/ci/admission.py --local`: the static checks of the `Admission` workflow, on the
+local branch against `origin/main`. The workflow runs when a pull request is opened, pushed to or
+reopened, and again when CI finishes. A miss closes a pull request from outside the maintainers,
+with a comment naming each miss and its fix; fix it and press Reopen. The misses:
+
+- the branch does not contain `main`'s tip;
+- code under `crates/` or `scripts/` changes with no test added or updated in the same pull request
+  (a `tests/` file, a `#[test]`, a `test_*.py` or `test_*.sh`, or the golden expectation or corpus
+  `manifest.json` the change moves); a maintainer's `tests-not-needed` label waives it;
+- no commit declares its model (one new signed commit carrying the trailer clears it);
+- the body lacks one of the template's three sections, or a crate change has no `CHANGELOG.md` line
+  under Unreleased;
+- a parity-matrix cell stops resolving, or a required check fails.
+
+An unsigned commit draws the comment and no close: the DCO check already blocks the merge, and
+clearing it rewrites history (`git rebase --signoff origin/main`, then a force-push), the one case
+where a pushed branch is rewritten. On a pull request the check closed for another miss, fix that
+miss and press Reopen before the rewrite: GitHub cannot reopen a pull request whose head was
+force-pushed while it was closed.
+
+On a pull request from a fork, the workflows do not start until a maintainer presses "Approve and
+run", after every push, and the checks read "no checks reported" until then, so Verification carries
+the local results. `main` requires the branch to be current with it and every review thread resolved
+before merge. Bring `main` in with `git fetch origin && git merge --signoff origin/main`; otherwise
+never rebase or force-push a pushed branch, since maintainers may push fixes onto it.
+
 Fill in [.github/pull_request_template.md](.github/pull_request_template.md) for the description.
 
 ## Scope
 
+- Before taking a row, a plugin or a performance item, ask on its issue whether a release branch
+  already carries it; in-flight maintainer work closes a duplicate with credit rather than merging
+  it.
 - One matrix row or one issue per branch, cut from `origin/main`. Rows that share one mechanism, one
   message shape or one docs sentence (`gff` and `gtf`; the unported plugins) are a **family** and land
   together in one branch.
+- A pull request is squash-merged: its body is written at merge from the commit messages, so wording
+  fixes to commits need no force-push.
 - A row's `target` is the maintainers' call. When the Perl source or the code shows the target is
   wrong, or another row contradicts it, stop and report it as a **target decision**, with the
   evidence, and keep the row as it is.
@@ -64,5 +131,6 @@ Fill in [.github/pull_request_template.md](.github/pull_request_template.md) for
   `crates/vep-cli/src/args.rs`, `crates/vep-cli/src/config.rs`, `docs/cli-reference.md` and
   `docs/cli/`. Rebase onto `origin/main` before the first push; once the pull request exists, merge
   `origin/main` in instead. Regenerate the CLI reference after either.
-- Releases stay with the maintainers: the version in `Cargo.toml`, tags, crates.io publishing, and the
-  `release.yml`, `docker.yml` and `pages.yml` workflows.
+- Releases and dependency bumps stay with the maintainers: the version in `Cargo.toml`, tags,
+  crates.io publishing, the `release.yml`, `docker.yml` and `pages.yml` workflows, and a bump in
+  `Cargo.lock` that no change of yours needs.
