@@ -2581,6 +2581,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
  "vep-builtins",

@@ -1156,31 +1156,22 @@ mod tests {
         assert_eq!(variation_file_kind("1-1000000.json"), None);
     }
 
-    /// A scratch directory under the system temporary directory, removed on drop.
-    struct Scratch(PathBuf);
+    /// A scratch directory under the system temporary directory, unique to the
+    /// test that made it and removed on drop.
+    struct Scratch(tempfile::TempDir);
 
     impl Scratch {
         fn new() -> Self {
-            let nanos = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos();
-            let dir = std::env::temp_dir().join(format!(
-                "vep-cache-converter-{}-{nanos}",
-                std::process::id()
-            ));
-            fs::create_dir_all(&dir).unwrap();
-            Self(dir)
+            Self(
+                tempfile::Builder::new()
+                    .prefix("vep-cache-converter-")
+                    .tempdir()
+                    .unwrap(),
+            )
         }
 
         fn path(&self) -> &Path {
-            &self.0
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
+            self.0.path()
         }
     }
 

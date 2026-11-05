@@ -6767,7 +6767,9 @@ fn make_transcript_with_edited_codon_4(residue: u8) -> Transcript {
         cds.replace_range(9..12, "TGA");
         let mut pep: Vec<u8> = cds
             .as_bytes()
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .map(|c| vep_core::codon::translate_codon_with_table(c, 1))
             .collect();
         pep[3] = residue;

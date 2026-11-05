@@ -1266,8 +1266,10 @@ fn unwritable_warnings_file_ends_both_modes_at_the_same_batch() {
 /// the header lines, which the direct and vectored strategies put on the
 /// output before the pipeline starts, fail as the buffered strategy's write or
 /// final flush does. The warnings go to standard error, so the default warnings
-/// file beside the unwritable output is not what fails first.
-#[cfg(unix)]
+/// file beside the unwritable output is not what fails first. The output is
+/// Linux's `/dev/full`, which opens and then fails every write; macOS has no
+/// such device.
+#[cfg(target_os = "linux")]
 #[test]
 fn unwritable_output_fails_instead_of_hanging() {
     let corpus = &corpora()[0];
