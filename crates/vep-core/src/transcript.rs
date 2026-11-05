@@ -1087,10 +1087,19 @@ mod tests {
         assert_eq!(&*derived.feature_ordinals().introns, &[(201, 299)]);
     }
 
-    /// The empty cells every loaded transcript carries, touched or not.
+    /// The empty cells every loaded transcript carries, touched or not. Each
+    /// `OnceLock` holds a `Once` beside its value: where `Once` is a 4-byte
+    /// futex word (Linux) the cells take 16 + 16 + 24 = 56 bytes, and where it
+    /// is an 8-byte queue pointer (macOS) the 10-byte facts cell pads to 24, for
+    /// 64.
     #[test]
-    fn derived_cells_cost_at_most_56_bytes_per_transcript() {
-        assert!(std::mem::size_of::<TranscriptDerived>() <= 56);
+    fn derived_cells_cost_at_most_56_bytes_per_transcript_with_a_futex_once() {
+        let bound = if std::mem::size_of::<std::sync::Once>() == 4 {
+            56
+        } else {
+            64
+        };
+        assert!(std::mem::size_of::<TranscriptDerived>() <= bound);
     }
 
     /// A coding transcript with a translation and a mapper over `cds`, the
