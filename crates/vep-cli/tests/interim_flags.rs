@@ -5,7 +5,7 @@
 //! binary: `--custom` and the statistics flags are accepted and change nothing,
 //! `--regulatory` is accepted, warns and declares its columns empty, `--refseq`
 //! and `--merged` select the suffixed species directory of the cache root, and
-//! `--stats_html`, `--all_refseq` and `--bam` are refused as unknown arguments.
+//! `--stats_html` and `--all_refseq` are refused as unknown arguments.
 //! Each test quotes the documentation sentence it proves and cites the Ensembl
 //! VEP source (release/116.2) that sentence describes.
 
@@ -453,24 +453,14 @@ fn stats_html_is_refused_as_an_unknown_argument() {
 
 /// `--all_refseq` is refused as an unknown argument.
 ///
-/// Documented: "`--all_refseq` and `--bam` are refused as unknown arguments (exit
-/// 2)" (What vep-rs does not do, RefSeq and merged caches; the `--bam` half is
-/// [`bam_is_refused_as_an_unknown_argument`]). Ensembl VEP declares it
+/// Documented: "`--all_refseq` is refused as an unknown argument (exit 2)" (What
+/// vep-rs does not do, RefSeq and merged caches). Ensembl VEP declares it
 /// (`Config.pm:98`) and under it keeps the transcripts of a RefSeq or merged cache
 /// whose stable id lacks the `^[A-Z]{2}_\d+` accession shape
 /// (`AnnotationType/Transcript.pm:236-247`).
 #[test]
 fn all_refseq_is_refused_as_an_unknown_argument() {
     assert_unknown_argument(&["--all_refseq", "-all_refseq"], "--all_refseq");
-}
-
-/// `--bam` is refused as an unknown argument (the sentence of
-/// [`all_refseq_is_refused_as_an_unknown_argument`]). Ensembl VEP declares it
-/// (`Config.pm:253`) and edits the cache's transcript models from the aligned
-/// reads of the BAM file it names (`AnnotationType/Transcript.pm:391-399, :421`).
-#[test]
-fn bam_is_refused_as_an_unknown_argument() {
-    assert_unknown_argument(&["--bam", "-bam"], "--bam");
 }
 
 /// A cache root holding the corpus cache as `<root>/<species_dir>/116_GRCh38`
