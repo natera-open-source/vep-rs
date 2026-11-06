@@ -97,7 +97,6 @@ STATEMENT_WORDS = (
     ("none", re.compile(r"\bnone\b", re.IGNORECASE)),
 )
 NONE_STATEMENT = "This change touches none of the intended divergences."
-# An issue form writes `### <label>` then the value; `_No response_` stands for an empty field.
 ISSUE_MARKER = "<!-- admission:issue -->"
 NEEDS_DIVERGENCE_LABEL = "needs-divergence-check"
 ISSUE_CHOICE_LABEL = "Intended divergences"
@@ -151,7 +150,7 @@ AUTHOR_RE = re.compile(r"^author (.*?) <([^>]*)> \d+ [+-]\d{4}$")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$")
 # The template's checklist sits under its last heading; a checkbox line is never a section's text.
 CHECKLIST_RE = re.compile(r"^\s*[-*]\s+\[[ xX]\]")
-CHECKBOX_RE = re.compile(r"^\s*[-*+]\s+\[([ xX])\]\s*(.*?)\s*$")
+CHECKBOX_RE = re.compile(r"^\s*[-*]\s+\[([ xX])\]\s*(.*?)\s*$")
 # An entry line: the entry in a code span, with or without a list marker, then the rest of the line.
 ENTRY_LINE_RE = re.compile(r"^\s*(?:(?:[-*+]|\d+[.)])\s+)?`([^`]+)`\s*(.*?)\s*$")
 LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
@@ -961,6 +960,7 @@ def check_divergences(
     index = read_index(base_index) | read_index(head_index)
     lines = body_sections(body).get(DIVERGENCE_SECTION.lower())
     statements = read_statements(lines) if lines is not None else {}
+    checked = {kind for kind, (is_checked, _lines) in statements.items() if is_checked}
     problems: list[str] = []
     if not statements:
         problems.append(
@@ -969,45 +969,41 @@ def check_divergences(
             "check the statement that applies (the change touches none of the index's entries; it "
             "touches existing entries, one line each; it proposes a new intended divergence)."
         )
+    elif not checked:
+        problems.append(
+            f"No statement of the `## {DIVERGENCE_SECTION}` section is checked: check the one "
+            "that applies (the change touches none of the index's entries; it touches existing "
+            "entries, one line each; it proposes a new intended divergence)."
+        )
+    elif "none" in checked and checked != {"none"}:
+        problems.append(
+            f"The `## {DIVERGENCE_SECTION}` section checks the first statement (none touched) "
+            "together with another: the first statement excludes the other two."
+        )
     else:
-        checked = {kind for kind, (is_checked, _lines) in statements.items() if is_checked}
-        if not checked:
-            problems.append(
-                f"No statement of the `## {DIVERGENCE_SECTION}` section is checked: check the one "
-                "that applies (the change touches none of the index's entries; it touches existing "
-                "entries, one line each; it proposes a new intended divergence)."
-            )
-        elif "none" in checked and checked != {"none"}:
-            problems.append(
-                f"The `## {DIVERGENCE_SECTION}` section checks the first statement (none touched) "
-                "together with another: the first statement excludes the other two."
-            )
-        else:
-            if "touches" in checked:
-                problems.extend(
-                    entry_problems(
-                        entry_lines(statements["touches"][1]),
-                        index,
-                        f"The second statement of the `## {DIVERGENCE_SECTION}` section is checked",
-                    )
+        if "touches" in checked:
+            problems.extend(
+                entry_problems(
+                    entry_lines(statements["touches"][1]),
+                    index,
+                    f"The second statement of the `## {DIVERGENCE_SECTION}` section is checked",
                 )
-            if "proposes" in checked and not any(
-                line.strip() for line in statements["proposes"][1]
-            ):
+            )
+        if "proposes" in checked and not any(line.strip() for line in statements["proposes"][1]):
+            problems.append(
+                f"The third statement of the `## {DIVERGENCE_SECTION}` section is checked and no "
+                "description follows it: in a line or two, give the input, what Ensembl VEP and "
+                "vep-rs each write, and why vep-rs's output is the one to keep."
+            )
+        if "none" in checked:
+            artefacts = divergence_artefacts(files, index)
+            if artefacts:
                 problems.append(
-                    f"The third statement of the `## {DIVERGENCE_SECTION}` section is checked and no "
-                    "description follows it: in a line or two, give the input, what Ensembl VEP and "
-                    "vep-rs each write, and why vep-rs's output is the one to keep."
+                    f"The first statement of the `## {DIVERGENCE_SECTION}` section (none "
+                    f"touched) is checked while the change edits {listed_codes(artefacts)}: name "
+                    "the entries the change touches under the second statement, or describe the "
+                    "proposed divergence under the third."
                 )
-            if "none" in checked:
-                artefacts = divergence_artefacts(files, index)
-                if artefacts:
-                    problems.append(
-                        f"The first statement of the `## {DIVERGENCE_SECTION}` section (none "
-                        f"touched) is checked while the change edits {listed_codes(artefacts)}: name "
-                        "the entries the change touches under the second statement, or describe the "
-                        "proposed divergence under the third."
-                    )
     if not problems:
         return None
     return Finding("divergences", " ".join(problems), closes=closes)
@@ -1224,6 +1220,24 @@ def predates(created_at: str | None, landed_at: str | None) -> bool:
     return datetime.fromisoformat(created_at) < datetime.fromisoformat(landed_at)
 
 
+REPORTED_ONLY = (
+    (
+        "signoff",
+        (
+            "the sign-off miss is reported only, and the DCO check holds the merge until every "
+            "commit is signed off"
+        ),
+    ),
+    (
+        "divergences",
+        (
+            f"the `## {DIVERGENCE_SECTION}` miss is reported only, since the pull request was opened "
+            "before that section was asked"
+        ),
+    ),
+)
+
+
 def close_footer(
     findings: list[Finding],
     user: dict,
@@ -1257,24 +1271,6 @@ def close_footer(
         "The pull request is closed until these are fixed: push the fixes to the same branch, then "
         "reopen it and the check runs again."
     )
-
-
-REPORTED_ONLY = (
-    (
-        "signoff",
-        (
-            "the sign-off miss is reported only, and the DCO check holds the merge until every "
-            "commit is signed off"
-        ),
-    ),
-    (
-        "divergences",
-        (
-            f"the `## {DIVERGENCE_SECTION}` miss is reported only, since the pull request was opened "
-            "before that section was asked"
-        ),
-    ),
-)
 
 
 # --- the comment ---------------------------------------------------------------------------------
@@ -1476,10 +1472,6 @@ def opened_before(gh: GitHub, pr: dict, path: str) -> bool:
     except AdmissionError as exc:
         print(f"WARNING: [admission] the landing date was not read ({path}): {exc}", file=sys.stderr)
         return True
-
-
-def predates_workflow(gh: GitHub, pr: dict) -> bool:
-    return opened_before(gh, pr, WORKFLOW_FILE)
 
 
 def required_checks(gh: GitHub, base_ref: str) -> set[str]:
@@ -1715,7 +1707,7 @@ def publish_findings(
     user = pr.get("user") or {}
     labels = label_names(pr)
     draft = bool(pr.get("draft"))
-    older = predates_workflow(gh, pr)
+    older = opened_before(gh, pr, WORKFLOW_FILE)
     close, footer = close_footer(findings, user, labels, draft, maintainers, older)
     # The judgement is of one head: a push since the event moved it, and the run for the new head
     # writes the comment and decides the close; this run then writes nothing.
@@ -1873,7 +1865,6 @@ def run_issue(event: dict, gh: GitHub, repo_dir: Path) -> int:
     problem = check_issue_divergences(issue.get("body"), index)
     labels = label_names(issue)
     existing = find_comment(gh, number, ISSUE_MARKER)
-    quoted = urllib.parse.quote(NEEDS_DIVERGENCE_LABEL, safe="")
     if problem is not None:
         print(f"ERROR: [admission] {problem}", file=sys.stderr)
         body = f"{ISSUE_MARKER}\n{problem} Edit the issue and the check runs again."
@@ -1885,6 +1876,7 @@ def run_issue(event: dict, gh: GitHub, repo_dir: Path) -> int:
     if existing is not None:
         write_comment(gh, number, existing, f"{ISSUE_MARKER}\nThe intended-divergences check passes.")
     if NEEDS_DIVERGENCE_LABEL in labels:
+        quoted = urllib.parse.quote(NEEDS_DIVERGENCE_LABEL, safe="")
         gh.delete(f"/repos/{gh.repo}/issues/{number}/labels/{quoted}")
     print(f"admission: issue #{number}: OK")
     return 0
