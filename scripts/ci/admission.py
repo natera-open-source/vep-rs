@@ -239,12 +239,13 @@ def rust_test_regions(text: str) -> list[tuple[int, int]]:
     i = 0
     line = 1
     depth = 0
-    # The pending attribute: its line, and the `depth` and `parens` counts where it sits.
+    # The armed attribute, the one whose target has not ended: its line, and the `depth` and
+    # `parens` counts where it sits.
     armed: tuple[int, int, int] | None = None
-    # Whether the pending attribute's target is an item, decided by its first word with the
+    # Whether the armed attribute's target is an item, decided by its first word with the
     # visibility skipped; None until that word arrives.
     item_target: bool | None = None
-    # Generic brackets open inside the pending attribute's target: a comma inside them does not end
+    # Generic brackets open inside the armed attribute's target: a comma inside them does not end
     # a field. `<` opens one only right after a path character, which a comparison written `a < b`
     # never has, and `>` closes one unless it ends `->` or `=>`.
     angle = 0
