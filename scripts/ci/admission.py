@@ -103,14 +103,18 @@ MOD_DECL_TEMPLATE = r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+{name}\s*;"
 HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 SIGNOFF_RE = re.compile(r"^Signed-off-by:\s*(.*?)\s*<([^<>]+)>\s*$", re.MULTILINE | re.IGNORECASE)
 DECLARATION_RE = re.compile(r"^Co-Authored-By:\s*(.+?)\s*$", re.MULTILINE | re.IGNORECASE)
+AUTHOR_RE = re.compile(r"^author (.*?) <([^>]*)> \d+ [+-]\d{4}$")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$")
 # The template's checklist sits under its last heading; a checkbox line is never a section's text.
 CHECKLIST_RE = re.compile(r"^\s*[-*]\s+\[[ xX]\]")
+FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
 BLOCK_RE = re.compile(
     r"<!-- admission:(static|ci) sha=([0-9a-f]+) closes=([01]) -->\n(.*?)\n<!-- /admission:\1 -->",
     re.DOTALL,
 )
 CFG_RE = re.compile(r"^cfg\s*\((.*)\)\s*$", re.DOTALL)
+CFG_ALL_RE = re.compile(r"^all\s*\((.*)\)\s*$", re.DOTALL)
+CFG_DEPTH_MAX = 16
 TEST_ATTR_RE = re.compile(
     r"^(?:[A-Za-z_][A-Za-z0-9_]*::)*(?:test|rstest|test_case|quickcheck|proptest)\b"
 )
@@ -201,19 +205,22 @@ def split_operands(predicate: str) -> list[str]:
 
 def cfg_is_test(attr: str) -> bool:
     """Whether an attribute's text is a `cfg` predicate true only in a test build: `cfg(test)`, or
-    `cfg(all(...))` with `test` among its operands, directly or inside a nested `all(...)`.
-    `any(...)`, `not(...)` and a feature name containing the word are predicates a release build can
-    satisfy, so they are code."""
+    `cfg(all(...))` with `test` among its operands, directly or inside a nested `all(...)` up to
+    `CFG_DEPTH_MAX` levels. `any(...)`, `not(...)` and a feature name containing the word are
+    predicates a release build can satisfy, so they are code; a deeper nest is not parsed and
+    counts as code too."""
     match = CFG_RE.match(attr.strip())
     if not match:
         return False
-    predicate = match.group(1).strip()
-    if predicate == "test":
-        return True
-    inner = re.match(r"^all\s*\((.*)\)\s*$", predicate, re.DOTALL)
-    if not inner:
-        return False
-    return any(cfg_is_test(f"cfg({operand})") for operand in split_operands(inner.group(1)))
+    pending = [(match.group(1).strip(), 0)]
+    while pending:
+        predicate, depth = pending.pop()
+        if predicate == "test":
+            return True
+        inner = CFG_ALL_RE.match(predicate)
+        if inner and depth < CFG_DEPTH_MAX:
+            pending.extend((operand, depth + 1) for operand in split_operands(inner.group(1)))
+    return False
 
 
 def rust_test_regions(text: str) -> list[tuple[int, int]]:
@@ -478,6 +485,8 @@ def classify_file(entry: dict, regions_for: RegionsFor) -> tuple[bool, bool]:
         return False, arrived or bool(entry.get("additions"))
     if not file_changed(entry):
         return False, False
+    if RUST_UNTESTED_RE.match(path):
+        return True, False
     if RUST_CODE_RE.match(path):
         patch = entry.get("patch")
         if patch is None:
@@ -515,23 +524,26 @@ def check_tests_included(
     return None
 
 
-def check_workflow_files(files: list[dict], labels: set[str]) -> Finding | None:
+def check_workflow_files(files: list[dict]) -> Finding | None:
     """A change under `.github/workflows/` from outside the maintainers: the required checks the
-    after-CI job judges are produced by those files, so a contributor cannot edit them."""
-    if OVERRIDE_LABEL in labels:
-        return None
-    changed = sorted(
-        entry["filename"]
-        for entry in files
-        if WORKFLOW_PATH_RE.match(entry.get("filename", "")) and file_changed(entry)
+    after-CI job judges are produced by those files, so a contributor cannot edit, add, remove or
+    rename them. The `admission-override` label holds the close, as for every finding."""
+    touched = sorted(
+        {
+            path
+            for entry in files
+            for path in (entry.get("filename", ""), entry.get("previous_filename") or "")
+            if WORKFLOW_PATH_RE.match(path)
+        }
     )
-    if not changed:
+    if not touched:
         return None
-    listed = ", ".join(code(path) for path in changed[:5])
+    listed = ", ".join(code(path) for path in touched[:5])
+    more = f" and {len(touched) - 5} more" if len(touched) > 5 else ""
     return Finding(
         "workflows",
-        f"The change edits {listed} under `.github/workflows/`: workflow changes are the maintainers'; "
-        "ask on an issue and leave the workflows out of this pull request.",
+        f"The change touches {listed}{more} under `.github/workflows/`: workflow changes are the "
+        "maintainers'; ask on an issue and leave the workflows out of this pull request.",
     )
 
 
@@ -642,10 +654,10 @@ def check_body_sections(body: str | None) -> Finding | None:
     for raw in text.splitlines():
         stripped = raw.strip()
         if fence is not None:
-            if stripped.startswith(fence):
+            if stripped.startswith(fence) and stripped.rstrip(fence[0]) == "":
                 fence = None
-        elif stripped.startswith(("```", "~~~")):
-            fence = stripped[:3]
+        elif (opening := FENCE_RE.match(stripped)) is not None:
+            fence = opening.group(1)
         elif (heading := HEADING_RE.match(stripped)) is not None:
             current = heading.group(1).strip().lower()
             sections.setdefault(current, [])
@@ -738,9 +750,9 @@ def check_changelog(
 
 def check_parity(tree: Path, checker: Path) -> Finding | None:
     """Run the base branch's checker over the contributed tree. The checker reads the tree and runs
-    nothing from it. A checker that exits without a finding was stopped by the tree it read (a byte
-    it cannot decode, a cell past its limits), which is the contribution's miss; only a timeout is an
-    environment error."""
+    nothing from it. A checker that exits with a traceback was stopped by what it read, which is the
+    contribution's miss; a timeout, a signal, no output at all or a failed import of the checker's
+    own modules is an environment error."""
     try:
         proc = subprocess.run(
             [sys.executable, str(checker), "--root", str(tree)],
@@ -760,6 +772,11 @@ def check_parity(tree: Path, checker: Path) -> Finding | None:
     ]
     if not errors:
         last = next((line for line in reversed(proc.stderr.splitlines()) if line.strip()), "")
+        if proc.returncode < 0 or not last or last.startswith(("ModuleNotFoundError", "ImportError")):
+            raise AdmissionError(
+                f"the parity checker stopped without reading the tree (exit {proc.returncode}): "
+                f"{last or 'no output'}"
+            )
         return Finding(
             "parity",
             f"The parity checker could not read this change ({code(last, 200)}): run "
@@ -1076,6 +1093,27 @@ def required_checks(gh: GitHub, base_ref: str) -> set[str]:
 # --- git -----------------------------------------------------------------------------------------
 
 
+def parse_commit_object(sha: str, raw: bytes) -> dict:
+    """A commit object's headers and message as the API's commit entry: the parents, the author's
+    name and address, and the message with its trailers."""
+    text = raw.decode("utf-8", errors="replace")
+    header, _, message = text.partition("\n\n")
+    parents: list[dict] = []
+    name = email = ""
+    for line in header.splitlines():
+        if line.startswith("parent "):
+            parents.append({"sha": line.split()[1]})
+        elif line.startswith("author "):
+            match = AUTHOR_RE.match(line)
+            if match:
+                name, email = match.group(1), match.group(2)
+    return {
+        "sha": sha,
+        "parents": parents,
+        "commit": {"message": message, "author": {"name": name, "email": email}},
+    }
+
+
 class Git:
     def __init__(self, repo_dir: Path):
         self.repo_dir = repo_dir
@@ -1120,27 +1158,33 @@ class Git:
         return sha
 
     def log_commits(self, base: str, head: str) -> list[dict]:
-        """The commits reachable from `head` and not from `base`, oldest first, in the shape the API
-        gives a pull request's commits (the fields the checks read)."""
-        out = self.run(
-            "log",
-            "--topo-order",
-            "--reverse",
-            "--format=%H%x00%P%x00%an%x00%ae%x00%B%x1e",
-            f"{base}..{head}",
+        """The commits reachable from `head` and not from `base`, parents before children, in the
+        shape the API gives a pull request's commits (the fields the checks read). The objects come
+        through `cat-file --batch`, whose size-prefixed records a message cannot break."""
+        shas = self.run("rev-list", "--topo-order", "--reverse", f"{base}..{head}").split()
+        if not shas:
+            return []
+        proc = subprocess.run(
+            ["git", "-C", str(self.repo_dir), "cat-file", "--batch"],
+            input=("\n".join(shas) + "\n").encode(),
+            capture_output=True,
+            check=False,
         )
+        if proc.returncode != 0:
+            raise AdmissionError(f"git cat-file failed: {proc.stderr.decode(errors='replace')[-300:]}")
         commits = []
-        for record in out.split("\x1e"):
-            if not record.strip():
-                continue
-            sha, parents, name, email, message = record.lstrip("\n").split("\x00", 4)
-            commits.append(
-                {
-                    "sha": sha,
-                    "parents": [{"sha": p} for p in parents.split()],
-                    "commit": {"message": message, "author": {"name": name, "email": email}},
-                }
-            )
+        data = proc.stdout
+        pos = 0
+        for sha in shas:
+            header_end = data.index(b"\n", pos)
+            fields = data[pos:header_end].decode(errors="replace").split()
+            if len(fields) != 3 or fields[1] != "commit":
+                raise AdmissionError(f"{sha} is not a commit object: {' '.join(fields[1:])}")
+            size = int(fields[2])
+            body_start = header_end + 1
+            body_end = body_start + size
+            commits.append(parse_commit_object(sha, data[body_start:body_end]))
+            pos = body_end + 1
         return commits
 
     def export_tree(self, rev: str, dest: Path) -> None:
@@ -1225,6 +1269,17 @@ def label_names(pr: dict) -> set[str]:
     return {label.get("name", "") for label in pr.get("labels") or []}
 
 
+class Publication(NamedTuple):
+    """`closed`: this run closed the pull request. `current`: the pull request's head as re-read
+    before the write matched the judged head, so the comment and the close were decided here and
+    the labels may follow. `labels`: the pull request's labels from the same re-read (empty when
+    the head moved)."""
+
+    closed: bool
+    current: bool
+    labels: set[str]
+
+
 def publish_findings(
     gh: GitHub,
     pr: dict,
@@ -1233,12 +1288,13 @@ def publish_findings(
     block: str,
     findings: list[Finding],
     noted: bool = False,
-) -> bool:
+) -> Publication:
     """Write this run's block into the pull request's comment, close the pull request when the
-    findings call for it and it is open, and return whether this run closed it. The footer is the
-    close or exemption sentence for the findings on this head: this run's, else the other block's
-    when an earlier run on the same head left some. A clean run writes only to refresh a comment
-    that exists, unless its block carries a note (`noted`)."""
+    findings call for it and it is open, and return the `Publication`: nothing is written when the
+    head moved since the judgement. The footer is the close or exemption sentence for the findings
+    on this head: this run's, else the other block's when an earlier run on the same head left
+    some. A clean run writes only to refresh a comment that exists, unless its block carries a note
+    (`noted`)."""
     number = pr["number"]
     head_sha = pr["head"]["sha"]
     maintainers = read_maintainers(repo_dir)
@@ -1252,7 +1308,8 @@ def publish_findings(
     current = gh.get(f"/repos/{gh.repo}/pulls/{number}") or {}
     if (current.get("head") or {}).get("sha", head_sha) != head_sha:
         print(f"admission: the head moved past {head_sha[:7]}; this run writes nothing.")
-        return False
+        return Publication(closed=False, current=False, labels=set())
+    current_labels = label_names(current) if current.get("labels") is not None else labels
     # The comment is read right before it is written and the other job's block is kept, so two runs
     # that interleave lose neither block.
     existing = find_comment(gh, number)
@@ -1267,8 +1324,8 @@ def publish_findings(
         write_comment(gh, number, existing, render_comment(blocks, head_sha, footer))
     if close and (current.get("state") or pr.get("state")) == "open":
         gh.patch(f"/repos/{gh.repo}/pulls/{number}", {"state": "closed"})
-        return True
-    return False
+        return Publication(closed=True, current=True, labels=current_labels)
+    return Publication(closed=False, current=True, labels=current_labels)
 
 
 def run_event(event: dict, gh: GitHub, git: Git, repo_dir: Path) -> int:
@@ -1302,7 +1359,7 @@ def run_event(event: dict, gh: GitHub, git: Git, repo_dir: Path) -> int:
         models,
     )
     if not is_maintainer(pr.get("user") or {}, maintainers):
-        workflows = check_workflow_files(files, labels)
+        workflows = check_workflow_files(files)
         if workflows is not None:
             findings.append(workflows)
     # The parity finding is appended last rather than passed to static_findings, so the workflow
@@ -1316,11 +1373,11 @@ def run_event(event: dict, gh: GitHub, git: Git, repo_dir: Path) -> int:
     labelled = label_models(commits)
     note = LABELS_SKIPPED_NOTE if labelled is None else None
     block = static_block(findings, head_sha, policy_url(gh.repo, base_ref), note)
-    close = publish_findings(gh, pr, repo_dir, "static", block, findings, noted=note is not None)
-    if labelled is not None:
-        sync_model_labels(gh, number, labels, labelled)
+    published = publish_findings(gh, pr, repo_dir, "static", block, findings, noted=note is not None)
+    if published.current and labelled is not None:
+        sync_model_labels(gh, number, published.labels, labelled)
     print(f"admission: {len(commits)} commits, {len(files)} files, head {head_sha[:7]}")
-    return verdict(findings, close)
+    return verdict(findings, published.closed)
 
 
 def run_dispatch(number: int, gh: GitHub, git: Git, repo_dir: Path) -> int:
@@ -1379,9 +1436,9 @@ def run_workflow_run(event: dict, gh: GitHub, repo_dir: Path) -> int:
         return 0
     jobs = gh.paginate(f"/repos/{gh.repo}/actions/runs/{run['id']}/jobs")
     findings = check_ci(jobs, required_checks(gh, pr["base"]["ref"]))
-    close = publish_findings(gh, pr, repo_dir, "ci", ci_block(findings, head_sha), findings)
+    published = publish_findings(gh, pr, repo_dir, "ci", ci_block(findings, head_sha), findings)
     print(f"admission: CI run {run['id']} judged on head {head_sha[:7]}")
-    return verdict(findings, close)
+    return verdict(findings, published.closed)
 
 
 LOCAL_STATUS = {
@@ -1462,6 +1519,13 @@ def run_local(repo_dir: Path, base: str, body_file: Path | None) -> int:
         models,
     )
     report(findings)
+    workflows = check_workflow_files(files)
+    if workflows is not None:
+        print(
+            f"WARNING: [admission] {workflows.text} From outside the maintainers this closes the "
+            f"pull request unless a maintainer sets the `{OVERRIDE_LABEL}` label.",
+            file=sys.stderr,
+        )
     if findings:
         print(f"admission: {len(findings)} miss(es) against {base}; fix them before pushing.")
         return 1

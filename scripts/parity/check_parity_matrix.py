@@ -217,8 +217,8 @@ def scan_args(source: str) -> tuple[list[str], list[str]]:
 
 def read_matrix(root: Path) -> tuple[list[dict], list[str]]:
     errors: list[str] = []
-    # A byte that is not UTF-8 or a cell past csv's default limit is a defect of the matrix, reported
-    # as such below, never a crash that reports nothing.
+    # A byte that is not UTF-8 is replaced and a cell past csv's default limit is read, so neither
+    # stops the checker before it judges every row it can.
     csv.field_size_limit(1 << 24)
     with (root / MATRIX).open(newline="", encoding="utf-8", errors="replace") as fh:
         reader = csv.reader(fh, delimiter="\t")

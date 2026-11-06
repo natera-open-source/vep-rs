@@ -172,8 +172,8 @@ lead-in or author handle; a trailing `(#N)` naming the pull request; at most 30 
 number is written only after the pull request exists, never predicted.
 
 Refactors, CI and dependency bumps appear only when behaviour changes; the admission check asks every
-crate code or manifest change for a changelog line, and a maintainer's `admission-override` label waives
-it for a refactor. Under a kind heading, entries may be grouped by area: a bullet `- <Area name>` at the
+crate code or manifest change for a changelog line, and a maintainer's `admission-override` label holds
+the close for a refactor. Under a kind heading, entries may be grouped by area: a bullet `- <Area name>` at the
 margin (the area alone, at most 60 characters) with its entries nested under it as `-` bullets indented
 two spaces, each in the grammar above with its own `(#N)`; two levels at most, and every area has at
 least one entry.
@@ -224,7 +224,7 @@ Before submitting a PR:
 An admission check (the `Admission` workflow) runs on every pull request. It closes one that is
 behind `main`, changes code without a test that gains a line (a benchmark or an example asks for
 none), carries no model declaration or lacks a template section. It also closes one that changes a
-crate without a changelog line, edits a workflow under `.github/workflows/`, fails the parity matrix
+crate without a changelog line, changes a file under `.github/workflows/`, fails the parity matrix
 or fails a required CI check. The comment it leaves names each miss and its fix; push the fixes to
 the same branch and reopen it.
 
@@ -232,8 +232,10 @@ An unsigned commit is reported but never closes (the DCO check holds the merge; 
 branch by opening a new pull request from a signed branch). Maintainers' and bots' pull requests,
 drafts and those opened before the check existed are commented but stay open; a maintainer's
 `tests-not-needed` label waives the test requirement and `admission-override` holds the close for a
-justified exception. `python3 scripts/ci/admission.py --local` applies the static rules to your
-branch before you push (`--base upstream/main` from a fork clone).
+justified exception. The check judges a pull request by its author, so a maintainer sets
+`admission-override` before pushing a workflow edit (a test floor in `ci.yml`) onto a contributor's
+branch. `python3 scripts/ci/admission.py --local` applies the static rules to your branch before
+you push (`--base upstream/main` from a fork clone).
 
 ## Comment and write-up discipline
 

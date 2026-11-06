@@ -187,6 +187,20 @@ def test_regions_only_a_cfg_true_in_a_test_build_marks_a_region(attr, is_test):
     assert adm.cfg_is_test(attr[2:-1]) is is_test
 
 
+def test_cfg_parser_bounds_its_depth_and_survives_hostile_predicates():
+    deep = "cfg(" + "all(" * 500 + "test" + ")" * 500 + ")"
+    assert adm.cfg_is_test(deep) is False
+    nested_ok = "cfg(" + "all(" * 3 + "test" + ")" * 3 + ")"
+    assert adm.cfg_is_test(nested_ok) is True
+    at_cap = "cfg(" + "all(" * adm.CFG_DEPTH_MAX + "test" + ")" * adm.CFG_DEPTH_MAX + ")"
+    assert adm.cfg_is_test(at_cap) is True
+    past_cap = "cfg(" + "all(" * (adm.CFG_DEPTH_MAX + 1) + "test" + ")" * (adm.CFG_DEPTH_MAX + 1) + ")"
+    assert adm.cfg_is_test(past_cap) is False
+    for hostile in ("cfg(all(test", "cfg(all(feature = \"a,b\", test))", "cfg(all(\"unterminated, test))", "cfg()"):
+        adm.cfg_is_test(hostile)
+    assert adm.cfg_is_test("cfg(all(feature = \"a,b\", test))") is True
+
+
 def test_regions_single_line_item_and_inner_attribute():
     assert adm.rust_test_regions("#[cfg(test)]\nuse std::fmt;\nfn code() {}\n") == [(1, 2)]
     assert adm.rust_test_regions("#![cfg(test)]\nfn a() {}\nfn b() {}\n") == [(1, 3)]
@@ -401,6 +415,17 @@ def test_benches_and_examples_are_crate_code_with_no_test_asked():
     example = {"filename": "crates/vep-cli/examples/run.rs", "status": "added", "additions": 9, "deletions": 0}
     assert adm.check_tests_included([bench, example], set(), none) is None
     assert adm.is_crate_change([bench], none) is True
+    bench_test = {
+        "filename": "crates/vep-core/benches/speed.rs",
+        "status": "modified",
+        "additions": 2,
+        "deletions": 0,
+        "patch": "@@ -1,0 +1,2 @@\n+#[test]\n+fn t() {}\n",
+    }
+    everywhere = lambda side, path: [(1, 2)]
+    assert adm.classify_file(bench_test, everywhere) == (True, False)
+    code = {"filename": "crates/vep-core/src/lib.rs", "status": "modified", "additions": 1, "deletions": 0}
+    assert adm.check_tests_included([code, bench_test], set(), everywhere) is not None
     fixture = {"filename": "scripts/ci/fixtures/admission/shape.json", "status": "modified", "additions": 1, "deletions": 1}
     testdata = {"filename": "scripts/concordance/testdata/reference_release/expected_115_2/a.txt", "status": "modified", "additions": 1, "deletions": 0}
     assert not adm.is_test_path(fixture["filename"]) and not adm.is_test_path(testdata["filename"])
@@ -408,18 +433,35 @@ def test_benches_and_examples_are_crate_code_with_no_test_asked():
     assert adm.check_tests_included([script, fixture, testdata], set(), none) is not None
 
 
-def test_workflow_files_are_a_miss_unless_overridden():
+def test_workflow_files_are_a_miss_for_edits_renames_and_removals():
     ci = text_entry(
         ".github/workflows/ci.yml",
         "jobs:\n  test:\n    name: Test\n    steps:\n      - run: cargo test\n",
         "jobs:\n  test:\n    name: Test\n    steps:\n      - run: 'true'\n",
     )
-    finding = adm.check_workflow_files([ci], set())
+    finding = adm.check_workflow_files([ci])
     assert finding is not None and finding.closes and "`.github/workflows/ci.yml`" in finding.text
     assert "maintainers'" in finding.text
-    assert adm.check_workflow_files([ci], {adm.OVERRIDE_LABEL}) is None
+    renamed_out = {
+        "filename": "docs/ci.yml",
+        "previous_filename": ".github/workflows/ci.yml",
+        "status": "renamed",
+        "additions": 0,
+        "deletions": 0,
+    }
+    assert adm.check_workflow_files([renamed_out]) is not None
+    renamed_in = {
+        "filename": ".github/workflows/extra.yml",
+        "previous_filename": "docs/extra.yml",
+        "status": "renamed",
+        "additions": 0,
+        "deletions": 0,
+    }
+    assert adm.check_workflow_files([renamed_in]) is not None
+    removed = {"filename": ".github/workflows/dco.yml", "status": "removed", "additions": 0, "deletions": 20}
+    assert adm.check_workflow_files([removed]) is not None
     docs = {"filename": "docs/plugins.md", "status": "modified", "additions": 1, "deletions": 0}
-    assert adm.check_workflow_files([docs], set()) is None
+    assert adm.check_workflow_files([docs]) is None
 
 
 LIB_RS = "pub fn f() {}\n\n#[cfg(test)]\nmod helpers;\n\nmod real;\n"
@@ -611,6 +653,14 @@ def test_body_sections_present_and_filled():
         "## Upgrade impact\nNone.\n"
     )
     assert adm.check_body_sections(output_under_heading) is None
+    four_backticks = (
+        "## Summary\nAdds a flag.\n## Verification\n````text\n```\n## not a heading\n````\n"
+        "## Upgrade impact\nNone.\n"
+    )
+    assert adm.check_body_sections(four_backticks) is None
+    unterminated = "## Summary\nx\n## Verification\n```\ny\n## Upgrade impact\nz\n"
+    finding = adm.check_body_sections(unterminated)
+    assert finding is not None and "`## Upgrade impact`" in finding.text
 
 
 def test_body_sections_on_the_repository_template():
@@ -831,6 +881,21 @@ def test_parity_checker_crash_is_a_closing_finding_naming_its_last_line(tmp_path
     finding = adm.check_parity(tmp_path, crashing)
     assert finding is not None and finding.closes and finding.check == "parity"
     assert "could not read this change" in finding.text and "boom @x 'y'" in finding.text
+
+
+def test_parity_checker_killed_silent_or_unimportable_is_an_environment_error(tmp_path):
+    silent = tmp_path / "silent.py"
+    silent.write_text("import sys\nsys.exit(1)\n")
+    with pytest.raises(adm.AdmissionError, match="no output"):
+        adm.check_parity(tmp_path, silent)
+    killed = tmp_path / "killed.py"
+    killed.write_text("import os, signal\nos.kill(os.getpid(), signal.SIGKILL)\n")
+    with pytest.raises(adm.AdmissionError, match="exit -9"):
+        adm.check_parity(tmp_path, killed)
+    unimportable = tmp_path / "unimportable.py"
+    unimportable.write_text("import module_that_does_not_exist_anywhere\n")
+    with pytest.raises(adm.AdmissionError, match="ModuleNotFoundError"):
+        adm.check_parity(tmp_path, unimportable)
 
 
 def test_parity_checker_timeout_is_an_environment_error(tmp_path, monkeypatch):
@@ -1484,7 +1549,9 @@ def test_run_event_closes_a_contributor_who_edits_a_workflow_and_spares_a_mainta
     fixture["pull_request"]["labels"] = [{"name": adm.OVERRIDE_LABEL}]
     gh = FakeGitHub(files=[ci])
     assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 0
-    assert all("workflows" not in (w[2] or {}).get("body", "") for w in gh.writes() if len(w) > 2)
+    assert all(w[1] != f"/repos/{REPO}/pulls/0" for w in gh.writes())
+    body = gh.writes()[0][2]["body"]
+    assert "workflow changes are the maintainers'" in body and adm.OVERRIDE_LABEL in body
 
 
 def test_run_event_labels_from_the_head_commit_and_skips_many_declarations(tmp_path):
@@ -1518,11 +1585,34 @@ def test_run_event_writes_nothing_when_the_head_moved_before_the_write(tmp_path,
     head = fixture["pull_request"]["head"]["sha"]
     moved = dict(fixture["pull_request"], head={"sha": "e" * 40})
     gh = FakeGitHub(files=fixture["files"], pull=moved)
-    git = FakeGit(head, commits=fixture["commits"])
+    declaring = [dict(c) for c in fixture["commits"]]
+    declaring[-1]["commit"] = dict(
+        declaring[-1]["commit"],
+        message=declaring[-1]["commit"]["message"] + "Co-Authored-By: Example Model 1\n",
+    )
+    git = FakeGit(head, commits=declaring)
     assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 0
-    assert all(w[1] != f"/repos/{REPO}/pulls/0" for w in gh.writes())
-    assert all(not w[1].endswith("/comments") for w in gh.writes())
+    assert gh.writes() == []
     assert "head moved past" in capsys.readouterr().out
+
+
+def test_run_event_syncs_the_labels_of_the_pull_request_as_re_read(tmp_path):
+    fixture = load(FIXTURE_DIR / "fork-performance-change.json")
+    head = fixture["pull_request"]["head"]["sha"]
+    re_read = dict(fixture["pull_request"], labels=[{"name": "model: Earlier Model"}])
+    gh = FakeGitHub(files=fixture["files"], pull=re_read)
+    declaring = [dict(c) for c in fixture["commits"]]
+    declaring[-1]["commit"] = dict(
+        declaring[-1]["commit"],
+        message=declaring[-1]["commit"]["message"] + "Co-Authored-By: Example Model 1\n",
+    )
+    git = FakeGit(head, commits=declaring)
+    adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path))
+    label_writes = [w for w in gh.writes() if "/labels" in w[1]]
+    assert label_writes == [
+        ("DELETE", f"/repos/{REPO}/issues/0/labels/model%3A%20Earlier%20Model"),
+        ("POST", f"/repos/{REPO}/issues/0/labels", {"labels": ["model: Example Model 1"]}),
+    ]
 
 
 def test_run_event_keeps_the_other_block_written_after_the_judgement(tmp_path):
@@ -1770,6 +1860,60 @@ def test_run_local_reports_a_branch_behind_the_base(tmp_path, capsys):
     assert "git fetch upstream && git merge --signoff upstream/main" in err
     with pytest.raises(adm.AdmissionError, match="run `git fetch upstream` first"):
         adm.run_local(repo, "upstream/main", None)
+
+
+def test_log_commits_survives_separator_bytes_in_a_message_and_orders_parents_first(tmp_path):
+    repo = scratch_repo(tmp_path)
+    (repo / "a.md").write_text("a\n")
+    git(repo, "add", "-A")
+    hostile = "Subject\x1e with a record separator\n\nBody\x00free\x1e\n\nSigned-off-by: Dev <dev@example.com>\nCo-Authored-By: No LLM\n"
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-q", "-F", "-"],
+        input=hostile.replace("\x00", ""),
+        text=True,
+        check=True,
+    )
+    (repo / "b.md").write_text("b\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-s", "-m", "Second")
+    commits = adm.Git(repo).log_commits("origin/main", "HEAD")
+    assert commits[0]["commit"]["message"].startswith("Subject\x1e with a record separator\n")
+    assert commits[1]["commit"]["message"].startswith("Second\n")
+    assert len(commits) == 2
+    assert commits[0]["commit"]["author"] == {"name": "Dev", "email": "dev@example.com"}
+    assert adm.declared_models(commits) == ["No LLM"]
+    assert adm.label_models(commits) == ["No LLM"]
+    assert adm.Git(repo).log_commits("HEAD", "HEAD") == []
+
+
+def test_log_commits_reports_an_object_the_store_lost_as_an_environment_error(tmp_path, monkeypatch):
+    repo = scratch_repo(tmp_path)
+    (repo / "a.md").write_text("a\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-s", "-m", "One")
+    sha = git(repo, "rev-parse", "HEAD").strip()
+    real_run = subprocess.run
+
+    def pruned(args, **kwargs):
+        if "cat-file" in args:
+            return subprocess.CompletedProcess(args, 0, stdout=f"{sha} missing\n".encode(), stderr=b"")
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(adm.subprocess, "run", pruned)
+    with pytest.raises(adm.AdmissionError, match="is not a commit object: missing"):
+        adm.Git(repo).log_commits("origin/main", "HEAD")
+
+
+def test_run_local_warns_on_a_workflow_edit_without_failing_on_it(tmp_path, capsys):
+    repo = scratch_repo(tmp_path)
+    (repo / ".github" / "workflows").mkdir(parents=True)
+    (repo / ".github" / "workflows" / "ci.yml").write_text("on: push\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-s", "-m", "Workflow\n\nCo-Authored-By: No LLM")
+    assert adm.run_local(repo, "origin/main", None) == 0
+    captured = capsys.readouterr()
+    assert "WARNING: [admission]" in captured.err and "workflow changes are the maintainers'" in captured.err
+    assert adm.OVERRIDE_LABEL in captured.err and "admission: OK" in captured.out
 
 
 def test_export_tree_writes_links_as_files_and_skips_filters(tmp_path):

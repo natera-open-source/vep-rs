@@ -47,7 +47,9 @@ parts that fail CI or review when missed.
   and why.
 - A test file under `scripts/` runs in CI only when `.github/workflows/ci.yml` lists it, with a floor
   on the tests it collects (pytest) or the `ok` lines it prints (bash). Adding or deleting a test
-  moves that floor in the same change; a test file `ci.yml` does not list never runs.
+  moves that floor, and a new test file needs its line there: name the new count under Verification
+  and a maintainer edits `ci.yml`, since a change to a workflow file from outside the maintainers
+  closes the pull request.
 - Before deleting or renaming a test, grep `tests/parity/matrix.tsv` for its name: a cell naming a
   test the tree lacks fails `check_parity_matrix.py`.
 - A docs edit runs `python3 scripts/docs/site_metrics.py --gate` and, after `mdbook build`,
@@ -124,5 +126,5 @@ Fill in [.github/pull_request_template.md](.github/pull_request_template.md) for
   `docs/cli/`. Rebase onto `origin/main` before the first push; once the pull request exists, merge
   `origin/main` in instead. Regenerate the CLI reference after either.
 - Releases and dependency bumps stay with the maintainers: the version in `Cargo.toml`, tags,
-  crates.io publishing, the `release.yml`, `docker.yml` and `pages.yml` workflows, and a bump in
-  `Cargo.lock` that no change of yours needs.
+  crates.io publishing, every workflow under `.github/workflows/`, and a bump in `Cargo.lock` that
+  no change of yours needs.
