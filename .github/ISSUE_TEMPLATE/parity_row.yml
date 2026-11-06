@@ -86,5 +86,5 @@ body:
     id: divergence-entries
     attributes:
       label: Entries or proposed divergence
-      description: "For existing entries, one line each: the entry in backticks as the index's first column names it (a defect letter such as `B`, or a difference's name as written there), then what should change and why the index's reasoning is wrong for this case. For a proposed divergence: the input, what Ensembl VEP and vep-rs each write, and why vep-rs's output is the one to keep."
+      description: "For existing entries, one line each: the entry in backticks as the index's first column names it (a defect letter such as `B`, or a difference's name as written there, inner backticks dropped), then what should change and why the index's reasoning is wrong for this case. For a proposed divergence: the input, what Ensembl VEP and vep-rs each write, and why vep-rs's output is the one to keep."
       placeholder: "`B`: remove it, because ..."

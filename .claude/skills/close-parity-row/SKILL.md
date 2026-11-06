@@ -43,9 +43,10 @@ Before classing a difference between the two engines as a defect of either, sear
 `docs/intended-divergences.md` and its pages for the flag, field or shape: a difference the index
 records is deliberate, and a row that would make vep-rs match Ensembl VEP there is a target decision,
 not a port. Cite the entry as the index's first column names it (a defect letter such as `B`, or a
-difference's name as written) in the pull request's fourth section; a new difference the row
-uncovers is proposed there, with the input, both engines' rows and why vep-rs's row is the one to
-keep.
+difference's name as written, inner backticks dropped) in the pull request's fourth section; asking
+for an entry to go needs the newer Ensembl VEP behaviour stated in plain words, with the record that
+shows it; a new difference the row uncovers is proposed there, with the input, both engines' rows
+and why vep-rs's row is the one to keep.
 
 Done when every claim has a citation you read yourself at `release/116.2`.
 

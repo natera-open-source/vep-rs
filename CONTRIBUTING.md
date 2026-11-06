@@ -214,19 +214,23 @@ Co-Authored-By: No LLM
 
 ## Issues
 
-Every issue form ends with a required choice about the intended divergences:
+Every issue form carries a required choice about the intended divergences:
 [docs/intended-divergences.md](docs/intended-divergences.md) lists every behaviour where vep-rs
 deliberately differs from Ensembl VEP, most of them Ensembl VEP defects it does not reproduce. A
 report or request touches an entry when it asks for a recorded behaviour to change or go, or asks
 vep-rs to match Ensembl VEP where the index says it deliberately does not; before reporting a
 difference, search the index for the flag, field or shape. Say that the report touches none of the
 entries, or name the entries it touches (the entry as the index's first column names it, a defect
-letter or a difference's name, with what should change and why the index's reasoning is wrong for
-this case), or propose a new intended divergence: the input, what Ensembl VEP and vep-rs each write,
-and why vep-rs's output is the one to keep. Additions are welcome; the maintainers write or review
-the entry's page. An issue opened without the choice, or naming an entry the index lacks, gets the
+letter or a difference's name with any inner backticks dropped, with what should change and why the
+index's reasoning is wrong for this case), or propose a new intended divergence: the input, what
+Ensembl VEP and vep-rs each write, and why vep-rs's output is the one to keep. Asking for an entry
+to go needs the newer Ensembl VEP behaviour stated in plain words, with the record that shows it.
+Additions are welcome; the maintainers write or review the entry's page. An issue opened or edited
+without the choice, naming an entry the index lacks, naming existing entries with no entry line or
+a line that says nothing after the entry, or proposing a divergence with an empty field, gets the
 `needs-divergence-check` label and one comment; an edit of the description that supplies what was
-missing removes the label and the comment reports the pass.
+missing removes the label and the comment reports the pass. An issue opened before the forms
+carried the choice is not asked.
 
 ## Pull Requests
 
@@ -240,9 +244,9 @@ Before submitting a PR:
 The description has the template's four sections: Summary, Verification, Upgrade impact and
 Intended divergences. The last certifies the check of [Issues](#issues) for the change: one of its
 three statements is checked, the first (the change touches none of the entries) excluding the other
-two, and the second lists the entries touched one line each, the entry named as the index's first
-column names it and followed by what the change does to it and why the index's reasoning is wrong
-for this case; the third describes a proposed entry. A change that edits
+two, and the second lists the entries touched one line each, the entry named in backticks as the
+index's first column names it (inner backticks dropped) and followed by what the change does to it
+and why the index's reasoning is wrong for this case; the third describes a proposed entry. A change that edits
 `docs/intended-divergences.md`, a page it links or `scripts/divergences/` cannot claim the first.
 The section is the author's attestation, read by a maintainer: whether a code change that leaves
 those pages alone also leaves every recorded behaviour alone is not something the check can prove.
@@ -259,7 +263,8 @@ description before you open the pull request.
 
 An unsigned commit is reported but never closes (the DCO check holds the merge; sign a pushed
 branch by opening a new pull request from a signed branch). Maintainers' and bots' pull requests,
-drafts and those opened before the check existed are commented but stay open; a maintainer's
+drafts and those opened before the check existed are commented but stay open, as is one opened
+before the Intended divergences section was asked, for that miss alone; a maintainer's
 `tests-not-needed` label waives the test requirement and `admission-override` holds the close for a
 justified exception. The check judges a pull request by its author, so a maintainer sets
 `admission-override` before pushing a workflow edit (a test floor in `ci.yml`) onto a contributor's

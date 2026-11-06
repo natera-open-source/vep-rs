@@ -12,6 +12,7 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 from pathlib import Path
 
@@ -1194,6 +1195,48 @@ def test_divergences_strips_html_comments_and_fenced_headings():
     assert divergences(in_comment) is not None
 
 
+def test_a_line_opening_with_an_inline_code_span_is_not_a_fence():
+    """A backtick run followed by text holding another backtick is an inline code span, so the
+    headings after it still open sections and fields; a real fence still hides them."""
+    assert adm.opens_fence("```") == "```" and adm.opens_fence("~~~ text") == "~~~"
+    assert adm.opens_fence("````rust") == "````" and adm.opens_fence("``` cargo test `x`") is None
+    assert adm.opens_fence("```ERROR: [cache] shard missing```") is None
+    assert adm.opens_fence("text") is None
+    body = (
+        "## Summary\nAdds a flag.\n## Verification\n```cargo test -p vep-cli```\n"
+        "## Upgrade impact\nNone.\n" + section({"none"})
+    )
+    assert adm.check_body_sections(body) is None
+    assert adm.check_divergences(body, [], INDEX_SAMPLE, None) is None
+    issue = (
+        "### What happened\n\n```ERROR: [cache] shard missing```\nand then it stopped\n\n"
+        f"### {adm.ISSUE_CHOICE_LABEL}\n\n{adm.ISSUE_CHOICES['none']}\n\n"
+        f"### {adm.ISSUE_ENTRIES_LABEL}\n\n{adm.NO_RESPONSE}\n"
+    )
+    fields = adm.form_fields(issue)
+    assert fields[adm.ISSUE_CHOICE_LABEL.lower()] == adm.ISSUE_CHOICES["none"]
+    assert fields["what happened"].startswith("```ERROR") and fields["what happened"].endswith("stopped")
+    assert adm.check_issue_divergences(issue, adm.read_index(INDEX_SAMPLE)) is None
+
+
+def test_an_entry_whose_name_holds_a_backtick_is_cited_in_a_longer_run_or_without_it():
+    index = adm.read_index(INDEX_SAMPLE)
+    assert adm.entry_name("A bare M") in index.names
+    assert adm.entry_lines(["- ``A bare `M` ``: keeps it, because x.", "- `A bare M`: keeps it."]) == [
+        ("A bare `M`", "keeps it, because x."),
+        ("A bare M", "keeps it."),
+    ]
+    for line in ("- ``A bare `M` ``: keeps it, because x.", "- `A bare M`: keeps it, because x."):
+        assert divergences(section({"touches"}, {"touches": [line]})) is None, line
+    assert adm.entry_lines(["- `B`: `x` and `y`"]) == [("B", "`x` and `y`")]
+    assert adm.entry_lines(["- ``: nothing"]) == []
+    # A description is at most 65,536 characters; a line of backticks is read in bounded time.
+    hostile = "- " + "`" * 65_536
+    started = time.perf_counter()
+    adm.entry_lines([hostile, hostile + "x", hostile + "x" + "`" * 65_535 + "x"])
+    assert time.perf_counter() - started < 5
+
+
 def test_divergences_section_on_the_repository_template():
     """The template's fourth section carries the three statements, none checked, with its example
     entry line inside a comment; checking the first statement alone passes. A tree whose template
@@ -1367,6 +1410,44 @@ def test_run_issue_writes_nothing_for_a_clean_closed_or_pull_request_issue(tmp_p
     assert adm.run_issue(issue_event(clean), gh, without_index) == 0 and gh.writes() == []
 
 
+def test_run_issue_acts_on_the_labels_and_state_as_re_read(tmp_path):
+    """A run queued behind another sees a stale payload: the label it removes or adds, and the
+    state it respects, are the issue's as re-read before the writes."""
+    fixed = issue_body(adm.ISSUE_CHOICES["proposes"], "The record, both rows and the reason.")
+    live = {"number": 7, "state": "open", "labels": [{"name": adm.NEEDS_DIVERGENCE_LABEL}]}
+    existing = {"id": 3, "body": f"{adm.ISSUE_MARKER}\nold", "user": {"login": "github-actions[bot]", "type": "Bot"}}
+    gh = FakeGitHub(comments=[existing], issue=live)
+    assert adm.run_issue(issue_event(fixed, labels=[]), gh, issue_repo(tmp_path)) == 0
+    assert [w[:2] for w in gh.writes()] == [
+        ("PATCH", f"/repos/{REPO}/issues/comments/3"),
+        ("DELETE", f"/repos/{REPO}/issues/7/labels/needs-divergence-check"),
+    ]
+    gh = FakeGitHub(issue={"number": 7, "state": "open", "labels": [{"name": adm.NEEDS_DIVERGENCE_LABEL}]})
+    assert adm.run_issue(issue_event(issue_body(None), labels=[]), gh, issue_repo(tmp_path)) == 0
+    assert [w[:2] for w in gh.writes()] == [("POST", f"/repos/{REPO}/issues/7/comments")]
+    gh = FakeGitHub(issue={"number": 7, "state": "closed", "labels": []})
+    assert adm.run_issue(issue_event(issue_body(None)), gh, issue_repo(tmp_path)) == 0
+    assert gh.writes() == []
+
+
+def test_run_issue_skips_an_issue_opened_before_the_rule_landed(tmp_path, capsys):
+    rule = [{"commit": {"committer": {"date": "1999-01-05T00:00:00Z"}}}]
+    before = issue_event(issue_body(None), created_at="1999-01-04T00:00:00Z")
+    gh = FakeGitHub(rule_landed=rule)
+    assert adm.run_issue(dict(before, repository={"default_branch": "trunk"}), gh, issue_repo(tmp_path)) == 0
+    assert gh.writes() == [] and "opened before the check" in capsys.readouterr().out
+    assert any(call[1].endswith(f"/repos/{REPO}/commits") for call in gh.calls)
+    after = issue_event(issue_body(None), created_at="1999-01-06T00:00:00Z")
+    gh = FakeGitHub(rule_landed=rule)
+    assert adm.run_issue(after, gh, issue_repo(tmp_path)) == 0
+    assert [w[:2] for w in gh.writes()] == [
+        ("POST", f"/repos/{REPO}/issues/7/comments"),
+        ("POST", f"/repos/{REPO}/issues/7/labels"),
+    ]
+    gh = FakeGitHub(fail_landed=True)
+    assert adm.run_issue(after, gh, issue_repo(tmp_path)) == 0 and gh.writes() == []
+
+
 # --- the parity matrix ---------------------------------------------------------------------------
 
 
@@ -1487,10 +1568,11 @@ class FakeGitHub:
         landed=(),
         rule_landed=None,
         fail_landed=False,
+        issue=None,
     ):
         self.repo = REPO
         self.commits, self.files, self.comments = list(commits), list(files), list(comments)
-        self.rules, self.pulls_by_head, self.pull = rules, list(pulls_by_head), pull
+        self.rules, self.pulls_by_head, self.pull, self.issue = rules, list(pulls_by_head), pull, issue
         self.jobs, self.fail_rules, self.landed = list(jobs), fail_rules, list(landed)
         # The commits that landed the divergences rule's fixture; the workflow's own when not given.
         self.rule_landed = list(landed if rule_landed is None else rule_landed)
@@ -1525,6 +1607,9 @@ class FakeGitHub:
             return self.pulls_by_head
         if "/pulls/" in path:
             return self.pull
+        parts = path.split("/")
+        if len(parts) > 2 and parts[-2] == "issues" and parts[-1].isdigit():
+            return self.issue
         return None
 
     def post(self, path, body):

@@ -36,7 +36,8 @@ when the index is regrouped.
 The issues job reads the `Intended divergences` choice an issue form writes under its `### ` heading
 and the entries or description under the next one, checks the named entries against the index on the
 checked-out base branch, and asks for what is missing with the `needs-divergence-check` label and one
-comment edited in place; it never closes an issue, and an edit that fixes the body clears both.
+comment edited in place; it never closes an issue, an edit that fixes the body clears both, and an
+issue opened before the rule landed is not judged.
 
 The two Actions modes read the pull request through the REST API (commits, changed files, labels,
 comments) and the contribution's files as git objects: a `git fetch` of the pull request's head ref, `git
@@ -152,8 +153,11 @@ HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$")
 # The template's checklist sits under its last heading; a checkbox line is never a section's text.
 CHECKLIST_RE = re.compile(r"^\s*[-*]\s+\[[ xX]\]")
 CHECKBOX_RE = re.compile(r"^\s*[-*]\s+\[([ xX])\]\s*(.*?)\s*$")
-# An entry line: the entry in a code span, with or without a list marker, then the rest of the line.
-ENTRY_LINE_RE = re.compile(r"^\s*(?:(?:[-*+]|\d+[.)])\s+)?`([^`]+)`\s*(.*?)\s*$")
+# An entry line: the entry in a code span of one to three backticks (a name holding a backtick is
+# written inside a longer run; an unbounded run backtracks cubically on a line of backticks), with
+# or without a list marker, then the rest of the line, read whole and stripped by the caller (a lazy
+# tail with trailing whitespace is quadratic on a run of spaces).
+ENTRY_LINE_RE = re.compile(r"^\s*(?:(?:[-*+]|\d+[.)])\s+)?(`{1,3})(.+?)\1(?!`)(.*)$")
 LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 TABLE_ROW_RE = re.compile(r"^\s*\|")
 FORM_HEADING_RE = re.compile(r"^### (.+?)\s*$")
@@ -746,27 +750,43 @@ def model_label(name: str) -> str | None:
 # --- the description and the changelog -----------------------------------------------------------
 
 
-def body_sections(body: str | None) -> dict[str, list[str]]:
-    """The description's sections by lower-cased heading, each the lines under it, HTML comments
-    stripped first; a heading inside a fenced code block opens no section."""
-    text = re.sub(r"<!--.*?-->", "", body or "", flags=re.DOTALL)
+def opens_fence(stripped: str) -> str | None:
+    """The fence a line opens, or None. A backtick run followed by text that holds another backtick
+    is an inline code span, not a fence: a backtick fence's info string may not contain one."""
+    opening = FENCE_RE.match(stripped)
+    if opening is None:
+        return None
+    fence = opening.group(1)
+    if fence[0] == "`" and "`" in stripped[len(fence) :]:
+        return None
+    return fence
+
+
+def sectioned(text: str, heading_re: re.Pattern[str]) -> dict[str, list[str]]:
+    """The text's sections by lower-cased heading, each the lines under it; a heading inside a
+    fenced code block opens no section."""
     sections: dict[str, list[str]] = {}
-    current = None
+    current: str | None = None
     fence: str | None = None
     for raw in text.splitlines():
         stripped = raw.strip()
         if fence is not None:
             if stripped.startswith(fence) and stripped.rstrip(fence[0]) == "":
                 fence = None
-        elif (opening := FENCE_RE.match(stripped)) is not None:
-            fence = opening.group(1)
-        elif (heading := HEADING_RE.match(stripped)) is not None:
+        elif (opened := opens_fence(stripped)) is not None:
+            fence = opened
+        elif (heading := heading_re.match(stripped)) is not None:
             current = heading.group(1).strip().lower()
             sections.setdefault(current, [])
             continue
         if current is not None:
             sections[current].append(raw)
     return sections
+
+
+def body_sections(body: str | None) -> dict[str, list[str]]:
+    """The description's sections, HTML comments stripped first."""
+    return sectioned(re.sub(r"<!--.*?-->", "", body or "", flags=re.DOTALL), HEADING_RE)
 
 
 def check_body_sections(body: str | None) -> Finding | None:
@@ -889,7 +909,8 @@ def entry_lines(lines: list[str]) -> list[tuple[str, str]]:
     for line in lines:
         match = ENTRY_LINE_RE.match(line)
         if match is not None:
-            entries.append((match.group(1), re.sub(r"^[\s:,\-]+", "", match.group(2))))
+            rest = re.sub(r"^[\s:,\-]+", "", match.group(3)).strip()
+            entries.append((match.group(2).strip(), rest))
     return entries
 
 
@@ -899,17 +920,24 @@ def listed_codes(values: list[str]) -> str:
     return listed + more
 
 
-def entry_problems(entries: list[tuple[str, str]], index: Index, claim: str) -> list[str]:
+CHANGE_REMEDY = "what the change does to it (keeps, changes or removes it)"
+REPORT_REMEDY = "what should change"
+
+
+def entry_problems(
+    entries: list[tuple[str, str]], index: Index, claim: str, remedy: str
+) -> list[str]:
     """What is wrong with the cited entries: none named, a name the index lacks, a line that says
-    nothing after the name. `claim` opens the first sentence: the statement or choice that names
-    existing entries."""
+    nothing after the name. `claim` opens the first sentence (the statement or choice that names
+    existing entries) and `remedy` is what the rest of an entry line must say: for a pull request
+    what the change does to the entry, for an issue what should change."""
     if not entries:
         return [
             (
                 f"{claim} and no entry line follows it: add one line per entry, ``- `<entry>`: "
-                "keeps, changes or removes it because ...``, the entry named as the first column of "
-                f"`{INDEX_PATH}` names it (a defect letter such as `B`, or a difference's name as "
-                "written there)."
+                f"{remedy}, because ...``, the entry named as the first column of `{INDEX_PATH}` "
+                "names it (a defect letter such as `B`, or a difference's name as written there, "
+                "inner backticks dropped)."
             )
         ]
     problems = []
@@ -918,13 +946,13 @@ def entry_problems(entries: list[tuple[str, str]], index: Index, claim: str) -> 
         problems.append(
             f"No entry of `{INDEX_PATH}` is named {listed_codes(unknown)}: name an entry as the "
             "index's first column does (a defect letter such as `B`, or a difference's name as "
-            "written there), or by the path of its page."
+            "written there, inner backticks dropped), or by the path of its page."
         )
     bare = [token for token, rest in entries if not rest]
     if bare:
         problems.append(
-            f"The entry line for {listed_codes(bare)} says nothing after the entry: add what the "
-            "change does to it (keeps, changes or removes it) and why."
+            f"The entry line for {listed_codes(bare)} says nothing after the entry: add {remedy} "
+            "and why the index's reasoning is wrong for this case."
         )
     return problems
 
@@ -988,6 +1016,7 @@ def check_divergences(
                     entry_lines(statements["touches"][1]),
                     index,
                     f"The second statement of the `## {DIVERGENCE_SECTION}` section is checked",
+                    CHANGE_REMEDY,
                 )
             )
         if "proposes" in checked and not any(line.strip() for line in statements["proposes"][1]):
@@ -1012,28 +1041,12 @@ def check_divergences(
 
 def form_fields(body: str | None) -> dict[str, str]:
     """An issue form's fields as GitHub writes them: `### <label>` then the value up to the next
-    heading, keyed by the lower-cased label; `_No response_` is an empty field, and a heading
-    inside a fenced code block opens none."""
+    heading, keyed by the lower-cased label; `_No response_` is an empty field."""
     fields: dict[str, str] = {}
-    current: str | None = None
-    fence: str | None = None
-    for line in (body or "").splitlines():
-        stripped = line.strip()
-        if fence is not None:
-            if stripped.startswith(fence) and stripped.rstrip(fence[0]) == "":
-                fence = None
-        elif (opening := FENCE_RE.match(stripped)) is not None:
-            fence = opening.group(1)
-        elif (heading := FORM_HEADING_RE.match(line)) is not None:
-            current = heading.group(1).strip().lower()
-            fields[current] = ""
-            continue
-        if current is not None:
-            fields[current] += line + "\n"
-    return {
-        label: "" if value.strip() == NO_RESPONSE else value.strip()
-        for label, value in fields.items()
-    }
+    for label, lines in sectioned(body or "", FORM_HEADING_RE).items():
+        value = "\n".join(lines).strip()
+        fields[label] = "" if value == NO_RESPONSE else value
+    return fields
 
 
 def check_issue_divergences(body: str | None, index: Index) -> str | None:
@@ -1056,6 +1069,7 @@ def check_issue_divergences(body: str | None, index: Index) -> str | None:
             entry_lines(text.splitlines()),
             index,
             f"The `{ISSUE_CHOICE_LABEL}` choice names existing entries",
+            REPORT_REMEDY,
         )
         if problems:
             return " ".join(problems)
@@ -1473,11 +1487,13 @@ def landed_at(gh: GitHub, base_ref: str, path: str = WORKFLOW_FILE) -> str | Non
     return ((commits[-1].get("commit") or {}).get("committer") or {}).get("date")
 
 
-def opened_before(gh: GitHub, pr: dict, path: str) -> bool:
-    """Whether the pull request predates the landing of `path` on the base branch; a failed read of
-    the landing date counts as yes, so an API fault never closes a pull request."""
+def opened_before(gh: GitHub, item: dict, path: str, base_ref: str | None = None) -> bool:
+    """Whether the pull request or issue predates the landing of `path` on the base branch (a pull
+    request's own base, or `base_ref` for an issue); a failed read of the landing date counts as
+    yes, so an API fault never closes a pull request or asks an issue for anything."""
+    ref = base_ref or item["base"]["ref"]
     try:
-        return predates(pr.get("created_at"), landed_at(gh, pr["base"]["ref"], path))
+        return predates(item.get("created_at"), landed_at(gh, ref, path))
     except AdmissionError as exc:
         print(f"WARNING: [admission] the landing date was not read ({path}): {exc}", file=sys.stderr)
         return True
@@ -1862,17 +1878,27 @@ def run_workflow_run(event: dict, gh: GitHub, repo_dir: Path) -> int:
 def run_issue(event: dict, gh: GitHub, repo_dir: Path) -> int:
     """The issues job: hold an open issue to the intended-divergences choice its form carries, with
     the `needs-divergence-check` label and one comment edited in place, never a close; an edit that
-    clears the miss removes the label and rewrites the comment. The index read is the checked-out
-    base branch's. Exit 0 whatever the outcome: nothing here blocks a merge."""
+    clears the miss removes the label and rewrites the comment. An issue opened before the rule
+    landed on the default branch is not judged. The index read is the checked-out base branch's;
+    the labels and state are re-read before the writes, so a run queued behind another never acts
+    on a stale payload. Exit 0 whatever the outcome: nothing here blocks a merge."""
     issue = event["issue"]
     number = issue["number"]
     if "pull_request" in issue or issue.get("state") != "open":
         print(f"admission: #{number} is not an open issue; nothing to judge.")
         return 0
+    default_branch = (event.get("repository") or {}).get("default_branch") or "main"
+    if opened_before(gh, issue, DIVERGENCE_LANDING_PATH, default_branch):
+        print(f"admission: issue #{number} was opened before the check; nothing to judge.")
+        return 0
     index_file = repo_dir / INDEX_PATH
     index = read_index(index_file.read_text(encoding="utf-8") if index_file.is_file() else None)
     problem = check_issue_divergences(issue.get("body"), index)
-    labels = label_names(issue)
+    current = gh.get(f"/repos/{gh.repo}/issues/{number}") or issue
+    if current.get("state") != "open":
+        print(f"admission: issue #{number} is closed; nothing to write.")
+        return 0
+    labels = label_names(current)
     existing = find_comment(gh, number, ISSUE_MARKER)
     if problem is not None:
         print(f"ERROR: [admission] {problem}", file=sys.stderr)
