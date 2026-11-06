@@ -217,7 +217,10 @@ def scan_args(source: str) -> tuple[list[str], list[str]]:
 
 def read_matrix(root: Path) -> tuple[list[dict], list[str]]:
     errors: list[str] = []
-    with (root / MATRIX).open(newline="", encoding="utf-8") as fh:
+    # A byte that is not UTF-8 or a cell past csv's default limit is a defect of the matrix, reported
+    # as such below, never a crash that reports nothing.
+    csv.field_size_limit(1 << 24)
+    with (root / MATRIX).open(newline="", encoding="utf-8", errors="replace") as fh:
         reader = csv.reader(fh, delimiter="\t")
         header = next(reader, None)
         if header != COLUMNS:
@@ -434,7 +437,7 @@ def read_corpus_manifest(root: Path, entry: str) -> tuple[dict | None, str | Non
     if not manifest.is_file():
         return None, f"{entry} has no manifest.json"
     try:
-        parsed = json.loads(manifest.read_text(encoding="utf-8"))
+        parsed = json.loads(manifest.read_text(encoding="utf-8", errors="replace"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         return None, f"{entry}/manifest.json is not JSON ({exc})"
     if not isinstance(parsed, dict):
@@ -485,7 +488,7 @@ def check(root: Path) -> tuple[list[str], str]:
         return errors, ""
     items = {row["item"] for row in rows}
 
-    flags, errors = scan_args(args_rs.read_text(encoding="utf-8"))
+    flags, errors = scan_args(args_rs.read_text(encoding="utf-8", errors="replace"))
     declared = {flag.replace("-", "_") for flag in flags}
     for flag in flags:
         name = flag.replace("-", "_")

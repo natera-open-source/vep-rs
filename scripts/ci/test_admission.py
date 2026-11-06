@@ -168,6 +168,25 @@ def test_regions_keep_a_pending_attribute_across_commas_in_a_signature():
     assert adm.rust_test_regions(text) == [(1, 4)]
 
 
+@pytest.mark.parametrize(
+    "attr, is_test",
+    [
+        ("#[cfg(test)]", True),
+        ("#[cfg(all(test, feature = \"x\"))]", True),
+        ("#[cfg(all(unix, test))]", True),
+        ("#[cfg(any(test, not(test)))]", False),
+        ("#[cfg(not(all(test, feature = \"never\")))]", False),
+        ("#[cfg(feature = \"test-helpers\")]", False),
+        ("#[cfg(not(test))]", False),
+        ("#[cfg(all(any(test, unix)))]", False),
+    ],
+)
+def test_regions_only_a_cfg_true_in_a_test_build_marks_a_region(attr, is_test):
+    text = f"pub fn keep() {{}}\n{attr}\npub fn item() {{}}\n"
+    assert adm.rust_test_regions(text) == ([(2, 3)] if is_test else [])
+    assert adm.cfg_is_test(attr[2:-1]) is is_test
+
+
 def test_regions_single_line_item_and_inner_attribute():
     assert adm.rust_test_regions("#[cfg(test)]\nuse std::fmt;\nfn code() {}\n") == [(1, 2)]
     assert adm.rust_test_regions("#![cfg(test)]\nfn a() {}\nfn b() {}\n") == [(1, 3)]
@@ -263,10 +282,12 @@ def test_classify_rust_lines_by_region():
     assert adm.classify_file(both, regions) == (True, True)
 
 
-def test_classify_removed_lines_use_the_old_file_regions():
+def test_classify_removed_test_lines_are_neither_code_nor_a_test_change():
     regions = lambda side, path: [(1, 10)] if side == "old" else []
     removed_test = rust_entry("@@ -3,2 +3,0 @@\n-a\n-b\n", deletions=2, additions=0)
-    assert adm.classify_file(removed_test, regions) == (False, True)
+    assert adm.classify_file(removed_test, regions) == (False, False)
+    removed_code = rust_entry("@@ -30,2 +30,0 @@\n-a\n-b\n", deletions=2, additions=0)
+    assert adm.classify_file(removed_code, regions) == (True, False)
 
 
 def test_classify_without_a_patch_or_with_a_rename_only():
@@ -287,7 +308,7 @@ def test_classify_without_a_patch_or_with_a_rename_only():
     assert adm.classify_file(rename, lambda side, path: []) == (False, False)
 
 
-def test_classify_a_file_moved_out_of_a_test_directory_as_code():
+def test_classify_a_file_moved_out_of_a_test_directory_is_code_and_no_test_change():
     none = lambda side, path: []
     moved = {
         "filename": "crates/vep-core/src/b.rs",
@@ -297,11 +318,108 @@ def test_classify_a_file_moved_out_of_a_test_directory_as_code():
         "deletions": 0,
         "patch": "@@ -1,0 +1,2 @@\n+x\n+y\n",
     }
-    assert adm.classify_file(moved, none) == (True, True)
-    assert adm.check_tests_included([moved], set(), none) is None
+    assert adm.classify_file(moved, none) == (True, False)
+    assert adm.check_tests_included([moved], set(), none) is not None
     moved_no_patch = dict(moved)
     del moved_no_patch["patch"]
-    assert adm.classify_file(moved_no_patch, none) == (True, True)
+    assert adm.classify_file(moved_no_patch, none) == (True, False)
+    into_tests = {
+        "filename": "crates/vep-core/tests/a.rs",
+        "previous_filename": "crates/vep-core/src/a.rs",
+        "status": "renamed",
+        "additions": 0,
+        "deletions": 0,
+    }
+    assert adm.classify_file(into_tests, none) == (False, True)
+
+
+BASE_RS = "// license\n//! doc\n\npub fn keep() -> u32 { 1 }\n"
+
+
+def text_entry(path: str, old: str, new: str, status: str = "modified") -> dict:
+    """An API file entry built from two texts, the patch as the API renders it (hunks only)."""
+    import difflib
+
+    lines = list(difflib.unified_diff(old.splitlines(), new.splitlines(), lineterm="", n=3))
+    patch = "\n".join(lines[2:])
+    return {
+        "filename": path,
+        "status": status,
+        "additions": sum(1 for line in patch.splitlines() if line.startswith("+")),
+        "deletions": sum(1 for line in patch.splitlines() if line.startswith("-")),
+        "patch": patch,
+    }
+
+
+def regions_from(texts: dict[tuple[str, str], str]) -> adm.RegionsFor:
+    return lambda side, path: adm.rust_test_regions(texts.get((side, path), "")) if texts.get(
+        (side, path)
+    ) else []
+
+
+def test_tests_included_a_deleted_test_or_a_removed_test_fn_alone_does_not_count():
+    code_path = "crates/vep-core/src/lib.rs"
+    code_new = BASE_RS + "\npub fn behaviour_change() -> u32 { 3 }\n"
+    deleted_test = {
+        "filename": "crates/vep-core/tests/behaviour.rs",
+        "status": "removed",
+        "additions": 0,
+        "deletions": 2,
+        "patch": "@@ -1,2 +0,0 @@\n-#[test]\n-fn pins_behaviour() { assert_eq!(1, 1); }",
+    }
+    regions = regions_from({("new", code_path): code_new, ("old", code_path): BASE_RS})
+    files = [text_entry(code_path, BASE_RS, code_new), deleted_test]
+    assert adm.check_tests_included(files, set(), regions) is not None
+    src_old = BASE_RS + "\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn a() {}\n    #[test]\n    fn b() {}\n}\n"
+    src_new = BASE_RS + "\npub fn behaviour_change() -> u32 { 3 }\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn a() {}\n}\n"
+    regions = regions_from({("new", code_path): src_new, ("old", code_path): src_old})
+    assert adm.check_tests_included([text_entry(code_path, src_old, src_new)], set(), regions) is not None
+    src_added = src_old.replace("    fn b() {}\n", "    fn b() {}\n    #[test]\n    fn c() {}\n")
+    src_added = src_added.replace("pub fn keep() -> u32 { 1 }", "pub fn keep() -> u32 { 2 }")
+    regions = regions_from({("new", code_path): src_added, ("old", code_path): src_old})
+    assert adm.check_tests_included([text_entry(code_path, src_old, src_added)], set(), regions) is None
+
+
+def test_tests_included_production_code_under_a_release_cfg_needs_a_test():
+    path = "crates/vep-core/src/lib.rs"
+    for attr in (
+        "#[cfg(any(test, not(test)))]",
+        "#[cfg(not(all(test, feature = \"never\")))]",
+        "#[cfg(feature = \"test-helpers\")]",
+    ):
+        new = BASE_RS + f"\n{attr}\npub fn production_change() -> u32 {{ 2 }}\n"
+        regions = regions_from({("new", path): new, ("old", path): BASE_RS})
+        files = [text_entry(path, BASE_RS, new)]
+        assert adm.classify_file(files[0], regions) == (True, False), attr
+        assert adm.check_tests_included(files, set(), regions) is not None, attr
+        assert adm.is_crate_change(files, regions) is True, attr
+
+
+def test_benches_and_examples_are_crate_code_with_no_test_asked():
+    none = lambda side, path: []
+    bench = {"filename": "crates/vep-core/benches/speed.rs", "status": "modified", "additions": 3, "deletions": 1}
+    example = {"filename": "crates/vep-cli/examples/run.rs", "status": "added", "additions": 9, "deletions": 0}
+    assert adm.check_tests_included([bench, example], set(), none) is None
+    assert adm.is_crate_change([bench], none) is True
+    fixture = {"filename": "scripts/ci/fixtures/admission/shape.json", "status": "modified", "additions": 1, "deletions": 1}
+    testdata = {"filename": "scripts/concordance/testdata/reference_release/expected_115_2/a.txt", "status": "modified", "additions": 1, "deletions": 0}
+    assert not adm.is_test_path(fixture["filename"]) and not adm.is_test_path(testdata["filename"])
+    script = {"filename": "scripts/golden/build.py", "status": "modified", "additions": 1, "deletions": 0}
+    assert adm.check_tests_included([script, fixture, testdata], set(), none) is not None
+
+
+def test_workflow_files_are_a_miss_unless_overridden():
+    ci = text_entry(
+        ".github/workflows/ci.yml",
+        "jobs:\n  test:\n    name: Test\n    steps:\n      - run: cargo test\n",
+        "jobs:\n  test:\n    name: Test\n    steps:\n      - run: 'true'\n",
+    )
+    finding = adm.check_workflow_files([ci], set())
+    assert finding is not None and finding.closes and "`.github/workflows/ci.yml`" in finding.text
+    assert "maintainers'" in finding.text
+    assert adm.check_workflow_files([ci], {adm.OVERRIDE_LABEL}) is None
+    docs = {"filename": "docs/plugins.md", "status": "modified", "additions": 1, "deletions": 0}
+    assert adm.check_workflow_files([docs], set()) is None
 
 
 LIB_RS = "pub fn f() {}\n\n#[cfg(test)]\nmod helpers;\n\nmod real;\n"
@@ -394,7 +512,7 @@ def commit(sha: str, message: str, email: str = "a@example.com", parents: int = 
     }
 
 
-def test_signoff_needs_the_author_address_and_skips_merges():
+def test_signoff_needs_the_author_name_and_address_and_skips_merges():
     signed = commit("1" * 40, "Subject\n\nSigned-off-by: A <a@example.com>\n")
     other_address = commit(
         "2" * 40,
@@ -402,11 +520,13 @@ def test_signoff_needs_the_author_address_and_skips_merges():
         email="1+bot[bot]@users.noreply.example.com",
     )
     unsigned = commit("3" * 40, "Subject\n")
+    other_name = commit("5" * 40, "Subject\n\nSigned-off-by: Someone Else <a@example.com>\n")
     merge = commit("4" * 40, "Merge main into topic\n", parents=2)
     assert adm.check_signoff([signed, merge]) is None
-    finding = adm.check_signoff([signed, other_address, unsigned])
+    finding = adm.check_signoff([signed, other_address, unsigned, other_name])
     assert finding is not None and "`2222222`" in finding.text and "`3333333`" in finding.text
-    assert "`1111111`" not in finding.text
+    assert "`5555555`" in finding.text and "`1111111`" not in finding.text
+    assert "author's name and address" in finding.text
     assert finding.closes is False and "new pull request from a signed branch" in finding.text
 
 
@@ -431,6 +551,28 @@ def test_declaration_names_models_and_normalises_no_llm():
     missing = adm.check_declaration(adm.declared_models(signed_only))
     assert missing is not None and missing.closes is True
     assert "one new signed commit" in missing.text and "do not amend" in missing.text
+
+
+def test_label_models_come_from_the_newest_declaring_commit_and_stop_at_two_names():
+    head = commit("9" * 40, "Subject\n\nCo-Authored-By: Example Model 1 <m@example.com>\n")
+    earlier = commit("8" * 40, "Subject\n\nCo-Authored-By: Example Model 2 <m@example.com>\n")
+    assert adm.label_models([earlier, head]) == ["Example Model 1"]
+    assert adm.label_models([head, earlier]) == ["Example Model 2"]
+    assert adm.label_models([]) == []
+    assert adm.label_models([commit("7" * 40, "Subject\n")]) == []
+    merge_at_head = commit("4" * 40, "Merge main into topic\n", parents=2)
+    assert adm.label_models([earlier, head, merge_at_head]) == ["Example Model 1"]
+    two = commit(
+        "6" * 40,
+        "Subject\n\nCo-Authored-By: Example Model 1 <m@example.com>\nCo-Authored-By: No LLM\n",
+    )
+    assert adm.label_models([two]) == ["Example Model 1", "No LLM"]
+    many = [
+        commit(f"{n:040x}", f"c\n\nCo-Authored-By: Jane Doe {n} <j{n}@example.com>\n")
+        for n in range(1, 5)
+    ]
+    assert adm.label_models(many) is None
+    assert adm.declared_models(many) == [f"Jane Doe {n}" for n in range(1, 5)]
 
 
 def test_model_label_is_bounded_and_clean():
@@ -461,6 +603,14 @@ def test_body_sections_present_and_filled():
     )
     bullets = "## Summary\n- adds a flag\n## Verification\n* ran the tests\n## Upgrade impact\n1. none\n"
     assert adm.check_body_sections(bullets) is None
+    fenced = "```\n## Summary\nx\n## Verification\nx\n## Upgrade impact\nx\n```\n"
+    finding = adm.check_body_sections(fenced)
+    assert finding is not None and all(f"`## {name}`" in finding.text for name in adm.SECTIONS)
+    output_under_heading = (
+        "## Summary\nAdds a flag.\n## Verification\n```\n## not a heading\ncargo test: ok\n```\n"
+        "## Upgrade impact\nNone.\n"
+    )
+    assert adm.check_body_sections(output_under_heading) is None
 
 
 def test_body_sections_on_the_repository_template():
@@ -675,11 +825,37 @@ def test_parity_renders_contributor_text_inside_code_spans(tmp_path):
     assert finding is not None and "`x`" not in finding.text and "@someone_'x'" in finding.text
 
 
-def test_parity_checker_crash_is_an_environment_error(tmp_path):
+def test_parity_checker_crash_is_a_closing_finding_naming_its_last_line(tmp_path):
     crashing = tmp_path / "checker.py"
-    crashing.write_text("import sys\nprint('boom', file=sys.stderr)\nsys.exit(3)\n")
-    with pytest.raises(adm.AdmissionError):
-        adm.check_parity(tmp_path, crashing)
+    crashing.write_text("import sys\nprint('boom @x `y`', file=sys.stderr)\nsys.exit(3)\n")
+    finding = adm.check_parity(tmp_path, crashing)
+    assert finding is not None and finding.closes and finding.check == "parity"
+    assert "could not read this change" in finding.text and "boom @x 'y'" in finding.text
+
+
+def test_parity_checker_timeout_is_an_environment_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(adm, "PARITY_TIMEOUT_S", 1)
+    hanging = tmp_path / "checker.py"
+    hanging.write_text("import time\ntime.sleep(5)\n")
+    with pytest.raises(adm.AdmissionError, match="did not finish"):
+        adm.check_parity(tmp_path, hanging)
+
+
+@pytest.mark.parametrize(
+    "target, tail",
+    [
+        ("tests/parity/matrix.tsv", b"\xff\n"),
+        ("crates/vep-cli/src/args.rs", b"\n// \xff\n"),
+        ("tests/parity/matrix.tsv", b"x\t" + b"a" * 200_000 + b"\n"),
+    ],
+    ids=["invalid-utf8-matrix", "invalid-utf8-args", "oversized-cell"],
+)
+def test_parity_contributed_bytes_never_abort_the_run(tmp_path, target, tail):
+    write_tree(tmp_path, ROW, {"crates/vep-cli/src/x.rs": TEST_FILE})
+    path = tmp_path / target
+    path.write_bytes(path.read_bytes() + tail)
+    finding = adm.check_parity(tmp_path, CHECKER)
+    assert finding is None or finding.check == "parity"
 
 
 # --- CI ------------------------------------------------------------------------------------------
@@ -1081,6 +1257,7 @@ class FakeGit:
         contains: bool = True,
         fetched: str | None = None,
         texts: dict | None = None,
+        commits: list | None = None,
     ):
         self.head, self.contains, self.fetched, self.texts = (
             head,
@@ -1088,9 +1265,13 @@ class FakeGit:
             fetched or head,
             texts or {},
         )
+        self.commits = list(commits or [])
 
     def fetch_pull_head(self, number):
         return self.fetched
+
+    def log_commits(self, base, head):
+        return self.commits
 
     def rev_parse(self, rev):
         return "b" * 40
@@ -1123,12 +1304,12 @@ def event_for(fixture: dict, action: str = "opened") -> dict:
 
 def test_run_event_comments_labels_and_closes_a_contributor_miss(tmp_path, capsys):
     fixture = load(FIXTURE_DIR / "fork-performance-change.json")
-    fixture["commits"][0]["commit"]["message"] += (
+    fixture["commits"][-1]["commit"]["message"] += (
         "Co-Authored-By: Example Model 3 <model@example.com>\n"
     )
     fixture["contains_base_tip"] = False
-    gh = FakeGitHub(commits=fixture["commits"], files=fixture["files"])
-    git = FakeGit(fixture["pull_request"]["head"]["sha"], contains=False)
+    gh = FakeGitHub(files=fixture["files"])
+    git = FakeGit(fixture["pull_request"]["head"]["sha"], contains=False, commits=fixture["commits"])
     code = adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path))
     assert code == 1
     writes = gh.writes()
@@ -1153,8 +1334,9 @@ def test_run_event_edits_the_existing_comment_and_keeps_the_ci_block_of_the_same
         {"ci": (head, ci, True), "static": ("0" * 40, "stale", True)}, head, None
     )
     existing = {"id": 5, "body": old, "user": {"login": "github-actions[bot]", "type": "Bot"}}
-    gh = FakeGitHub(commits=fixture["commits"], files=fixture["files"], comments=[existing])
-    code = adm.run_event(event_for(fixture, "synchronize"), gh, FakeGit(head), repo_dir(tmp_path))
+    gh = FakeGitHub(files=fixture["files"], comments=[existing])
+    git = FakeGit(head, commits=fixture["commits"])
+    code = adm.run_event(event_for(fixture, "synchronize"), gh, git, repo_dir(tmp_path))
     assert code == 1
     writes = gh.writes()
     assert [w[:2] for w in writes] == [
@@ -1178,9 +1360,11 @@ def test_sync_model_labels_skips_a_name_with_nothing_left():
 
 def test_run_event_clean_pull_request_writes_nothing_but_the_label(tmp_path):
     fixture = load(FIXTURE_DIR / "maintainer-flag-bam.json")
-    gh = FakeGitHub(commits=fixture["commits"], files=fixture["files"])
+    gh = FakeGitHub(files=fixture["files"])
     git = FakeGit(
-        fixture["pull_request"]["head"]["sha"], texts={"CHANGELOG.md": fixture["head_changelog"]}
+        fixture["pull_request"]["head"]["sha"],
+        texts={"CHANGELOG.md": fixture["head_changelog"]},
+        commits=fixture["commits"],
     )
     code = adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path))
     assert code == 0
@@ -1191,9 +1375,11 @@ def test_run_event_maintainer_miss_is_commented_not_closed(tmp_path):
     fixture = load(FIXTURE_DIR / "maintainer-flag-bam.json")
     strip_trailers(fixture, "co-authored-by:")
     fixture["pull_request"]["labels"] = [{"name": "model: Example Model 1"}]
-    gh = FakeGitHub(commits=fixture["commits"], files=fixture["files"])
+    gh = FakeGitHub(files=fixture["files"])
     git = FakeGit(
-        fixture["pull_request"]["head"]["sha"], texts={"CHANGELOG.md": fixture["head_changelog"]}
+        fixture["pull_request"]["head"]["sha"],
+        texts={"CHANGELOG.md": fixture["head_changelog"]},
+        commits=fixture["commits"],
     )
     code = adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path))
     assert code == 0
@@ -1213,9 +1399,10 @@ def test_run_event_override_label_and_draft_are_commented_not_closed(tmp_path):
     ):
         fixture = load(FIXTURE_DIR / "fork-performance-change.json")
         mutate(fixture["pull_request"])
-        gh = FakeGitHub(commits=fixture["commits"], files=fixture["files"])
+        gh = FakeGitHub(files=fixture["files"])
         head = fixture["pull_request"]["head"]["sha"]
-        codes.append(adm.run_event(event_for(fixture), gh, FakeGit(head), repo_dir(tmp_path)))
+        git = FakeGit(head, commits=fixture["commits"])
+        codes.append(adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)))
         assert all(w[1] != f"/repos/{REPO}/pulls/0" for w in gh.writes())
         assert "No automatic close" in gh.writes()[0][2]["body"]
     assert codes == [0, 0]
@@ -1225,9 +1412,10 @@ def test_run_event_signoff_miss_alone_is_commented_not_closed(tmp_path):
     fixture = load(FIXTURE_DIR / "maintainer-docs-with-declaration.json")
     fixture["pull_request"]["user"] = {"login": "someone", "type": "User"}
     strip_trailers(fixture, "signed-off-by:")
-    gh = FakeGitHub(commits=fixture["commits"], files=fixture["files"])
+    gh = FakeGitHub(files=fixture["files"])
     head = fixture["pull_request"]["head"]["sha"]
-    code = adm.run_event(event_for(fixture), gh, FakeGit(head), repo_dir(tmp_path))
+    git = FakeGit(head, commits=fixture["commits"])
+    code = adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path))
     assert code == 0
     writes = gh.writes()
     assert [w[:2] for w in writes] == [
@@ -1244,20 +1432,22 @@ def test_run_event_pull_request_older_than_the_workflow_is_commented_not_closed(
     head = fixture["pull_request"]["head"]["sha"]
     landed = [{"commit": {"committer": {"date": "1999-01-03T00:00:00Z"}}}]
     fixture["pull_request"]["created_at"] = "1999-01-01T00:00:00Z"
-    gh = FakeGitHub(commits=fixture["commits"], files=fixture["files"], landed=landed)
-    assert adm.run_event(event_for(fixture), gh, FakeGit(head), repo_dir(tmp_path)) == 0
+    git = FakeGit(head, commits=fixture["commits"])
+    gh = FakeGitHub(files=fixture["files"], landed=landed)
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 0
     assert [w[:2] for w in gh.writes()] == [("POST", f"/repos/{REPO}/issues/0/comments")]
     assert "opened before the admission check" in gh.writes()[0][2]["body"]
     fixture["pull_request"]["created_at"] = "1999-01-04T00:00:00Z"
-    gh = FakeGitHub(commits=fixture["commits"], files=fixture["files"], landed=landed)
-    assert adm.run_event(event_for(fixture), gh, FakeGit(head), repo_dir(tmp_path)) == 1
+    gh = FakeGitHub(files=fixture["files"], landed=landed)
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 1
 
 
 def test_run_event_landing_date_read_failure_never_closes(tmp_path, capsys):
     fixture = load(FIXTURE_DIR / "fork-performance-change.json")
     head = fixture["pull_request"]["head"]["sha"]
-    gh = FakeGitHub(commits=fixture["commits"], files=fixture["files"], fail_landed=True)
-    assert adm.run_event(event_for(fixture), gh, FakeGit(head), repo_dir(tmp_path)) == 0
+    gh = FakeGitHub(files=fixture["files"], fail_landed=True)
+    git = FakeGit(head, commits=fixture["commits"])
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 0
     assert [w[:2] for w in gh.writes()] == [("POST", f"/repos/{REPO}/issues/0/comments")]
     assert "landing date was not read" in capsys.readouterr().err
 
@@ -1266,18 +1456,97 @@ def test_run_event_on_a_closed_pull_request_sends_no_close_and_exits_zero(tmp_pa
     fixture = load(FIXTURE_DIR / "fork-performance-change.json")
     fixture["pull_request"]["state"] = "closed"
     head = fixture["pull_request"]["head"]["sha"]
-    gh = FakeGitHub(commits=fixture["commits"], files=fixture["files"])
-    assert adm.run_event(event_for(fixture, "edited"), gh, FakeGit(head), repo_dir(tmp_path)) == 0
+    gh = FakeGitHub(files=fixture["files"])
+    git = FakeGit(head, commits=fixture["commits"])
+    assert adm.run_event(event_for(fixture, "edited"), gh, git, repo_dir(tmp_path)) == 0
     assert [w[:2] for w in gh.writes()] == [("POST", f"/repos/{REPO}/issues/0/comments")]
+
+
+def test_run_event_closes_a_contributor_who_edits_a_workflow_and_spares_a_maintainer(tmp_path):
+    fixture = load(FIXTURE_DIR / "maintainer-docs-with-declaration.json")
+    ci = text_entry(
+        ".github/workflows/ci.yml",
+        "jobs:\n  test:\n    name: Test\n    steps:\n      - run: cargo test\n",
+        "jobs:\n  test:\n    name: Test\n    steps:\n      - run: 'true'\n",
+    )
+    head = fixture["pull_request"]["head"]["sha"]
+    fixture["pull_request"]["state"] = "open"
+    gh = FakeGitHub(files=[ci])
+    git = FakeGit(head, commits=fixture["commits"])
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 0
+    assert all(w[1] != f"/repos/{REPO}/pulls/0" for w in gh.writes())
+    fixture["pull_request"]["user"] = {"login": "someone", "type": "User"}
+    gh = FakeGitHub(files=[ci])
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 1
+    writes = gh.writes()
+    assert ("PATCH", f"/repos/{REPO}/pulls/0", {"state": "closed"}) in writes
+    assert "workflow changes are the maintainers'" in writes[0][2]["body"]
+    fixture["pull_request"]["labels"] = [{"name": adm.OVERRIDE_LABEL}]
+    gh = FakeGitHub(files=[ci])
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 0
+    assert all("workflows" not in (w[2] or {}).get("body", "") for w in gh.writes() if len(w) > 2)
+
+
+def test_run_event_labels_from_the_head_commit_and_skips_many_declarations(tmp_path):
+    fixture = load(FIXTURE_DIR / "maintainer-docs-with-declaration.json")
+    head = fixture["pull_request"]["head"]["sha"]
+    commits = fixture["commits"] + [
+        commit(f"{n:040x}", f"c\n\nSigned-off-by: A <a@example.com>\nCo-Authored-By: Model {n}\n")
+        for n in range(1, 4)
+    ]
+    for entry in commits:
+        entry["commit"]["author"] = fixture["commits"][0]["commit"]["author"]
+        entry["commit"]["message"] = entry["commit"]["message"].replace(
+            "A <a@example.com>",
+            f"{entry['commit']['author']['name']} <{entry['commit']['author']['email']}>",
+        )
+    gh = FakeGitHub(files=fixture["files"])
+    git = FakeGit(head, commits=commits)
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 0
+    writes = gh.writes()
+    assert all(not w[1].endswith("/labels") for w in writes)
+    assert any("label is not set" in (w[2] or {}).get("body", "") for w in writes if len(w) > 2)
+    gh = FakeGitHub(files=fixture["files"])
+    git = FakeGit(head, commits=commits[-2:])
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 0
+    labels = [w for w in gh.writes() if w[1].endswith("/labels")]
+    assert labels == [("POST", f"/repos/{REPO}/issues/0/labels", {"labels": ["model: Model 3"]})]
+
+
+def test_run_event_writes_nothing_when_the_head_moved_before_the_write(tmp_path, capsys):
+    fixture = load(FIXTURE_DIR / "fork-performance-change.json")
+    head = fixture["pull_request"]["head"]["sha"]
+    moved = dict(fixture["pull_request"], head={"sha": "e" * 40})
+    gh = FakeGitHub(files=fixture["files"], pull=moved)
+    git = FakeGit(head, commits=fixture["commits"])
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 0
+    assert all(w[1] != f"/repos/{REPO}/pulls/0" for w in gh.writes())
+    assert all(not w[1].endswith("/comments") for w in gh.writes())
+    assert "head moved past" in capsys.readouterr().out
+
+
+def test_run_event_keeps_the_other_block_written_after_the_judgement(tmp_path):
+    fixture = load(FIXTURE_DIR / "fork-performance-change.json")
+    head = fixture["pull_request"]["head"]["sha"]
+    ci = adm.ci_block([adm.Finding("ci", "The CI job `Test` failed (u): fix it and push.")], head)
+    other = {
+        "id": 5,
+        "body": adm.render_comment({"ci": (head, ci, True)}, head, None),
+        "user": {"login": "github-actions[bot]", "type": "Bot"},
+    }
+    gh = FakeGitHub(files=fixture["files"], comments=[other])
+    git = FakeGit(head, commits=fixture["commits"])
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 1
+    body = gh.writes()[0][2]["body"]
+    assert "admission:ci" in body and "admission:static" in body and body.count(adm.MARKER) == 1
 
 
 def test_run_dispatch_judges_the_numbered_pull_request(tmp_path):
     fixture = load(FIXTURE_DIR / "fork-performance-change.json")
-    gh = FakeGitHub(
-        commits=fixture["commits"], files=fixture["files"], pull=fixture["pull_request"]
-    )
+    gh = FakeGitHub(files=fixture["files"], pull=fixture["pull_request"])
     head = fixture["pull_request"]["head"]["sha"]
-    assert adm.run_dispatch(0, gh, FakeGit(head), repo_dir(tmp_path)) == 1
+    git = FakeGit(head, commits=fixture["commits"])
+    assert adm.run_dispatch(0, gh, git, repo_dir(tmp_path)) == 1
     assert ("GET", f"/repos/{REPO}/pulls/0") in gh.calls
     assert [w[:2] for w in gh.writes()] == [
         ("POST", f"/repos/{REPO}/issues/0/comments"),
@@ -1287,11 +1556,11 @@ def test_run_dispatch_judges_the_numbered_pull_request(tmp_path):
 
 def test_run_event_head_moved_judges_nothing(tmp_path):
     fixture = load(FIXTURE_DIR / "fork-performance-change.json")
-    gh = FakeGitHub(commits=fixture["commits"], files=fixture["files"])
+    gh = FakeGitHub(files=fixture["files"])
     code = adm.run_event(
         event_for(fixture),
         gh,
-        FakeGit(fixture["pull_request"]["head"]["sha"], fetched="c" * 40),
+        FakeGit(fixture["pull_request"]["head"]["sha"], fetched="c" * 40, commits=fixture["commits"]),
         repo_dir(tmp_path),
     )
     assert code == 0 and gh.calls == []
@@ -1306,9 +1575,11 @@ def test_run_event_parity_miss_names_the_cell(tmp_path):
                 dest, ROW, {"crates/vep-cli/src/x.rs": TEST_FILE.replace("refuses_foo", "gone")}
             )
 
-    gh = FakeGitHub(commits=fixture["commits"], files=fixture["files"])
+    gh = FakeGitHub(files=fixture["files"])
     git = BrokenTreeGit(
-        fixture["pull_request"]["head"]["sha"], texts={"CHANGELOG.md": fixture["head_changelog"]}
+        fixture["pull_request"]["head"]["sha"],
+        texts={"CHANGELOG.md": fixture["head_changelog"]},
+        commits=fixture["commits"],
     )
     code = adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path))
     body = gh.writes()[0][2]["body"]
@@ -1387,6 +1658,18 @@ def test_run_workflow_run_success_refreshes_an_existing_comment_only(tmp_path):
     assert "Every required CI check passes" in gh.writes()[0][2]["body"]
 
 
+def test_resolve_pull_request_prints_the_open_pull_request_number_or_nothing(capsys):
+    fixture = load(FIXTURE_DIR / "fork-performance-change.json")
+    pr = fixture["pull_request"]
+    gh = FakeGitHub(pulls_by_head=[pr])
+    assert adm.resolve_pull_request(run_payload(pr["head"]["sha"]), gh) == 0
+    assert capsys.readouterr().out.strip() == str(pr["number"])
+    assert adm.resolve_pull_request(run_payload("d" * 40), gh) == 0
+    assert capsys.readouterr().out == ""
+    assert adm.resolve_pull_request(run_payload(pr["head"]["sha"], event="push"), gh) == 0
+    assert capsys.readouterr().out == ""
+
+
 def test_run_workflow_run_skips_a_closed_pull_request_the_run_lists(tmp_path, capsys):
     fixture = load(FIXTURE_DIR / "fork-performance-change.json")
     pr = dict(fixture["pull_request"], state="closed")
@@ -1462,8 +1745,8 @@ def test_run_local_passes_a_complete_branch_and_names_each_miss(tmp_path, capsys
     assert adm.run_local(repo, "origin/main", None) == 1
     captured = capsys.readouterr()
     err = captured.err
-    assert "no test does" in err
-    assert "carries no `Signed-off-by` trailer with its author's address" in err
+    assert "no test gains a line" in err
+    assert "carries no `Signed-off-by` trailer with its author's name and address" in err
     assert "declares the model" in err
     assert "gains no line under `## [Unreleased]`" in err
     assert "does not contain the tip" not in err

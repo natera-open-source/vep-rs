@@ -8,17 +8,18 @@ usage: admission.py --event <github event json>          the pull_request_target
                                                         the static checks on the local branch before pushing
 
 The static checks: the branch contains the tip of the base branch; a change to code under `crates/`,
-`tools/` or `scripts/` comes with a new or changed test (a file under a crate's or tool's `tests/`
-directory, a line of a `#[cfg(test)]` module or a `#[test]` function of a source file, a `test_*.py` or
-`test_*.sh` under `scripts/`, a golden `expected/` or `expected_*/` file or a corpus `manifest.json`),
-unless a maintainer sets the `tests-not-needed` label; a commit declares the model that wrote the change with a
-`Co-Authored-By` trailer (`No LLM` for none); the description carries the template's three sections; a
-crate change adds a line under `## [Unreleased]` of CHANGELOG.md, or under a release heading the change
-itself adds; the parity matrix resolves on the contributed tree; and every commit carries a
-`Signed-off-by` trailer with its author's address, a miss the comment reports without closing, since the
-only remedy on a pushed branch is a history rewrite after which a closed pull request cannot be reopened,
-and the DCO check holds the merge anyway. The job that runs after CI adds one line per required check
-that failed.
+`tools/` or `scripts/` (benchmarks and examples apart) comes with a test that gains a line (a file under
+a crate's or tool's `tests/` directory, a line of a `#[cfg(test)]` module or a `#[test]` function of a
+source file, a `test_*.py` or `test_*.sh` under `scripts/`, a golden `expected/` or `expected_*/` file
+or a corpus `manifest.json`), unless a maintainer sets the `tests-not-needed` label; a commit declares
+the model that wrote the change with a `Co-Authored-By` trailer (`No LLM` for none); the description
+carries the template's three sections; a crate change adds a line under `## [Unreleased]` of
+CHANGELOG.md, or under a release heading the change itself adds; a change from outside the maintainers
+leaves `.github/workflows/` alone; the parity matrix resolves on the contributed tree; and every commit
+carries a `Signed-off-by` trailer with its author's name and address, a miss the comment reports
+without closing, since the only remedy on a pushed branch is a history rewrite after which a closed
+pull request cannot be reopened, and the DCO check holds the merge anyway. The job that runs after CI
+adds one line per required check that failed.
 
 The two Actions modes read the pull request through the REST API (commits, changed files, labels,
 comments) and the contribution's files as git objects: a `git fetch` of the pull request's head ref, `git
@@ -30,8 +31,11 @@ rendered inside a code span, so it carries no mention, link or formatting.
 One comment per pull request, edited in place on every run, states each miss with its fix. A miss closes
 the pull request unless its author is a maintainer (a CODEOWNERS entry for `*`) or a bot, the
 `admission-override` label is set, the pull request is a draft, or it was opened before this workflow
-first landed on the base branch; the author reopens it once it is fixed and the check runs again. Exit 1
-only when the run closes the pull request, 0 otherwise, 2 on a usage or environment error.
+first landed on the base branch; the author reopens it once it is fixed and the check runs again. The
+newest commit that declares a model sets the `model: <name>` label (at most two names; none when
+the commits declare more). Before the comment and the close are written the pull request's head and the comment
+are read again, so a push in between or a run of the other job loses nothing. Exit 1 only when the run
+closes the pull request, 0 otherwise, 2 on a usage or environment error.
 """
 
 from __future__ import annotations
@@ -58,6 +62,7 @@ NO_TESTS_LABEL = "tests-not-needed"
 MODEL_LABEL_PREFIX = "model: "
 NO_MODEL_DECLARATION = "No LLM"
 LABEL_MAX = 50
+LABEL_MODELS_MAX = 2
 SECTIONS = ("Summary", "Verification", "Upgrade impact")
 # The base branch ruleset names the required checks; this list stands in when it cannot be read.
 REQUIRED_CHECKS = (
@@ -86,7 +91,12 @@ TEST_PATH_RES = (
     re.compile(r"^scripts/(.*/)?test_[^/]*\.(py|sh)$"),
     re.compile(r"^tests/golden/.*/(expected(_[^/]+)?/|manifest\.json$)"),
 )
+# A fixture or recorded-data file under `scripts/` is an input of a test, not a test.
+NOT_TEST_PATH_RE = re.compile(r"^scripts/.*/(fixtures|testdata)/")
 RUST_CODE_RE = re.compile(r"^(crates|tools)/.*\.rs$")
+# Benchmarks and examples are code a crate change counts, with no test asked for them.
+RUST_UNTESTED_RE = re.compile(r"^(crates|tools)/[^/]+/(benches|examples)/.*\.rs$")
+WORKFLOW_PATH_RE = re.compile(r"^\.github/workflows/")
 SCRIPT_CODE_RE = re.compile(r"^scripts/.*\.(py|sh)$")
 CRATE_MANIFEST_RE = re.compile(r"^crates/[^/]+/Cargo\.toml$")
 MOD_DECL_TEMPLATE = r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+{name}\s*;"
@@ -100,8 +110,7 @@ BLOCK_RE = re.compile(
     r"<!-- admission:(static|ci) sha=([0-9a-f]+) closes=([01]) -->\n(.*?)\n<!-- /admission:\1 -->",
     re.DOTALL,
 )
-# `cfg(test)`, `cfg(all(test, ...))` and the like mark test-only items; `cfg(not(test))` does not.
-CFG_TEST_RE = re.compile(r"^cfg\s*\((?!\s*not\s*\(\s*test\b).*\btest\b", re.DOTALL)
+CFG_RE = re.compile(r"^cfg\s*\((.*)\)\s*$", re.DOTALL)
 TEST_ATTR_RE = re.compile(
     r"^(?:[A-Za-z_][A-Za-z0-9_]*::)*(?:test|rstest|test_case|quickcheck|proptest)\b"
 )
@@ -150,6 +159,61 @@ def code(value: str, limit: int = 120) -> str:
 
 
 # --- Rust test regions -----------------------------------------------------------------------------
+
+
+def split_operands(predicate: str) -> list[str]:
+    """The top-level comma-separated operands of a `cfg` predicate list, strings and nested
+    parentheses kept whole."""
+    operands: list[str] = []
+    depth = 0
+    current: list[str] = []
+    in_string = False
+    i = 0
+    while i < len(predicate):
+        ch = predicate[i]
+        if in_string:
+            current.append(ch)
+            if ch == "\\" and i + 1 < len(predicate):
+                current.append(predicate[i + 1])
+                i += 1
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+            current.append(ch)
+        elif ch == "(":
+            depth += 1
+            current.append(ch)
+        elif ch == ")":
+            depth -= 1
+            current.append(ch)
+        elif ch == "," and depth == 0:
+            operands.append("".join(current).strip())
+            current = []
+        else:
+            current.append(ch)
+        i += 1
+    tail = "".join(current).strip()
+    if tail:
+        operands.append(tail)
+    return operands
+
+
+def cfg_is_test(attr: str) -> bool:
+    """Whether an attribute's text is a `cfg` predicate true only in a test build: `cfg(test)`, or
+    `cfg(all(...))` with `test` among its operands, directly or inside a nested `all(...)`.
+    `any(...)`, `not(...)` and a feature name containing the word are predicates a release build can
+    satisfy, so they are code."""
+    match = CFG_RE.match(attr.strip())
+    if not match:
+        return False
+    predicate = match.group(1).strip()
+    if predicate == "test":
+        return True
+    inner = re.match(r"^all\s*\((.*)\)\s*$", predicate, re.DOTALL)
+    if not inner:
+        return False
+    return any(cfg_is_test(f"cfg({operand})") for operand in split_operands(inner.group(1)))
 
 
 def rust_test_regions(text: str) -> list[tuple[int, int]]:
@@ -253,13 +317,13 @@ def rust_test_regions(text: str) -> list[tuple[int, int]]:
                     level -= 1
                 j += 1
             attr = text[start : j - 1].strip()
-            if inner and CFG_TEST_RE.match(attr):
+            if inner and cfg_is_test(attr):
                 return [(1, total)]
             if (
                 not inner
                 and armed is None
                 and region_start is None
-                and (CFG_TEST_RE.match(attr) or TEST_ATTR_RE.match(attr))
+                and (cfg_is_test(attr) or TEST_ATTR_RE.match(attr))
             ):
                 armed = (line, depth)
                 item_started = False
@@ -383,7 +447,14 @@ def changed_lines(patch: str) -> tuple[list[tuple[int, str]], list[tuple[int, st
 
 
 def is_test_path(path: str) -> bool:
+    if NOT_TEST_PATH_RE.match(path):
+        return False
     return any(pattern.search(path) for pattern in TEST_PATH_RES)
+
+
+def asks_for_test(path: str) -> bool:
+    """Code a change to which needs a test change beside it; a benchmark or an example does not."""
+    return not RUST_UNTESTED_RE.match(path)
 
 
 def file_changed(entry: dict) -> bool:
@@ -397,30 +468,30 @@ RegionsFor = Callable[[str, str], list[tuple[int, int]]]
 
 def classify_file(entry: dict, regions_for: RegionsFor) -> tuple[bool, bool]:
     """(changes code, changes a test) for one entry of the pull request's file list. `regions_for(side,
-    path)` gives the test regions of the file's text on the `old` or `new` side."""
+    path)` gives the test regions of the file's text on the `old` or `new` side. A test change is an
+    added line in a test file or a test region, or a file added or renamed into a test path; a
+    deleted test, a removed test function alone, or a file moved out of a test path is none."""
     path = entry.get("filename", "")
     previous = entry.get("previous_filename") or path
+    if is_test_path(path):
+        arrived = entry.get("status") == "added" or (previous != path and not is_test_path(previous))
+        return False, arrived or bool(entry.get("additions"))
     if not file_changed(entry):
         return False, False
-    if is_test_path(path):
-        return False, True
-    moved_test = previous != path and is_test_path(previous)
     if RUST_CODE_RE.match(path):
         patch = entry.get("patch")
         if patch is None:
-            return True, moved_test
+            return True, False
         removed, added = changed_lines(patch)
         new_regions = regions_for("new", path) if added else []
         old_regions = regions_for("old", previous) if removed else []
-        in_test = [in_regions(n, new_regions) for n, _ in added] + [
-            in_regions(n, old_regions) for n, _ in removed
-        ]
-        if not in_test:
-            return True, moved_test
-        return not all(in_test), any(in_test) or moved_test
+        added_in_test = [in_regions(n, new_regions) for n, _ in added]
+        removed_in_test = [in_regions(n, old_regions) for n, _ in removed]
+        changes_code = not all(added_in_test) or not all(removed_in_test)
+        return changes_code, any(added_in_test)
     if SCRIPT_CODE_RE.match(path):
-        return True, moved_test
-    return False, moved_test
+        return True, False
+    return False, False
 
 
 def check_tests_included(
@@ -431,17 +502,37 @@ def check_tests_included(
     changes_code = changes_test = False
     for entry in files:
         is_code, is_test = classify_file(entry, regions_for)
-        changes_code = changes_code or is_code
+        changes_code = changes_code or (is_code and asks_for_test(entry.get("filename", "")))
         changes_test = changes_test or is_test
     if changes_code and not changes_test:
         return Finding(
             "tests",
-            "Code under `crates/`, `tools/` or `scripts/` changes and no test does: add or update a test "
-            "for the change (a file under a `tests/` directory, a `#[test]` function or a `#[cfg(test)]` "
-            "module, a `test_*.py` or `test_*.sh`, or the golden expectation the change moves), or a "
-            f"maintainer adds the `{NO_TESTS_LABEL}` label.",
+            "Code under `crates/`, `tools/` or `scripts/` changes and no test gains a line: add or "
+            "update a test for the change (a file under a `tests/` directory, a `#[test]` function or a "
+            "`#[cfg(test)]` module, a `test_*.py` or `test_*.sh`, or the golden expectation the change "
+            f"moves), or a maintainer adds the `{NO_TESTS_LABEL}` label.",
         )
     return None
+
+
+def check_workflow_files(files: list[dict], labels: set[str]) -> Finding | None:
+    """A change under `.github/workflows/` from outside the maintainers: the required checks the
+    after-CI job judges are produced by those files, so a contributor cannot edit them."""
+    if OVERRIDE_LABEL in labels:
+        return None
+    changed = sorted(
+        entry["filename"]
+        for entry in files
+        if WORKFLOW_PATH_RE.match(entry.get("filename", "")) and file_changed(entry)
+    )
+    if not changed:
+        return None
+    listed = ", ".join(code(path) for path in changed[:5])
+    return Finding(
+        "workflows",
+        f"The change edits {listed} under `.github/workflows/`: workflow changes are the maintainers'; "
+        "ask on an issue and leave the workflows out of this pull request.",
+    )
 
 
 # --- the commits ---------------------------------------------------------------------------------
@@ -467,9 +558,14 @@ def check_signoff(commits: list[dict]) -> Finding | None:
         if len(commit.get("parents") or []) > 1:
             continue
         message = commit["commit"].get("message") or ""
-        author = ((commit["commit"].get("author") or {}).get("email") or "").lower()
-        signers = {match.group(2).strip().lower() for match in SIGNOFF_RE.finditer(message)}
-        if not author or author not in signers:
+        author = commit["commit"].get("author") or {}
+        name = re.sub(r"\s+", " ", author.get("name") or "").strip().lower()
+        email = (author.get("email") or "").strip().lower()
+        signers = {
+            (re.sub(r"\s+", " ", match.group(1)).strip().lower(), match.group(2).strip().lower())
+            for match in SIGNOFF_RE.finditer(message)
+        }
+        if not email or (name, email) not in signers:
             unsigned.append(commit["sha"][:7])
     if not unsigned:
         return None
@@ -477,10 +573,10 @@ def check_signoff(commits: list[dict]) -> Finding | None:
     more = f" and {len(unsigned) - 5} more" if len(unsigned) > 5 else ""
     return Finding(
         "signoff",
-        f"Commit {listed}{more} carries no `Signed-off-by` trailer with its author's address: before "
-        "the first push, sign every commit with `git rebase --signoff origin/main`; on a pushed branch, "
-        "open a new pull request from a signed branch, since a force-push would stop this one from "
-        "being reopened.",
+        f"Commit {listed}{more} carries no `Signed-off-by` trailer with its author's name and address: "
+        "before the first push, sign every commit with `git rebase --signoff origin/main`; on a pushed "
+        "branch, open a new pull request from a signed branch, since a force-push would stop this one "
+        "from being reopened.",
         closes=False,
     )
 
@@ -509,6 +605,20 @@ def check_declaration(models: list[str]) -> Finding | None:
     )
 
 
+def label_models(commits: list[dict]) -> list[str] | None:
+    """The names the `model:` labels are set from: the declarations of the newest commit that carries
+    one (a merge of the base branch at the head declares nothing), at most `LABEL_MODELS_MAX`; None
+    when more distinct names appear across the commits, so a run of unrelated trailers never
+    creates repository labels."""
+    if len(declared_models(commits)) > LABEL_MODELS_MAX:
+        return None
+    for commit in reversed(commits):
+        names = declared_models([commit])
+        if names:
+            return names[:LABEL_MODELS_MAX]
+    return []
+
+
 def model_label(name: str) -> str | None:
     """`model: <name>` with the name reduced to letters, digits, spaces and `._+/-`, at most
     `LABEL_MAX` characters; None when nothing of the name survives."""
@@ -523,16 +633,26 @@ def model_label(name: str) -> str | None:
 
 def check_body_sections(body: str | None) -> Finding | None:
     """Every template section is present as a heading with at least one line of text under it;
-    the template's HTML comments and checklist lines do not count as text."""
+    the template's HTML comments and checklist lines do not count as text, and a heading inside a
+    fenced code block opens no section."""
     text = re.sub(r"<!--.*?-->", "", body or "", flags=re.DOTALL)
     sections: dict[str, list[str]] = {}
     current = None
+    fence: str | None = None
     for raw in text.splitlines():
-        heading = HEADING_RE.match(raw.strip())
-        if heading:
+        stripped = raw.strip()
+        if fence is not None:
+            if stripped.startswith(fence):
+                fence = None
+        elif stripped.startswith(("```", "~~~")):
+            fence = stripped[:3]
+        elif (heading := HEADING_RE.match(stripped)) is not None:
             current = heading.group(1).strip().lower()
             sections.setdefault(current, [])
-        elif current is not None and not CHECKLIST_RE.match(raw):
+            continue
+        elif CHECKLIST_RE.match(raw):
+            continue
+        if current is not None:
             sections[current].append(raw)
     missing = [
         name
@@ -618,12 +738,15 @@ def check_changelog(
 
 def check_parity(tree: Path, checker: Path) -> Finding | None:
     """Run the base branch's checker over the contributed tree. The checker reads the tree and runs
-    nothing from it; a crash of the checker is an environment error, not a miss."""
+    nothing from it. A checker that exits without a finding was stopped by the tree it read (a byte
+    it cannot decode, a cell past its limits), which is the contribution's miss; only a timeout is an
+    environment error."""
     try:
         proc = subprocess.run(
             [sys.executable, str(checker), "--root", str(tree)],
             capture_output=True,
             text=True,
+            errors="replace",
             timeout=PARITY_TIMEOUT_S,
             check=False,
         )
@@ -636,8 +759,11 @@ def check_parity(tree: Path, checker: Path) -> Finding | None:
         line.removeprefix(prefix) for line in proc.stderr.splitlines() if line.startswith(prefix)
     ]
     if not errors:
-        raise AdmissionError(
-            f"the parity checker failed without a finding: {proc.stderr.strip()[-500:]}"
+        last = next((line for line in reversed(proc.stderr.splitlines()) if line.strip()), "")
+        return Finding(
+            "parity",
+            f"The parity checker could not read this change ({code(last, 200)}): run "
+            f"`python3 {PARITY_CHECKER}` on the branch and fix what stops it.",
         )
     listed = "; ".join(code(line, 200) for line in errors[:5])
     more = f"; and {len(errors) - 5} more" if len(errors) > 5 else ""
@@ -673,6 +799,12 @@ def maintainers_from_codeowners(text: str) -> set[str]:
         if parts and parts[0] == "*":
             return {p[1:].lower() for p in parts[1:] if p.startswith("@") and "/" not in p}
     return set()
+
+
+def read_maintainers(repo_dir: Path) -> set[str]:
+    """The maintainers named by the base checkout's CODEOWNERS; none when it has no such file."""
+    codeowners = repo_dir / CODEOWNERS
+    return maintainers_from_codeowners(codeowners.read_text() if codeowners.is_file() else "")
 
 
 def is_bot(user: dict) -> bool:
@@ -740,13 +872,24 @@ def parse_blocks(body: str | None) -> dict[str, Block]:
     }
 
 
-def static_block(findings: list[Finding], head_sha: str, policy_url: str) -> str:
+def static_block(
+    findings: list[Finding], head_sha: str, policy_url: str, note: str | None = None
+) -> str:
     head = code(head_sha[:7])
     if not findings:
-        return f"The admission check ([policy]({policy_url})) passes on head {head}."
-    lines = [f"The admission check ([policy]({policy_url})) finds on head {head}:"]
-    lines.extend(f"- {finding.text}" for finding in findings)
+        lines = [f"The admission check ([policy]({policy_url})) passes on head {head}."]
+    else:
+        lines = [f"The admission check ([policy]({policy_url})) finds on head {head}:"]
+        lines.extend(f"- {finding.text}" for finding in findings)
+    if note:
+        lines.append(note)
     return "\n".join(lines)
+
+
+LABELS_SKIPPED_NOTE = (
+    f"The `{MODEL_LABEL_PREFIX.strip()}` label is not set: the commits declare more than "
+    f"{LABEL_MODELS_MAX} distinct models; the newest declaring commit is the one a label would name."
+)
 
 
 def ci_block(findings: list[Finding], head_sha: str) -> str:
@@ -976,6 +1119,30 @@ class Git:
             raise AdmissionError(f"refs/pull/{number}/head was not fetched")
         return sha
 
+    def log_commits(self, base: str, head: str) -> list[dict]:
+        """The commits reachable from `head` and not from `base`, oldest first, in the shape the API
+        gives a pull request's commits (the fields the checks read)."""
+        out = self.run(
+            "log",
+            "--topo-order",
+            "--reverse",
+            "--format=%H%x00%P%x00%an%x00%ae%x00%B%x1e",
+            f"{base}..{head}",
+        )
+        commits = []
+        for record in out.split("\x1e"):
+            if not record.strip():
+                continue
+            sha, parents, name, email, message = record.lstrip("\n").split("\x00", 4)
+            commits.append(
+                {
+                    "sha": sha,
+                    "parents": [{"sha": p} for p in parents.split()],
+                    "commit": {"message": message, "author": {"name": name, "email": email}},
+                }
+            )
+        return commits
+
     def export_tree(self, rev: str, dest: Path) -> None:
         """Write the tree at `rev` under `dest` through a temporary index: no hook runs, the tree's
         `.gitattributes` can name a filter but not define its command, the runner's own git-lfs
@@ -1065,23 +1232,29 @@ def publish_findings(
     kind: str,
     block: str,
     findings: list[Finding],
+    noted: bool = False,
 ) -> bool:
     """Write this run's block into the pull request's comment, close the pull request when the
     findings call for it and it is open, and return whether this run closed it. The footer is the
     close or exemption sentence for the findings on this head: this run's, else the other block's
     when an earlier run on the same head left some. A clean run writes only to refresh a comment
-    that exists."""
+    that exists, unless its block carries a note (`noted`)."""
     number = pr["number"]
     head_sha = pr["head"]["sha"]
-    codeowners = repo_dir / CODEOWNERS
-    maintainers = maintainers_from_codeowners(
-        codeowners.read_text() if codeowners.is_file() else ""
-    )
+    maintainers = read_maintainers(repo_dir)
     user = pr.get("user") or {}
     labels = label_names(pr)
     draft = bool(pr.get("draft"))
     older = predates_workflow(gh, pr)
     close, footer = close_footer(findings, user, labels, draft, maintainers, older)
+    # The judgement is of one head: a push since the event moved it, and the run for the new head
+    # writes the comment and decides the close; this run then writes nothing.
+    current = gh.get(f"/repos/{gh.repo}/pulls/{number}") or {}
+    if (current.get("head") or {}).get("sha", head_sha) != head_sha:
+        print(f"admission: the head moved past {head_sha[:7]}; this run writes nothing.")
+        return False
+    # The comment is read right before it is written and the other job's block is kept, so two runs
+    # that interleave lose neither block.
     existing = find_comment(gh, number)
     blocks = parse_blocks(existing.get("body") if existing else None)
     blocks[kind] = (head_sha, block, any(f.closes for f in findings))
@@ -1090,9 +1263,9 @@ def publish_findings(
         _close, footer = close_footer(
             [Finding("other", "", closes=other[2])], user, labels, draft, maintainers, older
         )
-    if existing is not None or findings:
+    if existing is not None or findings or noted:
         write_comment(gh, number, existing, render_comment(blocks, head_sha, footer))
-    if close and pr.get("state") == "open":
+    if close and (current.get("state") or pr.get("state")) == "open":
         gh.patch(f"/repos/{gh.repo}/pulls/{number}", {"state": "closed"})
         return True
     return False
@@ -1110,14 +1283,12 @@ def run_event(event: dict, gh: GitHub, git: Git, repo_dir: Path) -> int:
     base_tip = git.rev_parse(f"origin/{base_ref}") or pr["base"]["sha"]
     contains = git.is_ancestor(base_tip, head_sha)
     merge_base = git.merge_base(base_tip, head_sha)
-    commits = gh.paginate(f"/repos/{gh.repo}/pulls/{number}/commits")
+    # The commits come from the fetched objects: the API's list stops at 250.
+    commits = git.log_commits(merge_base or base_tip, head_sha)
     files = gh.paginate(f"/repos/{gh.repo}/pulls/{number}/files")
     models = declared_models(commits)
     labels = label_names(pr)
-    with tempfile.TemporaryDirectory() as tmp:
-        tree = Path(tmp) / "tree"
-        git.export_tree(head_sha, tree)
-        parity = check_parity(tree, repo_dir / PARITY_CHECKER)
+    maintainers = read_maintainers(repo_dir)
     findings = static_findings(
         contains,
         base_ref,
@@ -1127,12 +1298,27 @@ def run_event(event: dict, gh: GitHub, git: Git, repo_dir: Path) -> int:
         pr.get("body"),
         git_regions_for(git, head_sha, merge_base),
         git.show(head_sha, "CHANGELOG.md"),
-        parity,
+        None,
         models,
     )
-    block = static_block(findings, head_sha, policy_url(gh.repo, base_ref))
-    close = publish_findings(gh, pr, repo_dir, "static", block, findings)
-    sync_model_labels(gh, number, labels, models)
+    if not is_maintainer(pr.get("user") or {}, maintainers):
+        workflows = check_workflow_files(files, labels)
+        if workflows is not None:
+            findings.append(workflows)
+    # The parity finding is appended last rather than passed to static_findings, so the workflow
+    # finding precedes it.
+    with tempfile.TemporaryDirectory() as tmp:
+        tree = Path(tmp) / "tree"
+        git.export_tree(head_sha, tree)
+        parity = check_parity(tree, repo_dir / PARITY_CHECKER)
+    if parity is not None:
+        findings.append(parity)
+    labelled = label_models(commits)
+    note = LABELS_SKIPPED_NOTE if labelled is None else None
+    block = static_block(findings, head_sha, policy_url(gh.repo, base_ref), note)
+    close = publish_findings(gh, pr, repo_dir, "static", block, findings, noted=note is not None)
+    if labelled is not None:
+        sync_model_labels(gh, number, labels, labelled)
     print(f"admission: {len(commits)} commits, {len(files)} files, head {head_sha[:7]}")
     return verdict(findings, close)
 
@@ -1169,6 +1355,18 @@ def find_pull_request(gh: GitHub, run: dict) -> dict | None:
     return None
 
 
+def resolve_pull_request(event: dict, gh: GitHub) -> int:
+    """Print the number of the open pull request a completed CI run belongs to, or nothing: the
+    first job of the after-CI workflow, whose output keys the judging job's concurrency group."""
+    run = event["workflow_run"]
+    if run.get("event") != "pull_request" or run.get("conclusion") in UNJUDGED_CONCLUSIONS:
+        return 0
+    pr = find_pull_request(gh, run)
+    if pr is not None:
+        print(pr["number"])
+    return 0
+
+
 def run_workflow_run(event: dict, gh: GitHub, repo_dir: Path) -> int:
     run = event["workflow_run"]
     if run.get("event") != "pull_request" or run.get("conclusion") in UNJUDGED_CONCLUSIONS:
@@ -1184,26 +1382,6 @@ def run_workflow_run(event: dict, gh: GitHub, repo_dir: Path) -> int:
     close = publish_findings(gh, pr, repo_dir, "ci", ci_block(findings, head_sha), findings)
     print(f"admission: CI run {run['id']} judged on head {head_sha[:7]}")
     return verdict(findings, close)
-
-
-def local_commits(git: Git, base: str) -> list[dict]:
-    out = git.run("log", "--format=%H%x00%P%x00%an%x00%ae%x00%B%x1e", f"{base}..HEAD")
-    commits = []
-    for record in out.split("\x1e"):
-        if not record.strip():
-            continue
-        sha, parents, name, email, message = record.lstrip("\n").split("\x00", 4)
-        commits.append(
-            {
-                "sha": sha,
-                "parents": [{"sha": p} for p in parents.split()],
-                "commit": {
-                    "message": message,
-                    "author": {"name": name, "email": email},
-                },
-            }
-        )
-    return commits
 
 
 LOCAL_STATUS = {
@@ -1266,7 +1444,7 @@ def run_local(repo_dir: Path, base: str, body_file: Path | None) -> int:
         remote = base.split("/", 1)[0] if "/" in base else "origin"
         raise AdmissionError(f"cannot resolve HEAD or {base}; run `git fetch {remote}` first")
     merge_base = git.merge_base(base_sha, head) or base_sha
-    commits = local_commits(git, base)
+    commits = git.log_commits(base, "HEAD")
     files = local_files(git, merge_base)
     models = declared_models(commits)
     filled_template = "\n".join(f"## {name}\nx" for name in SECTIONS)
@@ -1309,6 +1487,11 @@ def main(argv: list[str] | None = None) -> int:
         help="--local: the base ref (default: origin/main)",
     )
     parser.add_argument("--body-file", help="--local: the pull request description to check")
+    parser.add_argument(
+        "--resolve-pull-request",
+        action="store_true",
+        help="--workflow-run: print the open pull request's number for the run's head, or nothing",
+    )
     args = parser.parse_args(argv)
     repo_dir = Path(args.repo_dir).resolve()
     try:
@@ -1323,6 +1506,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.pull_request is not None:
             return run_dispatch(args.pull_request, gh, Git(repo_dir), repo_dir)
         event = json.loads(Path(args.workflow_run).read_text())
+        if args.resolve_pull_request:
+            return resolve_pull_request(event, gh)
         return run_workflow_run(event, gh, repo_dir)
     except AdmissionError as exc:
         print(f"ERROR: [admission] {exc}", file=sys.stderr)
