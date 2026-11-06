@@ -107,15 +107,17 @@ Edit the row:
 Find every hand-written page that states the item's old behaviour with `grep -rnw -- '<flag or
 item>' docs/` (`-w` keeps `--gff` from matching `--gff3`) and bring it in line; `docs/cli-reference.md` and `docs/cli/` are generated in step 4. A
 `documented_subset` exclusion is stated on its page in the sentences Test 1 asserts. Add a
-`CHANGELOG.md` entry under Unreleased when the change is visible to a user.
+`CHANGELOG.md` entry under Unreleased when the change is visible to a user; the admission check asks
+every crate code or manifest change for a changelog line, and a maintainer's `admission-override`
+label waives it for a refactor.
 
 Done when `python3 scripts/parity/check_parity_matrix.py` and `cargo test -p vep-cli --test
 parity_matrix` pass.
 
 ## 7. Gate
 
-Run the full set in [AGENTS.md](../../../AGENTS.md#before-pushing), the admission check included,
-then commit with `-s` and the model declaration and open the pull request with the template's three
-sections and nothing else. A test added to a file under `scripts/` moves that file's floor in
+Commit with `-s` and the model declaration, run the full set in
+[AGENTS.md](../../../AGENTS.md#before-pushing) (the admission check included), then open the pull
+request with the template's three sections and nothing else. A test added to a file under `scripts/` moves that file's floor in
 `.github/workflows/ci.yml`. Done when every command passes, its output is quoted in the pull
 request's Verification section, and the smoke's F1 is quoted there or stated as not run and why.

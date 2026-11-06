@@ -15,7 +15,7 @@
 - [ ] Every commit is signed off (`git commit -s`); the DCO check fails without it.
 - [ ] One commit declares the model that wrote the change, in a trailer in the form CONTRIBUTING.md's Sign your commits gives, or declares that none did.
 - [ ] The branch contains `main`'s tip, brought in by a merge (never a rebase once pushed), and `python3 scripts/ci/admission.py --local` passes.
-- [ ] The CI gate passed locally on Rust 1.97.1 (`cargo test --workspace --locked --no-fail-fast`, clippy with `-D warnings`, fmt, `check_parity_matrix.py`, `check_module_docs.sh`) and `cargo +1.89 build --workspace --locked` passed, with the output quoted under Verification, or no code changed.
+- [ ] The CI gate passed locally on the toolchain `ci.yml` pins (`cargo test --workspace --locked --no-fail-fast`, clippy with `-D warnings`, fmt, `check_parity_matrix.py`, `check_module_docs.sh`) and the MSRV build passed, with the output quoted under Verification, or no code changed.
 - [ ] `CHANGELOG.md` has an entry under Unreleased in the release-notes grammar (one line, the subject first, at most 30 words, a trailing `(#N)` added once the PR number exists), or no crate code or manifest under `crates/` changed. The admission check asks every crate change for a line.
 - [ ] Tests cover the change, added or updated in this PR (a `tests/` file, a `#[test]`, a `test_*.py` or `test_*.sh`, or the golden expectation or corpus `manifest.json` the change moves), or it changes no code.
 - [ ] A test file under `scripts/` that gained or lost tests has its floor in `.github/workflows/ci.yml` moved to the new count, or no such file changed.

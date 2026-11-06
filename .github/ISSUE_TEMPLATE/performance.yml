@@ -22,7 +22,7 @@ body:
     attributes:
       label: vep-rs version
       description: Output of `vep --version`, or the commit you built from. For a comparison of two builds, both.
-      placeholder: vep 0.5.0; and the commit of the change
+      placeholder: vep <version>; and the commit of the change
     validations:
       required: true
   - type: textarea
