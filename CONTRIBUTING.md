@@ -219,12 +219,14 @@ An admission check (the `Admission` workflow) runs on every pull request. It clo
 behind `main`, changes code without a new or changed test, carries no model declaration, lacks a
 template section, changes a crate without a changelog line, fails the parity matrix or fails a
 required CI check. The comment it leaves names each miss and its fix; push the fixes to the same
-branch and reopen it. An unsigned commit is reported but never closes (the DCO check holds the
-merge; sign a pushed branch by opening a new pull request from a signed branch). Maintainers' and
-bots' pull requests and those opened before the check existed are commented but stay open; a
-maintainer's `tests-not-needed` label waives the test requirement and `admission-override` holds the
-close for a justified exception. `python3 scripts/ci/admission.py --local` applies the static rules
-to your branch before you push.
+branch and reopen it.
+
+An unsigned commit is reported but never closes (the DCO check holds the merge; sign a pushed
+branch by opening a new pull request from a signed branch). Maintainers' and bots' pull requests,
+drafts and those opened before the check existed are commented but stay open; a maintainer's
+`tests-not-needed` label waives the test requirement and `admission-override` holds the close for a
+justified exception. `python3 scripts/ci/admission.py --local` applies the static rules to your
+branch before you push.
 
 ## Comment and write-up discipline
 

@@ -92,11 +92,12 @@ signed off, the model declared with a trailer form under Gotchas, the changelog 
 matrix. CONTRIBUTING.md's Pull Requests says what the `Admission` check closes and how a closed pull
 request reopens.
 
-On a pull request from a fork, the workflows do not start until a maintainer presses "Approve and
-run", after every push, and the checks read "no checks reported" until then, so Verification carries
-the local results. `main` requires the branch to be current with it and every review thread resolved
-before merge. Bring `main` in with `git fetch origin && git merge --signoff origin/main`; never rebase
-or force-push a pushed branch, since maintainers may push fixes onto it.
+On a pull request from a fork, the CI, DCO and Pages workflows do not start until a maintainer
+presses "Approve and run", after every push, and those checks read "no checks reported" until then.
+Verification therefore carries the local results; the admission check runs at once. `main` requires
+the branch to be current with it and every review thread resolved before merge. Bring `main` in
+with `git fetch origin && git merge --signoff origin/main`; never rebase or force-push a pushed
+branch, since maintainers may push fixes onto it.
 
 Fill in [.github/pull_request_template.md](.github/pull_request_template.md) for the description.
 
