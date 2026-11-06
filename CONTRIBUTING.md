@@ -212,6 +212,21 @@ Co-Authored-By: <model name> <the vendor's noreply address>
 Co-Authored-By: No LLM
 ```
 
+## Issues
+
+Every issue form ends with a required choice about the intended divergences:
+[docs/intended-divergences.md](docs/intended-divergences.md) lists every behaviour where vep-rs
+deliberately differs from Ensembl VEP, most of them Ensembl VEP defects it does not reproduce. A
+report or request touches an entry when it asks for a recorded behaviour to change or go, or asks
+vep-rs to match Ensembl VEP where the index says it deliberately does not; before reporting a
+difference, search the index for the flag, field or shape. Say that the report touches none of the
+entries, or name the entries it touches (the entry as the index's first column names it, a defect
+letter or a difference's name, with what should change and why the index's reasoning is wrong for
+this case), or propose a new intended divergence: the input, what Ensembl VEP and vep-rs each write,
+and why vep-rs's output is the one to keep. Additions are welcome; the maintainers write or review
+the entry's page. An issue opened without the choice, or naming an entry the index lacks, gets the
+`needs-divergence-check` label and one comment, and an edit of the description clears both.
+
 ## Pull Requests
 
 Before submitting a PR:
@@ -221,12 +236,25 @@ Before submitting a PR:
 3. Update the affected page under `docs/`: the format's page under `output/` for output layouts, the mechanism's page under `plugins/` and the plugin table in `plugins.md` for plugins, `cache-setup.md` for the cache builder and converter. A flag is documented by its help text in `crates/vep-cli/src/args.rs` and by the option tables, from which the CLI reference (`cli-reference.md` and the group pages under `cli/`) is generated: regenerate it with `VEP_UPDATE_CLI_REFERENCE=1 cargo test -p vep-cli --test cli_reference` and commit the result.
 4. For consequence or plugin changes, run concordance smoke to confirm no regressions.
 
+The description has the template's four sections: Summary, Verification, Upgrade impact and
+Intended divergences. The last certifies the check of [Issues](#issues) for the change: one of its
+three statements is checked, the first (the change touches none of the entries) excluding the other
+two, and the second lists the entries touched one line each, the entry named as the index's first
+column names it and followed by what the change does to it and why the index's reasoning is wrong
+for this case; the third describes a proposed entry. A change that edits
+`docs/intended-divergences.md`, a page it links or `scripts/divergences/` cannot claim the first.
+The section is the author's attestation, read by a maintainer: whether a code change that leaves
+those pages alone also leaves every recorded behaviour alone is not something the check can prove.
+
 An admission check (the `Admission` workflow) runs on every pull request. It closes one that is
 behind `main`, changes code without a test that gains a line (a benchmark or an example asks for
-none), carries no model declaration or lacks a template section. It also closes one that changes a
-crate without a changelog line, changes a file under `.github/workflows/`, fails the parity matrix
-or fails a required CI check. The comment it leaves names each miss and its fix; push the fixes to
-the same branch and reopen it.
+none), carries no model declaration, lacks a template section, or leaves the Intended divergences
+section unchecked, inconsistent, naming an entry the index lacks, or claiming none while it edits
+the divergence pages. It also closes one that changes a crate without a changelog line, changes a
+file under `.github/workflows/`, fails the parity matrix or fails a required CI check. The comment
+it leaves names each miss and its fix; push the fixes to the same branch and reopen it.
+`python3 scripts/ci/admission.py --local --body-file <file>` applies the same rules to a saved
+description before you open the pull request.
 
 An unsigned commit is reported but never closes (the DCO check holds the merge; sign a pushed
 branch by opening a new pull request from a signed branch). Maintainers' and bots' pull requests,
