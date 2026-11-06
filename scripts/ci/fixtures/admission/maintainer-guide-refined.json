@@ -45,13 +45,13 @@
  ],
  "files": [
   {
-   "filename": "docs/recipes/close-parity-row.md",
+   "filename": "docs/cache-setup.md",
    "status": "modified",
    "additions": 16,
    "deletions": 8
   },
   {
-   "filename": "docs/guide.md",
+   "filename": "docs/contributing.md",
    "status": "modified",
    "additions": 15,
    "deletions": 6

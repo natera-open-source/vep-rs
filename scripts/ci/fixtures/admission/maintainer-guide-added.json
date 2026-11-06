@@ -45,13 +45,13 @@
  ],
  "files": [
   {
-   "filename": "docs/recipes/close-parity-row.md",
+   "filename": "docs/cache-setup.md",
    "status": "added",
    "additions": 102,
    "deletions": 0
   },
   {
-   "filename": "docs/recipes/corpus.md",
+   "filename": "docs/plugins.md",
    "status": "added",
    "additions": 51,
    "deletions": 0
@@ -63,13 +63,13 @@
    "deletions": 0
   },
   {
-   "filename": "docs/guide.md",
+   "filename": "docs/contributing.md",
    "status": "added",
    "additions": 59,
    "deletions": 0
   },
   {
-   "filename": "docs/guide-include.md",
+   "filename": "docs/index.md",
    "status": "added",
    "additions": 1,
    "deletions": 0
