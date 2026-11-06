@@ -171,13 +171,13 @@ fn pick_likely_transcript(mut transcripts: Vec<Transcript>) -> Option<Transcript
 fn likelihood_scores(transcript: &Transcript) -> [i64; 8] {
     let absent = |present: bool| i64::from(!present);
     let ccds = transcript
-        .ccds
+        .ccds()
         .as_deref()
         .is_some_and(|ccds| !ccds.is_empty() && ccds != "-");
     [
-        absent(transcript.mane_select.is_some()),
-        absent(transcript.mane_plus_clinical.is_some()),
-        appris_score(transcript.appris.as_deref()),
+        absent(transcript.mane_select().is_some()),
+        absent(transcript.mane_plus_clinical().is_some()),
+        appris_score(transcript.appris().as_deref()),
         transcript
             .tsl
             .filter(|&tsl| tsl != 0)
@@ -548,17 +548,9 @@ pub(super) mod tests {
             hgnc_id: None,
             gene_phenotype: None,
             canonical: false,
-            mane_select: None,
-            mane_plus_clinical: None,
+            meta: Arc::new(vep_core::transcript::TranscriptMeta::default()),
             tsl: None,
-            appris: None,
-            ccds: None,
             protein_id: None,
-            refseq: None,
-            swissprot: None,
-            trembl: None,
-            uniparc: None,
-            uniprot_isoform: None,
             exons: exons
                 .iter()
                 .enumerate()
@@ -904,7 +896,7 @@ pub(super) mod tests {
         canonical.canonical = true;
         let mut mane = non_coding();
         mane.stable_id = "ENST00000000013".into();
-        mane.mane_select = Some("NM_000001.1".into());
+        Arc::make_mut(&mut mane.meta).mane_select = Some("NM_000001.1".into());
         assert_eq!(
             picked(vec![long.clone(), canonical.clone(), mane.clone()]),
             "ENST00000000013"
@@ -915,10 +907,10 @@ pub(super) mod tests {
         );
         let mut appris = long.clone();
         appris.stable_id = "ENST00000000014".into();
-        appris.appris = Some("alternative2".into());
+        Arc::make_mut(&mut appris.meta).appris = Some("alternative2".into());
         let mut principal = long.clone();
         principal.stable_id = "ENST00000000015".into();
-        principal.appris = Some("principal3".into());
+        Arc::make_mut(&mut principal.meta).appris = Some("principal3".into());
         assert_eq!(
             picked(vec![canonical.clone(), appris, principal]),
             "ENST00000000015"
@@ -929,7 +921,7 @@ pub(super) mod tests {
         assert_eq!(picked(vec![canonical.clone(), tsl1]), "ENST00000000016");
         let mut ccds = reverse();
         ccds.stable_id = "ENST00000000017".into();
-        ccds.ccds = Some("CCDS1.1".into());
+        Arc::make_mut(&mut ccds.meta).ccds = Some("CCDS1.1".into());
         assert_eq!(picked(vec![long.clone(), ccds]), "ENST00000000017");
         let mut twin = long.clone();
         twin.stable_id = "ENST00000000018".into();

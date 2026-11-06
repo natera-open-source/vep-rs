@@ -26,7 +26,8 @@ use vep_core::cache_manifest::CacheManifest;
 use vep_core::coordinate::Strand;
 use vep_core::transcript::{
     Attribute, Exon, ExonCoordMapper, Intron, MapperPair, PredictionMatrix, ProteinFeature,
-    ProteinFunctionPredictions, SeqEdit, Transcript, TranscriptMapper, TranscriptVEFC, Translation,
+    ProteinFunctionPredictions, SeqEdit, Transcript, TranscriptMapper, TranscriptMeta,
+    TranscriptVEFC, Translation,
 };
 
 use crate::cache_resolve::manifest_error;
@@ -861,17 +862,19 @@ fn convert_transcript(jt: JsonTranscript, chr_override: &str) -> Transcript {
         hgnc_id: jt.hgnc_id,
         gene_phenotype: jt.gene_phenotype,
         canonical: jt.canonical,
-        mane_select,
-        mane_plus_clinical,
+        meta: Arc::new(TranscriptMeta {
+            mane_select,
+            mane_plus_clinical,
+            appris,
+            ccds: jt.ccds,
+            refseq: jt.refseq,
+            swissprot: jt.swissprot,
+            trembl: jt.trembl,
+            uniparc: jt.uniparc,
+            uniprot_isoform: jt.uniprot_isoform,
+        }),
         tsl,
-        appris,
-        ccds: jt.ccds,
         protein_id: jt.protein_id,
-        refseq: jt.refseq,
-        swissprot: jt.swissprot,
-        trembl: jt.trembl,
-        uniparc: jt.uniparc,
-        uniprot_isoform: jt.uniprot_isoform,
         exons,
         introns,
         cdna_coding_start: jt.cdna_coding_start,
@@ -2224,18 +2227,29 @@ mod tests {
     /// column, and its pick order reads the spelled value's letter and digit.
     #[test]
     fn appris_derived_from_attribute() {
-        let appris =
-            |value: &str| transcript_from(&minimal(&attributes(&[("appris", value)]))).appris;
-        assert_eq!(appris("principal1").as_deref(), Some("principal1"));
-        assert_eq!(appris("alternative2").as_deref(), Some("alternative2"));
-        assert_eq!(appris("principalM").as_deref(), Some("principalM"));
-        assert_eq!(transcript_from(&minimal("")).appris, None);
+        let transcript = |value: &str| transcript_from(&minimal(&attributes(&[("appris", value)])));
+        assert_eq!(
+            transcript("principal1").appris().as_deref(),
+            Some("principal1")
+        );
+        assert_eq!(
+            transcript("alternative2").appris().as_deref(),
+            Some("alternative2")
+        );
+        assert_eq!(
+            transcript("principalM").appris().as_deref(),
+            Some("principalM")
+        );
+        assert_eq!(transcript_from(&minimal("")).appris().as_deref(), None);
         // A top-level key is read before the attribute.
         let both = minimal(&format!(
             r#","appris":"principal3"{}"#,
             attributes(&[("appris", "alternative1")])
         ));
-        assert_eq!(transcript_from(&both).appris.as_deref(), Some("principal3"));
+        assert_eq!(
+            transcript_from(&both).appris().as_deref(),
+            Some("principal3")
+        );
     }
 
     /// The `MANE_Select` attribute's value, VEP's `MANE_SELECT` column, is a
@@ -2244,11 +2258,11 @@ mod tests {
     #[test]
     fn mane_select_derived_from_attribute() {
         let tx = transcript_from(&minimal(&attributes(&[("MANE_Select", "NM_198691.3")])));
-        assert_eq!(tx.mane_select.as_deref(), Some("NM_198691.3"));
-        assert_eq!(tx.mane_plus_clinical, None);
-        assert_eq!(transcript_from(&minimal("")).mane_select, None);
+        assert_eq!(tx.mane_select().as_deref(), Some("NM_198691.3"));
+        assert_eq!(tx.mane_plus_clinical().as_deref(), None);
+        assert_eq!(transcript_from(&minimal("")).mane_select().as_deref(), None);
         let empty = transcript_from(&minimal(&attributes(&[("MANE_Select", "")])));
-        assert_eq!(empty.mane_select.as_deref(), Some(""));
+        assert_eq!(empty.mane_select().as_deref(), Some(""));
     }
 
     /// `MANE_Plus_Clinical` is read beside `MANE_Select` from its own attribute
@@ -2261,16 +2275,16 @@ mod tests {
             ("MANE_Plus_Clinical", "NM_001005484.2"),
             ("MANE_Select", "NM_001005484.3"),
         ])));
-        assert_eq!(tx.mane_plus_clinical.as_deref(), Some("NM_001005484.2"));
-        assert_eq!(tx.mane_select.as_deref(), Some("NM_001005484.3"));
+        assert_eq!(tx.mane_plus_clinical().as_deref(), Some("NM_001005484.2"));
+        assert_eq!(tx.mane_select().as_deref(), Some("NM_001005484.3"));
         let select_only = transcript_from(&minimal(&attributes(&[("MANE_Select", "NM_1.1")])));
-        assert_eq!(select_only.mane_plus_clinical, None);
+        assert_eq!(select_only.mane_plus_clinical().as_deref(), None);
         // The first attribute of a code is the one read, as VEP's grep takes it.
         let twice = transcript_from(&minimal(&attributes(&[
             ("MANE_Plus_Clinical", "NM_2.1"),
             ("MANE_Plus_Clinical", "NM_3.1"),
         ])));
-        assert_eq!(twice.mane_plus_clinical.as_deref(), Some("NM_2.1"));
+        assert_eq!(twice.mane_plus_clinical().as_deref(), Some("NM_2.1"));
     }
 
     /// GENCODE set membership is the presence of the `gencode_basic` and
@@ -2488,17 +2502,20 @@ mod tests {
     fn uniprot_isoform_loaded() {
         assert_eq!(
             transcript_from(&minimal(r#","uniprot_isoform":"P60331-2""#))
-                .uniprot_isoform
+                .uniprot_isoform()
                 .as_deref(),
             Some("P60331-2")
         );
         assert_eq!(
             transcript_from(&minimal(r#","uniprot_isoform":"-""#))
-                .uniprot_isoform
+                .uniprot_isoform()
                 .as_deref(),
             Some("-")
         );
-        assert_eq!(transcript_from(&minimal("")).uniprot_isoform, None);
+        assert_eq!(
+            transcript_from(&minimal("")).uniprot_isoform().as_deref(),
+            None
+        );
     }
 
     /// The VEFC intron list (VEP's `get_all_Introns`) is the transcript's intron

@@ -132,6 +132,7 @@ fn json_type_name(value: &Value) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn merge_plugin_result_inserts_strings_verbatim_and_stringifies_the_rest() {
@@ -319,6 +320,111 @@ mod tests {
         );
         expected.sort();
         assert_eq!(sorted_keys(&tc), expected);
+    }
+
+    #[test]
+    fn shared_transcript_meta_preserves_legacy_json() {
+        // Captured from the original inline-string representation before ownership changes.
+        const LEGACY_TRANSCRIPT_JSON: &str = r#"{"stable_id":"ENST_META","version":null,"db_id":null,"gene_stable_id":"ENSG_META","gene_version":null,"chr":"1","start":100,"end":1099,"strand":"Forward","biotype":"lncRNA","source":"Ensembl","gene_symbol":"ENST_META","gene_symbol_source":"TEST","hgnc_id":null,"gene_phenotype":null,"canonical":true,"mane_select":null,"mane_plus_clinical":null,"tsl":null,"appris":null,"ccds":null,"protein_id":null,"refseq":null,"swissprot":null,"trembl":null,"uniparc":null,"uniprot_isoform":null,"exons":[{"stable_id":null,"start":100,"end":299,"rank":1,"phase":-1,"end_phase":-1},{"stable_id":null,"start":900,"end":1099,"rank":2,"phase":-1,"end_phase":-1}],"introns":[{"start":300,"end":899,"rank":1}],"cdna_coding_start":null,"cdna_coding_end":null,"coding_region_start":null,"coding_region_end":null,"translation_start":null,"translation_end":null,"translation":null,"cdna_sequence":null,"protein_sequence":null,"flags":[],"gencode_basic":false,"gencode_primary":false,"attributes":[],"vefc":null}"#;
+        const LEGACY_TRANSCRIPT_CONSEQUENCE_JSON: &str = r#"{"transcript_id":"ENST_META","gene_id":"ENSG_META","gene_symbol":"ENST_META","gene_symbol_source":"TEST","hgnc_id":null,"consequences":[],"impact":"MODIFIER","biotype":"lncRNA","canonical":true,"cdna_position":null,"cds_position":null,"protein_position":null,"amino_acids":null,"codons":null,"protein_id":null,"distance":null,"strand":1,"exon":null,"intron":null,"hgvsc":null,"hgvsp":null,"hgvs_offset":null,"shift_length":0,"sift":null,"polyphen":null,"domains":[],"feature_type":"Transcript","flags":[],"tsl":null,"mane_select":null,"mane_plus_clinical":null,"appris":null,"ccds":null,"gencode_primary":false,"swissprot":null,"trembl":null,"uniparc":null,"uniprot_isoform":null,"refseq":null,"transcript_version":null,"gene_version":null,"gene_phenotype":false,"mirna":[],"cdna_length":400,"feature_start":100,"feature_end":1099}"#;
+        const LEGACY_DEFAULT_CONSEQUENCE_JSON: &str = r#"{"transcript_id":"","gene_id":"","gene_symbol":null,"gene_symbol_source":null,"hgnc_id":null,"consequences":[],"impact":"MODIFIER","biotype":null,"canonical":false,"cdna_position":null,"cds_position":null,"protein_position":null,"amino_acids":null,"codons":null,"protein_id":null,"distance":null,"strand":1,"exon":null,"intron":null,"hgvsc":null,"hgvsp":null,"hgvs_offset":null,"shift_length":0,"sift":null,"polyphen":null,"domains":[],"feature_type":"Transcript","flags":[],"tsl":null,"mane_select":null,"mane_plus_clinical":null,"appris":null,"ccds":null,"gencode_primary":false,"swissprot":null,"trembl":null,"uniparc":null,"uniprot_isoform":null,"refseq":null,"transcript_version":null,"gene_version":null,"gene_phenotype":false,"mirna":[],"cdna_length":0,"feature_start":0,"feature_end":0}"#;
+        const LEGACY_POPULATED_CONSEQUENCE_JSON: &str = r#"{"transcript_id":"","gene_id":"","gene_symbol":null,"gene_symbol_source":null,"hgnc_id":null,"consequences":[],"impact":"MODIFIER","biotype":null,"canonical":false,"cdna_position":null,"cds_position":null,"protein_position":null,"cdna_total":2500,"cds_total":300,"protein_total":99,"own_span_positions":{"cdna":"439","cds":"87","protein":"29"},"amino_acids":null,"codons":null,"protein_id":null,"distance":null,"strand":1,"exon":null,"intron":null,"hgvsc":null,"hgvsp":null,"hgvs_offset":null,"shift_length":0,"shifted_allele":"GAA","used_ref":"A","sift":null,"polyphen":null,"domains":[],"feature_type":"Transcript","flags":[],"tsl":null,"mane_select":null,"mane_plus_clinical":null,"appris":null,"ccds":null,"gencode_primary":false,"swissprot":null,"trembl":null,"uniparc":null,"uniprot_isoform":null,"refseq":null,"transcript_version":null,"gene_version":null,"gene_phenotype":false,"mirna":[],"cds_length":300,"cdna_length":0,"source_cache":"Ensembl","plugin_data":{"REVEL_score":"0.9"},"feature_start":0,"feature_end":0,"loftee_ctx":{"exons":[{"stable_id":null,"start":100,"end":299,"rank":1,"phase":-1,"end_phase":-1},{"stable_id":null,"start":900,"end":1099,"rank":2,"phase":-1,"end_phase":-1}],"introns":[{"start":300,"end":899,"rank":1}],"strand":1,"coding_region_start":null,"coding_region_end":null,"translation_start":null,"translation_end":null,"cdna_coding_start":null,"cdna_coding_end":null,"cds_start_nf":false,"cds_end_nf":false},"motif":{"name":"ENSPFM0290","pos":7,"factors":["HNF4A"]}}"#;
+        const META_FIELDS: [&str; 9] = [
+            "mane_select",
+            "mane_plus_clinical",
+            "appris",
+            "ccds",
+            "refseq",
+            "swissprot",
+            "trembl",
+            "uniparc",
+            "uniprot_isoform",
+        ];
+
+        fn assert_legacy_json<T>(value: &T, expected: &str)
+        where
+            T: serde::Serialize + serde::de::DeserializeOwned,
+        {
+            assert_eq!(serde_json::to_string(value).unwrap(), expected);
+            let restored: T = serde_json::from_str(expected).unwrap();
+            assert_eq!(serde_json::to_string(&restored).unwrap(), expected);
+        }
+
+        let expected_with_meta = |baseline: &str, value: Option<&str>| {
+            let encoded = serde_json::to_string(&value).unwrap();
+            let mut expected = baseline.to_owned();
+            for field in META_FIELDS {
+                let token = format!("\"{field}\":null");
+                assert_eq!(baseline.matches(&token).count(), 1, "{field}");
+                expected = expected.replace(&token, &format!("\"{field}\":{encoded}"));
+            }
+            expected
+        };
+
+        let mut transcript =
+            crate::runner::make_runner_test_transcript("ENST_META", "ENSG_META", "1", 100);
+        for value in [
+            None,
+            Some(""),
+            Some("0"),
+            Some("-"),
+            Some("A,,B,"),
+            Some("NM_1.2"),
+        ] {
+            Arc::make_mut(&mut transcript.meta).mane_select = value.map(str::to_owned);
+            Arc::make_mut(&mut transcript.meta).mane_plus_clinical = value.map(str::to_owned);
+            Arc::make_mut(&mut transcript.meta).appris = value.map(str::to_owned);
+            Arc::make_mut(&mut transcript.meta).ccds = value.map(str::to_owned);
+            Arc::make_mut(&mut transcript.meta).refseq = value.map(str::to_owned);
+            Arc::make_mut(&mut transcript.meta).swissprot = value.map(str::to_owned);
+            Arc::make_mut(&mut transcript.meta).trembl = value.map(str::to_owned);
+            Arc::make_mut(&mut transcript.meta).uniparc = value.map(str::to_owned);
+            Arc::make_mut(&mut transcript.meta).uniprot_isoform = value.map(str::to_owned);
+            assert_legacy_json(
+                &transcript,
+                &expected_with_meta(LEGACY_TRANSCRIPT_JSON, value),
+            );
+            assert_legacy_json(
+                &TranscriptConsequence::for_transcript(&transcript),
+                &expected_with_meta(LEGACY_TRANSCRIPT_CONSEQUENCE_JSON, value),
+            );
+        }
+        assert_legacy_json(
+            &TranscriptConsequence::default(),
+            LEGACY_DEFAULT_CONSEQUENCE_JSON,
+        );
+
+        let mut populated = TranscriptConsequence {
+            id_rank: 7,
+            record_span_in_cds: true,
+            ..TranscriptConsequence::default()
+        };
+        populated
+            .plugin_data
+            .insert("REVEL_score".to_string(), "0.9".to_string());
+        populated.loftee_ctx = Some(Box::new(
+            vep_core::consequence::LofteeContext::from_transcript(
+                &crate::runner::make_runner_test_transcript("ENST1", "ENSG1", "1", 100),
+            ),
+        ));
+        populated.cds_length = Some(300);
+        populated.source_cache = Some(vep_core::consequence::SourceCache::Ensembl);
+        populated.cdna_total = Some(2500);
+        populated.cds_total = Some(300);
+        populated.protein_total = Some(99);
+        populated.own_span_positions = Some(Box::new(vep_core::consequence::OwnSpanPositions {
+            cdna: Some("439".to_string()),
+            cds: Some("87".to_string()),
+            protein: Some("29".to_string()),
+        }));
+        populated.used_ref = Some(std::sync::Arc::from("A"));
+        populated.shifted_allele = Some(std::sync::Arc::from("GAA"));
+        populated.motif = Some(Box::new(vep_core::consequence::MotifFields {
+            name: std::sync::Arc::from("ENSPFM0290"),
+            pos: Some(7),
+            factors: std::sync::Arc::from([std::sync::Arc::from("HNF4A")]),
+        }));
+        assert_legacy_json(&populated, LEGACY_POPULATED_CONSEQUENCE_JSON);
     }
 
     /// The variant document a plugin receives names the input line under

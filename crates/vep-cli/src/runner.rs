@@ -3560,7 +3560,7 @@ pub(crate) fn make_runner_test_transcript(
     start: u64,
 ) -> vep_core::transcript::Transcript {
     use vep_core::coordinate::Strand;
-    use vep_core::transcript::{Exon, Intron, Transcript};
+    use vep_core::transcript::{Exon, Intron, Transcript, TranscriptMeta};
     let exons = vec![
         Exon {
             stable_id: None,
@@ -3602,17 +3602,9 @@ pub(crate) fn make_runner_test_transcript(
         hgnc_id: None,
         gene_phenotype: None,
         canonical: true,
-        mane_select: None,
-        mane_plus_clinical: None,
+        meta: Arc::new(TranscriptMeta::default()),
         tsl: None,
-        appris: None,
-        ccds: None,
         protein_id: None,
-        refseq: None,
-        swissprot: None,
-        trembl: None,
-        uniparc: None,
-        uniprot_isoform: None,
         exons,
         introns,
         cdna_coding_start: None,

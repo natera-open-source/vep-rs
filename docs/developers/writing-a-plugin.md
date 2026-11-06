@@ -158,15 +158,22 @@ Ensembl VEP runs a plugin on the feature classes its `feature_types` names. An i
 no entry, so `Intergenic` in the list gives a plugin no row; Ensembl VEP runs a
 plugin that declares it on intergenic rows.
 
-The two JSON documents are the serde serialization of `TranscriptConsequence`
-(`crates/vep-core/src/consequence.rs`) and `InputVariant`
-(`crates/vep-core/src/variant.rs`), and those two structs with their serde
-attributes are the authoritative schema. No field is renamed, so a JSON key is
-the Rust field name. A field marked `#[serde(skip)]` (`id_rank`,
+The two JSON documents serialize `TranscriptConsequence` and `InputVariant`.
+The authoritative consequence schema is the private `TranscriptConsequenceWire`
+serde mirror in `crates/vep-core/src/consequence.rs`; the input schema is
+`InputVariant` and its serde attributes in `crates/vep-core/src/variant.rs`.
+Internally shared transcript metadata does not become a nested JSON object:
+the flat JSON keys, field order, and treatment of `None`, `null`, and omitted
+fields are unchanged. No field is renamed, so a JSON key is the corresponding
+wire field name. A field marked `#[serde(skip)]` (`id_rank`,
 `record_span_in_cds`, `raw_input_bytes`, `split_first_feature_rowless`,
 `reference_row_shift_allele`) never appears, a field marked
 `skip_serializing_if` is left out when it is `None`, empty or zero, and every
 other absent optional value is `null`.
+
+For Rust readers, `consequence.mane_select().as_deref()` borrows shared
+metadata as an `Option<&str>` without cloning. Analogous getters expose the
+other MANE, APPRIS, CCDS, UniProt, and RefSeq metadata.
 
 **The consequence document.** Every field a plugin will find:
 

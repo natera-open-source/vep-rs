@@ -1110,8 +1110,18 @@ mod tests {
     #[test]
     fn dash_sentinel_is_an_empty_subfield_and_lists_join_with_ampersand() {
         let mut v = annotated_variant();
-        v.transcript_consequences[0].ccds = Some("-".into());
-        v.transcript_consequences[0].refseq = Some("NM_1.1,NM_2.2".into());
+        Arc::make_mut(
+            v.transcript_consequences[0]
+                .meta
+                .get_or_insert_with(Default::default),
+        )
+        .ccds = Some("-".into());
+        Arc::make_mut(
+            v.transcript_consequences[0]
+                .meta
+                .get_or_insert_with(Default::default),
+        )
+        .refseq = Some("NM_1.1,NM_2.2".into());
         let formatter = VcfOutputFormatter::new(
             "CSQ".to_string(),
             VcfFieldOptions {

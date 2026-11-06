@@ -1465,9 +1465,9 @@ fn write_row_field_value(
         // flag state (OutputFactory.pm:1587-1601): `--mane_select` alone never
         // lists `MANE_Plus_Clinical`.
         "MANE" => {
-            let select = options.mane_select && tc.is_some_and(|x| x.mane_select.is_some());
+            let select = options.mane_select && tc.is_some_and(|x| x.mane_select().is_some());
             let plus_clinical =
-                options.mane_plus_clinical && tc.is_some_and(|x| x.mane_plus_clinical.is_some());
+                options.mane_plus_clinical && tc.is_some_and(|x| x.mane_plus_clinical().is_some());
             let sets = [
                 select.then_some("MANE_Select"),
                 plus_clinical.then_some("MANE_Plus_Clinical"),
@@ -1476,12 +1476,12 @@ fn write_row_field_value(
         }
         "MANE_SELECT" => push_opt(
             out,
-            tc.and_then(|x| x.mane_select.as_deref())
+            tc.and_then(|x| x.mane_select().as_deref())
                 .filter(|v| perl_true(v)),
         ),
         "MANE_PLUS_CLINICAL" => push_opt(
             out,
-            tc.and_then(|x| x.mane_plus_clinical.as_deref())
+            tc.and_then(|x| x.mane_plus_clinical().as_deref())
                 .filter(|v| perl_true(v)),
         ),
         "TSL" => {
@@ -1498,7 +1498,7 @@ fn write_row_field_value(
         // substitution each, the rest of the value kept, so `principalM` is `PM`.
         "APPRIS" => {
             if let Some(v) = tc
-                .and_then(|x| x.appris.as_deref())
+                .and_then(|x| x.appris().as_deref())
                 .filter(|v| perl_true(v))
             {
                 let graded = v
@@ -1507,16 +1507,18 @@ fn write_row_field_value(
                 out.extend_from_slice(graded.as_bytes());
             }
         }
-        "CCDS" => write_identifier(out, tc.and_then(|x| x.ccds.as_deref())),
+        "CCDS" => write_identifier(out, tc.and_then(|x| x.ccds().as_deref())),
         "ENSP" => write_identifier(out, tc.and_then(|x| x.protein_id.as_deref())),
         "SWISSPROT" => {
-            write_identifier_list(out, tc.and_then(|x| x.swissprot.as_deref()), list_sep)
+            write_identifier_list(out, tc.and_then(|x| x.swissprot().as_deref()), list_sep)
         }
-        "TREMBL" => write_identifier_list(out, tc.and_then(|x| x.trembl.as_deref()), list_sep),
-        "UNIPARC" => write_identifier_list(out, tc.and_then(|x| x.uniparc.as_deref()), list_sep),
-        "UNIPROT_ISOFORM" => {
-            write_identifier_list(out, tc.and_then(|x| x.uniprot_isoform.as_deref()), list_sep)
-        }
+        "TREMBL" => write_identifier_list(out, tc.and_then(|x| x.trembl().as_deref()), list_sep),
+        "UNIPARC" => write_identifier_list(out, tc.and_then(|x| x.uniparc().as_deref()), list_sep),
+        "UNIPROT_ISOFORM" => write_identifier_list(
+            out,
+            tc.and_then(|x| x.uniprot_isoform().as_deref()),
+            list_sep,
+        ),
         "HGVSg" => push_opt(out, variant.hgvsg.as_deref()),
         "NEAREST" => {
             if let Some(values) = variant.nearest.as_deref() {
@@ -1534,7 +1536,7 @@ fn write_row_field_value(
                 out.extend_from_slice(b"failed");
             }
         }
-        "RefSeq" => write_identifier_list(out, tc.and_then(|x| x.refseq.as_deref()), list_sep),
+        "RefSeq" => write_identifier_list(out, tc.and_then(|x| x.refseq().as_deref()), list_sep),
         "GENE_PHENO" => {
             if tc.is_some_and(|x| x.gene_phenotype) {
                 out.push(b'1');
@@ -2267,16 +2269,18 @@ pub(crate) mod fixtures {
                 "cds_end_NF".to_string(),
             ]),
             tsl: Some(1),
-            mane_select: Some("NM_000454.5".to_string()),
-            mane_plus_clinical: Some("NM_000454.4".to_string()),
-            appris: Some("principal1".to_string()),
-            ccds: Some("CCDS33536.1".to_string()),
+            meta: Some(Arc::new(vep_core::transcript::TranscriptMeta {
+                mane_select: Some("NM_000454.5".to_string()),
+                mane_plus_clinical: Some("NM_000454.4".to_string()),
+                appris: Some("principal1".to_string()),
+                ccds: Some("CCDS33536.1".to_string()),
+                swissprot: Some("P00441,Q9".to_string()),
+                trembl: Some("A0A0,".to_string()),
+                uniparc: Some("UPI000012A3C5".to_string()),
+                uniprot_isoform: Some("P00441-1".to_string()),
+                refseq: Some("NM_000454.5,NM_000454.4".to_string()),
+            })),
             gencode_primary: true,
-            swissprot: Some("P00441,Q9".to_string()),
-            trembl: Some("A0A0,".to_string()),
-            uniparc: Some("UPI000012A3C5".to_string()),
-            uniprot_isoform: Some("P00441-1".to_string()),
-            refseq: Some("NM_000454.5,NM_000454.4".to_string()),
             transcript_version: Some(4),
             gene_version: Some(12),
             gene_phenotype: true,
@@ -2808,22 +2812,23 @@ mod tests {
             // lists `MANE_Plus_Clinical`.
             "MANE" => {
                 let mut sets = Vec::new();
-                if options.mane_select && tc.is_some_and(|x| x.mane_select.is_some()) {
+                if options.mane_select && tc.is_some_and(|x| x.mane_select().is_some()) {
                     sets.push("MANE_Select");
                 }
-                if options.mane_plus_clinical && tc.is_some_and(|x| x.mane_plus_clinical.is_some())
+                if options.mane_plus_clinical
+                    && tc.is_some_and(|x| x.mane_plus_clinical().is_some())
                 {
                     sets.push("MANE_Plus_Clinical");
                 }
                 sets.join(list_sep)
             }
             "MANE_SELECT" => tc
-                .and_then(|x| x.mane_select.as_deref())
+                .and_then(|x| x.mane_select().as_deref())
                 .filter(|v| perl_true(v))
                 .unwrap_or("")
                 .to_string(),
             "MANE_PLUS_CLINICAL" => tc
-                .and_then(|x| x.mane_plus_clinical.as_deref())
+                .and_then(|x| x.mane_plus_clinical().as_deref())
                 .filter(|v| perl_true(v))
                 .unwrap_or("")
                 .to_string(),
@@ -2840,22 +2845,22 @@ mod tests {
             // `s/principal/P/; s/alternative/A/` (OutputFactory.pm:1616-1622): one
             // substitution each, the rest of the value kept, so `principalM` is `PM`.
             "APPRIS" => tc
-                .and_then(|x| x.appris.as_deref())
+                .and_then(|x| x.appris().as_deref())
                 .filter(|v| perl_true(v))
                 .map(|v| {
                     v.replacen("principal", "P", 1)
                         .replacen("alternative", "A", 1)
                 })
                 .unwrap_or_default(),
-            "CCDS" => string_identifier(tc.and_then(|x| x.ccds.as_deref())),
+            "CCDS" => string_identifier(tc.and_then(|x| x.ccds().as_deref())),
             "ENSP" => string_identifier(tc.and_then(|x| x.protein_id.as_deref())),
             "SWISSPROT" => {
-                string_identifier_list(tc.and_then(|x| x.swissprot.as_deref()), list_sep)
+                string_identifier_list(tc.and_then(|x| x.swissprot().as_deref()), list_sep)
             }
-            "TREMBL" => string_identifier_list(tc.and_then(|x| x.trembl.as_deref()), list_sep),
-            "UNIPARC" => string_identifier_list(tc.and_then(|x| x.uniparc.as_deref()), list_sep),
+            "TREMBL" => string_identifier_list(tc.and_then(|x| x.trembl().as_deref()), list_sep),
+            "UNIPARC" => string_identifier_list(tc.and_then(|x| x.uniparc().as_deref()), list_sep),
             "UNIPROT_ISOFORM" => {
-                string_identifier_list(tc.and_then(|x| x.uniprot_isoform.as_deref()), list_sep)
+                string_identifier_list(tc.and_then(|x| x.uniprot_isoform().as_deref()), list_sep)
             }
             "HGVSg" => variant.hgvsg.clone().unwrap_or_default(),
             "NEAREST" => variant
@@ -2876,7 +2881,7 @@ mod tests {
                     String::new()
                 }
             }
-            "RefSeq" => string_identifier_list(tc.and_then(|x| x.refseq.as_deref()), list_sep),
+            "RefSeq" => string_identifier_list(tc.and_then(|x| x.refseq().as_deref()), list_sep),
             "GENE_PHENO" => {
                 if tc.is_some_and(|x| x.gene_phenotype) {
                     "1".to_string()
@@ -4454,16 +4459,19 @@ mod tests {
             gene_symbol: Some("NDUFV3".into()),
             biotype: Some("protein_coding".into()),
             canonical: true,
-            mane_select: Some("NM_021075.4".to_string()),
+            meta: Some(Arc::new(vep_core::transcript::TranscriptMeta {
+                mane_select: Some("NM_021075.4".to_string()),
+                appris: Some("principalM".to_string()),
+                ccds: Some("CCDS33572.1".to_string()),
+                swissprot: Some("P56181.185".to_string()),
+                trembl: Some("-".to_string()),
+                uniparc: Some("UPI000037848B".to_string()),
+                uniprot_isoform: Some("P56181-2".to_string()),
+                refseq: Some("NM_021075.4".to_string()),
+                ..Default::default()
+            })),
             tsl: Some(1),
-            appris: Some("principalM".to_string()),
-            ccds: Some("CCDS33572.1".to_string()),
             protein_id: Some("ENSP00000346196".into()),
-            swissprot: Some("P56181.185".to_string()),
-            trembl: Some("-".to_string()),
-            uniparc: Some("UPI000037848B".to_string()),
-            uniprot_isoform: Some("P56181-2".to_string()),
-            refseq: Some("NM_021075.4".to_string()),
             gene_phenotype: false,
             ..Default::default()
         }
@@ -4518,12 +4526,13 @@ mod tests {
             ("alternative2", "A2"),
             ("principal4", "P4"),
         ] {
-            tc.appris = Some(raw.to_string());
+            Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).appris =
+                Some(raw.to_string());
             assert_eq!(value("APPRIS", &tc, &options), printed, "{raw}");
         }
-        tc.appris = Some(String::new());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).appris = Some(String::new());
         assert_eq!(value("APPRIS", &tc, &options), "");
-        tc.appris = None;
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).appris = None;
         assert_eq!(value("APPRIS", &tc, &options), "");
     }
 
@@ -4624,9 +4633,9 @@ mod tests {
         let options = attribute_options();
         let mut tc = ndufv3_consequence();
         assert_eq!(value("CCDS", &tc, &options), "CCDS33572.1");
-        tc.ccds = Some("-".to_string());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).ccds = Some("-".to_string());
         assert_eq!(value("CCDS", &tc, &options), "");
-        tc.ccds = None;
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).ccds = None;
         assert_eq!(value("CCDS", &tc, &options), "");
     }
 
@@ -4640,9 +4649,11 @@ mod tests {
         let mut tc = ndufv3_consequence();
         assert_eq!(value("TREMBL", &tc, &options), "");
         assert_eq!(value("SWISSPROT", &tc, &options), "P56181.185");
-        tc.swissprot = Some("-".to_string());
-        tc.uniparc = Some("-".to_string());
-        tc.uniprot_isoform = Some("-".to_string());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).swissprot =
+            Some("-".to_string());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).uniparc = Some("-".to_string());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).uniprot_isoform =
+            Some("-".to_string());
         for field in ["SWISSPROT", "TREMBL", "UNIPARC", "UNIPROT_ISOFORM"] {
             assert_eq!(value(field, &tc, &options), "", "{field}");
         }
@@ -4660,7 +4671,8 @@ mod tests {
         let mut tc = ndufv3_consequence();
         assert_eq!(value("UNIPARC", &tc, &options), "UPI000037848B");
         assert_eq!(value("UNIPROT_ISOFORM", &tc, &options), "P56181-2");
-        tc.trembl = Some("L7XE61_HUMAN,L7XCZ9_HUMAN,B7Z313_HUMAN".to_string());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).trembl =
+            Some("L7XE61_HUMAN,L7XCZ9_HUMAN,B7Z313_HUMAN".to_string());
         assert_eq!(
             value("TREMBL", &tc, &options),
             "L7XE61_HUMAN,L7XCZ9_HUMAN,B7Z313_HUMAN"
@@ -4676,7 +4688,8 @@ mod tests {
             field_value("TREMBL", &v, Some(&tc), &options, "&"),
             "L7XE61_HUMAN&L7XCZ9_HUMAN&B7Z313_HUMAN"
         );
-        tc.trembl = Some("A,,B,".to_string());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).trembl =
+            Some("A,,B,".to_string());
         assert_eq!(value("TREMBL", &tc, &options), "A,,B");
         let fields = flag_fields(&options);
         let at = |name: &str| fields.iter().position(|f| *f == name).unwrap();
@@ -4692,11 +4705,12 @@ mod tests {
     fn refseq_dash_sentinel_suppressed() {
         let options = attribute_options();
         let mut tc = ndufv3_consequence();
-        tc.refseq = Some("NM_198996.4,NM_001302998.2".to_string());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).refseq =
+            Some("NM_198996.4,NM_001302998.2".to_string());
         assert_eq!(value("RefSeq", &tc, &options), "NM_198996.4,NM_001302998.2");
-        tc.refseq = Some("-".to_string());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).refseq = Some("-".to_string());
         assert_eq!(value("RefSeq", &tc, &options), "");
-        tc.refseq = None;
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).refseq = None;
         assert_eq!(value("RefSeq", &tc, &options), "");
     }
 
@@ -4806,12 +4820,14 @@ mod tests {
         assert_eq!(value("MANE", &tc, &options), "MANE_Select");
         assert_eq!(value("MANE_SELECT", &tc, &options), "NM_021075.4");
         assert_eq!(value("MANE_PLUS_CLINICAL", &tc, &options), "");
-        tc.mane_select = None;
-        tc.mane_plus_clinical = Some("NM_058174.3".to_string());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).mane_select = None;
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).mane_plus_clinical =
+            Some("NM_058174.3".to_string());
         assert_eq!(value("MANE", &tc, &options), "MANE_Plus_Clinical");
         assert_eq!(value("MANE_SELECT", &tc, &options), "");
         assert_eq!(value("MANE_PLUS_CLINICAL", &tc, &options), "NM_058174.3");
-        tc.mane_select = Some("NM_021075.4".to_string());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).mane_select =
+            Some("NM_021075.4".to_string());
         assert_eq!(
             value("MANE", &tc, &options),
             "MANE_Select,MANE_Plus_Clinical"
@@ -4821,8 +4837,8 @@ mod tests {
             field_value("MANE", &v, Some(&tc), &options, "&"),
             "MANE_Select&MANE_Plus_Clinical"
         );
-        tc.mane_select = None;
-        tc.mane_plus_clinical = None;
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).mane_select = None;
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).mane_plus_clinical = None;
         assert_eq!(value("MANE", &tc, &options), "");
     }
 
@@ -4837,12 +4853,15 @@ mod tests {
         let options = attribute_options();
         let mut tc = ndufv3_consequence();
         assert_eq!(value("MANE_SELECT", &tc, &options), "NM_021075.4");
-        tc.mane_select = Some("NR_185847.1".to_string());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).mane_select =
+            Some("NR_185847.1".to_string());
         assert_eq!(value("MANE_SELECT", &tc, &options), "NR_185847.1");
-        tc.mane_select = Some(String::new());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).mane_select =
+            Some(String::new());
         assert_eq!(value("MANE_SELECT", &tc, &options), "");
         assert_eq!(value("MANE", &tc, &options), "MANE_Select");
-        tc.mane_select = Some("0".to_string());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).mane_select =
+            Some("0".to_string());
         assert_eq!(value("MANE_SELECT", &tc, &options), "");
         assert_eq!(value("MANE", &tc, &options), "MANE_Select");
     }
@@ -4858,9 +4877,10 @@ mod tests {
             ..Default::default()
         };
         let mut tc = ndufv3_consequence();
-        tc.mane_plus_clinical = Some("NM_058174.3".to_string());
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).mane_plus_clinical =
+            Some("NM_058174.3".to_string());
         assert_eq!(value("MANE", &tc, &options), "MANE_Select");
-        tc.mane_select = None;
+        Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).mane_select = None;
         assert_eq!(value("MANE", &tc, &options), "");
         assert_eq!(
             flag_fields(&options),

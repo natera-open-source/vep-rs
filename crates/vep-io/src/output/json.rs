@@ -1700,10 +1700,14 @@ mod tests {
     #[test]
     fn uniprot_columns_are_arrays() {
         let tc = attribute_object(|tc| {
-            tc.swissprot = Some("A4_HUMAN".to_string());
-            tc.trembl = Some("L7XE61_HUMAN,L7XCZ9_HUMAN,B7Z313_HUMAN".to_string());
-            tc.uniparc = Some("UPI000002DB1C".to_string());
-            tc.uniprot_isoform = Some("-".to_string());
+            std::sync::Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).swissprot =
+                Some("A4_HUMAN".to_string());
+            std::sync::Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).trembl =
+                Some("L7XE61_HUMAN,L7XCZ9_HUMAN,B7Z313_HUMAN".to_string());
+            std::sync::Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).uniparc =
+                Some("UPI000002DB1C".to_string());
+            std::sync::Arc::make_mut(tc.meta.get_or_insert_with(Default::default))
+                .uniprot_isoform = Some("-".to_string());
         });
         assert_eq!(tc["swissprot"], json!(["A4_HUMAN"]));
         assert_eq!(
@@ -1712,7 +1716,10 @@ mod tests {
         );
         assert_eq!(tc["uniparc"], json!(["UPI000002DB1C"]));
         assert!(tc.get("uniprot_isoform").is_none(), "{tc}");
-        let empty_element = attribute_object(|tc| tc.trembl = Some("A,,B".to_string()));
+        let empty_element = attribute_object(|tc| {
+            std::sync::Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).trembl =
+                Some("A,,B".to_string())
+        });
         assert_eq!(empty_element["trembl"], json!(["A", "", "B"]));
     }
 
@@ -1723,14 +1730,18 @@ mod tests {
     #[test]
     fn refseq_transcript_ids_is_array() {
         let tc = attribute_object(|tc| {
-            tc.refseq = Some("NM_198996.4,NM_001302998.2".to_string());
+            std::sync::Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).refseq =
+                Some("NM_198996.4,NM_001302998.2".to_string());
         });
         assert_eq!(
             tc["refseq_transcript_ids"],
             json!(["NM_198996.4", "NM_001302998.2"])
         );
         assert!(tc.get("refseq").is_none());
-        let dash = attribute_object(|tc| tc.refseq = Some("-".to_string()));
+        let dash = attribute_object(|tc| {
+            std::sync::Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).refseq =
+                Some("-".to_string())
+        });
         assert!(dash.get("refseq_transcript_ids").is_none());
     }
 
@@ -1740,8 +1751,10 @@ mod tests {
     fn mirna_and_mane_are_arrays() {
         let tc = attribute_object(|tc| {
             tc.mirna = vec!["miRNA_loop".to_string(), "miRNA_stem".to_string()];
-            tc.mane_select = Some("NM_021075.4".to_string());
-            tc.mane_plus_clinical = Some("NM_058174.3".to_string());
+            std::sync::Arc::make_mut(tc.meta.get_or_insert_with(Default::default)).mane_select =
+                Some("NM_021075.4".to_string());
+            std::sync::Arc::make_mut(tc.meta.get_or_insert_with(Default::default))
+                .mane_plus_clinical = Some("NM_058174.3".to_string());
         });
         assert_eq!(tc["mirna"], json!(["miRNA_loop", "miRNA_stem"]));
         assert_eq!(tc["mane"], json!(["MANE_Select", "MANE_Plus_Clinical"]));
