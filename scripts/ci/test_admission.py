@@ -1921,6 +1921,10 @@ def test_export_tree_writes_links_as_files_and_skips_filters(tmp_path):
     (repo / "data.bin").write_bytes(b"\x00\x01")
     (repo / ".gitattributes").write_text("*.bin filter=lfs diff=lfs merge=lfs -text\n")
     (repo / "link.rs").symlink_to("crates/vep-core/src/lib.rs")
+    # A machine with `git lfs install` stores the pointer at `git add`: keep the raw bytes in the tree.
+    git(repo, "config", "filter.lfs.clean", "")
+    git(repo, "config", "filter.lfs.process", "")
+    git(repo, "config", "filter.lfs.required", "false")
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-s", "-m", "Attributes and a link")
     git(repo, "config", "filter.lfs.smudge", "false")
