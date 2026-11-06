@@ -119,8 +119,10 @@ TEST_ATTR_RE = re.compile(
     r"^(?:[A-Za-z_][A-Za-z0-9_]*::)*(?:test|rstest|test_case|quickcheck|proptest)\b"
 )
 STRING_PREFIXES = ("r", "br", "cr", "b", "c")
-# The words that open an item after an attribute; an attribute followed by a comma before one of them
-# sits on a struct field or an enum variant, not on an item.
+# The words that open an item after an attribute and its visibility; an attribute whose target opens
+# with any other word, or sits inside the parentheses of its block, or spells a weak keyword as a
+# name, is on a struct field, an enum variant, a struct literal's field or an argument, which ends
+# at the first comma outside its own brackets.
 ITEM_KEYWORDS = frozenset(
     (
         "fn",
@@ -138,9 +140,11 @@ ITEM_KEYWORDS = frozenset(
         "extern",
         "unsafe",
         "async",
-        "pub",
     )
 )
+VISIBILITY_KEYWORD = "pub"
+# A weak keyword opens an item only with an item's shape after it: `union U`, `macro_rules!`.
+WEAK_ITEM_RES = {"union": re.compile(r"\s+[^\W\d]"), "macro_rules": re.compile(r"\s*!")}
 LABEL_CHARS_RE = re.compile(r"[^A-Za-z0-9 ._+/-]")
 
 
@@ -226,19 +230,30 @@ def cfg_is_test(attr: str) -> bool:
 def rust_test_regions(text: str) -> list[tuple[int, int]]:
     """Line ranges (1-based, inclusive) of the items a `#[cfg(test)]` or a test attribute (`#[test]`,
     `#[tokio::test]`, `#[rstest]`) applies to: the attribute line through the item's closing brace or
-    semicolon. Braces are matched outside strings, character literals and comments; an inner
-    `#![cfg(test)]` makes the whole file a test region."""
+    semicolon, or, for a struct field, an enum variant, a struct literal's field or an argument,
+    through its comma or its last token when no comma follows. Braces are matched outside strings,
+    character literals and comments; an inner `#![cfg(test)]` makes the whole file a test region."""
     n = len(text)
     total = len(text.splitlines())
     regions: list[tuple[int, int]] = []
     i = 0
     line = 1
     depth = 0
-    armed: tuple[int, int] | None = None
-    item_started = False
+    # The pending attribute: its line, and the `depth` and `parens` counts where it sits.
+    armed: tuple[int, int, int] | None = None
+    # Whether the pending attribute's target is an item, decided by its first word with the
+    # visibility skipped; None until that word arrives.
+    item_target: bool | None = None
+    # Generic brackets open inside the pending attribute's target: a comma inside them does not end
+    # a field. `<` opens one only right after a path character, which a comparison written `a < b`
+    # never has, and `>` closes one unless it ends `->` or `=>`.
+    angle = 0
     parens = 0
+    # The `parens` count at each open brace: an item opens only at its block's own count.
+    block_parens: list[int] = []
     region_start: int | None = None
     region_depth = 0
+    last_token_line = 1
 
     def skip_string(j: int) -> int:
         j += 1
@@ -263,6 +278,7 @@ def rust_test_regions(text: str) -> list[tuple[int, int]]:
 
     while i < n:
         ch = text[i]
+        is_token = not ch.isspace() and not text.startswith(("//", "/*"), i)
         if ch == "\n":
             line += 1
             i += 1
@@ -300,8 +316,19 @@ def rust_test_regions(text: str) -> list[tuple[int, int]]:
             while j < n and (text[j].isalnum() or text[j] == "_"):
                 j += 1
             word = text[i:j]
-            if armed is not None and region_start is None and parens == 0 and word in ITEM_KEYWORDS:
-                item_started = True
+            if (
+                armed is not None
+                and region_start is None
+                and item_target is None
+                and parens == armed[2]
+                and word != VISIBILITY_KEYWORD
+            ):
+                weak = WEAK_ITEM_RES.get(word)
+                item_target = (
+                    word in ITEM_KEYWORDS
+                    and parens == (block_parens[-1] if block_parens else 0)
+                    and (weak is None or weak.match(text, j) is not None)
+                )
             if word in STRING_PREFIXES and j < n and text[j] in '"#':
                 if word in ("b", "c"):
                     j = skip_string(j) if text[j] == '"' else j
@@ -332,27 +359,35 @@ def rust_test_regions(text: str) -> list[tuple[int, int]]:
                 and region_start is None
                 and (cfg_is_test(attr) or TEST_ATTR_RE.match(attr))
             ):
-                armed = (line, depth)
-                item_started = False
+                armed = (line, depth, parens)
+                item_target = None
+                angle = 0
             line += text.count("\n", i, j)
             i = j
         elif ch == "{":
             depth += 1
+            block_parens.append(parens)
             if armed is not None and region_start is None and armed[1] == depth - 1:
                 region_start = armed[0]
                 region_depth = depth
             i += 1
         elif ch == "}":
+            if block_parens:
+                block_parens.pop()
             if region_start is not None and depth == region_depth:
                 regions.append((region_start, line))
                 region_start = None
+                armed = None
+            elif armed is not None and depth == armed[1] and not item_target:
+                # The body's last field or variant, with no comma after it.
+                regions.append((armed[0], last_token_line))
                 armed = None
             depth = max(depth - 1, 0)
             if armed is not None and depth < armed[1]:
                 armed = None
             i += 1
         elif ch == ";":
-            if armed is not None and region_start is None and armed[1] == depth and parens == 0:
+            if armed is not None and region_start is None and armed[1:] == (depth, parens):
                 regions.append((armed[0], line))
                 armed = None
             i += 1
@@ -360,10 +395,11 @@ def rust_test_regions(text: str) -> list[tuple[int, int]]:
             if (
                 armed is not None
                 and region_start is None
-                and armed[1] == depth
-                and parens == 0
-                and not item_started
+                and armed[1:] == (depth, parens)
+                and angle == 0
+                and not item_target
             ):
+                regions.append((armed[0], line))
                 armed = None
             i += 1
         elif ch in "([":
@@ -371,9 +407,25 @@ def rust_test_regions(text: str) -> list[tuple[int, int]]:
             i += 1
         elif ch in ")]":
             parens = max(parens - 1, 0)
+            if armed is not None and parens < armed[2]:
+                # The attribute is on the group's last argument or element, with no comma after it.
+                if region_start is None and not item_target:
+                    regions.append((armed[0], last_token_line))
+                armed = None
+            i += 1
+        elif ch == "<":
+            before = text[i - 1] if i else " "
+            if armed is not None and region_start is None and (before.isalnum() or before in "_:"):
+                angle += 1
+            i += 1
+        elif ch == ">":
+            if angle and text[i - 1] not in "-=":
+                angle -= 1
             i += 1
         else:
             i += 1
+        if is_token:
+            last_token_line = line
     if region_start is not None:
         regions.append((region_start, line))
     return regions

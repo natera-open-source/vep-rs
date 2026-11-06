@@ -26,6 +26,13 @@ FIXTURES = sorted(FIXTURE_DIR.glob("*.json"))
 FIXTURE_IDS = [path.stem for path in FIXTURES]
 CHECKER = ROOT / adm.PARITY_CHECKER
 MATRIX_HEADER = "item\tperl_reference\ttarget\tstate\ttest1\ttest2\tinterim\n"
+# The plugins page as the parity checker reads it: the support table heading over an empty table,
+# which asks nothing of a matrix row that is not a plugin's.
+PLUGINS_PAGE = (
+    "# Plugins\n\n## Support table\n\n"
+    "| Plugin | Data file and provider | Terms | Assemblies | Status | Reason |\n"
+    "| --- | --- | --- | --- | --- | --- |\n"
+)
 MAINTAINERS = {"first-maintainer", "second-maintainer"}
 REPO = "example/vep-rs"
 
@@ -78,11 +85,14 @@ def evaluate(
 
 
 def write_tree(root: Path, rows: str = "", tests: dict[str, str] | None = None) -> None:
-    """A tree the parity checker reads: the matrix, an args.rs without flags, the named test files."""
+    """A tree the parity checker reads: the matrix, an args.rs without flags, a plugins page whose
+    support table has no rows, the named test files."""
     (root / "tests" / "parity").mkdir(parents=True, exist_ok=True)
     (root / "tests" / "parity" / "matrix.tsv").write_text(MATRIX_HEADER + rows)
     (root / "crates" / "vep-cli" / "src").mkdir(parents=True, exist_ok=True)
     (root / "crates" / "vep-cli" / "src" / "args.rs").write_text("pub struct Args {}\n")
+    (root / "docs").mkdir(exist_ok=True)
+    (root / "docs" / "plugins.md").write_text(PLUGINS_PAGE)
     for path, text in (tests or {}).items():
         (root / path).parent.mkdir(parents=True, exist_ok=True)
         (root / path).write_text(text)
@@ -210,7 +220,110 @@ def test_regions_field_attribute_does_not_open_a_region_on_the_next_item():
     text = (
         "struct S {\n    #[cfg(test)]\n    x: u8,\n    y: u8,\n}\nfn code() {\n    let z = 1;\n}\n"
     )
-    assert adm.rust_test_regions(text) == []
+    assert adm.rust_test_regions(text) == [(2, 3)]
+
+
+def test_regions_cover_a_field_or_variant_attribute_alone():
+    """A `#[cfg(test)]` on a struct field, a struct literal's field or an enum variant marks that
+    field or variant alone: through its comma, or its last token when no comma follows."""
+    text = (
+        "struct Lookups {\n"  # 1
+        "    rules: Rules,\n"
+        "    #[cfg(test)]\n"  # 3
+        "    rows: Vec<CachedVariation>,\n"  # 4
+        "    #[cfg(test)]\n"  # 5
+        "    pub kept: &'static str\n"  # 6
+        "}\n"
+        "impl Lookups {\n"
+        "    fn open() -> Result<Lookups, Error> {\n"
+        "        Ok(Lookups {\n"
+        "            rules: Rules::default(),\n"
+        "            #[cfg(test)]\n"  # 12
+        "            rows: Vec::new(),\n"  # 13
+        "            #[cfg(test)]\n"  # 14
+        '            kept: "",\n'  # 15
+        "        })\n"
+        "    }\n"
+        "}\n"
+        "enum Kind {\n"
+        "    #[cfg(test)]\n"  # 20
+        "    Probe(fn(u8), [u8; 2]),\n"  # 21
+        "    #[cfg(test)]\n"  # 22
+        "    Pair {\n"
+        "        a: u8,\n"
+        "    },\n"  # 25
+        "    Real,\n"
+        "}\n"
+        "fn code() {}\n"
+    )
+    assert adm.rust_test_regions(text) == [(3, 4), (5, 6), (12, 13), (14, 15), (20, 21), (22, 25)]
+
+
+def test_regions_field_attribute_spans_generics_arguments_and_trailing_comments():
+    """A comma inside a field's generic brackets does not end it; an attribute inside a call's
+    parentheses ends with the argument; a comment after the last field is not its last token, and a
+    string that is ends the field on the string's last line."""
+    text = (
+        "struct S {\n"  # 1
+        "    #[cfg(test)]\n"  # 2
+        "    map: HashMap<\n"
+        "        String,\n"
+        "        Vec<u8>,\n"
+        "    >,\n"  # 6
+        "    #[cfg(test)]\n"  # 7
+        "    last: Box<dyn Fn(u8) -> u8>\n"  # 8
+        "    // the body's end\n"
+        "}\n"
+        "fn f() {\n"
+        "    foo(x, #[cfg(test)] b);\n"  # 12
+        "    if c {\n"
+        "        real();\n"
+        "    }\n"
+        "    let fast = a < b;\n"
+        "}\n"
+    )
+    assert adm.rust_test_regions(text) == [(2, 6), (7, 8), (12, 12)]
+    text = 'fn f() {\n    L {\n        #[cfg(test)]\n        kept: "multi\nline"\n    }\n}\n'
+    assert adm.rust_test_regions(text) == [(3, 5)]
+    text = "struct S {\n    #[cfg(test)]\n    m: Mapö<\n        String,\n        u8,\n    >,\n}\n"
+    assert adm.rust_test_regions(text) == [(2, 6)]
+
+
+def test_regions_item_words_inside_parentheses_or_as_names_open_no_item():
+    """A tuple field or variant element whose type opens with an item word (`fn(u8)`, `*const u8`,
+    `&'static str`) and a field, variant or binding spelled with a weak keyword (`union`) are
+    targets that end at their comma, so the attribute never swallows the next one; an item inside a
+    closure body passed as an argument is still an item."""
+    text = "struct S(u8, #[cfg(test)] fn(u8));\n"
+    assert adm.rust_test_regions(text) == [(1, 1)]
+    text = "struct S(#[cfg(test)] fn(u8), #[cfg(test)] *const u8,);\nfn code() {\n}\n"
+    assert adm.rust_test_regions(text) == [(1, 1), (1, 1)]
+    text = "enum E {\n    Probe(\n        u8,\n        #[cfg(test)] &'static str,\n    ),\n}\n"
+    assert adm.rust_test_regions(text) == [(4, 4)]
+    text = "struct S {\n    #[cfg(test)]\n    union: u8,\n    y: u8,\n}\n"
+    assert adm.rust_test_regions(text) == [(2, 3)]
+    text = "let s = S {\n    #[cfg(test)]\n    union,\n    #[cfg(test)]\n    macro_rules,\n};\n"
+    assert adm.rust_test_regions(text) == [(2, 3), (4, 5)]
+    text = "match k {\n    #[cfg(test)]\n    union => 1,\n    _ => 2,\n}\n"
+    assert adm.rust_test_regions(text) == [(2, 3)]
+    text = "#[cfg(test)]\nunion U {\n    a: u8,\n}\n#[cfg(test)]\nmacro_rules! m {\n    () => {};\n}\n"
+    assert adm.rust_test_regions(text) == [(1, 4), (5, 8)]
+    text = "#[cfg(test)]\nunion Ü<T>\nwhere\n    T: Copy,\n{\n    a: T,\n}\n"
+    assert adm.rust_test_regions(text) == [(1, 7)]
+    text = (
+        "fn f() {\n"
+        "    spawn(move || {\n"
+        "        #[cfg(test)]\n"  # 3
+        "        fn g<T>()\n"
+        "        where\n"
+        "            T: A,\n"
+        "        {\n"
+        "        }\n"  # 8
+        "        real();\n"
+        "    });\n"
+        "}\n"
+    )
+    assert adm.rust_test_regions(text) == [(3, 8)]
 
 
 def test_regions_hold_every_test_attribute_of_the_repository_sources():
@@ -488,13 +601,13 @@ def test_tree_regions_cover_a_module_file_declared_under_cfg_test():
 
 def test_regions_variant_attribute_does_not_extend_to_the_next_variant():
     text = "pub enum E {\n    #[cfg(test)]\n    Probe,\n    Real {\n        x: u8,\n    },\n}\n"
-    assert adm.rust_test_regions(text) == []
+    assert adm.rust_test_regions(text) == [(2, 3)]
     text = "struct S {\n    #[cfg(test)]\n    x: HashMap<String, u8>,\n    y: u8,\n}\nfn f() {\n}\n"
-    assert adm.rust_test_regions(text) == []
+    assert adm.rust_test_regions(text) == [(2, 3)]
     text = "pub enum E {\n    #[cfg(test)]\n    Probe(&'static str),\n    Real {\n        x: u8,\n    },\n}\n"
-    assert adm.rust_test_regions(text) == []
+    assert adm.rust_test_regions(text) == [(2, 3)]
     text = "pub enum E {\n    #[cfg(test)]\n    Probe(fn(u8), [u8; 2]),\n    Real {\n        x: u8,\n    },\n}\n"
-    assert adm.rust_test_regions(text) == []
+    assert adm.rust_test_regions(text) == [(2, 3)]
     text = "#[test]\nfn f(a: (u8, u8), b: [u8; 2]) -> Vec<(u8, u8)>\nwhere\n    T: Into<u8>,\n{\n}\nfn g() {}\n"
     assert adm.rust_test_regions(text) == [(1, 6)]
 
