@@ -28,9 +28,10 @@ DCO check holds the merge anyway. The job that runs after CI adds one line per r
 failed.
 
 The entry names the divergences check accepts are read from `docs/intended-divergences.md` at the base
-tip and at the pull request's head: each table row's first cell when it is a link or inline code, and
-each link target of the row with and without the `docs/` prefix and any fragment, so an entry the pull
-request itself adds resolves and the check keeps working when the index is regrouped.
+tip and at the pull request's head: the first cell of each table row that links a page (the literal
+`none` and a number alone excepted), and each link target of the row with and without the `docs/`
+prefix and any fragment, so an entry the pull request itself adds resolves and the check keeps working
+when the index is regrouped.
 
 The issues job reads the `Intended divergences` choice an issue form writes under its `### ` heading
 and the entries or description under the next one, checks the named entries against the index on the
@@ -958,8 +959,8 @@ def check_divergences(
     needs its description. One finding states every problem; `closes` is False for a pull request
     opened before the rule landed, whose template had no such section."""
     index = read_index(base_index) | read_index(head_index)
-    lines = body_sections(body).get(DIVERGENCE_SECTION.lower())
-    statements = read_statements(lines) if lines is not None else {}
+    section_lines = body_sections(body).get(DIVERGENCE_SECTION.lower(), [])
+    statements = read_statements(section_lines)
     checked = {kind for kind, (is_checked, _lines) in statements.items() if is_checked}
     problems: list[str] = []
     if not statements:
@@ -1011,15 +1012,23 @@ def check_divergences(
 
 def form_fields(body: str | None) -> dict[str, str]:
     """An issue form's fields as GitHub writes them: `### <label>` then the value up to the next
-    heading, keyed by the lower-cased label; `_No response_` is an empty field."""
+    heading, keyed by the lower-cased label; `_No response_` is an empty field, and a heading
+    inside a fenced code block opens none."""
     fields: dict[str, str] = {}
     current: str | None = None
+    fence: str | None = None
     for line in (body or "").splitlines():
-        heading = FORM_HEADING_RE.match(line)
-        if heading is not None:
+        stripped = line.strip()
+        if fence is not None:
+            if stripped.startswith(fence) and stripped.rstrip(fence[0]) == "":
+                fence = None
+        elif (opening := FENCE_RE.match(stripped)) is not None:
+            fence = opening.group(1)
+        elif (heading := FORM_HEADING_RE.match(line)) is not None:
             current = heading.group(1).strip().lower()
             fields[current] = ""
-        elif current is not None:
+            continue
+        if current is not None:
             fields[current] += line + "\n"
     return {
         label: "" if value.strip() == NO_RESPONSE else value.strip()

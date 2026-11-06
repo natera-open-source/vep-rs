@@ -1262,6 +1262,14 @@ def test_form_fields_and_the_issue_choice():
     assert fields[adm.ISSUE_CHOICE_LABEL.lower()] == adm.ISSUE_CHOICES["none"]
     assert fields[adm.ISSUE_ENTRIES_LABEL.lower()] == ""
     assert adm.form_fields(None) == {}
+    quoted = issue_body(
+        adm.ISSUE_CHOICES["none"],
+        f"The form I filled in:\n```\n### {adm.ISSUE_CHOICE_LABEL}\n\nsomething else\n```\nend",
+    )
+    fields = adm.form_fields(quoted)
+    assert fields[adm.ISSUE_CHOICE_LABEL.lower()] == adm.ISSUE_CHOICES["none"]
+    assert fields[adm.ISSUE_ENTRIES_LABEL.lower()].startswith("The form I filled in:\n```")
+    assert fields[adm.ISSUE_ENTRIES_LABEL.lower()].endswith("```\nend")
     index = adm.read_index(INDEX_SAMPLE)
     assert adm.check_issue_divergences(issue_body(adm.ISSUE_CHOICES["none"]), index) is None
     assert adm.check_issue_divergences(issue_body(adm.ISSUE_CHOICES["none"], "stray text"), index) is None

@@ -225,7 +225,8 @@ letter or a difference's name, with what should change and why the index's reaso
 this case), or propose a new intended divergence: the input, what Ensembl VEP and vep-rs each write,
 and why vep-rs's output is the one to keep. Additions are welcome; the maintainers write or review
 the entry's page. An issue opened without the choice, or naming an entry the index lacks, gets the
-`needs-divergence-check` label and one comment, and an edit of the description clears both.
+`needs-divergence-check` label and one comment; an edit of the description that supplies what was
+missing removes the label and the comment reports the pass.
 
 ## Pull Requests
 
