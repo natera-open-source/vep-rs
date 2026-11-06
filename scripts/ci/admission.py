@@ -56,6 +56,7 @@ MARKER = "<!-- admission -->"
 OVERRIDE_LABEL = "admission-override"
 NO_TESTS_LABEL = "tests-not-needed"
 MODEL_LABEL_PREFIX = "model: "
+NO_MODEL_DECLARATION = "No LLM"
 LABEL_MAX = 50
 SECTIONS = ("Summary", "Verification", "Upgrade impact")
 # The base branch ruleset names the required checks; this list stands in when it cannot be read.
@@ -93,6 +94,8 @@ HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 SIGNOFF_RE = re.compile(r"^Signed-off-by:\s*(.*?)\s*<([^<>]+)>\s*$", re.MULTILINE | re.IGNORECASE)
 DECLARATION_RE = re.compile(r"^Co-Authored-By:\s*(.+?)\s*$", re.MULTILINE | re.IGNORECASE)
 HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$")
+# The template's checklist sits under its last heading; a checkbox line is never a section's text.
+CHECKLIST_RE = re.compile(r"^\s*[-*]\s+\[[ xX]\]")
 BLOCK_RE = re.compile(
     r"<!-- admission:(static|ci) sha=([0-9a-f]+) closes=([01]) -->\n(.*?)\n<!-- /admission:\1 -->",
     re.DOTALL,
@@ -450,7 +453,9 @@ def check_contains_base(contains: bool, base_ref: str) -> Finding | None:
     return Finding(
         "base",
         f"The branch does not contain the tip of `{base_ref}`: bring it in with "
-        f"`git fetch origin && git merge --signoff origin/{base_ref}`, then push.",
+        f"`git fetch origin && git merge --signoff origin/{base_ref}` (from a fork clone, add this "
+        "repository as the `upstream` remote, then `git fetch upstream && git merge --signoff "
+        f"upstream/{base_ref}`), then push.",
     )
 
 
@@ -486,8 +491,8 @@ def declared_models(commits: list[dict]) -> list[str]:
     for commit in commits:
         for match in DECLARATION_RE.finditer(commit["commit"].get("message") or ""):
             name = re.sub(r"\s+", " ", re.sub(r"<[^>]*>", "", match.group(1))).strip()
-            if name.lower() == "no llm":
-                name = "No LLM"
+            if name.lower() == NO_MODEL_DECLARATION.lower():
+                name = NO_MODEL_DECLARATION
             if name and name not in names:
                 names.append(name)
     return names
@@ -518,7 +523,7 @@ def model_label(name: str) -> str | None:
 
 def check_body_sections(body: str | None) -> Finding | None:
     """Every template section is present as a heading with at least one line of text under it;
-    the template's HTML comments do not count as text."""
+    the template's HTML comments and checklist lines do not count as text."""
     text = re.sub(r"<!--.*?-->", "", body or "", flags=re.DOTALL)
     sections: dict[str, list[str]] = {}
     current = None
@@ -527,7 +532,7 @@ def check_body_sections(body: str | None) -> Finding | None:
         if heading:
             current = heading.group(1).strip().lower()
             sections.setdefault(current, [])
-        elif current is not None:
+        elif current is not None and not CHECKLIST_RE.match(raw):
             sections[current].append(raw)
     missing = [
         name
@@ -1258,7 +1263,8 @@ def run_local(repo_dir: Path, base: str, body_file: Path | None) -> int:
     head = git.rev_parse("HEAD")
     base_sha = git.rev_parse(base)
     if head is None or base_sha is None:
-        raise AdmissionError(f"cannot resolve HEAD or {base}; run `git fetch origin` first")
+        remote = base.split("/", 1)[0] if "/" in base else "origin"
+        raise AdmissionError(f"cannot resolve HEAD or {base}; run `git fetch {remote}` first")
     merge_base = git.merge_base(base_sha, head) or base_sha
     commits = local_commits(git, base)
     files = local_files(git, merge_base)

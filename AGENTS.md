@@ -85,18 +85,20 @@ A failure that reproduces on a clean checkout of `origin/main` is pre-existing. 
 Verification with that reproduction, and leave it out of this change. A newer local toolchain adds
 clippy lints and can move type sizes, so compare like with like.
 
-Cut the branch from a freshly fetched `origin/main`, and run `python3 scripts/ci/admission.py --local`
-before pushing. It applies the admission check's static rules to the local branch against
-`origin/main`: current with `main`, a new or changed test with every code change, every commit
-signed off, the model declared with a trailer form under Gotchas, the changelog line, the parity
-matrix. CONTRIBUTING.md's Pull Requests says what the `Admission` check closes and how a closed pull
-request reopens.
+Cut the branch from the repository's freshly fetched `main`, and before pushing run
+`python3 scripts/ci/admission.py --local` (from a fork clone, with the repository added as the
+`upstream` remote, `--base upstream/main`). It applies the admission check's static rules to the
+local branch against that base: current with `main`, a new or changed test with every code change,
+every commit signed off, the model declared with a trailer form under Gotchas, the changelog line,
+the parity matrix. CONTRIBUTING.md's Pull Requests says what the `Admission` check closes and how a
+closed pull request reopens.
 
-On a pull request from a fork, the CI, DCO and Pages workflows do not start until a maintainer
-presses "Approve and run", after every push, and those checks read "no checks reported" until then.
-Verification therefore carries the local results; the admission check runs at once. `main` requires
-the branch to be current with it and every review thread resolved before merge. Bring `main` in
-with `git fetch origin && git merge --signoff origin/main`; never rebase or force-push a pushed
+On a pull request from a fork, the CI, DCO, Pages and Docker workflows do not start until a
+maintainer presses "Approve and run", after every push, and those checks read "no checks reported"
+until then. Verification therefore carries the local results; the admission check runs at once.
+`main` requires the branch to be current with it and every review thread resolved before merge.
+Bring `main` in with `git fetch origin && git merge --signoff origin/main` (from a fork clone,
+`git fetch upstream && git merge --signoff upstream/main`); never rebase or force-push a pushed
 branch, since maintainers may push fixes onto it.
 
 Fill in [.github/pull_request_template.md](.github/pull_request_template.md) for the description.

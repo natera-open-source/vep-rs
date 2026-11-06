@@ -189,10 +189,13 @@ that you have the right to submit the code under this project's Apache-2.0 licen
 A `DCO` workflow (`.github/workflows/dco.yml`) checks every commit of a pull request
 for the trailer and fails the check if one is missing. To add a missing sign-off before
 the branch is pushed, use `git commit --amend -s` for the last commit or
-`git rebase --signoff origin/main` for several. A pushed branch with an unsigned commit is
-signed the same way on a new branch and opened as a new pull request: never rebase or
-force-push a pushed branch, since maintainers may push fixes onto it. Bring `main` in with
-`git fetch origin && git merge --signoff origin/main`.
+`git rebase --signoff origin/main` for several.
+
+A pushed branch with an unsigned commit is signed the same way on a new branch and opened
+as a new pull request: never rebase or force-push a pushed branch, since maintainers may
+push fixes onto it. Bring `main` in with `git fetch origin && git merge --signoff origin/main`;
+from a fork clone, add this repository as the `upstream` remote, then
+`git fetch upstream && git merge --signoff upstream/main`.
 
 One commit of every pull request also declares the model that wrote the change, as a
 second trailer beside the sign-off; the squash merge carries both trailers onto `main`.
@@ -226,7 +229,7 @@ branch by opening a new pull request from a signed branch). Maintainers' and bot
 drafts and those opened before the check existed are commented but stay open; a maintainer's
 `tests-not-needed` label waives the test requirement and `admission-override` holds the close for a
 justified exception. `python3 scripts/ci/admission.py --local` applies the static rules to your
-branch before you push.
+branch before you push (`--base upstream/main` from a fork clone).
 
 ## Comment and write-up discipline
 

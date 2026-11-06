@@ -421,7 +421,8 @@ def test_declaration_names_models_and_normalises_no_llm():
             "1" * 40,
             "Subject\n\nCo-Authored-By: Example Model 2 <model@example.com>\nSigned-off-by: A <a@example.com>\n",
         ),
-        commit("2" * 40, "Subject\n\nco-authored-by:  no   llm\n"),
+        commit("2" * 40, f"Subject\n\nco-authored-by:   {adm.NO_MODEL_DECLARATION.lower()}  \n"),
+        commit("5" * 40, f"Subject\n\nCo-Authored-By: {'  '.join(adm.NO_MODEL_DECLARATION.split())}\n"),
         commit("3" * 40, "Subject\n\nCo-Authored-By: Example Model 2 <other@example.com>\n"),
     ]
     assert adm.declared_models(commits) == ["Example Model 2", "No LLM"]
@@ -458,6 +459,24 @@ def test_body_sections_present_and_filled():
     assert (
         adm.check_body_sections("### summary\nx\n## VERIFICATION\ny\n## Upgrade Impact\nz") is None
     )
+    bullets = "## Summary\n- adds a flag\n## Verification\n* ran the tests\n## Upgrade impact\n1. none\n"
+    assert adm.check_body_sections(bullets) is None
+
+
+def test_body_sections_on_the_repository_template():
+    """The template's checklist sits under its last heading and is not that section's text: the
+    unfilled template misses all three sections, and filling each heading's line clears them."""
+    template = (ROOT / ".github" / "pull_request_template.md").read_text(encoding="utf-8")
+    unfilled = adm.check_body_sections(template)
+    assert unfilled is not None
+    assert all(f"`## {name}`" in unfilled.text for name in adm.SECTIONS)
+    filled = template
+    for name in adm.SECTIONS:
+        filled = filled.replace(f"## {name}\n", f"## {name}\nFilled in.\n", 1)
+    assert adm.check_body_sections(filled) is None
+    checklist_only = "## Summary\n- [x] Every commit is signed off\n## Verification\ny\n## Upgrade impact\nz\n"
+    finding = adm.check_body_sections(checklist_only)
+    assert finding is not None and "`## Summary`" in finding.text
 
 
 @pytest.mark.parametrize(
@@ -1463,7 +1482,11 @@ def test_run_local_reports_a_branch_behind_the_base(tmp_path, capsys):
     git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
     git(repo, "checkout", "-q", "topic")
     assert adm.run_local(repo, "origin/main", None) == 1
-    assert "does not contain the tip of `main`" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "does not contain the tip of `main`" in err
+    assert "git fetch upstream && git merge --signoff upstream/main" in err
+    with pytest.raises(adm.AdmissionError, match="run `git fetch upstream` first"):
+        adm.run_local(repo, "upstream/main", None)
 
 
 def test_export_tree_writes_links_as_files_and_skips_filters(tmp_path):
