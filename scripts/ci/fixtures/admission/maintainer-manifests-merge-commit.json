@@ -1,0 +1,150 @@
+{
+ "pull_request": {
+  "number": 0,
+  "state": "closed",
+  "draft": false,
+  "title": "Title",
+  "body": "## Summary\n\nSummary text.\n\n## Verification\n\nVerification text.\n\n## Upgrade impact\n\nUpgrade impact text.\n",
+  "user": {
+   "login": "second-maintainer",
+   "type": "User"
+  },
+  "author_association": "COLLABORATOR",
+  "labels": [],
+  "head": {
+   "sha": "0000000000000000000000000000000000000004",
+   "ref": "topic",
+   "repo": {
+    "fork": false,
+    "owner": {
+     "login": "second-maintainer"
+    }
+   }
+  },
+  "base": {
+   "sha": "0000000000000000000000000000000000000005",
+   "ref": "main"
+  }
+ },
+ "commits": [
+  {
+   "sha": "0000000000000000000000000000000000000001",
+   "parents": [
+    {
+     "sha": "0000000000000000000000000000000000000002"
+    }
+   ],
+   "commit": {
+    "message": "Subject line 1\n\nCo-Authored-By: Example Model 1 <model@example.org>\nSigned-off-by: Person 1 <person1@example.org>\n",
+    "author": {
+     "name": "Person 1",
+     "email": "person1@example.org"
+    }
+   }
+  },
+  {
+   "sha": "0000000000000000000000000000000000000003",
+   "parents": [
+    {
+     "sha": "0000000000000000000000000000000000000001"
+    }
+   ],
+   "commit": {
+    "message": "Subject line 2\n\nCo-Authored-By: Example Model 1 <model@example.org>\nSigned-off-by: Person 1 <person1@example.org>\n",
+    "author": {
+     "name": "Person 1",
+     "email": "person1@example.org"
+    }
+   }
+  },
+  {
+   "sha": "0000000000000000000000000000000000000004",
+   "parents": [
+    {
+     "sha": "0000000000000000000000000000000000000003"
+    },
+    {
+     "sha": "0000000000000000000000000000000000000005"
+    }
+   ],
+   "commit": {
+    "message": "Subject line 3\n\nSigned-off-by: Person 1 <person1@example.org>\nCo-Authored-By: Example Model 1 <model@example.org>\n",
+    "author": {
+     "name": "Person 1",
+     "email": "person1@example.org"
+    }
+   }
+  }
+ ],
+ "files": [
+  {
+   "filename": "CHANGELOG.md",
+   "status": "modified",
+   "additions": 1,
+   "deletions": 0,
+   "patch": "@@ -25,6 +25,7 @@\n ### Changed\n \n - Entry text (#0)\n+- Entry text (#0)\n - Entry text (#0)\n \n ### Fixed"
+  },
+  {
+   "filename": "Cargo.toml",
+   "status": "modified",
+   "additions": 14,
+   "deletions": 7
+  },
+  {
+   "filename": "crates/vep-builtins/Cargo.toml",
+   "status": "modified",
+   "additions": 5,
+   "deletions": 0
+  },
+  {
+   "filename": "crates/vep-cache-builder/Cargo.toml",
+   "status": "modified",
+   "additions": 6,
+   "deletions": 1
+  },
+  {
+   "filename": "crates/vep-cache-converter/Cargo.toml",
+   "status": "modified",
+   "additions": 6,
+   "deletions": 1
+  },
+  {
+   "filename": "crates/vep-cli/Cargo.toml",
+   "status": "modified",
+   "additions": 6,
+   "deletions": 1
+  },
+  {
+   "filename": "crates/vep-core/Cargo.toml",
+   "status": "modified",
+   "additions": 5,
+   "deletions": 0
+  },
+  {
+   "filename": "crates/vep-effects/Cargo.toml",
+   "status": "modified",
+   "additions": 5,
+   "deletions": 0
+  },
+  {
+   "filename": "crates/vep-fasta/Cargo.toml",
+   "status": "modified",
+   "additions": 5,
+   "deletions": 0
+  },
+  {
+   "filename": "crates/vep-io/Cargo.toml",
+   "status": "modified",
+   "additions": 5,
+   "deletions": 0
+  },
+  {
+   "filename": "crates/vep-plugin/Cargo.toml",
+   "status": "modified",
+   "additions": 5,
+   "deletions": 0
+  }
+ ],
+ "contains_base_tip": true,
+ "head_changelog": "# Changelog\n\nx\n\nx\nx\n\n## [Unreleased]\n\n### Added\n\n- Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n- Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n\n### Changed\n\n- Entry text (#0)\n- Entry text (#0)\n- Entry text (#0)\n\n### Fixed\n\n- Entry text (#0)\n\n## [0.5.0] - 0000-00-00\n"
+}

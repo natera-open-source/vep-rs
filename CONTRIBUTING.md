@@ -5,7 +5,7 @@
 ```bash
 # Run the full test suite (the per-crate test counts are in
 # manuscript/data/code_metrics.csv)
-cargo test --workspace
+cargo test --workspace --locked
 
 # Build a release binary (target/release/vep)
 cargo build --release
@@ -169,11 +169,14 @@ user-visible change, on one physical line; the subject first (the flag, format, 
 identifiers in backticks), then what it now does; one sentence, a second only for a consequence the user
 must act on; the measured effect inline where the change claims speed or memory; no type prefix, bold
 lead-in or author handle; a trailing `(#N)` naming the pull request; at most 30 words. The pull request
-number is written only after the pull request exists, never predicted. Refactors, CI and dependency
-bumps appear only when behaviour changes. Under a kind heading, entries may be grouped by area: a bullet
-`- <Area name>` at the margin (the area alone, at most 60 characters) with its entries nested under it
-as `-` bullets indented two spaces, each in the grammar above with its own `(#N)`; two levels at most,
-and every area has at least one entry.
+number is written only after the pull request exists, never predicted.
+
+Refactors, CI and dependency bumps appear only when behaviour changes; the admission check asks every
+crate code or manifest change for a changelog line, and a maintainer's `admission-override` label holds
+the close for a refactor. Under a kind heading, entries may be grouped by area: a bullet `- <Area name>` at the
+margin (the area alone, at most 60 characters) with its entries nested under it as `-` bullets indented
+two spaces, each in the grammar above with its own `(#N)`; two levels at most, and every area has at
+least one entry.
 
 ## Sign your commits
 
@@ -187,17 +190,52 @@ git commit -s -m "Add CADD plugin support"
 The sign-off asserts, under the [Developer Certificate of Origin](https://developercertificate.org),
 that you have the right to submit the code under this project's Apache-2.0 license.
 A `DCO` workflow (`.github/workflows/dco.yml`) checks every commit of a pull request
-for the trailer and fails the check if one is missing. To add a missing sign-off to
-the commits on your branch, use `git rebase --signoff main` and force-push the branch.
+for the trailer and fails the check if one is missing. To add a missing sign-off before
+the branch is pushed, use `git commit --amend -s` for the last commit or
+`git rebase --signoff origin/main` for several.
+
+A pushed branch with an unsigned commit is signed the same way on a new branch and opened
+as a new pull request: never rebase or force-push a pushed branch, since maintainers may
+push fixes onto it. Bring `main` in with `git fetch origin && git merge --signoff origin/main`;
+from a fork clone, add this repository as the `upstream` remote, then
+`git fetch upstream && git merge --signoff upstream/main`.
+
+One commit of every pull request also declares the model that wrote the change, as a
+second trailer beside the sign-off; the squash merge carries both trailers onto `main`.
+The declaration takes one of these forms, the first being the line a coding tool
+appends by default, any vendor's model named the same way, and the last for a change
+written without a model:
+
+```text
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Co-Authored-By: <model name> <the vendor's noreply address>
+Co-Authored-By: No LLM
+```
 
 ## Pull Requests
 
 Before submitting a PR:
 
-1. All CI checks pass: `cargo test --workspace`, `cargo clippy --workspace -- -D warnings`, `cargo fmt --all -- --check`.
+1. All CI checks pass on the toolchain `.github/workflows/ci.yml` pins: `cargo test --workspace --locked`, `cargo clippy --workspace -- -D warnings`, `cargo fmt --all -- --check`.
 2. Add tests for new features or bug fixes.
 3. Update the affected page under `docs/`: the format's page under `output/` for output layouts, the mechanism's page under `plugins/` and the plugin table in `plugins.md` for plugins, `cache-setup.md` for the cache builder and converter. A flag is documented by its help text in `crates/vep-cli/src/args.rs` and by the option tables, from which the CLI reference (`cli-reference.md` and the group pages under `cli/`) is generated: regenerate it with `VEP_UPDATE_CLI_REFERENCE=1 cargo test -p vep-cli --test cli_reference` and commit the result.
 4. For consequence or plugin changes, run concordance smoke to confirm no regressions.
+
+An admission check (the `Admission` workflow) runs on every pull request. It closes one that is
+behind `main`, changes code without a test that gains a line (a benchmark or an example asks for
+none), carries no model declaration or lacks a template section. It also closes one that changes a
+crate without a changelog line, changes a file under `.github/workflows/`, fails the parity matrix
+or fails a required CI check. The comment it leaves names each miss and its fix; push the fixes to
+the same branch and reopen it.
+
+An unsigned commit is reported but never closes (the DCO check holds the merge; sign a pushed
+branch by opening a new pull request from a signed branch). Maintainers' and bots' pull requests,
+drafts and those opened before the check existed are commented but stay open; a maintainer's
+`tests-not-needed` label waives the test requirement and `admission-override` holds the close for a
+justified exception. The check judges a pull request by its author, so a maintainer sets
+`admission-override` before pushing a workflow edit (a test floor in `ci.yml`) onto a contributor's
+branch. `python3 scripts/ci/admission.py --local` applies the static rules to your branch before
+you push (`--base upstream/main` from a fork clone).
 
 ## Comment and write-up discipline
 

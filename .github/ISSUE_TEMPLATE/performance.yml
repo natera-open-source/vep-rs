@@ -1,0 +1,75 @@
+name: Performance report
+description: vep-rs is slower, or uses more memory, than expected, or you measured a change that makes it faster
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A speed or memory figure is reproducible when it names the build, the machine, the input and the run count, so this form asks for each. The published figures and their protocol are on the [Current release](https://natera-open-source.github.io/vep-rs/benchmarks/current-release.html) page.
+  - type: dropdown
+    id: carried
+    attributes:
+      label: Already carried elsewhere
+      description: A release branch may carry a change in this area before it reaches `main`. Ask here before writing code; in-flight maintainer work closes a duplicate with credit rather than merging it.
+      options:
+        - "A report only: no change proposed"
+        - "No open pull request or release branch names this change, as far as I can see"
+        - "Unknown: please check before I start"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: vep-rs version
+      description: Output of `vep --version`, or the commit you built from. For a comparison of two builds, both.
+      placeholder: vep <version>; and the commit of the change
+    validations:
+      required: true
+  - type: textarea
+    id: machine
+    attributes:
+      label: Machine
+      description: CPU model and core count, memory, OS, and the storage the cache and input were read from.
+      placeholder: 16-core x86_64 (AVX2), 64 GB, Ubuntu 24.04, local NVMe
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: Input
+      description: The dataset (a public one by name and version, or a description), its record count and its size on disk; the assembly and cache. Do not post patient or other identifiable data.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The full command line, `--fork` included, exactly as run.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: timings
+    attributes:
+      label: Timings
+      description: Wall time per run and the run count (five or more runs on the same machine, the median and the spread). For a comparison, the same for each build, runs interleaved. Peak memory as `/usr/bin/time -v` reports it, if you measured it.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: identical
+    attributes:
+      label: Output identity
+      description: For a change that makes vep-rs faster, whether its output is byte-identical to `main`'s on the same input in every format you ran.
+      options:
+        - "A report only: no change proposed"
+        - "Byte-identical in every format run"
+        - "Not checked"
+        - "Differs (say where below)"
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: What you expected, what you found, or where the output differs.

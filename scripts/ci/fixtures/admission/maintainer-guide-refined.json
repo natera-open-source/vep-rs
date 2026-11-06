@@ -1,0 +1,61 @@
+{
+ "pull_request": {
+  "number": 0,
+  "state": "open",
+  "draft": false,
+  "title": "Title",
+  "body": "## Summary\n\nSummary text.\n\n## Verification\n\nVerification text.\n\n## Upgrade impact\n\nUpgrade impact text.\n",
+  "user": {
+   "login": "second-maintainer",
+   "type": "User"
+  },
+  "author_association": "COLLABORATOR",
+  "labels": [],
+  "head": {
+   "sha": "0000000000000000000000000000000000000001",
+   "ref": "topic",
+   "repo": {
+    "fork": false,
+    "owner": {
+     "login": "second-maintainer"
+    }
+   }
+  },
+  "base": {
+   "sha": "0000000000000000000000000000000000000002",
+   "ref": "main"
+  }
+ },
+ "commits": [
+  {
+   "sha": "0000000000000000000000000000000000000001",
+   "parents": [
+    {
+     "sha": "0000000000000000000000000000000000000002"
+    }
+   ],
+   "commit": {
+    "message": "Subject line 1\n\nCo-Authored-By: Example Model 1 <model@example.org>\nSigned-off-by: Person 1 <person1@example.org>\n",
+    "author": {
+     "name": "Person 1",
+     "email": "person1@example.org"
+    }
+   }
+  }
+ ],
+ "files": [
+  {
+   "filename": "docs/cache-setup.md",
+   "status": "modified",
+   "additions": 16,
+   "deletions": 8
+  },
+  {
+   "filename": "docs/contributing.md",
+   "status": "modified",
+   "additions": 15,
+   "deletions": 6
+  }
+ ],
+ "contains_base_tip": true
+}

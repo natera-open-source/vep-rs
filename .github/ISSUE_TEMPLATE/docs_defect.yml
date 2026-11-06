@@ -1,0 +1,43 @@
+name: Documentation defect
+description: A page, the README or a help text says something the code, Ensembl VEP or a command's output contradicts
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The pages live under `docs/` and render at https://natera-open-source.github.io/vep-rs/ (the site root describes the latest release, `/main/` the development preview). `docs/cli-reference.md` and the pages under `docs/cli/` are generated from the help text in `crates/vep-cli/src/args.rs`, so a defect there is a defect in the help text.
+  - type: input
+    id: page
+    attributes:
+      label: Page
+      description: The file under `docs/`, or the README, and the channel you read (the release root or `/main/`).
+      placeholder: docs/cache-setup.md, release root
+    validations:
+      required: true
+  - type: textarea
+    id: sentence
+    attributes:
+      label: The sentence
+      description: The text as the page states it, quoted.
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What is wrong
+      description: What the sentence should say instead, if you know.
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: What shows it
+      description: The command you ran and its output, the Ensembl VEP source as `Module.pm:line`, the test, or the file in the repository that contradicts the page.
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I'm willing to open a pull request for this.

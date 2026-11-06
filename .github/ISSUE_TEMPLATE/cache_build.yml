@@ -1,0 +1,63 @@
+name: Cache build or conversion failure
+description: vep-cache-builder, the Ensembl VEP cache conversion or vep-cache-converter fails, or the cache it writes is incomplete
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        [docs/cache-setup.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/cache-setup.md) describes what `vep-cache-builder` reads and writes, the one `ERROR: [cache-builder] <message>` line a failed build ends with, and the conversion of an Ensembl VEP cache with `scripts/data/storable_to_json.pl`; `vep-cache-converter` copies a flat JSON cache into the per-chromosome runtime layout. If the cache builds but `vep` annotates differently from Ensembl VEP on it, use the **Output differs from Ensembl VEP** form instead.
+  - type: input
+    id: version
+    attributes:
+      label: vep-rs version
+      description: Output of `vep --version` from the same release or build, or the commit you built from; the cache tools build from the same tree.
+    validations:
+      required: true
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Tool
+      options:
+        - vep-cache-builder
+        - scripts/data/storable_to_json.pl (Ensembl VEP cache conversion)
+        - vep-cache-converter
+    validations:
+      required: true
+  - type: input
+    id: species
+    attributes:
+      label: Species and assembly
+      placeholder: homo_sapiens, GRCh38
+    validations:
+      required: true
+  - type: textarea
+    id: inputs
+    attributes:
+      label: Inputs
+      description: The Ensembl release, and what the tool read; for the builder, the GFF3, FASTA, GTF or core dumps and where they came from; for the conversion script, the Ensembl VEP cache version its `info.txt` states; for `vep-cache-converter`, where the flat JSON cache came from.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The full command line, exactly as run.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: First error line
+      description: The first `ERROR:` line, or the first line of the failure, as printed; then the rest of the output as text if it helps.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: OS, CPU, memory, and the free disk the output directory had.
+      placeholder: Ubuntu 24.04, x86_64, 64 GB, 200 GB free
+    validations:
+      required: true

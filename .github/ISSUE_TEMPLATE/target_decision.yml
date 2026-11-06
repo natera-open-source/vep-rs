@@ -1,0 +1,55 @@
+name: Target decision
+description: A row of tests/parity/matrix.tsv whose target the Ensembl VEP source, the code or another row contradicts
+title: "Target decision: `<item>`"
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A row's `target` is the maintainers' call. When the Ensembl VEP source shows the target is wrong, or another row contradicts it, report it here with the evidence and leave the row as it is. Two examples: an `error` row that Ensembl VEP's own behaviour makes an `accepted_noop`; an `implemented` row that needs the Ensembl database, which belongs under `error` as the `database` row does. The columns are defined in `tests/parity/README.md`.
+  - type: input
+    id: item
+    attributes:
+      label: Row
+      description: The row's `item`, exactly as it appears in the matrix.
+    validations:
+      required: true
+  - type: dropdown
+    id: current
+    attributes:
+      label: Current target
+      options:
+        - implemented
+        - documented_subset
+        - accepted_noop
+        - error
+        - removed
+        - excluded
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: The Ensembl VEP source that contradicts the target, cited as `Module.pm:line` at `release/116.2`, with what it does; or the contradicting row and the behaviour the two rows cannot both have; or the code path that shows it.
+    validations:
+      required: true
+  - type: dropdown
+    id: proposed
+    attributes:
+      label: Target you propose
+      options:
+        - implemented
+        - documented_subset
+        - accepted_noop
+        - error
+        - removed
+        - excluded
+        - "Unsure: the evidence rules out the current target only"
+    validations:
+      required: true
+  - type: textarea
+    id: rows
+    attributes:
+      label: Other rows affected
+      description: Rows that would change state or target with this decision, and the tests that name them.
