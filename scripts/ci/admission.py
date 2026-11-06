@@ -4,6 +4,7 @@
 usage: admission.py --event <github event json>          the pull_request_target job
        admission.py --pull-request <number>              the same checks, run by hand (workflow_dispatch)
        admission.py --workflow-run <github event json>   the job that runs when the CI workflow completes
+       admission.py --issue <github event json>          the issues job: the intended-divergences choice
        admission.py --local [--base origin/main] [--body-file <f>]
                                                         the static checks on the local branch before pushing
 
@@ -13,13 +14,28 @@ a crate's or tool's `tests/` directory, a line of a `#[cfg(test)]` module or a `
 source file, a `test_*.py` or `test_*.sh` under `scripts/`, a golden `expected/` or `expected_*/` file
 or a corpus `manifest.json`), unless a maintainer sets the `tests-not-needed` label; a commit declares
 the model that wrote the change with a `Co-Authored-By` trailer (`No LLM` for none); the description
-carries the template's three sections; a crate change adds a line under `## [Unreleased]` of
-CHANGELOG.md, or under a release heading the change itself adds; a change from outside the maintainers
-leaves `.github/workflows/` alone; the parity matrix resolves on the contributed tree; and every commit
-carries a `Signed-off-by` trailer with its author's name and address, a miss the comment reports
-without closing, since the only remedy on a pushed branch is a history rewrite after which a closed
-pull request cannot be reopened, and the DCO check holds the merge anyway. The job that runs after CI
-adds one line per required check that failed.
+carries the template's three text sections and its `## Intended divergences` section with one of the
+three statements checked (none of the index's entries touched, which the change may not claim while it
+edits the index, a page the index links or `scripts/divergences/`; existing entries touched, one line
+per entry naming it as the index's first column does and saying what the change does to it and why;
+a new intended divergence proposed, with its description), the first statement excluding the other
+two; a crate change adds a line under `## [Unreleased]` of CHANGELOG.md, or under a release heading
+the change itself adds; a change from outside the maintainers leaves `.github/workflows/` alone; the
+parity matrix resolves on the contributed tree; and every commit carries a `Signed-off-by` trailer
+with its author's name and address, a miss the comment reports without closing, since the only remedy
+on a pushed branch is a history rewrite after which a closed pull request cannot be reopened, and the
+DCO check holds the merge anyway. The job that runs after CI adds one line per required check that
+failed.
+
+The entry names the divergences check accepts are read from `docs/intended-divergences.md` at the base
+tip and at the pull request's head: each table row's first cell when it is a link or inline code, and
+each link target of the row with and without the `docs/` prefix and any fragment, so an entry the pull
+request itself adds resolves and the check keeps working when the index is regrouped.
+
+The issues job reads the `Intended divergences` choice an issue form writes under its `### ` heading
+and the entries or description under the next one, checks the named entries against the index on the
+checked-out base branch, and asks for what is missing with the `needs-divergence-check` label and one
+comment edited in place; it never closes an issue, and an edit that fixes the body clears both.
 
 The two Actions modes read the pull request through the REST API (commits, changed files, labels,
 comments) and the contribution's files as git objects: a `git fetch` of the pull request's head ref, `git
@@ -31,7 +47,9 @@ rendered inside a code span, so it carries no mention, link or formatting.
 One comment per pull request, edited in place on every run, states each miss with its fix. A miss closes
 the pull request unless its author is a maintainer (a CODEOWNERS entry for `*`) or a bot, the
 `admission-override` label is set, the pull request is a draft, or it was opened before this workflow
-first landed on the base branch; the author reopens it once it is fixed and the check runs again. The
+first landed on the base branch; the divergences miss alone is reported without a close on a pull
+request opened before that rule landed, whose template had no such section; the author reopens a
+closed pull request once it is fixed and the check runs again. The
 newest commit that declares a model sets the `model: <name>` label (at most two names; none when
 the commits declare more). Before the comment and the close are written the pull request's head and the comment
 are read again, so a push in between or a run of the other job loses nothing. Exit 1 only when the run
@@ -64,6 +82,32 @@ NO_MODEL_DECLARATION = "No LLM"
 LABEL_MAX = 50
 LABEL_MODELS_MAX = 2
 SECTIONS = ("Summary", "Verification", "Upgrade impact")
+# The fourth section holds checklist statements alone, so it is read by its own check, not by the
+# text test of `check_body_sections`, which would read it as empty.
+DIVERGENCE_SECTION = "Intended divergences"
+INDEX_PATH = "docs/intended-divergences.md"
+DIVERGENCE_SCRIPTS = "scripts/divergences/"
+# The rule's own landing date: the oldest base-branch commit touching a file that arrived with it.
+DIVERGENCE_LANDING_PATH = "scripts/ci/fixtures/admission/divergences-none-clean.json"
+# The three statements, told apart by a word each alone carries; the order breaks a tie in a
+# reworded line.
+STATEMENT_WORDS = (
+    ("proposes", re.compile(r"\bpropos", re.IGNORECASE)),
+    ("touches", re.compile(r"\bexisting\b", re.IGNORECASE)),
+    ("none", re.compile(r"\bnone\b", re.IGNORECASE)),
+)
+NONE_STATEMENT = "This change touches none of the intended divergences."
+# An issue form writes `### <label>` then the value; `_No response_` stands for an empty field.
+ISSUE_MARKER = "<!-- admission:issue -->"
+NEEDS_DIVERGENCE_LABEL = "needs-divergence-check"
+ISSUE_CHOICE_LABEL = "Intended divergences"
+ISSUE_ENTRIES_LABEL = "Entries or proposed divergence"
+ISSUE_CHOICES = {
+    "none": "Touches none of the intended divergences",
+    "touches": "Touches existing intended divergences (named below, with the reasoning)",
+    "proposes": "Proposes a new intended divergence (described below)",
+}
+NO_RESPONSE = "_No response_"
 # The base branch ruleset names the required checks; this list stands in when it cannot be read.
 REQUIRED_CHECKS = (
     "Test",
@@ -107,6 +151,12 @@ AUTHOR_RE = re.compile(r"^author (.*?) <([^>]*)> \d+ [+-]\d{4}$")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$")
 # The template's checklist sits under its last heading; a checkbox line is never a section's text.
 CHECKLIST_RE = re.compile(r"^\s*[-*]\s+\[[ xX]\]")
+CHECKBOX_RE = re.compile(r"^\s*[-*+]\s+\[([ xX])\]\s*(.*?)\s*$")
+# An entry line: the entry in a code span, with or without a list marker, then the rest of the line.
+ENTRY_LINE_RE = re.compile(r"^\s*(?:(?:[-*+]|\d+[.)])\s+)?`([^`]+)`\s*(.*?)\s*$")
+LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+TABLE_ROW_RE = re.compile(r"^\s*\|")
+FORM_HEADING_RE = re.compile(r"^### (.+?)\s*$")
 FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
 BLOCK_RE = re.compile(
     r"<!-- admission:(static|ci) sha=([0-9a-f]+) closes=([01]) -->\n(.*?)\n<!-- /admission:\1 -->",
@@ -696,10 +746,9 @@ def model_label(name: str) -> str | None:
 # --- the description and the changelog -----------------------------------------------------------
 
 
-def check_body_sections(body: str | None) -> Finding | None:
-    """Every template section is present as a heading with at least one line of text under it;
-    the template's HTML comments and checklist lines do not count as text, and a heading inside a
-    fenced code block opens no section."""
+def body_sections(body: str | None) -> dict[str, list[str]]:
+    """The description's sections by lower-cased heading, each the lines under it, HTML comments
+    stripped first; a heading inside a fenced code block opens no section."""
     text = re.sub(r"<!--.*?-->", "", body or "", flags=re.DOTALL)
     sections: dict[str, list[str]] = {}
     current = None
@@ -715,14 +764,21 @@ def check_body_sections(body: str | None) -> Finding | None:
             current = heading.group(1).strip().lower()
             sections.setdefault(current, [])
             continue
-        elif CHECKLIST_RE.match(raw):
-            continue
         if current is not None:
             sections[current].append(raw)
+    return sections
+
+
+def check_body_sections(body: str | None) -> Finding | None:
+    """Every template text section is present as a heading with at least one line of text under it;
+    the template's HTML comments and checklist lines do not count as text."""
+    sections = body_sections(body)
     missing = [
         name
         for name in SECTIONS
-        if not any(line.strip() for line in sections.get(name.lower(), []))
+        if not any(
+            line.strip() and not CHECKLIST_RE.match(line) for line in sections.get(name.lower(), [])
+        )
     ]
     if not missing:
         return None
@@ -732,6 +788,279 @@ def check_body_sections(body: str | None) -> Finding | None:
         f"The description lacks the {listed} section of the pull request template, or leaves it "
         "empty: edit the description and fill it in.",
     )
+
+
+# --- the intended divergences --------------------------------------------------------------------
+
+
+class Index(NamedTuple):
+    """What the divergences check reads from `docs/intended-divergences.md`: the names a contributor
+    may cite, normalised by `entry_name`, and the repository paths of the pages its rows link."""
+
+    names: frozenset[str]
+    pages: frozenset[str]
+
+    def __or__(self, other: Index) -> Index:
+        return Index(self.names | other.names, self.pages | other.pages)
+
+
+def entry_name(text: str) -> str:
+    """A cell or a cited token as the check compares it: link markup reduced to its text, code
+    spans to their text, whitespace collapsed, lower-cased."""
+    plain = LINK_RE.sub(lambda m: m.group(1), text).replace("`", "")
+    return re.sub(r"\s+", " ", plain).strip().lower()
+
+
+def table_cells(row: str) -> list[str]:
+    """The cells of a table row, split on unescaped pipes, the outer pipes dropped."""
+    text = row.strip().removeprefix("|")
+    if text.endswith("|") and not text.endswith("\\|"):
+        text = text[:-1]
+    return [cell.replace("\\|", "|").strip() for cell in re.split(r"(?<!\\)\|", text)]
+
+
+def is_separator_row(line: str) -> bool:
+    return "-" in line and not re.sub(r"[|:\-\s]", "", line)
+
+
+def page_links(row: str) -> list[str]:
+    """The targets of a table row's links to pages: a fragment alone and an address are not pages."""
+    targets = []
+    for match in LINK_RE.finditer(row):
+        target = match.group(2).removeprefix("./")
+        if not target.startswith("#") and "://" not in target:
+            targets.append(target)
+    return targets
+
+
+def read_index(text: str | None) -> Index:
+    """The entry names and pages of one revision of the index. A table row that links a page is an
+    entry: its names are its first cell's text (a defect letter, a difference's name, an identifier)
+    and each link target with and without the `docs/` prefix and any fragment; a header row and a
+    row without a page link name nothing, and neither a number alone (a class) nor the literal `none`
+    a row without a defect carries is a name. A page is the repository path of a row's link target,
+    relative to the `docs/` directory the index sits in."""
+    names: set[str] = set()
+    pages: set[str] = set()
+    lines = (text or "").splitlines()
+    for number, line in enumerate(lines):
+        if not TABLE_ROW_RE.match(line) or is_separator_row(line):
+            continue
+        if number + 1 < len(lines) and is_separator_row(lines[number + 1]):
+            continue
+        targets = page_links(line)
+        cells = table_cells(line)
+        if not targets or not cells:
+            continue
+        name = entry_name(cells[0])
+        if name and name != "none" and not name.isdigit():
+            names.add(name)
+        for target in targets:
+            page = target.partition("#")[0]
+            for variant in {target, page}:
+                bare = variant.removeprefix("docs/")
+                names.update({bare.lower(), f"docs/{bare}".lower()})
+            if page:
+                repo_path = page if page.startswith("docs/") else f"docs/{page}"
+                pages.add(os.path.normpath(repo_path))
+    return Index(frozenset(names), frozenset(pages))
+
+
+def read_statements(lines: list[str]) -> dict[str, tuple[bool, list[str]]]:
+    """The checklist statements of the divergences section by kind, each with whether it is checked
+    and the lines that follow it up to the next checklist line."""
+    statements: dict[str, tuple[bool, list[str]]] = {}
+    current: str | None = None
+    for line in lines:
+        box = CHECKBOX_RE.match(line)
+        if box is None:
+            if current is not None:
+                statements[current][1].append(line)
+            continue
+        current = next((kind for kind, word in STATEMENT_WORDS if word.search(box.group(2))), None)
+        if current is not None:
+            statements[current] = (box.group(1) != " ", [])
+    return statements
+
+
+def entry_lines(lines: list[str]) -> list[tuple[str, str]]:
+    """(cited entry, the rest of the line) for every line of the entry shape."""
+    entries = []
+    for line in lines:
+        match = ENTRY_LINE_RE.match(line)
+        if match is not None:
+            entries.append((match.group(1), re.sub(r"^[\s:,\-]+", "", match.group(2))))
+    return entries
+
+
+def listed_codes(values: list[str]) -> str:
+    listed = ", ".join(code(value) for value in values[:5])
+    more = f" and {len(values) - 5} more" if len(values) > 5 else ""
+    return listed + more
+
+
+def entry_problems(entries: list[tuple[str, str]], index: Index, claim: str) -> list[str]:
+    """What is wrong with the cited entries: none named, a name the index lacks, a line that says
+    nothing after the name. `claim` opens the first sentence: the statement or choice that names
+    existing entries."""
+    if not entries:
+        return [
+            (
+                f"{claim} and no entry line follows it: add one line per entry, ``- `<entry>`: "
+                "keeps, changes or removes it because ...``, the entry named as the first column of "
+                f"`{INDEX_PATH}` names it (a defect letter such as `B`, or a difference's name as "
+                "written there)."
+            )
+        ]
+    problems = []
+    unknown = [token for token, _rest in entries if entry_name(token) not in index.names]
+    if unknown:
+        problems.append(
+            f"No entry of `{INDEX_PATH}` is named {listed_codes(unknown)}: name an entry as the "
+            "index's first column does (a defect letter such as `B`, or a difference's name as "
+            "written there), or by the path of its page."
+        )
+    bare = [token for token, rest in entries if not rest]
+    if bare:
+        problems.append(
+            f"The entry line for {listed_codes(bare)} says nothing after the entry: add what the "
+            "change does to it (keeps, changes or removes it) and why."
+        )
+    return problems
+
+
+def divergence_artefacts(files: list[dict], index: Index) -> list[str]:
+    """The changed paths that record the intended divergences: the index, a page one of its rows
+    links, or a file under `scripts/divergences/`."""
+    touched = {
+        path
+        for entry in files
+        for path in (entry.get("filename", ""), entry.get("previous_filename") or "")
+        if path
+    }
+    return sorted(
+        path
+        for path in touched
+        if path == INDEX_PATH or path in index.pages or path.startswith(DIVERGENCE_SCRIPTS)
+    )
+
+
+def check_divergences(
+    body: str | None,
+    files: list[dict],
+    base_index: str | None,
+    head_index: str | None,
+    closes: bool = True,
+) -> Finding | None:
+    """The `## Intended divergences` section carries one of its three statements checked: the first
+    (none of the index's entries touched) excludes the other two and is refused while the change
+    edits a divergence artefact; the second needs one line per entry, the entry resolving against
+    the index at the base tip or the head and the line saying what the change does to it; the third
+    needs its description. One finding states every problem; `closes` is False for a pull request
+    opened before the rule landed, whose template had no such section."""
+    index = read_index(base_index) | read_index(head_index)
+    lines = body_sections(body).get(DIVERGENCE_SECTION.lower())
+    statements = read_statements(lines) if lines is not None else {}
+    problems: list[str] = []
+    if not statements:
+        problems.append(
+            f"The description lacks the `## {DIVERGENCE_SECTION}` section of the pull request "
+            "template, or the section carries none of its three statements: add the section and "
+            "check the statement that applies (the change touches none of the index's entries; it "
+            "touches existing entries, one line each; it proposes a new intended divergence)."
+        )
+    else:
+        checked = {kind for kind, (is_checked, _lines) in statements.items() if is_checked}
+        if not checked:
+            problems.append(
+                f"No statement of the `## {DIVERGENCE_SECTION}` section is checked: check the one "
+                "that applies (the change touches none of the index's entries; it touches existing "
+                "entries, one line each; it proposes a new intended divergence)."
+            )
+        elif "none" in checked and checked != {"none"}:
+            problems.append(
+                f"The `## {DIVERGENCE_SECTION}` section checks the first statement (none touched) "
+                "together with another: the first statement excludes the other two."
+            )
+        else:
+            if "touches" in checked:
+                problems.extend(
+                    entry_problems(
+                        entry_lines(statements["touches"][1]),
+                        index,
+                        f"The second statement of the `## {DIVERGENCE_SECTION}` section is checked",
+                    )
+                )
+            if "proposes" in checked and not any(
+                line.strip() for line in statements["proposes"][1]
+            ):
+                problems.append(
+                    f"The third statement of the `## {DIVERGENCE_SECTION}` section is checked and no "
+                    "description follows it: in a line or two, give the input, what Ensembl VEP and "
+                    "vep-rs each write, and why vep-rs's output is the one to keep."
+                )
+            if "none" in checked:
+                artefacts = divergence_artefacts(files, index)
+                if artefacts:
+                    problems.append(
+                        f"The first statement of the `## {DIVERGENCE_SECTION}` section (none "
+                        f"touched) is checked while the change edits {listed_codes(artefacts)}: name "
+                        "the entries the change touches under the second statement, or describe the "
+                        "proposed divergence under the third."
+                    )
+    if not problems:
+        return None
+    return Finding("divergences", " ".join(problems), closes=closes)
+
+
+def form_fields(body: str | None) -> dict[str, str]:
+    """An issue form's fields as GitHub writes them: `### <label>` then the value up to the next
+    heading, keyed by the lower-cased label; `_No response_` is an empty field."""
+    fields: dict[str, str] = {}
+    current: str | None = None
+    for line in (body or "").splitlines():
+        heading = FORM_HEADING_RE.match(line)
+        if heading is not None:
+            current = heading.group(1).strip().lower()
+            fields[current] = ""
+        elif current is not None:
+            fields[current] += line + "\n"
+    return {
+        label: "" if value.strip() == NO_RESPONSE else value.strip()
+        for label, value in fields.items()
+    }
+
+
+def check_issue_divergences(body: str | None, index: Index) -> str | None:
+    """What an issue is missing against the choice its form carries, or None: the choice itself
+    (an issue written outside the forms), the entries the second choice names, resolved against the
+    index, or the description the third choice promises."""
+    fields = form_fields(body)
+    choice = re.sub(r"\s+", " ", fields.get(ISSUE_CHOICE_LABEL.lower(), "")).strip().lower()
+    kind = next((k for k, text in ISSUE_CHOICES.items() if text.lower() == choice), None)
+    if kind is None:
+        options = "; ".join(f"`{text}`" for text in ISSUE_CHOICES.values())
+        return (
+            f"The issue carries no `{ISSUE_CHOICE_LABEL}` choice: edit the description to add a "
+            f"`### {ISSUE_CHOICE_LABEL}` heading followed by one of {options}, and under a "
+            f"`### {ISSUE_ENTRIES_LABEL}` heading the entries or the description the choice calls for."
+        )
+    text = fields.get(ISSUE_ENTRIES_LABEL.lower(), "")
+    if kind == "touches":
+        problems = entry_problems(
+            entry_lines(text.splitlines()),
+            index,
+            f"The `{ISSUE_CHOICE_LABEL}` choice names existing entries",
+        )
+        if problems:
+            return " ".join(problems)
+    if kind == "proposes" and not text:
+        return (
+            f"The `{ISSUE_CHOICE_LABEL}` choice proposes a new intended divergence and the "
+            f"`{ISSUE_ENTRIES_LABEL}` field is empty: in a line or two, give the input, what Ensembl "
+            "VEP and vep-rs each write, and why vep-rs's output is the one to keep."
+        )
+    return None
 
 
 def section_range(changelog: str, start: int) -> tuple[int, int]:
@@ -903,8 +1232,9 @@ def close_footer(
     maintainers: set[str],
     grandfathered: bool = False,
 ) -> tuple[bool, str | None]:
-    """(close it, the sentence that ends the comment). Findings on an exempt pull request, and a
-    sign-off miss alone, are stated with the reason the check does not close."""
+    """(close it, the sentence that ends the comment). Findings on an exempt pull request, and
+    findings that are reported only (a sign-off miss; the divergences miss on a pull request older
+    than that rule), are stated with the reason the check does not close."""
     if not findings:
         return False, None
     if is_maintainer(user, maintainers):
@@ -918,14 +1248,33 @@ def close_footer(
     if grandfathered:
         return False, "No automatic close: the pull request was opened before the admission check."
     if not any(finding.closes for finding in findings):
-        return False, (
-            "No automatic close: the sign-off miss is reported only, and the DCO check holds the merge "
-            "until every commit is signed off."
-        )
+        checks = {finding.check for finding in findings}
+        reasons = [reason for check, reason in REPORTED_ONLY if check in checks] or [
+            "the misses above are reported only"
+        ]
+        return False, "No automatic close: " + "; ".join(reasons) + "."
     return True, (
         "The pull request is closed until these are fixed: push the fixes to the same branch, then "
         "reopen it and the check runs again."
     )
+
+
+REPORTED_ONLY = (
+    (
+        "signoff",
+        (
+            "the sign-off miss is reported only, and the DCO check holds the merge until every "
+            "commit is signed off"
+        ),
+    ),
+    (
+        "divergences",
+        (
+            f"the `## {DIVERGENCE_SECTION}` miss is reported only, since the pull request was opened "
+            "before that section was asked"
+        ),
+    ),
+)
 
 
 # --- the comment ---------------------------------------------------------------------------------
@@ -1073,9 +1422,9 @@ class GitHub:
         return self.request("DELETE", path)[2]
 
 
-def find_comment(gh: GitHub, number: int) -> dict | None:
+def find_comment(gh: GitHub, number: int, marker: str = MARKER) -> dict | None:
     for comment in gh.paginate(f"/repos/{gh.repo}/issues/{number}/comments"):
-        if (comment.get("body") or "").startswith(MARKER) and is_bot(comment.get("user") or {}):
+        if (comment.get("body") or "").startswith(marker) and is_bot(comment.get("user") or {}):
             return comment
     return None
 
@@ -1109,23 +1458,28 @@ def sync_model_labels(gh: GitHub, number: int, labels: set[str], models: list[st
         )
 
 
-def landed_at(gh: GitHub, base_ref: str) -> str | None:
-    """The committer date of the first commit on the base branch that carries this workflow file."""
-    commits = gh.paginate(f"/repos/{gh.repo}/commits", {"path": WORKFLOW_FILE, "sha": base_ref})
+def landed_at(gh: GitHub, base_ref: str, path: str = WORKFLOW_FILE) -> str | None:
+    """The committer date of the first commit on the base branch that carries `path`: the workflow
+    file for the check as a whole, a fixture of the divergences rule for that rule."""
+    commits = gh.paginate(f"/repos/{gh.repo}/commits", {"path": path, "sha": base_ref})
     if not commits:
         return None
     # The API lists commits newest first, so the last one is the oldest.
     return ((commits[-1].get("commit") or {}).get("committer") or {}).get("date")
 
 
-def predates_workflow(gh: GitHub, pr: dict) -> bool:
-    """Whether the pull request predates the workflow's landing; a failed read of the landing date
-    counts as yes, so an API fault never closes a pull request."""
+def opened_before(gh: GitHub, pr: dict, path: str) -> bool:
+    """Whether the pull request predates the landing of `path` on the base branch; a failed read of
+    the landing date counts as yes, so an API fault never closes a pull request."""
     try:
-        return predates(pr.get("created_at"), landed_at(gh, pr["base"]["ref"]))
+        return predates(pr.get("created_at"), landed_at(gh, pr["base"]["ref"], path))
     except AdmissionError as exc:
-        print(f"WARNING: [admission] the landing date was not read: {exc}", file=sys.stderr)
+        print(f"WARNING: [admission] the landing date was not read ({path}): {exc}", file=sys.stderr)
         return True
+
+
+def predates_workflow(gh: GitHub, pr: dict) -> bool:
+    return opened_before(gh, pr, WORKFLOW_FILE)
 
 
 def required_checks(gh: GitHub, base_ref: str) -> set[str]:
@@ -1289,13 +1643,20 @@ def static_findings(
     head_changelog: str | None,
     parity: Finding | None,
     models: list[str],
+    base_index: str | None = None,
+    head_index: str | None = None,
+    divergences_close: bool = True,
 ) -> list[Finding]:
+    """The static findings in comment order. `base_index` and `head_index` are the text of
+    `docs/intended-divergences.md` at the base tip and the head; `divergences_close` is False for a
+    pull request opened before the divergences rule landed, whose miss is then reported only."""
     checks = [
         check_contains_base(contains, base_ref),
         check_tests_included(files, labels, regions_for),
         check_signoff(commits),
         check_declaration(models),
         check_body_sections(body),
+        check_divergences(body, files, base_index, head_index, closes=divergences_close),
         check_changelog(files, head_changelog, regions_for),
         parity,
     ]
@@ -1410,6 +1771,9 @@ def run_event(event: dict, gh: GitHub, git: Git, repo_dir: Path) -> int:
         git.show(head_sha, "CHANGELOG.md"),
         None,
         models,
+        base_index=git.show(base_tip, INDEX_PATH),
+        head_index=git.show(head_sha, INDEX_PATH),
+        divergences_close=not opened_before(gh, pr, DIVERGENCE_LANDING_PATH),
     )
     if not is_maintainer(pr.get("user") or {}, maintainers):
         workflows = check_workflow_files(files)
@@ -1494,6 +1858,38 @@ def run_workflow_run(event: dict, gh: GitHub, repo_dir: Path) -> int:
     return verdict(findings, published.closed)
 
 
+def run_issue(event: dict, gh: GitHub, repo_dir: Path) -> int:
+    """The issues job: hold an open issue to the intended-divergences choice its form carries, with
+    the `needs-divergence-check` label and one comment edited in place, never a close; an edit that
+    clears the miss removes the label and rewrites the comment. The index read is the checked-out
+    base branch's. Exit 0 whatever the outcome: nothing here blocks a merge."""
+    issue = event["issue"]
+    number = issue["number"]
+    if "pull_request" in issue or issue.get("state") != "open":
+        print(f"admission: #{number} is not an open issue; nothing to judge.")
+        return 0
+    index_file = repo_dir / INDEX_PATH
+    index = read_index(index_file.read_text(encoding="utf-8") if index_file.is_file() else None)
+    problem = check_issue_divergences(issue.get("body"), index)
+    labels = label_names(issue)
+    existing = find_comment(gh, number, ISSUE_MARKER)
+    quoted = urllib.parse.quote(NEEDS_DIVERGENCE_LABEL, safe="")
+    if problem is not None:
+        print(f"ERROR: [admission] {problem}", file=sys.stderr)
+        body = f"{ISSUE_MARKER}\n{problem} Edit the issue and the check runs again."
+        write_comment(gh, number, existing, body)
+        if NEEDS_DIVERGENCE_LABEL not in labels:
+            gh.post(f"/repos/{gh.repo}/issues/{number}/labels", {"labels": [NEEDS_DIVERGENCE_LABEL]})
+        print(f"admission: issue #{number}: 1 miss, labelled `{NEEDS_DIVERGENCE_LABEL}`")
+        return 0
+    if existing is not None:
+        write_comment(gh, number, existing, f"{ISSUE_MARKER}\nThe intended-divergences check passes.")
+    if NEEDS_DIVERGENCE_LABEL in labels:
+        gh.delete(f"/repos/{gh.repo}/issues/{number}/labels/{quoted}")
+    print(f"admission: issue #{number}: OK")
+    return 0
+
+
 LOCAL_STATUS = {
     "A": "added",
     "M": "modified",
@@ -1557,7 +1953,10 @@ def run_local(repo_dir: Path, base: str, body_file: Path | None) -> int:
     commits = git.log_commits(base, "HEAD")
     files = local_files(git, merge_base)
     models = declared_models(commits)
+    # Without a description to check, the synthesised one fills the text sections and certifies that
+    # the change touches no intended divergence, which the artefact test still holds it to.
     filled_template = "\n".join(f"## {name}\nx" for name in SECTIONS)
+    filled_template += f"\n## {DIVERGENCE_SECTION}\n- [x] {NONE_STATEMENT}\n"
     body = body_file.read_text() if body_file else filled_template
     findings = static_findings(
         git.is_ancestor(base_sha, head),
@@ -1570,6 +1969,8 @@ def run_local(repo_dir: Path, base: str, body_file: Path | None) -> int:
         git.show(head, "CHANGELOG.md"),
         check_parity(repo_dir, repo_dir / PARITY_CHECKER),
         models,
+        base_index=git.show(base_sha, INDEX_PATH),
+        head_index=git.show(head, INDEX_PATH),
     )
     report(findings)
     workflows = check_workflow_files(files)
@@ -1595,6 +1996,7 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--event", metavar="JSON", help="the pull_request_target event payload")
     mode.add_argument("--pull-request", metavar="N", type=int, help="one pull request, by number")
     mode.add_argument("--workflow-run", metavar="JSON", help="the workflow_run event payload")
+    mode.add_argument("--issue", metavar="JSON", help="the issues event payload")
     mode.add_argument("--local", action="store_true", help="check the local branch before pushing")
     parser.add_argument("--repo-dir", default=".", help="the base repository checkout (default: .)")
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY"), help="owner/name")
@@ -1622,6 +2024,8 @@ def main(argv: list[str] | None = None) -> int:
             return run_event(event, gh, Git(repo_dir), repo_dir)
         if args.pull_request is not None:
             return run_dispatch(args.pull_request, gh, Git(repo_dir), repo_dir)
+        if args.issue:
+            return run_issue(json.loads(Path(args.issue).read_text()), gh, repo_dir)
         event = json.loads(Path(args.workflow_run).read_text())
         if args.resolve_pull_request:
             return resolve_pull_request(event, gh)

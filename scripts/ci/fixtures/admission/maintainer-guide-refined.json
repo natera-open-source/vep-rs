@@ -57,5 +57,6 @@
    "deletions": 6
   }
  ],
- "contains_base_tip": true
+ "contains_base_tip": true,
+ "opened_before_divergences_rule": true
 }

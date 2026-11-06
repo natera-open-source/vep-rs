@@ -1,9 +1,10 @@
 """Tests for the admission check, on the recorded shapes of this repository's pull requests (the
 fixtures beside this file: numbers, logins, names, addresses and model names are placeholders, hunk
 text is reduced to its tags, the test regions of the changed Rust files are recorded from the files
-themselves) and on constructed inputs. Every check fails on its recorded or constructed shape and
-passes once the shape is corrected; the comment is edited in place; a stale CI run judges nothing;
-each exemption holds the close back; the API writes of a run are the expected ones and no other."""
+themselves), on the constructed shapes of the intended-divergences section, and on constructed
+inputs. Every check fails on its recorded or constructed shape and passes once the shape is
+corrected; the comment is edited in place; a stale CI run judges nothing; each exemption holds the
+close back; the API writes of a run are the expected ones and no other."""
 
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ import urllib.error
 from pathlib import Path
 
 import pytest
+import yaml
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
@@ -24,7 +26,12 @@ import admission as adm
 FIXTURE_DIR = HERE / "fixtures" / "admission"
 FIXTURES = sorted(FIXTURE_DIR.glob("*.json"))
 FIXTURE_IDS = [path.stem for path in FIXTURES]
+FIXTURE_COUNT = 27
+INDEX_SAMPLE = (FIXTURE_DIR / "index-sample-main.md").read_text(encoding="utf-8")
+INDEX_SAMPLE_REGROUPED = (FIXTURE_DIR / "index-sample-regrouped.md").read_text(encoding="utf-8")
 CHECKER = ROOT / adm.PARITY_CHECKER
+TEMPLATE = ROOT / ".github" / "pull_request_template.md"
+FORMS_DIR = ROOT / ".github" / "ISSUE_TEMPLATE"
 MATRIX_HEADER = "item\tperl_reference\ttarget\tstate\ttest1\ttest2\tinterim\n"
 # The plugins page as the parity checker reads it: the support table heading over an empty table,
 # which asks nothing of a matrix row that is not a plugin's.
@@ -36,23 +43,49 @@ PLUGINS_PAGE = (
 MAINTAINERS = {"first-maintainer", "second-maintainer"}
 REPO = "example/vep-rs"
 
-# The misses each recorded pull request shape carries, by check name.
+# The misses each fixture carries, by check name. The ten recorded pull requests were opened before
+# the divergences rule, so their descriptions lack its section and that miss is reported without a
+# close (`opened_before_divergences_rule` in the fixture); the constructed `divergences-*` shapes
+# were opened after it.
 RECORDED = {
-    "bot-dependency-bump": {"base", "signoff", "declaration", "body"},
-    "fork-many-commits-no-declaration": {"declaration"},
-    "fork-performance-change": {"declaration"},
-    "maintainer-docs-with-declaration": set(),
-    "maintainer-flag-bam": set(),
-    "maintainer-flag-gff-gtf": set(),
-    "maintainer-guide-added": set(),
-    "maintainer-guide-refined": set(),
-    "maintainer-local-gate-fixes": {"changelog"},
-    "maintainer-manifests-merge-commit": set(),
+    "bot-dependency-bump": {"base", "signoff", "declaration", "body", "divergences"},
+    "fork-many-commits-no-declaration": {"declaration", "divergences"},
+    "fork-performance-change": {"declaration", "divergences"},
+    "maintainer-docs-with-declaration": {"divergences"},
+    "maintainer-flag-bam": {"divergences"},
+    "maintainer-flag-gff-gtf": {"divergences"},
+    "maintainer-guide-added": {"divergences"},
+    "maintainer-guide-refined": {"divergences"},
+    "maintainer-local-gate-fixes": {"changelog", "divergences"},
+    "maintainer-manifests-merge-commit": {"divergences"},
+    "divergences-none-clean": set(),
+    "divergences-none-edits-a-page": {"divergences"},
+    "divergences-none-edits-a-linked-page": {"divergences"},
+    "divergences-touches-letter": set(),
+    "divergences-touches-difference-name": set(),
+    "divergences-touches-page-path": set(),
+    "divergences-touches-unknown-entry": {"divergences"},
+    "divergences-touches-without-rationale": {"divergences"},
+    "divergences-touches-no-entry-line": {"divergences"},
+    "divergences-none-and-touches": {"divergences"},
+    "divergences-none-and-proposes": {"divergences"},
+    "divergences-nothing-checked": {"divergences"},
+    "divergences-no-section": {"divergences"},
+    "divergences-regrouped-index": set(),
+    "divergences-proposes-with-description": set(),
+    "divergences-proposes-without-description": {"divergences"},
+    "divergences-touches-and-proposes": set(),
 }
+NONE_SECTION = f"\n## {adm.DIVERGENCE_SECTION}\n- [x] {adm.NONE_STATEMENT}\n"
 
 
 def load(path: Path) -> dict:
     return json.loads(path.read_text())
+
+
+def index_text(fixture: dict, key: str) -> str | None:
+    name = fixture.get(key)
+    return (FIXTURE_DIR / name).read_text(encoding="utf-8") if name else None
 
 
 def regions_of(fixture: dict) -> adm.RegionsFor:
@@ -65,11 +98,11 @@ def regions_of(fixture: dict) -> adm.RegionsFor:
     return lambda side, path: table.get((side, path), [])
 
 
-def evaluate(
+def findings_of(
     fixture: dict, labels: set[str] | None = None, parity: adm.Finding | None = None
-) -> set[str]:
+) -> list[adm.Finding]:
     pr = fixture["pull_request"]
-    findings = adm.static_findings(
+    return adm.static_findings(
         fixture["contains_base_tip"],
         pr["base"]["ref"],
         fixture["commits"],
@@ -80,8 +113,16 @@ def evaluate(
         fixture.get("head_changelog"),
         parity,
         adm.declared_models(fixture["commits"]),
+        base_index=index_text(fixture, "base_index_file"),
+        head_index=index_text(fixture, "head_index_file"),
+        divergences_close=not fixture.get("opened_before_divergences_rule", False),
     )
-    return {finding.check for finding in findings}
+
+
+def evaluate(
+    fixture: dict, labels: set[str] | None = None, parity: adm.Finding | None = None
+) -> set[str]:
+    return {finding.check for finding in findings_of(fixture, labels, parity)}
 
 
 def write_tree(root: Path, rows: str = "", tests: dict[str, str] | None = None) -> None:
@@ -961,6 +1002,363 @@ def test_changelog_line_under_a_release_heading_the_change_adds_satisfies_it():
     assert adm.check_changelog([manifest, changelog], bare, NONE) is not None
 
 
+# --- the intended divergences --------------------------------------------------------------------
+
+
+SECTION_HEAD = f"## {adm.DIVERGENCE_SECTION}\n"
+STATEMENTS = {
+    "none": adm.NONE_STATEMENT,
+    "touches": "This change touches these existing entries, one line each:",
+    "proposes": "This change proposes a new intended divergence, described below:",
+}
+
+
+def section(checked: set[str], lines: dict[str, list[str]] | None = None) -> str:
+    """A divergences section with the named statements checked and the given lines under each."""
+    out = [SECTION_HEAD.rstrip("\n")]
+    for kind, text in STATEMENTS.items():
+        out.append(f"- [{'x' if kind in checked else ' '}] {text}")
+        out.extend(f"  {line}" for line in (lines or {}).get(kind, []))
+    return "\n".join(out) + "\n"
+
+
+def divergences(body: str, files: list[dict] | None = None, head: str | None = None, **kw):
+    return adm.check_divergences(TEMPLATE_BODY + body, files or [], INDEX_SAMPLE, head, **kw)
+
+
+def test_index_names_come_from_rows_that_link_a_page_on_both_index_shapes():
+    """A defect letter, a difference's name as the first cell writes it, an identifier of the
+    regrouped index, and every link target with and without the `docs/` prefix and any fragment;
+    not a header, a number, the literal `none`, a row without a page link, or a page linked outside
+    the tables."""
+    index = adm.read_index(INDEX_SAMPLE)
+    for token in (
+        "B",
+        "a",
+        "JSON escaping",
+        "A bare M",
+        "A chromosome the cache lacks",
+        "divergences/defect-b.md",
+        "docs/divergences/defect-b.md",
+        "cache-setup.md#chromosome-names",
+        "cache-setup.md",
+        "docs/cache-setup.md",
+        "plugins/spliceai.md#reverse-strand-indels",
+        "Docs/Divergences/Defect-B.md",
+    ):
+        assert adm.entry_name(token) in index.names, token
+    for token in ("none", "1", "3", "Defect", "Difference", "Defect A", "divergences/reproducing.md", ""):
+        assert adm.entry_name(token) not in index.names, token
+    assert index.pages == {
+        "docs/divergences/defect-a.md",
+        "docs/divergences/defect-b.md",
+        "docs/divergences/cnv-tr.md",
+        "docs/divergences/defect-m.md",
+        "docs/divergences/json-escaping.md",
+        "docs/divergences/bare-m-chromosome.md",
+        "docs/cache-setup.md",
+        "docs/plugins/spliceai.md",
+    }
+    regrouped = adm.read_index(INDEX_SAMPLE_REGROUPED)
+    for token in ("start_cooccurrence_swap", "spliceai_reverse_strand_indel", "divergences/defect-c.md"):
+        assert adm.entry_name(token) in regrouped.names, token
+    assert adm.entry_name("B") not in regrouped.names and adm.entry_name("3") not in regrouped.names
+    both = index | regrouped
+    assert adm.entry_name("B") in both.names and adm.entry_name("start_cooccurrence_swap") in both.names
+    assert adm.read_index(None) == adm.Index(frozenset(), frozenset())
+
+
+def test_index_names_on_the_repository_index():
+    """Every entry of the repository's own index resolves by its first cell and by its page."""
+    index = adm.read_index((ROOT / adm.INDEX_PATH).read_text(encoding="utf-8"))
+    assert len(index.names) > 50 and len(index.pages) > 20
+    assert adm.entry_name("none") not in index.names
+    assert all(not name.isdigit() for name in index.names)
+    assert adm.INDEX_PATH not in index.pages
+    assert all(page.startswith("docs/") and page.endswith(".md") for page in index.pages)
+
+
+def test_table_cells_split_on_unescaped_pipes_and_entry_name_normalises():
+    assert adm.table_cells("| a | `b \\| c` | [d](e.md) |") == ["a", "`b | c`", "[d](e.md)"]
+    assert adm.table_cells("a | b") == ["a", "b"]
+    assert adm.is_separator_row("| --- | :---: |") and not adm.is_separator_row("| a | b |")
+    assert adm.entry_name("[A bare `M`](divergences/bare-m-chromosome.md)") == "a bare m"
+    assert adm.entry_name("  JSON   escaping ") == "json escaping"
+    assert adm.entry_name("[`start_cooccurrence_swap`](divergences/defect-b.md)") == "start_cooccurrence_swap"
+
+
+def test_statements_are_read_by_their_words_with_their_lines():
+    lines = [
+        "intro text",
+        "- [x] This change touches none of the intended divergences.",
+        "* [ ] It touches these existing entries:",
+        "  - `B`: changes it, because the reasoning assumes a start codon.",
+        "  plain continuation",
+        "- [X] A new intended divergence is proposed below:",
+        "  The description.",
+        "- [ ] An unrelated checklist line",
+        "  not attached to a statement",
+    ]
+    statements = adm.read_statements(lines)
+    assert set(statements) == {"none", "touches", "proposes"}
+    assert statements["none"] == (True, [])
+    assert statements["touches"][0] is False
+    assert adm.entry_lines(statements["touches"][1]) == [
+        ("B", "changes it, because the reasoning assumes a start codon.")
+    ]
+    assert statements["proposes"] == (True, ["  The description."])
+    assert adm.entry_lines(["`docs/divergences/defect-b.md` - removed", "1. `A`: kept", "text", "- `C`"]) == [
+        ("docs/divergences/defect-b.md", "removed"),
+        ("A", "kept"),
+        ("C", ""),
+    ]
+
+
+def test_divergences_none_passes_and_is_refused_on_an_artefact_edit():
+    assert divergences(section({"none"})) is None
+    for path in (
+        adm.INDEX_PATH,
+        "docs/divergences/defect-b.md",
+        "docs/cache-setup.md",
+        "docs/plugins/spliceai.md",
+        "scripts/divergences/reproductions/x.toml",
+    ):
+        finding = divergences(section({"none"}), [{"filename": path, "status": "modified"}])
+        assert finding is not None and finding.check == "divergences" and finding.closes
+        assert f"`{path}`" in finding.text and "under the second statement" in finding.text, path
+    renamed = {"filename": "docs/other.md", "previous_filename": "docs/divergences/defect-b.md"}
+    assert divergences(section({"none"}), [renamed]) is not None
+    for path in (
+        "docs/divergences.md",
+        "docs/plugins.md",
+        "scripts/concordance/compare_vep_outputs.py",
+        "tests/golden/116/GRCh38/manifest.json",
+        "crates/vep-effects/src/lib.rs",
+    ):
+        assert divergences(section({"none"}), [{"filename": path, "status": "modified"}]) is None, path
+
+
+def test_divergences_exclusivity_and_missing_shapes():
+    missing = divergences("")
+    assert missing is not None and "lacks the `## Intended divergences` section" in missing.text
+    assert divergences(SECTION_HEAD + "text without statements\n") is not None
+    nothing = divergences(section(set()))
+    assert nothing is not None and "No statement" in nothing.text
+    for other in ("touches", "proposes"):
+        both = divergences(section({"none", other}, {"touches": ["- `B`: kept, because x."], "proposes": ["desc"]}))
+        assert both is not None and "excludes the other two" in both.text
+    assert adm.check_divergences(None, [], None, None) is not None
+    soft = divergences(section(set()), closes=False)
+    assert soft is not None and soft.closes is False
+
+
+def test_divergences_entries_resolve_against_base_and_head_with_a_rationale():
+    ok = {"touches": ["- `B`: changes it, because the index's reasoning is wrong for this record."]}
+    assert divergences(section({"touches"}, ok)) is None
+    by_name = {"touches": ["- `JSON escaping`: removes it, because the writer changed."]}
+    assert divergences(section({"touches"}, by_name)) is None
+    by_path = {"touches": ["`docs/divergences/defect-b.md`: keeps it, because the class holds."]}
+    assert divergences(section({"touches"}, by_path)) is None
+    by_fragment = {"touches": ["- `cache-setup.md#chromosome-names`: changes it, because the synonym rule moved."]}
+    assert divergences(section({"touches"}, by_fragment)) is None
+    head_only = {"touches": ["- `start_cooccurrence_swap`: changes it, because the shape misses a record."]}
+    assert divergences(section({"touches"}, head_only)) is not None
+    assert divergences(section({"touches"}, head_only), head=INDEX_SAMPLE_REGROUPED) is None
+    unknown = divergences(section({"touches"}, {"touches": ["- `Q`: removed, because x.", "- `1`: kept, because y.", "- `none`: kept, because z."]}))
+    assert unknown is not None and "`Q`, `1`, `none`" in unknown.text and "first column" in unknown.text
+    bare = divergences(section({"touches"}, {"touches": ["- `B`", "- `A`:"]}))
+    assert bare is not None and "`B`, `A`" in bare.text and "says nothing after the entry" in bare.text
+    none_listed = divergences(section({"touches"}, {"touches": ["Changed defect B as described in the summary."]}))
+    assert none_listed is not None and "no entry line follows it" in none_listed.text
+    many = divergences(section({"touches"}, {"touches": [f"- `Z{n}`: x, because y." for n in range(7)]}))
+    assert many is not None and "and 2 more" in many.text
+
+
+def test_divergences_proposal_needs_a_description_and_may_join_the_entries():
+    assert divergences(section({"proposes"}, {"proposes": ["The input, both rows, the reason."]})) is None
+    empty = divergences(section({"proposes"}, {"proposes": ["", "   "]}))
+    assert empty is not None and "no description follows it" in empty.text
+    both = {"touches": ["- `B`: removes it, because x."], "proposes": ["A new one, described."]}
+    assert divergences(section({"touches", "proposes"}, both)) is None
+    half = {"touches": ["- `B`: removes it, because x."]}
+    assert divergences(section({"touches", "proposes"}, half)) is not None
+
+
+def test_divergences_strips_html_comments_and_fenced_headings():
+    commented = section({"touches"}) + "<!-- - `B`: an example line in a comment. -->\n"
+    finding = divergences(commented)
+    assert finding is not None and "no entry line follows it" in finding.text
+    hidden = "```\n" + section({"none"}) + "```\n"
+    assert divergences(hidden) is not None
+    in_comment = "<!--\n" + section({"none"}) + "-->\n" + section(set())
+    assert divergences(in_comment) is not None
+
+
+def test_divergences_section_on_the_repository_template():
+    """The template's fourth section carries the three statements, none checked, with its example
+    entry line inside a comment; checking the first statement alone passes. A tree whose template
+    predates the rule (a release branch before it merges the default branch) is not judged."""
+    template = TEMPLATE.read_text(encoding="utf-8")
+    if adm.DIVERGENCE_SECTION.lower() not in adm.body_sections(template):
+        pytest.skip("the tree's pull request template predates the divergences rule")
+    lines = adm.body_sections(template)[adm.DIVERGENCE_SECTION.lower()]
+    statements = adm.read_statements(lines)
+    assert set(statements) == {"none", "touches", "proposes"}
+    assert not any(checked for checked, _lines in statements.values())
+    assert adm.entry_lines(lines) == []
+    unfilled = adm.check_divergences(template, [], INDEX_SAMPLE, None)
+    assert unfilled is not None and "No statement" in unfilled.text
+    none_line = next(line for line in lines if adm.CHECKBOX_RE.match(line) and "none" in line)
+    assert adm.check_divergences(template.replace(none_line, none_line.replace("[ ]", "[x]"), 1), [], INDEX_SAMPLE, None) is None
+    assert adm.check_body_sections(template) is not None
+    assert adm.SECTIONS == ("Summary", "Verification", "Upgrade impact")
+
+
+def test_issue_forms_carry_the_divergence_choice():
+    """Each of the ten forms asks the choice as a required dropdown with the three statements,
+    then the entries field, after its last required field; blank issues stay off. A tree whose forms
+    all predate the rule is not judged; one where some do and some do not fails."""
+    forms = sorted(path for path in FORMS_DIR.glob("*.yml") if path.name != "config.yml")
+    assert len(forms) == 10
+    bodies = {form: yaml.safe_load(form.read_text(encoding="utf-8"))["body"] for form in forms}
+    carrying = [form for form, fields in bodies.items() if "divergences" in [f.get("id") for f in fields]]
+    if not carrying:
+        pytest.skip("the tree's issue forms predate the divergences rule")
+    assert carrying == forms, [form.name for form in forms if form not in carrying]
+    wordings: set[tuple[str, str]] = set()
+    for form, fields in bodies.items():
+        ids = [field.get("id") for field in fields]
+        at = ids.index("divergences")
+        dropdown, textarea = fields[at], fields[at + 1]
+        assert dropdown["type"] == "dropdown", form.name
+        assert dropdown["attributes"]["label"] == adm.ISSUE_CHOICE_LABEL, form.name
+        assert dropdown["attributes"]["options"] == list(adm.ISSUE_CHOICES.values()), form.name
+        assert dropdown["validations"]["required"] is True, form.name
+        assert textarea["type"] == "textarea" and textarea["id"] == "divergence-entries", form.name
+        assert textarea["attributes"]["label"] == adm.ISSUE_ENTRIES_LABEL, form.name
+        assert "render" not in textarea["attributes"], form.name
+        assert not any(
+            (field.get("validations") or {}).get("required") for field in fields[at + 1 :]
+        ), form.name
+        wordings.add((dropdown["attributes"]["description"], textarea["attributes"]["description"]))
+    assert len(wordings) == 1
+    config = yaml.safe_load((FORMS_DIR / "config.yml").read_text(encoding="utf-8"))
+    assert config["blank_issues_enabled"] is False
+
+
+def issue_body(choice: str | None, entries: str = adm.NO_RESPONSE) -> str:
+    head = "### Version\n\nvep 0.0.0\n\n"
+    if choice is None:
+        return head + "### Command\n\nvep\n"
+    return (
+        f"{head}### {adm.ISSUE_CHOICE_LABEL}\n\n{choice}\n\n"
+        f"### {adm.ISSUE_ENTRIES_LABEL}\n\n{entries}\n"
+    )
+
+
+def test_form_fields_and_the_issue_choice():
+    fields = adm.form_fields(issue_body(adm.ISSUE_CHOICES["none"]))
+    assert fields["version"] == "vep 0.0.0"
+    assert fields[adm.ISSUE_CHOICE_LABEL.lower()] == adm.ISSUE_CHOICES["none"]
+    assert fields[adm.ISSUE_ENTRIES_LABEL.lower()] == ""
+    assert adm.form_fields(None) == {}
+    index = adm.read_index(INDEX_SAMPLE)
+    assert adm.check_issue_divergences(issue_body(adm.ISSUE_CHOICES["none"]), index) is None
+    assert adm.check_issue_divergences(issue_body(adm.ISSUE_CHOICES["none"], "stray text"), index) is None
+    assert (
+        adm.check_issue_divergences(
+            issue_body(adm.ISSUE_CHOICES["touches"], "`B`: should go, because the reasoning is wrong here.\n`JSON escaping`: keep"),
+            index,
+        )
+        is None
+    )
+    unknown = adm.check_issue_divergences(issue_body(adm.ISSUE_CHOICES["touches"], "`Q`: remove it"), index)
+    assert unknown is not None and "`Q`" in unknown
+    empty = adm.check_issue_divergences(issue_body(adm.ISSUE_CHOICES["touches"]), index)
+    assert empty is not None and "names existing entries and no entry line follows it" in empty
+    assert adm.check_issue_divergences(issue_body(adm.ISSUE_CHOICES["proposes"], "A record, both rows, the reason."), index) is None
+    missing = adm.check_issue_divergences(issue_body(adm.ISSUE_CHOICES["proposes"]), index)
+    assert missing is not None and "field is empty" in missing
+    absent = adm.check_issue_divergences(issue_body(None), index)
+    assert absent is not None and f"no `{adm.ISSUE_CHOICE_LABEL}` choice" in absent
+    assert adm.check_issue_divergences("", index) is not None
+    reworded = adm.check_issue_divergences(issue_body("Touches none of them"), index)
+    assert reworded is not None and "no `Intended divergences` choice" in reworded
+
+
+def issue_event(body: str | None, labels=(), state="open", **extra) -> dict:
+    issue = {
+        "number": 7,
+        "state": state,
+        "body": body,
+        "labels": [{"name": name} for name in labels],
+        "user": {"login": "someone", "type": "User"},
+    }
+    issue.update(extra)
+    return {"action": "opened", "issue": issue}
+
+
+def issue_repo(tmp_path: Path) -> Path:
+    base = repo_dir(tmp_path)
+    (base / "docs").mkdir(exist_ok=True)
+    (base / adm.INDEX_PATH).write_text(INDEX_SAMPLE, encoding="utf-8")
+    return base
+
+
+def test_run_issue_labels_and_comments_a_miss_and_never_closes(tmp_path, capsys):
+    gh = FakeGitHub()
+    code = adm.run_issue(issue_event(issue_body(adm.ISSUE_CHOICES["touches"], "`Q`: drop it")), gh, issue_repo(tmp_path))
+    assert code == 0
+    writes = gh.writes()
+    assert [w[:2] for w in writes] == [
+        ("POST", f"/repos/{REPO}/issues/7/comments"),
+        ("POST", f"/repos/{REPO}/issues/7/labels"),
+    ]
+    assert writes[0][2]["body"].startswith(adm.ISSUE_MARKER) and "`Q`" in writes[0][2]["body"]
+    assert "Edit the issue and the check runs again." in writes[0][2]["body"]
+    assert writes[1][2] == {"labels": [adm.NEEDS_DIVERGENCE_LABEL]}
+    assert all("state" not in (w[2] if len(w) > 2 else {}) for w in writes)
+    assert "ERROR: [admission]" in capsys.readouterr().err
+    gh = FakeGitHub()
+    assert adm.run_issue(issue_event(issue_body(None)), gh, issue_repo(tmp_path)) == 0
+    assert [w[:2] for w in gh.writes()] == [
+        ("POST", f"/repos/{REPO}/issues/7/comments"),
+        ("POST", f"/repos/{REPO}/issues/7/labels"),
+    ]
+
+
+def test_run_issue_edits_its_comment_in_place_and_clears_a_fixed_issue(tmp_path):
+    existing = {"id": 3, "body": f"{adm.ISSUE_MARKER}\nold", "user": {"login": "github-actions[bot]", "type": "Bot"}}
+    gh = FakeGitHub(comments=[existing])
+    body = issue_body(adm.ISSUE_CHOICES["proposes"])
+    assert adm.run_issue(issue_event(body, labels=[adm.NEEDS_DIVERGENCE_LABEL]), gh, issue_repo(tmp_path)) == 0
+    assert [w[:2] for w in gh.writes()] == [("PATCH", f"/repos/{REPO}/issues/comments/3")]
+    assert "field is empty" in gh.writes()[0][2]["body"]
+    gh = FakeGitHub(comments=[existing])
+    fixed = issue_body(adm.ISSUE_CHOICES["proposes"], "The record, both rows and the reason.")
+    assert adm.run_issue(issue_event(fixed, labels=[adm.NEEDS_DIVERGENCE_LABEL]), gh, issue_repo(tmp_path)) == 0
+    assert [w[:2] for w in gh.writes()] == [
+        ("PATCH", f"/repos/{REPO}/issues/comments/3"),
+        ("DELETE", f"/repos/{REPO}/issues/7/labels/needs-divergence-check"),
+    ]
+    assert "passes" in gh.writes()[0][2]["body"]
+
+
+def test_run_issue_writes_nothing_for_a_clean_closed_or_pull_request_issue(tmp_path):
+    clean = issue_body(adm.ISSUE_CHOICES["none"])
+    gh = FakeGitHub()
+    assert adm.run_issue(issue_event(clean), gh, issue_repo(tmp_path)) == 0 and gh.writes() == []
+    gh = FakeGitHub()
+    assert adm.run_issue(issue_event(issue_body(None), state="closed"), gh, issue_repo(tmp_path)) == 0
+    assert gh.writes() == []
+    gh = FakeGitHub()
+    assert adm.run_issue(issue_event(issue_body(None), pull_request={"url": "x"}), gh, issue_repo(tmp_path)) == 0
+    assert gh.calls == []
+    gh = FakeGitHub()
+    without_index = repo_dir(tmp_path / "without-index")
+    assert adm.run_issue(issue_event(clean), gh, without_index) == 0 and gh.writes() == []
+
+
 # --- the parity matrix ---------------------------------------------------------------------------
 
 
@@ -1079,12 +1477,15 @@ class FakeGitHub:
         jobs=(),
         fail_rules=False,
         landed=(),
+        rule_landed=None,
         fail_landed=False,
     ):
         self.repo = REPO
         self.commits, self.files, self.comments = list(commits), list(files), list(comments)
         self.rules, self.pulls_by_head, self.pull = rules, list(pulls_by_head), pull
         self.jobs, self.fail_rules, self.landed = list(jobs), fail_rules, list(landed)
+        # The commits that landed the divergences rule's fixture; the workflow's own when not given.
+        self.rule_landed = list(landed if rule_landed is None else rule_landed)
         self.fail_landed = fail_landed
         self.calls: list[tuple] = []
 
@@ -1093,6 +1494,8 @@ class FakeGitHub:
         if path.endswith(f"/repos/{REPO}/commits"):
             if self.fail_landed:
                 raise adm.AdmissionError("503")
+            if (params or {}).get("path") == adm.DIVERGENCE_LANDING_PATH:
+                return self.rule_landed
             return self.landed
         if path.endswith("/commits"):
             return self.commits
@@ -1289,7 +1692,43 @@ def test_fixture_records_its_verdict(path):
 
 
 def test_every_fixture_has_a_recorded_verdict():
-    assert set(RECORDED) == set(FIXTURE_IDS) and len(FIXTURES) == 10
+    assert set(RECORDED) == set(FIXTURE_IDS) and len(FIXTURES) == FIXTURE_COUNT
+
+
+@pytest.mark.parametrize("path", FIXTURES, ids=FIXTURE_IDS)
+def test_fixture_divergences_miss_closes_only_after_the_rule_landed(path):
+    """A pull request opened before the divergences rule carries the miss as comment-only; one
+    opened after it is closed for the miss."""
+    fixture = load(path)
+    before = fixture.get("opened_before_divergences_rule", False)
+    assert before is (not path.stem.startswith("divergences-"))
+    divergences = [f for f in findings_of(fixture) if f.check == "divergences"]
+    assert ("divergences" in RECORDED[path.stem]) is bool(divergences)
+    for finding in divergences:
+        assert finding.closes is (not before)
+
+
+@pytest.mark.parametrize("path", FIXTURES, ids=FIXTURE_IDS)
+def test_fixture_divergences_check_flips(path):
+    """A description without the section misses; the same description with the none statement
+    checked passes unless the change edits a divergence artefact, and then naming the entry passes."""
+    fixture = load(path)
+    pr = fixture["pull_request"]
+    pr["body"] = (pr["body"] or "").split(f"## {adm.DIVERGENCE_SECTION}")[0]
+    assert "divergences" in evaluate(fixture)
+    pr["body"] += NONE_SECTION
+    index = adm.read_index(index_text(fixture, "base_index_file")) | adm.read_index(
+        index_text(fixture, "head_index_file")
+    )
+    artefacts = adm.divergence_artefacts(fixture["files"], index)
+    assert ("divergences" in evaluate(fixture)) is bool(artefacts)
+    if artefacts:
+        pr["body"] = pr["body"].replace(
+            f"- [x] {adm.NONE_STATEMENT}",
+            "- [x] This change proposes a new intended divergence, described below:\n"
+            "  The input, both engines' rows and why vep-rs's row is the one to keep.",
+        )
+        assert "divergences" not in evaluate(fixture)
 
 
 def strip_trailers(fixture: dict, key: str) -> None:
@@ -1418,11 +1857,12 @@ def test_fixture_changelog_check_flips_where_a_crate_changes(path):
 def test_fixture_close_decision(path):
     fixture = load(path)
     pr = fixture["pull_request"]
-    checks = sorted(evaluate(fixture))
-    findings = [adm.Finding(c, c, closes=c != "signoff") for c in checks] or [adm.Finding("x", "x")]
-    close, _footer = adm.close_footer(findings, pr["user"], set(), pr["draft"], MAINTAINERS)
+    findings = findings_of(fixture) or [adm.Finding("x", "x")]
+    close, footer = adm.close_footer(findings, pr["user"], set(), pr["draft"], MAINTAINERS)
     contributor = pr["user"]["login"] not in MAINTAINERS and pr["user"]["type"] != "Bot"
     assert close is (contributor and any(f.closes for f in findings))
+    if contributor and not close and all(f.check == "divergences" for f in findings):
+        assert footer is not None and "opened before that section was asked" in footer
 
 
 # --- the modes -----------------------------------------------------------------------------------
@@ -1538,6 +1978,7 @@ def test_sync_model_labels_skips_a_name_with_nothing_left():
 
 def test_run_event_clean_pull_request_writes_nothing_but_the_label(tmp_path):
     fixture = load(FIXTURE_DIR / "maintainer-flag-bam.json")
+    fixture["pull_request"]["body"] += NONE_SECTION
     gh = FakeGitHub(files=fixture["files"])
     git = FakeGit(
         fixture["pull_request"]["head"]["sha"],
@@ -1589,6 +2030,7 @@ def test_run_event_override_label_and_draft_are_commented_not_closed(tmp_path):
 def test_run_event_signoff_miss_alone_is_commented_not_closed(tmp_path):
     fixture = load(FIXTURE_DIR / "maintainer-docs-with-declaration.json")
     fixture["pull_request"]["user"] = {"login": "someone", "type": "User"}
+    fixture["pull_request"]["body"] += NONE_SECTION
     strip_trailers(fixture, "signed-off-by:")
     gh = FakeGitHub(files=fixture["files"])
     head = fixture["pull_request"]["head"]["sha"]
@@ -1603,6 +2045,37 @@ def test_run_event_signoff_miss_alone_is_commented_not_closed(tmp_path):
     body = writes[0][2]["body"]
     assert "carries no `Signed-off-by`" in body and "DCO check holds the merge" in body
     assert "closes=0" in body
+
+
+def test_run_event_divergences_miss_closes_only_a_pull_request_opened_after_the_rule(tmp_path):
+    """The rule has its own landing date: a pull request opened between the admission check's
+    landing and the rule's gets the divergences miss as a comment; one opened after the rule's
+    landing is closed for it."""
+    fixture = load(FIXTURE_DIR / "maintainer-docs-with-declaration.json")
+    pr = fixture["pull_request"]
+    pr["user"] = {"login": "someone", "type": "User"}
+    pr["state"] = "open"
+    head = pr["head"]["sha"]
+    workflow = [{"commit": {"committer": {"date": "1999-01-03T00:00:00Z"}}}]
+    rule = [{"commit": {"committer": {"date": "1999-01-05T00:00:00Z"}}}]
+    pr["created_at"] = "1999-01-04T00:00:00Z"
+    gh = FakeGitHub(files=fixture["files"], landed=workflow, rule_landed=rule)
+    git = FakeGit(head, commits=fixture["commits"])
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 0
+    writes = gh.writes()
+    assert [w[:2] for w in writes] == [
+        ("POST", f"/repos/{REPO}/issues/0/comments"),
+        ("POST", f"/repos/{REPO}/issues/0/labels"),
+    ]
+    body = writes[0][2]["body"]
+    assert f"lacks the `## {adm.DIVERGENCE_SECTION}` section" in body
+    assert "opened before that section was asked" in body and "closes=0" in body
+    pr["created_at"] = "1999-01-06T00:00:00Z"
+    gh = FakeGitHub(files=fixture["files"], landed=workflow, rule_landed=rule)
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 1
+    writes = gh.writes()
+    assert ("PATCH", f"/repos/{REPO}/pulls/0", {"state": "closed"}) in writes
+    assert "closes=1" in writes[0][2]["body"]
 
 
 def test_run_event_pull_request_older_than_the_workflow_is_commented_not_closed(tmp_path):
@@ -2027,6 +2500,37 @@ def test_run_local_warns_on_a_workflow_edit_without_failing_on_it(tmp_path, caps
     captured = capsys.readouterr()
     assert "WARNING: [admission]" in captured.err and "workflow changes are the maintainers'" in captured.err
     assert adm.OVERRIDE_LABEL in captured.err and "admission: OK" in captured.out
+
+
+def test_run_local_checks_the_divergences_section_of_a_body_file(tmp_path, capsys):
+    """A bare local run certifies none; a saved description is held to the rule, and the index at
+    the base and the head resolves the entries it names, the artefact test included."""
+    repo = scratch_repo(tmp_path)
+    (repo / "docs").mkdir(exist_ok=True)
+    (repo / adm.INDEX_PATH).write_text(INDEX_SAMPLE, encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-s", "-m", "Add the index\n\nCo-Authored-By: No LLM")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    (repo / "docs" / "divergences").mkdir()
+    (repo / "docs" / "divergences" / "defect-b.md").write_text("# Defect B\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-s", "-m", "Add the page\n\nCo-Authored-By: No LLM")
+    assert adm.run_local(repo, "origin/main", None) == 1
+    err = capsys.readouterr().err
+    assert "`docs/divergences/defect-b.md`" in err and "under the second statement" in err
+    body = tmp_path / "body.md"
+    body.write_text(TEMPLATE_BODY + section({"touches"}, {"touches": ["- `B`: changes it, because the record's start codon is intact."]}))
+    assert adm.run_local(repo, "origin/main", body) == 0
+    assert "admission: OK" in capsys.readouterr().out
+    body.write_text(TEMPLATE_BODY + section({"none", "touches"}, {"touches": ["- `B`: kept, because x."]}))
+    assert adm.run_local(repo, "origin/main", body) == 1
+    assert "excludes the other two" in capsys.readouterr().err
+    body.write_text(TEMPLATE_BODY + section({"touches"}, {"touches": ["- `Q`: kept, because x."]}))
+    assert adm.run_local(repo, "origin/main", body) == 1
+    assert "`Q`" in capsys.readouterr().err
+    body.write_text(TEMPLATE_BODY)
+    assert adm.run_local(repo, "origin/main", body) == 1
+    assert "lacks the `## Intended divergences` section" in capsys.readouterr().err
 
 
 def test_export_tree_writes_links_as_files_and_skips_filters(tmp_path):
