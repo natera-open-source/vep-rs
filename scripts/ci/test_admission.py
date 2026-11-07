@@ -4,11 +4,14 @@ text is reduced to its tags, the test regions of the changed Rust files are reco
 themselves), on the constructed shapes of the intended-divergences section, and on constructed
 inputs. Every check fails on its recorded or constructed shape and passes once the shape is
 corrected; the comment is edited in place; a stale CI run judges nothing; each exemption holds the
-close back; the API writes of a run are the expected ones and no other."""
+close back; the API writes of a run are the expected ones and no other. The two tests that read the
+repository's own pull request template and issue forms are skipped only when `ADMISSION_RELEASE_TREE=1`
+is set, for a run of this file over a tree whose template and forms predate the rule."""
 
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -24,6 +27,10 @@ ROOT = HERE.parent.parent
 sys.path.insert(0, str(HERE))
 import admission as adm
 
+RELEASE_TREE = pytest.mark.skipif(
+    os.environ.get("ADMISSION_RELEASE_TREE") == "1",
+    reason="the release tree's template and forms predate the rule until the default branch merges in",
+)
 FIXTURE_DIR = HERE / "fixtures" / "admission"
 FIXTURES = sorted(FIXTURE_DIR.glob("*.json"))
 FIXTURE_IDS = [path.stem for path in FIXTURES]
@@ -1277,13 +1284,11 @@ def test_entry_remedies_name_the_change_for_a_pull_request_and_the_report_for_an
     assert none_issue is not None and f"`<entry>`: {adm.REPORT_REMEDY}, because ...``" in none_issue
 
 
+@RELEASE_TREE
 def test_divergences_section_on_the_repository_template():
     """The template's fourth section carries the three statements, none checked, with its example
-    entry line inside a comment; checking the first statement alone passes. A tree whose template
-    predates the rule (a release branch before it merges the default branch) is not judged."""
+    entry line inside a comment; checking the first statement alone passes."""
     template = TEMPLATE.read_text(encoding="utf-8")
-    if adm.DIVERGENCE_SECTION.lower() not in adm.body_sections(template):
-        pytest.skip("the tree's pull request template predates the divergences rule")
     lines = adm.body_sections(template)[adm.DIVERGENCE_SECTION.lower()]
     statements = adm.read_statements(lines)
     assert set(statements) == {"none", "touches", "proposes"}
@@ -1297,17 +1302,13 @@ def test_divergences_section_on_the_repository_template():
     assert adm.SECTIONS == ("Summary", "Verification", "Upgrade impact")
 
 
+@RELEASE_TREE
 def test_issue_forms_carry_the_divergence_choice():
     """Each of the ten forms asks the choice as a required dropdown with the three statements,
-    then the entries field, after its last required field; blank issues stay off. A tree whose forms
-    all predate the rule is not judged; one where some do and some do not fails."""
+    then the entries field, after its last required field; blank issues stay off."""
     forms = sorted(path for path in FORMS_DIR.glob("*.yml") if path.name != "config.yml")
     assert len(forms) == 10
     bodies = {form: yaml.safe_load(form.read_text(encoding="utf-8"))["body"] for form in forms}
-    carrying = [form for form, fields in bodies.items() if "divergences" in [f.get("id") for f in fields]]
-    if not carrying:
-        pytest.skip("the tree's issue forms predate the divergences rule")
-    assert carrying == forms, [form.name for form in forms if form not in carrying]
     wordings: set[tuple[str, str]] = set()
     for form, fields in bodies.items():
         ids = [field.get("id") for field in fields]
