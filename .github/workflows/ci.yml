@@ -93,7 +93,7 @@ jobs:
           check scripts/parity/test_check_parity_matrix.py 60
           check scripts/validation/test_diff_caches.py 4
           check scripts/docs/test_site_tools.py 77
-          check scripts/ci/test_admission.py 419
+          check scripts/ci/test_admission.py 421
           [ "$fail" -eq 0 ]
           python3 -m pytest -q \
             scripts/validation/test_compare_sv_concordance.py \

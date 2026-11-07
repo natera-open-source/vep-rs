@@ -1195,6 +1195,23 @@ def test_divergences_strips_html_comments_and_fenced_headings():
     assert divergences(in_comment) is not None
 
 
+def test_fenced_lines_under_a_statement_are_neither_statements_nor_entries():
+    """A template fragment quoted in a fenced block under the section checks nothing; an
+    entry-shaped line inside a fence names no entry; fenced text still counts as a description."""
+    quoted_template = section(set()) + "```\n- [x] This change touches none of the intended divergences.\n```\n"
+    finding = divergences(quoted_template)
+    assert finding is not None and "No statement" in finding.text
+    fenced_entry = {"touches": ["- `B`: changes it, because x.", "```", "- `Q`: not a citation", "```"]}
+    assert divergences(section({"touches"}, fenced_entry)) is None
+    only_fenced = {"touches": ["```", "- `B`: changes it", "```"]}
+    finding = divergences(section({"touches"}, only_fenced))
+    assert finding is not None and "no entry line follows it" in finding.text
+    fenced_description = {"proposes": ["```", "the record and both rows", "```"]}
+    assert divergences(section({"proposes"}, fenced_description)) is None
+    assert adm.unfenced(["a", "```", "b", "```", "c", "~~~", "d"]) == ["a", "c"]
+    assert adm.fenced_lines(["```x`", "- [ ] y"]) == [("```x`", False), ("- [ ] y", False)]
+
+
 def test_a_line_opening_with_an_inline_code_span_is_not_a_fence():
     """A backtick run followed by text holding another backtick is an inline code span, so the
     headings after it still open sections and fields; a real fence still hides them."""
@@ -1229,12 +1246,35 @@ def test_an_entry_whose_name_holds_a_backtick_is_cited_in_a_longer_run_or_withou
     for line in ("- ``A bare `M` ``: keeps it, because x.", "- `A bare M`: keeps it, because x."):
         assert divergences(section({"touches"}, {"touches": [line]})) is None, line
     assert adm.entry_lines(["- `B`: `x` and `y`"]) == [("B", "`x` and `y`")]
-    assert adm.entry_lines(["- ``: nothing"]) == []
-    # A description is at most 65,536 characters; a line of backticks is read in bounded time.
+    assert adm.entry_lines(["- ``: nothing", "- ` `: nothing", "- ```A`: x"]) == []
+    # A fence line, bare or with an info string, is no entry line, so a fenced block quoted under
+    # the second statement leaves a valid citation valid.
+    assert adm.entry_lines(["```", "```text", "````", "~~~"]) == []
+    fenced = {"touches": ["- `B`: changes it, because x.", "```text", "the two rows, quoted", "```"]}
+    assert divergences(section({"touches"}, fenced)) is None
+    issue = issue_body(adm.ISSUE_CHOICES["touches"], "`B`: should go, because x.\n```\nrows\n```")
+    assert adm.check_issue_divergences(issue, index) is None
+    # A description is at most 65,536 characters; a line of backticks, or of spaces before a last
+    # character, is read in bounded time.
     hostile = "- " + "`" * 65_536
     started = time.perf_counter()
-    adm.entry_lines([hostile, hostile + "x", hostile + "x" + "`" * 65_535 + "x"])
+    adm.entry_lines(
+        [hostile, hostile + "x", hostile + "x" + "`" * 65_535 + "x", "- `a`: x" + " " * 65_536 + "x"]
+    )
     assert time.perf_counter() - started < 5
+
+
+def test_entry_remedies_name_the_change_for_a_pull_request_and_the_report_for_an_issue():
+    index = adm.read_index(INDEX_SAMPLE)
+    bare = divergences(section({"touches"}, {"touches": ["- `B`"]}))
+    assert bare is not None and f"add {adm.CHANGE_REMEDY} and why" in bare.text
+    none_listed = divergences(section({"touches"}))
+    assert none_listed is not None and f"`<entry>`: {adm.CHANGE_REMEDY}, because ...``" in none_listed.text
+    bare_issue = adm.check_issue_divergences(issue_body(adm.ISSUE_CHOICES["touches"], "`B`"), index)
+    assert bare_issue is not None and f"add {adm.REPORT_REMEDY} and why" in bare_issue
+    assert adm.CHANGE_REMEDY not in bare_issue
+    none_issue = adm.check_issue_divergences(issue_body(adm.ISSUE_CHOICES["touches"]), index)
+    assert none_issue is not None and f"`<entry>`: {adm.REPORT_REMEDY}, because ...``" in none_issue
 
 
 def test_divergences_section_on_the_repository_template():
@@ -1436,7 +1476,8 @@ def test_run_issue_skips_an_issue_opened_before_the_rule_landed(tmp_path, capsys
     gh = FakeGitHub(rule_landed=rule)
     assert adm.run_issue(dict(before, repository={"default_branch": "trunk"}), gh, issue_repo(tmp_path)) == 0
     assert gh.writes() == [] and "opened before the check" in capsys.readouterr().out
-    assert any(call[1].endswith(f"/repos/{REPO}/commits") for call in gh.calls)
+    landing_reads = [call for call in gh.calls if call[1].endswith(f"/repos/{REPO}/commits")]
+    assert [call[2] for call in landing_reads] == [{"path": adm.DIVERGENCE_LANDING_PATH, "sha": "trunk"}]
     after = issue_event(issue_body(None), created_at="1999-01-06T00:00:00Z")
     gh = FakeGitHub(rule_landed=rule)
     assert adm.run_issue(after, gh, issue_repo(tmp_path)) == 0
@@ -1580,7 +1621,7 @@ class FakeGitHub:
         self.calls: list[tuple] = []
 
     def paginate(self, path, params=None):
-        self.calls.append(("GET", path))
+        self.calls.append(("GET", path) if params is None else ("GET", path, dict(params)))
         if path.endswith(f"/repos/{REPO}/commits"):
             if self.fail_landed:
                 raise adm.AdmissionError("503")

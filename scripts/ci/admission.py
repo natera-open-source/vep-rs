@@ -156,8 +156,9 @@ CHECKBOX_RE = re.compile(r"^\s*[-*]\s+\[([ xX])\]\s*(.*?)\s*$")
 # An entry line: the entry in a code span of one to three backticks (a name holding a backtick is
 # written inside a longer run; an unbounded run backtracks cubically on a line of backticks), with
 # or without a list marker, then the rest of the line, read whole and stripped by the caller (a lazy
-# tail with trailing whitespace is quadratic on a run of spaces).
-ENTRY_LINE_RE = re.compile(r"^\s*(?:(?:[-*+]|\d+[.)])\s+)?(`{1,3})(.+?)\1(?!`)(.*)$")
+# tail with trailing whitespace is quadratic on a run of spaces). The opening and closing runs are
+# whole runs, so a fence line (three backticks, with or without an info string) is no entry line.
+ENTRY_LINE_RE = re.compile(r"^\s*(?:(?:[-*+]|\d+[.)])\s+)?(`{1,3})(?!`)(.+?)(?<!`)\1(?!`)(.*)$")
 LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 TABLE_ROW_RE = re.compile(r"^\s*\|")
 FORM_HEADING_RE = re.compile(r"^### (.+?)\s*$")
@@ -762,24 +763,39 @@ def opens_fence(stripped: str) -> str | None:
     return fence
 
 
+def fenced_lines(lines: list[str]) -> list[tuple[str, bool]]:
+    """Each line with whether it lies in a fenced code block, the fence lines themselves included."""
+    marked = []
+    fence: str | None = None
+    for raw in lines:
+        stripped = raw.strip()
+        if fence is not None:
+            if stripped.startswith(fence) and stripped.rstrip(fence[0]) == "":
+                fence = None
+            marked.append((raw, True))
+        elif (opened := opens_fence(stripped)) is not None:
+            fence = opened
+            marked.append((raw, True))
+        else:
+            marked.append((raw, False))
+    return marked
+
+
+def unfenced(lines: list[str]) -> list[str]:
+    return [raw for raw, fenced in fenced_lines(lines) if not fenced]
+
+
 def sectioned(text: str, heading_re: re.Pattern[str]) -> dict[str, list[str]]:
     """The text's sections by lower-cased heading, each the lines under it; a heading inside a
     fenced code block opens no section."""
     sections: dict[str, list[str]] = {}
     current: str | None = None
-    fence: str | None = None
-    for raw in text.splitlines():
-        stripped = raw.strip()
-        if fence is not None:
-            if stripped.startswith(fence) and stripped.rstrip(fence[0]) == "":
-                fence = None
-        elif (opened := opens_fence(stripped)) is not None:
-            fence = opened
-        elif (heading := heading_re.match(stripped)) is not None:
+    for raw, fenced in fenced_lines(text.splitlines()):
+        heading = None if fenced else heading_re.match(raw.strip())
+        if heading is not None:
             current = heading.group(1).strip().lower()
             sections.setdefault(current, [])
-            continue
-        if current is not None:
+        elif current is not None:
             sections[current].append(raw)
     return sections
 
@@ -888,11 +904,12 @@ def read_index(text: str | None) -> Index:
 
 def read_statements(lines: list[str]) -> dict[str, tuple[bool, list[str]]]:
     """The checklist statements of the divergences section by kind, each with whether it is checked
-    and the lines that follow it up to the next checklist line."""
+    and the lines that follow it up to the next checklist line; a checklist line quoted inside a
+    fenced code block is no statement."""
     statements: dict[str, tuple[bool, list[str]]] = {}
     current: str | None = None
-    for line in lines:
-        box = CHECKBOX_RE.match(line)
+    for line, fenced in fenced_lines(lines):
+        box = None if fenced else CHECKBOX_RE.match(line)
         if box is None:
             if current is not None:
                 statements[current][1].append(line)
@@ -904,13 +921,18 @@ def read_statements(lines: list[str]) -> dict[str, tuple[bool, list[str]]]:
 
 
 def entry_lines(lines: list[str]) -> list[tuple[str, str]]:
-    """(cited entry, the rest of the line) for every line of the entry shape."""
+    """(cited entry, the rest of the line) for every line of the entry shape; a span of whitespace
+    alone names nothing and is no entry line."""
     entries = []
     for line in lines:
         match = ENTRY_LINE_RE.match(line)
-        if match is not None:
-            rest = re.sub(r"^[\s:,\-]+", "", match.group(3)).strip()
-            entries.append((match.group(2).strip(), rest))
+        if match is None:
+            continue
+        entry = match.group(2).strip()
+        if not entry:
+            continue
+        rest = re.sub(r"^[\s:,\-]+", "", match.group(3)).strip()
+        entries.append((entry, rest))
     return entries
 
 
@@ -1013,7 +1035,7 @@ def check_divergences(
         if "touches" in checked:
             problems.extend(
                 entry_problems(
-                    entry_lines(statements["touches"][1]),
+                    entry_lines(unfenced(statements["touches"][1])),
                     index,
                     f"The second statement of the `## {DIVERGENCE_SECTION}` section is checked",
                     CHANGE_REMEDY,
@@ -1066,7 +1088,7 @@ def check_issue_divergences(body: str | None, index: Index) -> str | None:
     text = fields.get(ISSUE_ENTRIES_LABEL.lower(), "")
     if kind == "touches":
         problems = entry_problems(
-            entry_lines(text.splitlines()),
+            entry_lines(unfenced(text.splitlines())),
             index,
             f"The `{ISSUE_CHOICE_LABEL}` choice names existing entries",
             REPORT_REMEDY,
