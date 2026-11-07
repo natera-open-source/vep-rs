@@ -958,8 +958,8 @@ def entry_problems(
             (
                 f"{claim} and no entry line follows it: add one line per entry, ``- `<entry>`: "
                 f"{remedy}, because ...``, the entry named as the first column of `{INDEX_PATH}` "
-                "names it (a defect letter such as `B`, or a difference's name as written there, "
-                "inner backticks dropped)."
+                "names it (the text of its row's first cell, inner backticks dropped) or by the path "
+                "of its page."
             )
         ]
     problems = []
@@ -967,8 +967,8 @@ def entry_problems(
     if unknown:
         problems.append(
             f"No entry of `{INDEX_PATH}` is named {listed_codes(unknown)}: name an entry as the "
-            "index's first column does (a defect letter such as `B`, or a difference's name as "
-            "written there, inner backticks dropped), or by the path of its page."
+            "index's first column does (the text of its row's first cell, inner backticks dropped), "
+            "or by the path of its page."
         )
     bare = [token for token, rest in entries if not rest]
     if bare:

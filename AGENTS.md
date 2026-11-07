@@ -41,12 +41,12 @@ parts that fail CI or review when missed.
 - `CHANGELOG.md` entries follow the grammar in CONTRIBUTING.md's Changelog entries. The trailing
   `(#N)` is added in a commit after the pull request exists.
 - Before reporting or changing a difference from Ensembl VEP, read `docs/intended-divergences.md`
-  and search its pages for the flag, field or shape: most differences there are Ensembl VEP defects
-  vep-rs deliberately does not reproduce, and a change that makes vep-rs match one is refused. Cite
-  the entry as the index's first column names it (a defect letter such as `B`, or a difference's
-  name as written, inner backticks dropped). Removing an entry needs the newer Ensembl VEP behaviour stated in plain words,
-  with the record that shows it. Fill the template's fourth section, Intended divergences, truthfully
-  (the first statement excludes the other two), and run
+  and search its pages for the flag, field or shape: the entries are Ensembl VEP defects vep-rs
+  deliberately does not reproduce and differences in what it writes or reads, and a change that
+  makes vep-rs match one is refused. Cite the entry as the index's first column names it (the text
+  of its row's first cell, inner backticks dropped). Removing an entry needs the newer Ensembl VEP
+  behaviour stated in plain words, with the record that shows it. Fill the template's fourth
+  section, Intended divergences, truthfully (the first statement excludes the other two), and run
   `python3 scripts/ci/admission.py --local --body-file <description>` on the saved description:
   the admission check closes a pull request whose section is missing, unchecked, inconsistent, names
   an entry the index lacks, or claims none while editing the index, a page it links or
