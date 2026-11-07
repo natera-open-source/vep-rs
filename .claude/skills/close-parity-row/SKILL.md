@@ -39,6 +39,15 @@ When the Perl source shows the `target` is wrong (an `error` row Ensembl VEP's o
 `accepted_noop`, an `implemented` row that needs the Ensembl database), stop: report a **target
 decision** to the maintainers with the citations, and leave the row unchanged.
 
+Before classing a difference between the two engines as a defect of either, search
+`docs/intended-divergences.md` and its pages for the flag, field or shape: a difference the index
+records is deliberate, and a row that would make vep-rs match Ensembl VEP there is a target decision,
+not a port. Cite the entry as the index's first column names it (the text of its row's first cell,
+inner backticks dropped) in the pull request's fourth section; asking
+for an entry to go needs the newer Ensembl VEP behaviour stated in plain words, with the record that
+shows it; a new difference the row uncovers is proposed there, with the input, both engines' rows
+and why vep-rs's row is the one to keep.
+
 Done when every claim has a citation you read yourself at `release/116.2`.
 
 ## 3. Write Test 1 red
@@ -117,7 +126,8 @@ parity_matrix` pass.
 ## 7. Gate
 
 Commit with `-s` and the model declaration, run the full set in
-[AGENTS.md](../../../AGENTS.md#before-pushing) (the admission check included), then open the pull
-request with the template's three sections and nothing else. A test added to a file under `scripts/` moves that file's floor in
+[AGENTS.md](../../../AGENTS.md#before-pushing) (the admission check included, on the saved
+description with `--body-file`), then open the pull request with the template's four sections and
+nothing else, the Intended divergences statement checked truthfully. A test added to a file under `scripts/` moves that file's floor in
 `.github/workflows/ci.yml`: name the new count under Verification for a maintainer to set. Done when every command passes, its output is quoted in the pull
 request's Verification section, and the smoke's F1 is quoted there or stated as not run and why.

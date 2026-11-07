@@ -64,5 +64,6 @@
    "deletions": 1
   }
  ],
- "contains_base_tip": false
+ "contains_base_tip": false,
+ "opened_before_divergences_rule": true
 }

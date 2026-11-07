@@ -1,0 +1,58 @@
+{
+ "pull_request": {
+  "number": 0,
+  "state": "open",
+  "draft": false,
+  "title": "Title",
+  "body": "## Summary\n\nSummary text.\n\n## Verification\n\nVerification text.\n\n## Upgrade impact\n\nUpgrade impact text.\n\n- [x] Every commit is signed off.\n\n## Intended divergences\n<!-- Check what applies. One entry per line, for example:\n- `A`: keeps it, because the index's reasoning is wrong for this case in the way stated here. -->\n- [ ] This change touches none of the intended divergences.\n- [ ] This change touches these existing entries, one line each:\n- [x] This change proposes a new intended divergence, described below:\n",
+  "user": {
+   "login": "contributor-one",
+   "type": "User"
+  },
+  "author_association": "CONTRIBUTOR",
+  "labels": [],
+  "head": {
+   "sha": "0000000000000000000000000000000000000003",
+   "ref": "topic",
+   "repo": {
+    "fork": true,
+    "owner": {
+     "login": "contributor-one"
+    }
+   }
+  },
+  "base": {
+   "sha": "0000000000000000000000000000000000000002",
+   "ref": "main"
+  }
+ },
+ "commits": [
+  {
+   "sha": "0000000000000000000000000000000000000003",
+   "parents": [
+    {
+     "sha": "0000000000000000000000000000000000000002"
+    }
+   ],
+   "commit": {
+    "message": "Subject line 1\n\nCo-Authored-By: Example Model 1 <model@example.org>\nSigned-off-by: Person 1 <person1@example.org>\n",
+    "author": {
+     "name": "Person 1",
+     "email": "person1@example.org"
+    }
+   }
+  }
+ ],
+ "files": [
+  {
+   "filename": "docs/plugins.md",
+   "status": "modified",
+   "additions": 4,
+   "deletions": 1
+  }
+ ],
+ "contains_base_tip": true,
+ "head_changelog": "# Changelog\n\n## [Unreleased]\n\n### Fixed\n\n- Entry (#0)\n",
+ "base_index_file": "index-sample-main.md",
+ "head_index_file": "index-sample-main.md"
+}

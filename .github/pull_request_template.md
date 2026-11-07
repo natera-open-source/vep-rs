@@ -1,5 +1,5 @@
 <!-- Title: imperative, plain English, no type prefix. Example: "Inflate bgzip input through libdeflate". -->
-<!-- The body is these three sections and nothing else. A question for the maintainers goes on the issue; an idea beyond this change opens its own issue. -->
+<!-- The body is these four sections and nothing else. A question for the maintainers goes on the issue; an idea beyond this change opens its own issue. -->
 
 ## Summary
 <!-- One or two sentences: what changes for a user and why. Link an issue with "Closes #N" when one exists. Docs or data: which files change and what they now say or show. -->
@@ -14,10 +14,18 @@
 
 - [ ] Every commit is signed off (`git commit -s`); the DCO check fails without it.
 - [ ] One commit declares the model that wrote the change, in a trailer in the form CONTRIBUTING.md's Sign your commits gives, or declares that none did.
-- [ ] The branch contains `main`'s tip, brought in by a merge (never a rebase once pushed), and `python3 scripts/ci/admission.py --local` passes.
+- [ ] The branch contains `main`'s tip, brought in by a merge (never a rebase once pushed), and `python3 scripts/ci/admission.py --local --body-file <this description, saved to a file>` passes.
 - [ ] The CI gate passed locally on the toolchain `ci.yml` pins (`cargo test --workspace --locked --no-fail-fast`, clippy with `-D warnings`, fmt, `check_parity_matrix.py`, `check_module_docs.sh`) and the MSRV build passed, with the output quoted under Verification, or no code changed.
 - [ ] `CHANGELOG.md` has an entry under Unreleased in the release-notes grammar (one line, the subject first, at most 30 words, a trailing `(#N)` added once the PR number exists), or no crate code or manifest under `crates/` changed. The admission check asks every crate change for a line.
 - [ ] Tests cover the change, added or updated in this PR (a `tests/` file, a `#[test]`, a `test_*.py` or `test_*.sh`, or the golden expectation or corpus `manifest.json` the change moves), or it changes no code.
 - [ ] A test file under `scripts/` that gained or lost tests has its new collected count named under Verification for a maintainer to set as the floor in `.github/workflows/ci.yml`, or no such file changed.
 - [ ] The affected page under `docs/` is updated and `python3 scripts/docs/site_metrics.py --gate` passes, or no page is affected.
 - [ ] Consequence or plugin change: concordance smoke passes (summary under Verification), or Verification says it was not run and why, or this PR does not touch consequences or plugins.
+
+## Intended divergences
+<!-- docs/intended-divergences.md lists every behaviour where vep-rs deliberately differs from Ensembl VEP. A change touches an entry when it alters, removes or re-argues a behaviour the index records as deliberate, or makes vep-rs match Ensembl VEP where the index says it does not. Check what applies: the first statement excludes the other two; the second and third may both stand. The admission check reads this section. -->
+- [ ] This change touches none of the intended divergences.
+- [ ] This change touches these existing entries, one line each: the entry in backticks as the index's first column names it (the text of its row's first cell, inner backticks dropped) or the path of its page, then what the change does to it (keeps, changes or removes it) and why the index's reasoning is wrong for this case.
+  <!-- - `<entry>`: changes it, because the index's reasoning assumes a start codon the record does not carry. -->
+- [ ] This change proposes a new intended divergence, described below in a line or two: the input, what Ensembl VEP and vep-rs each write, and why vep-rs's output is the one to keep (an Ensembl VEP defect vep-rs should not replicate, or a deliberate difference).
+  <!-- The input, both outputs and the reasoning. -->

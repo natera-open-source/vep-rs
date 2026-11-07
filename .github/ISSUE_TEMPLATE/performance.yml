@@ -68,6 +68,23 @@ body:
         - "Differs (say where below)"
     validations:
       required: true
+  - type: dropdown
+    id: divergences
+    attributes:
+      label: Intended divergences
+      description: "[docs/intended-divergences.md](https://github.com/natera-open-source/vep-rs/blob/main/docs/intended-divergences.md) lists every behaviour where vep-rs deliberately differs from Ensembl VEP. A report or request touches an entry when it asks for a recorded behaviour to change or go, argues against the entry's reasoning, or asks vep-rs to match Ensembl VEP where the index says it deliberately does not. A new intended divergence may be proposed here too."
+      options:
+        - Touches none of the intended divergences
+        - Touches existing intended divergences (named below, with the reasoning)
+        - Proposes a new intended divergence (described below)
+    validations:
+      required: true
+  - type: textarea
+    id: divergence-entries
+    attributes:
+      label: Entries or proposed divergence
+      description: "For existing entries, one line each: the entry in backticks as the index's first column names it (the text of its row's first cell, inner backticks dropped), then what should change and why the index's reasoning is wrong for this case. For a proposed divergence: the input, what Ensembl VEP and vep-rs each write, and why vep-rs's output is the one to keep."
+      placeholder: "`<entry>`: remove it, because ..."
   - type: textarea
     id: notes
     attributes:

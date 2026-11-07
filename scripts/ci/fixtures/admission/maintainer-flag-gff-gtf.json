@@ -158,5 +158,6 @@
   }
  ],
  "contains_base_tip": true,
- "head_changelog": "# Changelog\n\nx\n\nx\nx\n\n## [Unreleased]\n\n### Added\n\n- Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n- Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n\n### Changed\n\n- Entry text (#0)\n- Entry text (#0)\n- Entry text (#0)\n- Entry text (#0)\n\n### Fixed\n\n- Entry text (#0)\n\n## [0.5.0] - 0000-00-00\n"
+ "head_changelog": "# Changelog\n\nx\n\nx\nx\n\n## [Unreleased]\n\n### Added\n\n- Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n- Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n  - Entry text (#0)\n\n### Changed\n\n- Entry text (#0)\n- Entry text (#0)\n- Entry text (#0)\n- Entry text (#0)\n\n### Fixed\n\n- Entry text (#0)\n\n## [0.5.0] - 0000-00-00\n",
+ "opened_before_divergences_rule": true
 }

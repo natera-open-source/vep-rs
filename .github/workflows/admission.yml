@@ -2,12 +2,14 @@ name: Admission
 
 # Holds every pull request to the admission policy in CONTRIBUTING.md (Pull Requests): current with
 # `main`, its tests included, every commit signed off, the model that wrote it declared, the
-# description in the template's shape, a changelog line for a crate change, the workflows left to
-# the maintainers, the parity matrix resolving, and after CI every required check green. A miss is
-# one comment with the fixes, edited in place on each run, and closes the pull request unless its
-# author is a maintainer or a bot, the `admission-override` label is set, it is a draft, or it was
-# opened before this workflow landed; a sign-off miss is reported without a close. The author
-# reopens it once fixed.
+# description in the template's shape with its intended-divergences statement, a changelog line for
+# a crate change, the workflows left to the maintainers, the parity matrix resolving, and after CI
+# every required check green. A miss is one comment with the fixes, edited in place on each run, and
+# closes the pull request unless its author is a maintainer or a bot, the `admission-override` label
+# is set, it is a draft, or it was opened before this workflow landed; a sign-off miss, and the
+# divergences miss on a pull request opened before that rule landed, are reported without a close.
+# The author reopens it once fixed. An issue is held to the intended-divergences choice its form
+# carries with a label and one comment, never a close.
 #
 # `pull_request_target` runs in this repository's context with the write token, at once for a
 # fork, so the job never checks out or executes anything from the pull request: the checkout is
@@ -22,6 +24,8 @@ on:
   workflow_run:
     workflows: [CI]
     types: [completed]
+  issues:
+    types: [opened, edited]
   # A maintainer's hand run of the static checks on one pull request, from the default branch.
   workflow_dispatch:
     inputs:
@@ -121,5 +125,28 @@ jobs:
         with:
           python-version: "3.12"
       - run: python3 scripts/ci/admission.py --workflow-run "$GITHUB_EVENT_PATH"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # An opened or edited issue: the intended-divergences choice its form carries, checked against the
+  # index on the default branch; a miss gets the `needs-divergence-check` label and one comment
+  # edited in place, and an edit that fixes the body clears both. Nothing here closes an issue.
+  issue-admission:
+    name: Issue admission
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: admission-issue-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: python3 scripts/ci/admission.py --issue "$GITHUB_EVENT_PATH"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

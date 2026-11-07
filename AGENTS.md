@@ -40,6 +40,17 @@ parts that fail CI or review when missed.
   line. CONTRIBUTING.md's Code Conventions lists the few direct writes.
 - `CHANGELOG.md` entries follow the grammar in CONTRIBUTING.md's Changelog entries. The trailing
   `(#N)` is added in a commit after the pull request exists.
+- Before reporting or changing a difference from Ensembl VEP, read `docs/intended-divergences.md`
+  and search its pages for the flag, field or shape: the entries are Ensembl VEP defects vep-rs
+  deliberately does not reproduce and differences in what it writes or reads, and a change that
+  makes vep-rs match one is refused. Cite the entry as the index's first column names it (the text
+  of its row's first cell, inner backticks dropped). Removing an entry needs the newer Ensembl VEP
+  behaviour stated in plain words, with the record that shows it. Fill the template's fourth
+  section, Intended divergences, truthfully (the first statement excludes the other two), and run
+  `python3 scripts/ci/admission.py --local --body-file <description>` on the saved description:
+  the admission check closes a pull request whose section is missing, unchecked, inconsistent, names
+  an entry the index lacks, or claims none while editing the index, a page it links or
+  `scripts/divergences/`.
 - A change that can alter annotation output runs `cargo test -p vep-cli --test golden --test
   format_parity`. A consequence or plugin change also runs the concordance smoke (`just
   concordance-smoke <perl_cache> <json_cache> <fasta>`), which needs Docker and an Ensembl VEP 116
@@ -90,12 +101,14 @@ Verification with that reproduction, and leave it out of this change. A newer lo
 clippy lints and can move type sizes, so compare like with like.
 
 Cut the branch from the repository's freshly fetched `main`, and before pushing run
-`python3 scripts/ci/admission.py --local` (from a fork clone, with the repository added as the
-`upstream` remote, `--base upstream/main`). It applies the admission check's static rules to the
-local branch against that base: current with `main`, a test gaining a line beside every code change,
-every commit signed off, the model declared with a trailer form under Gotchas, the changelog line,
-the parity matrix. CONTRIBUTING.md's Pull Requests says what the `Admission` check closes and how a
-closed pull request reopens.
+`python3 scripts/ci/admission.py --local --body-file <description>` on the saved description (from
+a fork clone, with the repository added as the `upstream` remote, `--base upstream/main`). It
+applies the admission check's static rules to the local branch against that base: current with
+`main`, a test gaining a line beside every code change, every commit signed off, the model declared
+with a trailer form under Gotchas, the changelog line, the parity matrix, and the description's
+Intended divergences section (without `--body-file` the run certifies none on its own).
+CONTRIBUTING.md's Pull Requests says what the `Admission` check closes and how a closed pull request
+reopens.
 
 On a pull request from a fork, the CI and DCO workflows, and Pages or Docker when their paths
 change, do not start until a maintainer presses "Approve and run", after every push, and those
@@ -106,7 +119,9 @@ thread resolved before merge. Bring `main` in with
 `git fetch upstream && git merge --signoff upstream/main`); never rebase or force-push a pushed
 branch, since maintainers may push fixes onto it.
 
-Fill in [.github/pull_request_template.md](.github/pull_request_template.md) for the description.
+Fill in [.github/pull_request_template.md](.github/pull_request_template.md) for the description:
+its four sections, the fourth being the Intended divergences statement under Gotchas, and nothing
+else.
 
 ## Scope
 
