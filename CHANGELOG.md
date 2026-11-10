@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- AlphaMissense selects scores separately for each missense transcript with matching reference and alternate amino acids.
+- AlphaMissense selects scores separately for each missense transcript with matching reference and alternate amino acids. (#103)
 - `vep-cache-converter` skips a `variations/` directory or file whose name is not UTF-8 with its unexpected-name warning instead of copying it under a chromosome name no record reaches. (#78)
 
 ## [0.5.0] - 2026-10-25
