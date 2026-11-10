@@ -1731,29 +1731,25 @@ impl Runner {
         let variation_source = open_variation_source(&self.config, &self.cache)?;
         let sv_source = open_sv_source(&self.config)?;
 
-        // Parquet: a TSV intermediate at `<output_file>.tsv.tmp`, converted by a
-        // DuckDB subprocess after the write loop.
-        let parquet_intermediate_path: Option<String> =
+        let parquet_output =
             if self.config.output_format == "parquet" && self.config.output_file != "STDOUT" {
-                // A run that cannot be finalized must fail before annotating.
                 check_duckdb()?;
-                Some(format!("{}.tsv.tmp", self.config.output_file))
+                Some(ParquetOutput::new(
+                    &self.config.output_file,
+                    self.config.force_overwrite,
+                )?)
             } else {
                 None
             };
+        let parquet_intermediate_path = parquet_output.as_ref().map(ParquetOutput::intermediate);
 
         // BaseRunner.pm:226, with Ensembl VEP's text; the Parquet intermediate
-        // sits beside the output file and fails the same way. An empty output
-        // name is refused before the intermediate is created: its `.tsv.tmp`
-        // alone would be a file in the working directory.
+        // sits beside the output directory and fails the same way.
         let unwritable =
             |path: &str| CliError::new("output", format!("Could not write to output file {path}"));
-        if parquet_intermediate_path.is_some() && self.config.output_file.is_empty() {
-            return Err(unwritable("").into());
-        }
         // The plain output opens through Perl's two-argument `open` (:226), for
-        // which `>-` is standard output; the compressed output's shell
-        // redirection (:217) and the Parquet intermediate write a file named `-`.
+        // which `>-` is standard output; compressed output writes a file named
+        // `-` through shell redirection (:217). Parquet always stages its TSV.
         let dash_is_stdout = self.config.output_file == "-"
             && self.config.compress_output.is_none()
             && parquet_intermediate_path.is_none();
@@ -1763,8 +1759,8 @@ impl Runner {
         } else {
             let path = parquet_intermediate_path
                 .as_deref()
-                .unwrap_or(&self.config.output_file);
-            Box::new(File::create(path).map_err(|_| unwritable(path))?)
+                .unwrap_or_else(|| Path::new(&self.config.output_file));
+            Box::new(File::create(path).map_err(|_| unwritable(&path.display().to_string()))?)
         };
         // The option rules refuse the flag with Parquet, so a compressed writer is
         // never the DuckDB intermediate.
@@ -2087,10 +2083,10 @@ impl Runner {
             return Err(CliError::new("fasta", error.to_string()).into());
         }
 
-        if let Some(intermediate) = parquet_intermediate_path {
+        if let Some(output) = parquet_output {
             finalize_parquet_output(
-                &intermediate,
-                &self.config.output_file,
+                &output.intermediate().to_string_lossy(),
+                &output.dataset().to_string_lossy(),
                 &self.config.parquet_shape,
                 parquet_formatter
                     .as_ref()
@@ -2099,14 +2095,7 @@ impl Runner {
                 &self.parquet_kv_metadata(),
                 self.config.parquet_row_group_size,
             )?;
-            if !self.config.keep_intermediate {
-                std::fs::remove_file(&intermediate).with_context(|| {
-                    format!(
-                        "Failed to remove Parquet intermediate '{}' after DuckDB success",
-                        intermediate
-                    )
-                })?;
-            }
+            output.publish(self.config.keep_intermediate)?;
         }
 
         let elapsed = start.elapsed();
@@ -2477,6 +2466,137 @@ impl Runner {
 /// report a run that wrote no Parquet as a success.
 const MIN_DUCKDB_VERSION: (u32, u32, u32) = (1, 3, 2);
 
+/// Owns a sibling staging directory until a complete Parquet dataset replaces
+/// the destination. Dropping it before publication removes only staged files.
+struct ParquetOutput {
+    staging: tempfile::TempDir,
+    destination: std::path::PathBuf,
+    force_overwrite: bool,
+}
+
+impl ParquetOutput {
+    fn new(path: &str, force_overwrite: bool) -> anyhow::Result<Self> {
+        let path = Path::new(path);
+        let name = path.file_name().ok_or_else(|| {
+            CliError::new(
+                "output",
+                format!("Could not write to output file {}", path.display()),
+            )
+        })?;
+        let parent = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        let destination = parent.join(name);
+        Self::check_destination(&destination, force_overwrite)?;
+        let staging = tempfile::Builder::new()
+            .prefix(".vep-parquet-")
+            .tempdir_in(parent)
+            .map_err(|_| {
+                CliError::new(
+                    "output",
+                    format!("Could not write to output file {}", destination.display()),
+                )
+            })?;
+        let output = Self {
+            staging,
+            destination,
+            force_overwrite,
+        };
+        std::fs::create_dir(output.dataset()).context("Could not create staged Parquet dataset")?;
+        Ok(output)
+    }
+
+    fn check_destination(path: &Path, force_overwrite: bool) -> anyhow::Result<bool> {
+        let metadata = match std::fs::symlink_metadata(path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!("Could not inspect Parquet output '{}'", path.display())
+                })
+            }
+        };
+        if !force_overwrite {
+            return Err(CliError::new(
+                "output",
+                format!(
+                    "Output file {} already exists. Specify a different output file with --output_file or overwrite existing file with --force_overwrite",
+                    path.display()
+                ),
+            ).into());
+        }
+        if !metadata.is_dir() {
+            return Err(CliError::new(
+                "output",
+                format!(
+                    "Parquet output '{}' must be a directory, not a file or symbolic link",
+                    path.display()
+                ),
+            )
+            .into());
+        }
+        Ok(true)
+    }
+
+    fn intermediate(&self) -> std::path::PathBuf {
+        self.staging.path().join("annotations.tsv")
+    }
+
+    fn dataset(&self) -> std::path::PathBuf {
+        self.staging.path().join("dataset")
+    }
+
+    fn publish(self, keep_intermediate: bool) -> anyhow::Result<()> {
+        if keep_intermediate {
+            let mut path = self.destination.as_os_str().to_owned();
+            path.push(".tsv.tmp");
+            std::fs::rename(self.intermediate(), &path).with_context(|| {
+                format!(
+                    "Could not retain Parquet intermediate '{}'",
+                    Path::new(&path).display()
+                )
+            })?;
+        }
+        let previous = self.staging.path().join("previous");
+        let replacing = Self::check_destination(&self.destination, self.force_overwrite)?;
+        if replacing {
+            std::fs::rename(&self.destination, &previous).with_context(|| {
+                format!(
+                    "Could not back up Parquet output '{}'",
+                    self.destination.display()
+                )
+            })?;
+        }
+        if let Err(error) = std::fs::rename(self.dataset(), &self.destination) {
+            if replacing {
+                if let Err(restore) = std::fs::rename(&previous, &self.destination) {
+                    let staging = self.staging.keep();
+                    anyhow::bail!(
+                        "Could not publish Parquet output '{}': {error}; could not restore it: {restore}; previous output preserved at '{}'",
+                        self.destination.display(), staging.join("previous").display()
+                    );
+                }
+            }
+            return Err(error).with_context(|| {
+                format!(
+                    "Could not publish Parquet output '{}'",
+                    self.destination.display()
+                )
+            });
+        }
+        let staging_path = self.staging.path().to_owned();
+        if let Err(error) = self.staging.close() {
+            warn!(
+                "Parquet output '{}' is complete, but cleanup of '{}' failed: {error}",
+                self.destination.display(),
+                staging_path.display()
+            );
+        }
+        Ok(())
+    }
+}
+
 /// Parses `duckdb --version` output such as `v1.5.5 (Variegata) d8cdaa33fd`.
 fn parse_duckdb_version(text: &str) -> Option<(u32, u32, u32)> {
     let token = text.split_whitespace().next()?.trim_start_matches('v');
@@ -2684,7 +2804,7 @@ fn finalize_parquet_output(
          COMPRESSION_LEVEL 9, ROW_GROUP_SIZE {rg}, DICTIONARY_SIZE_LIMIT {rg}, \
          DICTIONARY_COMPRESSION_RATIO_THRESHOLD -1, WRITE_BLOOM_FILTER true, \
          BLOOM_FILTER_FALSE_POSITIVE_RATIO 0.001, PARTITION_BY (chrom), \
-         WRITE_PARTITION_COLUMNS true, KV_METADATA {{{kv}}}, OVERWRITE_OR_IGNORE true);",
+         WRITE_PARTITION_COLUMNS true, KV_METADATA {{{kv}}});",
         escape_sql_string(out_path),
         rg = parquet_row_group_rows(row_group_size),
     );
@@ -3683,6 +3803,45 @@ mod tests {
         assert_eq!(parquet_row_group_rows(5_000), 6_144);
         assert_eq!(parquet_row_group_rows(1), 2_048);
         assert_eq!(parquet_row_group_rows(0), 2_048);
+    }
+
+    #[test]
+    fn parquet_publication_restores_the_previous_dataset_when_rename_fails() {
+        let root = tempfile::tempdir().unwrap();
+        let destination = root.path().join("output");
+        std::fs::create_dir(&destination).unwrap();
+        std::fs::write(destination.join("old"), "completed").unwrap();
+        let output = ParquetOutput::new(destination.to_str().unwrap(), true).unwrap();
+        let staging = output.staging.path().to_owned();
+        std::fs::remove_dir(output.dataset()).unwrap();
+        let error = output.publish(false).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("Could not publish Parquet output"));
+        assert_eq!(
+            std::fs::read_to_string(destination.join("old")).unwrap(),
+            "completed"
+        );
+        assert!(!staging.exists());
+    }
+
+    #[test]
+    fn parquet_publication_rechecks_force_overwrite_after_generation() {
+        let root = tempfile::tempdir().unwrap();
+        let destination = root.path().join("output");
+        let output = ParquetOutput::new(destination.to_str().unwrap(), false).unwrap();
+        let staging = output.staging.path().to_owned();
+        std::fs::write(output.dataset().join("new"), "replacement").unwrap();
+        std::fs::create_dir(&destination).unwrap();
+        std::fs::write(destination.join("old"), "completed").unwrap();
+        let error = output.publish(false).unwrap_err();
+        assert!(error.to_string().contains("--force_overwrite"));
+        assert_eq!(
+            std::fs::read_to_string(destination.join("old")).unwrap(),
+            "completed"
+        );
+        assert!(!destination.join("new").exists());
+        assert!(!staging.exists());
     }
 
     /// The DuckDB floor is 1.3.2, the first release whose Parquet COPY knows

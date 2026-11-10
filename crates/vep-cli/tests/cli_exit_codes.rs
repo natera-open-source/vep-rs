@@ -113,11 +113,9 @@ fn duckdb_available() -> bool {
         .unwrap_or(false)
 }
 
-/// A Parquet run writes its rows to `<output>.tsv.tmp` beside the output file
-/// first, so an output location that cannot be written fails the same way as
-/// a plain output, naming that file, and a run whose output name is empty is
-/// refused before any intermediate is written in the working directory; the
-/// check needs the DuckDB CLI the format converts with.
+/// A Parquet run stages its rows beside the output directory, so an output
+/// location that cannot be written fails under `output`, naming the destination.
+/// An empty name is refused before any intermediate is written.
 #[test]
 fn unwritable_parquet_output_is_1() {
     if !duckdb_available() {
@@ -135,7 +133,7 @@ fn unwritable_parquet_output_is_1() {
     assert_eq!(
         lines,
         [format!(
-            "ERROR: [output] Could not write to output file {}.tsv.tmp",
+            "ERROR: [output] Could not write to output file {}",
             out.display()
         )],
         "{err}"
