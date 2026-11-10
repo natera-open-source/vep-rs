@@ -910,10 +910,50 @@ mod tests {
     use super::*;
 
     fn plugin_source(path: &Path, body: &[u8]) {
+        use noodles::core::Position;
+        use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
         use std::io::Write;
+
         let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(path).unwrap());
-        writer.write_all(body).unwrap();
-        writer.try_finish().unwrap();
+        let mut indexer = noodles::tabix::index::Indexer::default();
+        indexer.set_header(
+            noodles::csi::binning_index::index::header::Builder::default()
+                .set_reference_sequence_name_index(0)
+                .set_start_position_index(1)
+                .set_end_position_index(Some(1))
+                .build(),
+        );
+        for line in std::str::from_utf8(body).unwrap().split_inclusive('\n') {
+            let begin = writer.virtual_position();
+            writer.write_all(line.as_bytes()).unwrap();
+            if line.starts_with('#') {
+                continue;
+            }
+            let mut fields = line.trim_end().split('\t');
+            let Some(chromosome) = fields.next() else {
+                continue;
+            };
+            let Some(position) = fields
+                .next()
+                .and_then(|field| field.parse::<Position>().ok())
+            else {
+                continue;
+            };
+            indexer
+                .add_record(
+                    chromosome,
+                    position,
+                    position,
+                    Chunk::new(begin, writer.virtual_position()),
+                )
+                .unwrap();
+        }
+        writer.finish().unwrap();
+        noodles::tabix::fs::write(
+            PathBuf::from(format!("{}.tbi", path.display())),
+            &indexer.build(),
+        )
+        .unwrap();
     }
 
     #[test]
@@ -959,6 +999,11 @@ mod tests {
                 store.query("21", 200, 200).unwrap()[0].get("score"),
                 Some("SRC_A")
             );
+            let tabix = vep_builtins::TabixAnnotator::open(config.clone()).unwrap();
+            assert_eq!(
+                tabix.query("21", 200, 200).unwrap()[0].get("score"),
+                Some("SRC_A")
+            );
             let path = vep_builtins::provenance::manifest_path(&output);
             let manifest: serde_json::Value =
                 serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
@@ -969,6 +1014,7 @@ mod tests {
                 )
             );
             fs::remove_file(path).unwrap();
+            fs::remove_file(dir.path().join("data.tsv.gz.tbi")).unwrap();
             assert!(vep_builtins::annotation_store::open_best_store(&input, config).is_err());
             let text = fs::read_to_string(log).unwrap();
             assert!(text.contains("using verified binary annotation store"));
