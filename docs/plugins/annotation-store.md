@@ -130,13 +130,16 @@ leading `#`.
 
 ## AlphaMissense {#alphamissense}
 
-AlphaMissense adds DeepMind's AlphaMissense pathogenicity prediction to each
-transcript consequence of a variant.
+AlphaMissense adds DeepMind's AlphaMissense pathogenicity prediction to missense
+transcript consequences whose reference and alternate amino acids match the
+data row's `protein_variant`. It selects the first matching row separately for
+each transcript, comparing peptides in the transcript's orientation on either
+strand. Protein positions and transcript identifiers need not match.
 
 | Property      | Value                                                       |
 | ------------- | ----------------------------------------------------------- |
 | Builds        | GRCh37, GRCh38                                              |
-| Matches       | position and allele                                         |
+| Matches       | position, allele and reference/alternate amino acids         |
 | Output fields | `am_class`, `am_pathogenicity`                              |
 | Data source   | [AlphaMissense data](https://zenodo.org/records/8208688)   |
 

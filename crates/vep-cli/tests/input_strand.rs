@@ -128,6 +128,89 @@ fn reverse_strand_snvs_annotate_on_their_forward_alleles() {
     );
 }
 
+/// AlphaMissense.pm:228-235 compares transcript-oriented peptides, whose CDS
+/// construction complements opposite-strand alleles (TranscriptVariationAllele.pm:2413-2417).
+#[test]
+fn alphamissense_matches_real_transcript_peptides_on_both_strands() {
+    use std::io::Write;
+
+    use noodles::bgzf;
+    use noodles::core::Position;
+    use noodles::csi::binning_index::index::header::Builder;
+    use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+
+    let dir = tempfile::tempdir().unwrap();
+    let data_path = dir.path().join("alphamissense.tsv.gz");
+    let mut writer = bgzf::io::Writer::new(std::fs::File::create(&data_path).unwrap());
+    let mut indexer = noodles::tabix::index::Indexer::default();
+    indexer.set_header(
+        Builder::default()
+            .set_reference_sequence_name_index(0)
+            .set_start_position_index(1)
+            .build(),
+    );
+    writeln!(
+        writer,
+        "#CHROM\tPOS\tREF\tALT\tgenome\tuniprot_id\ttranscript_id\tprotein_variant\tam_pathogenicity\tam_class"
+    )
+    .unwrap();
+    // Controlled scores distinguish compatible peptides from decoys at the
+    // real SNV_RECORDS sites; AlphaMissense.pm:232-233 ignores positions and IDs.
+    for row in [
+        "chr21\t13610310\tA\tG\thg38\tP1\tENST_OTHER\tC1R\t0.01\tlikely_benign",
+        "chr21\t13610310\tA\tG\thg38\tP1\tENST_OTHER\tC1G\t0.91\tlikely_pathogenic",
+        "chr21\t14109002\tG\tT\thg38\tP2\tENST_OTHER\tN1K\t0.02\tlikely_benign",
+        "chr21\t14109002\tG\tT\thg38\tP2\tENST_OTHER\tR1K\t0.45\tambiguous",
+    ] {
+        let fields: Vec<_> = row.split('\t').collect();
+        let position = Position::try_from(fields[1].parse::<usize>().unwrap()).unwrap();
+        let start = writer.virtual_position();
+        writeln!(writer, "{row}").unwrap();
+        indexer
+            .add_record(
+                fields[0],
+                position,
+                position,
+                Chunk::new(start, writer.virtual_position()),
+            )
+            .unwrap();
+    }
+    writer.finish().unwrap();
+    noodles::tabix::fs::write(
+        dir.path().join("alphamissense.tsv.gz.tbi"),
+        &indexer.build(),
+    )
+    .unwrap();
+
+    let rows = annotate(
+        dir.path(),
+        "alphamissense",
+        &format!("{SNV_RECORDS}21\t13610310\t13610310\tA/G\t1\tcv3216832_fwd\n"),
+        &[
+            "--plugin",
+            &format!("AlphaMissense,file={}", data_path.display()),
+            "--tab",
+            "--fields",
+            "Uploaded_variation,Feature,Consequence,Protein_position,Amino_acids,STRAND,am_pathogenicity,am_class",
+        ],
+    );
+    assert_eq!(
+        rows_on(
+            &rows,
+            &["ENST00000299443", "ENST00000400211", "ENST00000536861"]
+        ),
+        [
+            "cv3308991\tENST00000299443\tsynonymous_variant\t495\tT\t1\t-\t-",
+            "cv3216832\tENST00000299443\tmissense_variant\t28\tC/G\t1\t0.91\tlikely_pathogenic",
+            "cv4047524\tENST00000400211\tmissense_variant\t362\tR/K\t-1\t0.45\tambiguous",
+            "cv4047524\tENST00000536861\tsynonymous_variant\t452\tK\t-1\t-\t-",
+            "cv4047524_fwd\tENST00000400211\tmissense_variant\t362\tR/K\t-1\t0.45\tambiguous",
+            "cv4047524_fwd\tENST00000536861\tsynonymous_variant\t452\tK\t-1\t-\t-",
+            "cv3216832_fwd\tENST00000299443\tmissense_variant\t28\tC/G\t1\t0.91\tlikely_pathogenic",
+        ]
+    );
+}
+
 /// The JSON document keeps the record as written (`allele_string` `A/T`,
 /// `strand` -1, each consequence's `variant_allele` `T`) while its codons read
 /// the forward-strand allele, as Ensembl VEP's does.

@@ -5,11 +5,8 @@
 //!
 //! Queries a tabix-indexed AlphaMissense file and annotates variants with
 //! `am_class` (likely_pathogenic/likely_benign/ambiguous) and `am_pathogenicity` (0.0-1.0).
-//! Uses allele matching to ensure the correct alt allele is matched.
-//!
-//! The scores are per variant, and Ensembl VEP's plugin declares `Transcript`
-//! features, so they are written on each transcript row of the variant
-//! ([`crate::BuiltinPlugin::run_batch`]) and on no other row.
+//! Matches genomic alleles and each missense transcript's reference and alternate
+//! amino acids, writing the first matching data row's scores on that transcript.
 
 use indexmap::IndexMap;
 use tracing::debug;
@@ -17,7 +14,7 @@ use tracing::debug;
 use crate::annotation_store::{open_best_store, AnnotationStore};
 use crate::tabix::{allele_match, BatchQueryResult, TabixConfig};
 use crate::traits::{BuiltinPlugin, PluginError, PrefetchData};
-use vep_core::consequence::TranscriptConsequence;
+use vep_core::consequence::{Consequence, TranscriptConsequence};
 use vep_core::variant::InputVariant;
 
 /// Column indices in the AlphaMissense TSV.
@@ -27,6 +24,7 @@ const REF_COL: usize = 2;
 const ALT_COL: usize = 3;
 /// Every data row names its own build here, in UCSC spelling (`hg19` / `hg38`).
 const GENOME_COL: usize = 4;
+const PROTEIN_VARIANT_COL: usize = 7;
 const PATHOGENICITY_COL: usize = 8;
 const CLASS_COL: usize = 9;
 
@@ -157,37 +155,47 @@ impl BuiltinPlugin for AlphaMissensePlugin {
         }
 
         for variant in variants.iter_mut() {
-            let records = batch_result.lookup(&variant.chr, variant.start, variant.end);
+            let records: Vec<_> = batch_result
+                .lookup(&variant.chr, variant.start, variant.end)
+                .into_iter()
+                .filter(|record| allele_match::matches_allele(record, variant, REF_COL, ALT_COL))
+                .collect();
 
-            let mut values: Vec<(String, String)> = Vec::new();
-            for record in records {
-                if !allele_match::matches_allele(record, variant, REF_COL, ALT_COL) {
-                    continue;
-                }
-
-                if let Some(pathogenicity) = record.columns.get(PATHOGENICITY_COL) {
-                    if !pathogenicity.is_empty() && pathogenicity != "." {
-                        values.push(("am_pathogenicity".to_string(), pathogenicity.clone()));
-                    }
-                }
-
-                if let Some(class) = record.columns.get(CLASS_COL) {
-                    if !class.is_empty() && class != "." {
-                        values.push(("am_class".to_string(), class.clone()));
-                    }
-                }
-
-                break;
-            }
-            if values.is_empty() {
-                continue;
-            }
             for tc in &mut variant.transcript_consequences {
-                if !crate::traits::annotates_row(tc) {
+                // AlphaMissense.pm:242 requires missense among the transcript's terms.
+                if !crate::traits::annotates_row(tc)
+                    || !tc.consequences.contains(&Consequence::MissenseVariant)
+                {
                     continue;
                 }
-                for (key, value) in &values {
-                    tc.plugin_data.insert(key.clone(), value.clone());
+                // AlphaMissense.pm:224-235 compares whole, transcript-oriented peptides
+                // with the first and last protein-variant letters, ignoring their positions.
+                let Some([aa_ref, b'/', aa_alt]) = tc.amino_acids.as_deref().map(str::as_bytes)
+                else {
+                    continue;
+                };
+                for record in &records {
+                    let Some(protein_variant) = record.columns.get(PROTEIN_VARIANT_COL) else {
+                        continue;
+                    };
+                    if protein_variant.as_bytes().first() != Some(aa_ref)
+                        || protein_variant.as_bytes().last() != Some(aa_alt)
+                    {
+                        continue;
+                    }
+
+                    for (key, column) in [
+                        ("am_pathogenicity", PATHOGENICITY_COL),
+                        ("am_class", CLASS_COL),
+                    ] {
+                        if let Some(value) = record.columns.get(column) {
+                            if !value.is_empty() && value != "." {
+                                tc.plugin_data.insert(key.into(), value.clone());
+                            }
+                        }
+                    }
+
+                    break;
                 }
             }
         }
@@ -215,6 +223,28 @@ impl BuiltinPlugin for AlphaMissensePlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
+    use smallvec::smallvec;
+    use vep_core::consequence::Consequence;
+    use vep_core::coordinate::Strand;
+
+    const HEADER: &str = "#CHROM\tPOS\tREF\tALT\tgenome\tuniprot_id\ttranscript_id\tprotein_variant\tam_pathogenicity\tam_class";
+
+    fn missense(transcript_id: &str, amino_acids: &str) -> TranscriptConsequence {
+        TranscriptConsequence {
+            transcript_id: transcript_id.into(),
+            consequences: smallvec![Consequence::MissenseVariant],
+            amino_acids: Some(amino_acids.into()),
+            ..TranscriptConsequence::default()
+        }
+    }
+
+    fn prediction(tc: &TranscriptConsequence) -> (Option<&str>, Option<&str>) {
+        (
+            tc.plugin_data.get("am_pathogenicity").map(String::as_str),
+            tc.plugin_data.get("am_class").map(String::as_str),
+        )
+    }
 
     #[test]
     fn plugin_name_is_correct() {
@@ -303,10 +333,8 @@ mod tests {
             .expect("no --assembly must not block loading");
     }
 
-    /// AlphaMissense.pm declares `feature_types` of `['Transcript']`, so a
-    /// record's score lands on each of its transcript rows and on no
-    /// regulatory or motif row; nothing is written at record level, where it
-    /// would print on every row of the record.
+    /// AlphaMissense.pm:195-197 limits annotation to transcripts, and
+    /// AlphaMissense.pm:242,253 requires missense with matching peptides.
     #[test]
     fn writes_on_transcript_rows_alone() {
         use crate::test_fixtures::{write_tabix_fixture, IndexSpec};
@@ -315,7 +343,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rows = [
             "#CHROM\tPOS\tREF\tALT\tgenome\tuniprot_id\ttranscript_id\tprotein_variant\tam_pathogenicity\tam_class",
-            "chr21\t9068417\tC\tA\thg38\tQ9NQ38\tENST1\tA1B\t0.9123\tlikely_pathogenic",
+            "chr21\t9068417\tC\tA\thg38\tQ9NQ38\tENST1\tA1D\t0.9123\tlikely_pathogenic",
         ];
         let path = write_tabix_fixture(dir.path(), "am.tsv.gz", &rows, IndexSpec::standard());
 
@@ -339,7 +367,7 @@ mod tests {
                 .transcript_consequences
                 .push(TranscriptConsequence {
                     feature_type,
-                    ..TranscriptConsequence::default()
+                    ..missense("ENST1", "A/D")
                 });
         }
 
@@ -367,5 +395,152 @@ mod tests {
             Some("0.9123")
         );
         assert!(variants[0].plugin_data.is_empty());
+    }
+
+    /// AlphaMissense.pm:242-287 selects the first allele-and-peptide match
+    /// separately for each missense transcript; AlphaMissense.pm:232-233
+    /// leaves protein positions and transcript identifiers unrestricted by default.
+    #[test]
+    fn selects_matching_records_per_transcript_on_both_input_strands() {
+        let dir = tempfile::tempdir().unwrap();
+        let rows = [
+            HEADER,
+            "chr21\t100\tA\tT\thg38\tP1\tENST1\tK11R\t0.01\tlikely_benign",
+            "chr21\t100\tT\tG\thg38\tP1\tENST1\tK11R\t0.02\tlikely_benign",
+            "chr21\t100\tA\tG\thg38\tP1\tENST1\tK11R\t0.99\tlikely_pathogenic",
+            "chr21\t100\tA\tG\thg38\tP2\tENST2\tN99S\t0.45\tambiguous",
+            "chr21\t100\tA\tG\thg38\tP3\tENST3\tF18S\t0.12\tlikely_benign",
+            "chr21\t100\tA\tG\thg38\tP4\tENST4\tK77R\t0.22\tlikely_benign",
+        ];
+        let path = write_tabix_fixture(dir.path(), "am.tsv.gz", &rows, IndexSpec::standard());
+        let mut plugin = AlphaMissensePlugin::new();
+        plugin.init(&[path.to_string_lossy().into_owned()]).unwrap();
+
+        for input_strand in [Strand::Forward, Strand::Reverse] {
+            let (reference, alternate) = match input_strand {
+                Strand::Reverse => (b"T", b"C"),
+                _ => (b"A", b"G"),
+            };
+            let mut variant = InputVariant::new(
+                "21".into(),
+                100,
+                100,
+                reference.to_vec(),
+                alternate.to_vec(),
+            );
+            variant.strand = input_strand;
+            let mut first = missense("ENST_DIFFERENT", "K/R");
+            first.protein_position = Some("700".into());
+            first.strand = 1;
+            first.consequences.push(Consequence::SpliceRegionVariant);
+            let mut reverse = missense("ENST_REVERSE", "F/S");
+            reverse.strand = -1;
+            variant.transcript_consequences = vec![
+                first,
+                missense("ENST_OTHER", "N/S"),
+                reverse,
+                missense("ENST_BAD_REF", "A/R"),
+                missense("ENST_BAD_ALT", "K/W"),
+                TranscriptConsequence {
+                    consequences: smallvec![Consequence::IntronVariant],
+                    ..missense("ENST_INTRON", "K/R")
+                },
+                TranscriptConsequence {
+                    consequences: smallvec![Consequence::SynonymousVariant],
+                    ..missense("ENST_SYNONYMOUS", "K/R")
+                },
+                TranscriptConsequence {
+                    amino_acids: None,
+                    ..missense("ENST_NO_PEPTIDE", "K/R")
+                },
+            ];
+            for absent_or_multiple in ["", ".", "-", "K", "/", "K/", "/R", "KR/R", "K/RS"] {
+                variant
+                    .transcript_consequences
+                    .push(missense("ENST_INCOMPATIBLE", absent_or_multiple));
+            }
+            plugin
+                .run_batch(std::slice::from_mut(&mut variant))
+                .unwrap();
+            let predictions: Vec<_> = variant
+                .transcript_consequences
+                .iter()
+                .map(prediction)
+                .collect();
+            assert_eq!(
+                &predictions[..3],
+                &[
+                    (Some("0.99"), Some("likely_pathogenic")),
+                    (Some("0.45"), Some("ambiguous")),
+                    (Some("0.12"), Some("likely_benign")),
+                ],
+                "{input_strand:?}"
+            );
+            assert!(
+                predictions[3..].iter().all(|value| *value == (None, None)),
+                "{input_strand:?}: {predictions:?}"
+            );
+            assert!(variant.plugin_data.is_empty());
+        }
+    }
+
+    /// AlphaMissense.pm:224-235 compares both whole peptides with the first
+    /// and last protein-variant letters; AlphaMissense.pm:280-282 returns the
+    /// first matching row even when its selected values are absent.
+    #[test]
+    fn skips_absent_protein_changes_and_keeps_values_from_one_matching_row() {
+        let dir = tempfile::tempdir().unwrap();
+        let rows = [
+            HEADER,
+            "chr21\t100\tA\tG\thg38\tP1\tENST1",
+            "chr21\t100\tA\tG\thg38\tP1\tENST1\t.\t0.01\tlikely_benign",
+            "chr21\t100\tA\tG\thg38\tP1\tENST1\t\t0.02\tlikely_benign",
+            "chr21\t100\tA\tG\thg38\tP1\tENST1\tK11R\t.\t",
+            "chr21\t100\tA\tG\thg38\tP1\tENST1\tK11R\t0.99\tlikely_pathogenic",
+            "chr21\t100\tA\tG\thg38\tP2\tENST2\tN99S\t0.45\t.",
+            "chr21\t100\tA\tG\thg38\tP3\tENST3\tF18S\t\tlikely_benign",
+            "chr21\t100\tA\tG\thg38\tP4\tENST4\tD42G",
+            "chr21\t101\tA\tG\thg38\tP1\tENST1\tK11R\t0.88\tlikely_pathogenic",
+        ];
+        let path = write_tabix_fixture(dir.path(), "am.tsv.gz", &rows, IndexSpec::standard());
+        let mut plugin = AlphaMissensePlugin::new();
+        plugin.init(&[path.to_string_lossy().into_owned()]).unwrap();
+        let mut variants = [100, 101, 102].map(|position| {
+            let mut variant = InputVariant::new(
+                "21".into(),
+                position,
+                position,
+                b"A".to_vec(),
+                b"G".to_vec(),
+            );
+            variant.transcript_consequences = ["K/R", "N/S", "F/S", "D/G"]
+                .map(|change| missense("ENST_OTHER", change))
+                .into();
+            variant
+        });
+        plugin.run_batch(&mut variants).unwrap();
+        assert_eq!(
+            variants[0]
+                .transcript_consequences
+                .iter()
+                .map(prediction)
+                .collect::<Vec<_>>(),
+            [
+                (None, None),
+                (Some("0.45"), None),
+                (None, Some("likely_benign")),
+                (None, None)
+            ]
+        );
+        assert_eq!(
+            prediction(&variants[1].transcript_consequences[0]),
+            (Some("0.88"), Some("likely_pathogenic"))
+        );
+        for tc in variants[1].transcript_consequences[1..]
+            .iter()
+            .chain(&variants[2].transcript_consequences)
+        {
+            assert_eq!(prediction(tc), (None, None));
+        }
     }
 }

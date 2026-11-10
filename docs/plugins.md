@@ -32,7 +32,7 @@ plugin name links to its entry.
 | [CADD](plugins/annotation-store.md#cadd)                   | annotation store; position and allele                                | GRCh37, GRCh38 |
 | [REVEL](plugins/annotation-store.md#revel)                 | annotation store; position, allele and transcript                    | GRCh37, GRCh38 |
 | [gnomADc](plugins/annotation-store.md#gnomadc)             | annotation store; position only                                      | GRCh37, GRCh38 |
-| [AlphaMissense](plugins/annotation-store.md#alphamissense) | annotation store; position and allele                                | GRCh37, GRCh38 |
+| [AlphaMissense](plugins/annotation-store.md#alphamissense) | annotation store; position, allele and missense amino acids          | GRCh37, GRCh38 |
 | [dbscSNV](plugins/annotation-store.md#dbscsnv)             | annotation store; position and allele, per transcript                | GRCh37, GRCh38 |
 | [LoFTEE](plugins/loftee.md)                                | consequence filter over the transcript model, splice motifs and GERP | GRCh37, GRCh38 |
 | [LoFtool](plugins/flat-file.md#loftool)                    | flat file; gene symbol                                               | GRCh37, GRCh38 |
