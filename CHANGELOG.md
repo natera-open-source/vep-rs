@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Binary plugin stores verify full source, data and index contents and conversion settings before automatic selection; stale or unverifiable siblings warn and fall back to the requested tabix source.
 - `vep-cache-converter` skips a `variations/` directory or file whose name is not UTF-8 with its unexpected-name warning instead of copying it under a chromosome name no record reaches. (#78)
 
 ## [0.5.0] - 2026-10-25
