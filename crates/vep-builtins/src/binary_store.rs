@@ -47,6 +47,8 @@ struct PosIndexEntry {
     data_offset: u64,
     /// Number of records at this position.
     record_count: u32,
+    /// Largest record end at this position or any earlier position, rebuilt at open.
+    prefix_max_end: u64,
 }
 
 /// Per-chromosome metadata.
@@ -91,7 +93,9 @@ impl BinaryAnnotator {
     /// Open a binary annotation store from a `.vpd` file.
     ///
     /// The corresponding `.vpdi` index file must exist alongside it
-    /// (same path with `.vpdi` extension).
+    /// (same path with `.vpdi` extension). Opening scans every record's bounds
+    /// and field lengths to derive interval reach for the version 1 start index,
+    /// without decoding column text.
     pub fn open(vpd_path: &Path) -> Result<Self, PluginError> {
         let vpdi_path = vpd_path.with_extension("vpdi");
         if !vpd_path.exists() {
@@ -107,7 +111,7 @@ impl BinaryAnnotator {
             )));
         }
 
-        let index = Self::load_index(&vpdi_path)?;
+        let mut index = Self::load_index(&vpdi_path)?;
 
         let file = std::fs::File::open(vpd_path).map_err(|e| {
             PluginError::Init(format!(
@@ -123,7 +127,8 @@ impl BinaryAnnotator {
             ))
         })?;
 
-        let (column_names, _header_end) = Self::parse_data_header(&mmap)?;
+        let (column_names, header_end) = Self::parse_data_header(&mmap)?;
+        Self::index_reach(&mut index, &mmap, header_end)?;
         let column_names = Arc::new(column_names);
 
         let data = mmap.as_ptr();
@@ -196,13 +201,81 @@ impl BinaryAnnotator {
                     position,
                     data_offset,
                     record_count,
+                    prefix_max_end: 0,
                 });
             }
 
-            chromosomes.insert(name, ChrIndex { positions });
+            if chromosomes
+                .insert(name.clone(), ChrIndex { positions })
+                .is_some()
+            {
+                return Err(PluginError::Init(format!(
+                    "duplicate chromosome in binary index: {name}"
+                )));
+            }
         }
 
         Ok(VpdIndex { chromosomes })
+    }
+
+    /// Validate indexed records and derive interval reach without decoding their columns.
+    fn index_reach(
+        index: &mut VpdIndex,
+        data: &[u8],
+        header_end: usize,
+    ) -> Result<(), PluginError> {
+        for (chr, chr_index) in &mut index.chromosomes {
+            let mut previous_position = 0;
+            let mut previous_offset = None;
+            let mut reach = 0;
+            for entry in &mut chr_index.positions {
+                let invalid = |reason: &str| {
+                    PluginError::Init(format!(
+                        "invalid binary index at {chr}:{} (byte {}): {reason}",
+                        entry.position, entry.data_offset
+                    ))
+                };
+                if entry.position <= previous_position {
+                    return Err(invalid(
+                        "positions must be positive and strictly increasing",
+                    ));
+                }
+                let offset = usize::try_from(entry.data_offset)
+                    .ok()
+                    .filter(|&offset| offset >= header_end && offset <= data.len())
+                    .ok_or_else(|| invalid("record offset out of bounds"))?;
+                if previous_offset.is_some_and(|previous| previous != offset) {
+                    return Err(invalid("position groups must be contiguous"));
+                }
+                if entry.record_count == 0
+                    || u64::from(entry.record_count) > ((data.len() - offset) / 18) as u64
+                {
+                    return Err(invalid("record count exceeds available records or is zero"));
+                }
+                let mut cursor = io::Cursor::new(&data[offset..]);
+                for _ in 0..entry.record_count {
+                    let start = read_u64(&mut cursor)?;
+                    let end = read_u64(&mut cursor)?;
+                    if start != entry.position || end < start {
+                        return Err(invalid("record bounds disagree with the indexed position"));
+                    }
+                    reach = reach.max(end);
+                    let field_count = read_u16(&mut cursor)?;
+                    for _ in 0..field_count {
+                        let len = read_u16(&mut cursor)?;
+                        let next = cursor.position() + u64::from(len);
+                        if next > cursor.get_ref().len() as u64 {
+                            return Err(invalid("truncated field value"));
+                        }
+                        cursor.set_position(next);
+                    }
+                }
+                entry.prefix_max_end = reach;
+                previous_position = entry.position;
+                previous_offset = Some(offset + cursor.position() as usize);
+            }
+        }
+        Ok(())
     }
 
     /// Parse the `.vpd` data file header to extract column names.
@@ -327,7 +400,7 @@ impl BinaryAnnotator {
             return Ok(Vec::new());
         }
 
-        let lo = positions.partition_point(|e| e.position < start);
+        let lo = positions.partition_point(|e| e.prefix_max_end < start);
         let hi = positions.partition_point(|e| e.position <= end);
 
         let mut records = Vec::new();
@@ -335,8 +408,10 @@ impl BinaryAnnotator {
             let mut offset = entry.data_offset;
             for _ in 0..entry.record_count {
                 let (mut record, next_offset) = self.read_record_at(offset)?;
-                record.chr = chr_name.to_string();
-                records.push(record);
+                if record.end >= start {
+                    record.chr = chr_name.to_string();
+                    records.push(record);
+                }
                 offset = next_offset as u64;
             }
         }
@@ -372,9 +447,13 @@ impl AnnotationStore for BinaryAnnotator {
             intervals.sort_by_key(|&(s, _)| s);
             let merged = merge_intervals(&intervals);
 
+            let mut previous_end = None;
             for (m_start, m_end) in &merged {
                 let records = self.query_chr_range(chr_index, chr, *m_start, *m_end)?;
                 for record in records {
+                    if previous_end.is_some_and(|end| record.start <= end) {
+                        continue;
+                    }
                     all_records
                         .entry(chr.to_string())
                         .or_default()
@@ -382,6 +461,7 @@ impl AnnotationStore for BinaryAnnotator {
                         .or_default()
                         .push(record);
                 }
+                previous_end = Some(*m_end);
             }
         }
 
@@ -509,6 +589,7 @@ impl BinaryStoreWriter {
                     position: cur_pos,
                     data_offset: group_offset,
                     record_count: count,
+                    prefix_max_end: 0,
                 });
             }
 
@@ -638,6 +719,219 @@ fn write_err(e: io::Error) -> PluginError {
 mod tests {
     use super::*;
 
+    fn signature<'a>(
+        records: impl IntoIterator<Item = &'a TabixRecord>,
+    ) -> Vec<(u64, u64, Vec<String>)> {
+        records
+            .into_iter()
+            .map(|record| {
+                let mut columns = record.columns.clone();
+                columns[0] = record.chr.clone();
+                (record.start, record.end, columns)
+            })
+            .collect()
+    }
+
+    fn paired_stores(path: &Path, vpd: &Path) -> (crate::TabixAnnotator, BinaryAnnotator) {
+        let tabix = crate::TabixAnnotator::open(crate::tabix::TabixConfig {
+            file_path: path.to_path_buf(),
+            chr_col: 0,
+            start_col: 1,
+            end_col: Some(2),
+            ref_col: None,
+            alt_col: None,
+            zero_based: false,
+        })
+        .unwrap();
+        let records = ["21", "22"]
+            .into_iter()
+            .map(|chr| (chr.to_owned(), tabix.query(chr, 1, 10_000).unwrap()))
+            .collect::<Vec<_>>();
+        BinaryStoreWriter::new(vpd.to_path_buf())
+            .write(tabix.header().unwrap(), &records)
+            .unwrap();
+        (tabix, BinaryAnnotator::open(vpd).unwrap())
+    }
+
+    fn assert_queries_agree(
+        tabix: &crate::TabixAnnotator,
+        binary: &BinaryAnnotator,
+        queries: &[(&str, u64, u64)],
+    ) {
+        let mut reversed = queries.to_vec();
+        reversed.reverse();
+        for batch in [queries, reversed.as_slice()] {
+            let actual = binary.query_batch(batch).unwrap();
+            let expected = tabix.query_batch(batch).unwrap();
+            for &(chr, start, end) in batch {
+                let single = signature(&tabix.query(chr, start, end).unwrap());
+                assert_eq!(
+                    signature(&binary.query(chr, start, end).unwrap()),
+                    single,
+                    "single {chr}:{start}-{end}"
+                );
+                assert_eq!(
+                    signature(expected.lookup(chr, start, end)),
+                    single,
+                    "tabix batch {chr}:{start}-{end}"
+                );
+                assert_eq!(
+                    signature(actual.lookup(chr, start, end)),
+                    single,
+                    "binary batch {chr}:{start}-{end}"
+                );
+                let isolated = binary.query_batch(&[(chr, start, end)]).unwrap();
+                assert_eq!(
+                    signature(isolated.lookup(chr, start, end)),
+                    single,
+                    "isolated batch {chr}:{start}-{end}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn interval_queries_match_the_real_tabix_spans_fixture() {
+        let dir = tempfile::tempdir().unwrap();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/spans.tsv.gz");
+        let (tabix, binary) = paired_stores(&fixture, &dir.path().join("spans.vpd"));
+        assert_queries_agree(
+            &tabix,
+            &binary,
+            &[
+                ("21", 200, 210),
+                ("21", 250, 255),
+                ("21", 300, 300),
+                ("21", 150, 180),
+                ("21", 260, 260),
+                ("21", 320, 320),
+                ("21", 321, 399),
+                ("21", 255, 250),
+                ("21", 0, 0),
+                ("21", u64::MAX, u64::MAX),
+                ("22", 200, 200),
+                ("missing", 200, 210),
+            ],
+        );
+    }
+
+    #[test]
+    fn interval_batches_preserve_same_start_order_and_duplicate_records() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = crate::test_fixtures::write_tabix_fixture(
+            dir.path(),
+            "nested.tsv.gz",
+            &[
+                "#chrom\tstart\tend\tname",
+                "21\t100\t5000\tlong",
+                "21\t100\t120\tshort",
+                "21\t100\t3000\tduplicate",
+                "21\t100\t3000\tduplicate",
+                "21\t110\t115\tnested",
+                "21\t2500\t2500\tpoint",
+                "21\t6000\t6000\tafter",
+            ],
+            crate::test_fixtures::IndexSpec::standard(),
+        );
+        let (tabix, binary) = paired_stores(&path, &dir.path().join("nested.vpd"));
+        assert_eq!(binary.query("21", 2500, 2500).unwrap().len(), 4);
+        assert_queries_agree(
+            &tabix,
+            &binary,
+            &[
+                ("21", 100, 100),
+                ("21", 110, 110),
+                ("21", 2500, 2500),
+                ("21", 3000, 3000),
+                ("21", 5000, 5000),
+                ("21", 5001, 5999),
+                ("21", 110, 110),
+                ("22", 110, 2500),
+            ],
+        );
+    }
+
+    #[test]
+    fn point_only_queries_keep_exact_bounds_at_the_end_of_a_large_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let records = (1..=10_000)
+            .map(|start| TabixRecord {
+                chr: "21".into(),
+                start,
+                end: start,
+                columns: vec![],
+                header: None,
+            })
+            .collect();
+        let path = dir.path().join("points.vpd");
+        BinaryStoreWriter::new(path.clone())
+            .write(&[], &[("21".into(), records)])
+            .unwrap();
+        let store = BinaryAnnotator::open(&path).unwrap();
+        let single = store.query("21", 9999, 9999).unwrap();
+        assert_eq!(single.len(), 1);
+        assert_eq!(single[0].start, 9999);
+        assert!(store.query("21", 10_001, 10_002).unwrap().is_empty());
+        let batch = store
+            .query_batch(&[("21", 10_000, 10_000), ("21", 9999, 9999), ("21", 1, 1)])
+            .unwrap();
+        for position in [1, 9999, 10_000] {
+            let records = batch.lookup("21", position, position);
+            assert_eq!(records.len(), 1);
+            assert_eq!((records[0].start, records[0].end), (position, position));
+        }
+    }
+
+    #[test]
+    fn malformed_interval_bounds_and_index_order_are_refused_at_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bad.vpd");
+        let records = [100, 200]
+            .map(|start| TabixRecord {
+                chr: "21".into(),
+                start,
+                end: start + 50,
+                columns: vec![],
+                header: None,
+            })
+            .to_vec();
+        BinaryStoreWriter::new(path.clone())
+            .write(&[], &[("21".into(), records)])
+            .unwrap();
+        let data = std::fs::read(&path).unwrap();
+        let index_path = path.with_extension("vpdi");
+        let index = std::fs::read(&index_path).unwrap();
+        for (offset, value) in [(10, 0), (18, 99), (10, 101)] {
+            let mut bad = data.clone();
+            bad[offset..offset + 8].copy_from_slice(&u64::to_le_bytes(value));
+            std::fs::write(&path, bad).unwrap();
+            let error = BinaryAnnotator::open(&path).err().unwrap().to_string();
+            assert!(error.contains("record bounds"), "{error}");
+        }
+        std::fs::write(&path, &data).unwrap();
+        let first_position = 12 + 2 + 2 + 8;
+        for (offset, value) in [
+            (first_position, 0),
+            (first_position + 20, 100),
+            (first_position + 8, u64::MAX),
+            (first_position + 28, 10),
+        ] {
+            let mut bad = index.clone();
+            bad[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
+            std::fs::write(&index_path, bad).unwrap();
+            assert!(BinaryAnnotator::open(&path).is_err());
+        }
+        std::fs::write(&index_path, &index).unwrap();
+        for length in [10, 27, data.len() - 1] {
+            std::fs::write(&path, &data[..length]).unwrap();
+            assert!(BinaryAnnotator::open(&path).is_err());
+        }
+        let mut bad = data.clone();
+        bad[26..28].copy_from_slice(&u16::MAX.to_le_bytes());
+        std::fs::write(&path, bad).unwrap();
+        assert!(BinaryAnnotator::open(&path).is_err());
+    }
+
     #[test]
     fn roundtrip_write_and_read() {
         let dir = tempfile::tempdir().unwrap();
@@ -723,7 +1017,7 @@ mod tests {
     /// than the bytes after it hold is refused when the store is opened,
     /// before anything is allocated for it, and `open_best_store` then
     /// answers from the tabix file beside it; a record offset past the data
-    /// file is refused by the query.
+    /// file is also refused at open.
     #[test]
     fn index_counts_past_the_file_are_refused() {
         let dir = tempfile::tempdir().unwrap();
@@ -814,11 +1108,11 @@ mod tests {
         far_offset[pos_count_at + 8 + 8..pos_count_at + 8 + 16]
             .copy_from_slice(&u64::MAX.to_le_bytes());
         std::fs::write(&vpdi_path, far_offset).unwrap();
-        let store = BinaryAnnotator::open(&vpd_path).unwrap();
-        assert_eq!(
-            store.query("21", 100, 100).unwrap_err().to_string(),
-            "plugin execution failed: record offset out of bounds"
-        );
+        assert!(BinaryAnnotator::open(&vpd_path)
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("record offset out of bounds"));
     }
 
     #[test]

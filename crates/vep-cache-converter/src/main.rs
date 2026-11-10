@@ -23,6 +23,8 @@
 //!   (`.tsv.gz`) to the binary annotation store format (`.vpd` + `.vpdi`)
 //!   for mmap-backed zero-copy lookups.
 
+mod plugin_verify;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::BufReader;
@@ -89,7 +91,7 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         zero_based: bool,
 
-        /// Verify every record after conversion (slow but thorough).
+        /// Verify query probes from every record after conversion (slow but thorough).
         #[arg(long, default_value_t = false)]
         verify_all: bool,
 
@@ -213,11 +215,17 @@ fn convert_plugin_data(
 
     if !no_verify {
         let verify_start = Instant::now();
-        let result = verify_concordance(&output_path, &grouped_records, verify_all)?;
+        let result = plugin_verify::verify_concordance(
+            &output_path,
+            input_path,
+            cfg,
+            &grouped_records,
+            verify_all,
+        )?;
 
         if result.mismatches > 0 {
             eprintln!(
-                "Concordance: FAIL ({} mismatches in {} sampled positions)",
+                "Concordance: FAIL ({} mismatches in {} query checks)",
                 result.mismatches, result.checked
             );
             for mismatch in &result.mismatch_details[..result.mismatch_details.len().min(10)] {
@@ -230,9 +238,9 @@ fn convert_plugin_data(
         }
 
         info!(
-            "Concordance: PASS ({}/{} {} positions match) in {:.1}s",
+            "Concordance: PASS ({} query checks across {} {} probes) in {:.1}s",
             result.checked,
-            result.checked,
+            result.probes,
             if verify_all { "total" } else { "sampled" },
             verify_start.elapsed().as_secs_f64()
         );
@@ -265,7 +273,9 @@ fn read_tabix_records(path: &Path, cfg: &TabixConvertConfig) -> Result<GroupedRe
     let mut records_by_chr: BTreeMap<String, Vec<vep_builtins::tabix::TabixRecord>> =
         BTreeMap::new();
 
-    for line_result in vep_builtins::tabix::BoundedLines::new(buf_reader, path) {
+    for (line_number, line_result) in
+        vep_builtins::tabix::BoundedLines::new(buf_reader, path).enumerate()
+    {
         // The reader's errors name a plugin; the file is the conversion's input.
         let line = line_result.map_err(|error| match error {
             PluginError::Init(message) | PluginError::Run(message) => anyhow::anyhow!(message),
@@ -300,14 +310,36 @@ fn read_tabix_records(path: &Path, cfg: &TabixConvertConfig) -> Result<GroupedRe
             start_raw
         };
 
-        let end = if let Some(ec) = cfg.end_col {
+        let end = if let Some(ec) = cfg.end_col.filter(|&ec| ec != cfg.start_col) {
             columns
                 .get(ec)
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(start)
+                .with_context(|| {
+                    format!(
+                        "{}: line {} lacks end column {ec}",
+                        path.display(),
+                        line_number + 1
+                    )
+                })?
+                .parse::<u64>()
+                .with_context(|| {
+                    format!(
+                        "{}: line {} has invalid end position: {}",
+                        path.display(),
+                        line_number + 1,
+                        columns[ec]
+                    )
+                })?
         } else {
             start
         };
+        if start == 0 || end < start {
+            bail!(
+                "{}: line {} has invalid interval {chr}:{start}-{end}: \
+                 expected positive 1-based start <= end",
+                path.display(),
+                line_number + 1
+            );
+        }
 
         let record = vep_builtins::tabix::TabixRecord {
             chr: chr.clone(),
@@ -321,128 +353,13 @@ fn read_tabix_records(path: &Path, cfg: &TabixConvertConfig) -> Result<GroupedRe
     }
 
     for records in records_by_chr.values_mut() {
-        records.sort_by_key(|r| (r.start, r.end));
+        records.sort_by_key(|r| r.start);
     }
 
     let grouped: Vec<(String, Vec<vep_builtins::tabix::TabixRecord>)> =
         records_by_chr.into_iter().collect();
 
     Ok((header_names, grouped))
-}
-
-/// Result of concordance verification.
-struct VerifyResult {
-    checked: usize,
-    mismatches: usize,
-    mismatch_details: Vec<String>,
-}
-
-/// Verify concordance between the binary store and the original data.
-fn verify_concordance(
-    vpd_path: &Path,
-    source_records: &[(String, Vec<vep_builtins::tabix::TabixRecord>)],
-    verify_all: bool,
-) -> Result<VerifyResult> {
-    use vep_builtins::annotation_store::AnnotationStore;
-
-    let store = vep_builtins::binary_store::BinaryAnnotator::open(vpd_path)
-        .map_err(|e| anyhow::anyhow!("failed to open binary store for verification: {e}"))?;
-
-    let mut checked = 0usize;
-    let mut mismatches = 0usize;
-    let mut mismatch_details = Vec::new();
-
-    let mut all_positions: Vec<(&str, u64)> = Vec::new();
-    for (chr, records) in source_records {
-        for record in records {
-            all_positions.push((chr.as_str(), record.start));
-        }
-    }
-
-    let positions_to_check: Vec<(&str, u64)> = if verify_all || all_positions.len() <= 1000 {
-        all_positions
-    } else {
-        use rand::seq::SliceRandom;
-        let mut rng = rand::rng();
-        let mut sampled = all_positions.clone();
-        sampled.shuffle(&mut rng);
-        sampled.truncate(1000);
-        sampled
-    };
-
-    let mut source_lookup: std::collections::HashMap<
-        (&str, u64),
-        Vec<&vep_builtins::tabix::TabixRecord>,
-    > = std::collections::HashMap::new();
-    for (chr, records) in source_records {
-        for record in records {
-            source_lookup
-                .entry((chr.as_str(), record.start))
-                .or_default()
-                .push(record);
-        }
-    }
-
-    for (chr, pos) in &positions_to_check {
-        let binary_records = store
-            .query(chr, *pos, *pos)
-            .map_err(|e| anyhow::anyhow!("binary store query failed: {e}"))?;
-
-        let source = source_lookup
-            .get(&(*chr, *pos))
-            .map(|v| v.as_slice())
-            .unwrap_or(&[]);
-
-        checked += 1;
-
-        if binary_records.len() != source.len() {
-            mismatches += 1;
-            mismatch_details.push(format!(
-                "chr{}:{} record count mismatch: source={}, binary={}",
-                chr,
-                pos,
-                source.len(),
-                binary_records.len()
-            ));
-            continue;
-        }
-
-        for (i, (src, bin)) in source.iter().zip(binary_records.iter()).enumerate() {
-            if src.columns.len() != bin.columns.len() {
-                mismatches += 1;
-                mismatch_details.push(format!(
-                    "chr{}:{} record[{}] column count: source={}, binary={}",
-                    chr,
-                    pos,
-                    i,
-                    src.columns.len(),
-                    bin.columns.len()
-                ));
-                continue;
-            }
-            for (col_idx, (sv, bv)) in src.columns.iter().zip(bin.columns.iter()).enumerate() {
-                if sv != bv {
-                    mismatches += 1;
-                    let col_name = src
-                        .header
-                        .as_ref()
-                        .and_then(|h| h.get(col_idx))
-                        .map(|s| s.as_str())
-                        .unwrap_or("?");
-                    mismatch_details.push(format!(
-                        "chr{}:{} record[{}].{}: source='{}', binary='{}'",
-                        chr, pos, i, col_name, sv, bv
-                    ));
-                }
-            }
-        }
-    }
-
-    Ok(VerifyResult {
-        checked,
-        mismatches,
-        mismatch_details,
-    })
 }
 
 /// Run the full cache conversion.
