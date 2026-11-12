@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A dylib plugin may export `vep_plugin_feature_types` naming the feature types it annotates; it then runs on the rows of those types, and on transcript rows alone without it. (#78)
   - Built-in plugins that write per row annotate transcript rows alone; CADD, gnomADc and GWAS keep their record-level values on every row. (#78)
   - AlphaMissense writes `am_class` and `am_pathogenicity` on each transcript row of the variant and on no other row. (#78)
+- Nextflow and nf-core
+  - nf-core's `ENSEMBLVEP_VEP` module runs on the vep-rs image and writes Ensembl VEP's VCF. Its `perl-math-cdf` version probe needs the module patched or an image with `Math::CDF`.
 
 ### Changed
 

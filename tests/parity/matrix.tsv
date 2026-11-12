@@ -317,7 +317,7 @@ nearest	AnnotationType/Transcript.pm::get_nearest	documented_subset	landed:docum
 nearest-algorithm	TranscriptTree.pm::_get_obj_start_end	documented_subset	landed:documented_subset	crates/vep-cli/src/nearest.rs::ties_at_equal_distance_are_all_returned;crates/vep-cli/src/nearest.rs::a_site_the_span_covers_is_reported;crates/vep-cli/src/nearest.rs::only_protein_coding_tss_enter_the_array;crates/vep-cli/src/nearest.rs::a_site_one_base_above_the_start_is_not_the_up_candidate;crates/vep-cli/tests/golden.rs::nearest_transcript_values_compare_by_start_site;crates/vep-cli/tests/documented_subsets.rs::nearest_exclusion_is_documented	tests/golden/116/GRCh38-identifiers	
 NearestExonJB	NearestExonJB.pm	error	open			
 NearestGene	NearestGene.pm	error	open			
-nextflow-nf-core-drop-in	-	documented_subset	open			
+nextflow-nf-core-drop-in	-	documented_subset	landed:documented_subset	crates/vep-cli/tests/nf_core.rs::ensemblvep_vep_script_writes_a_tabix_indexed_vcf_of_the_reference_records;crates/vep-cli/tests/nf_core.rs::sarek_default_arguments_run_through_the_module_script;crates/vep-cli/tests/documented_subsets.rs::nextflow_nf_core_drop_in_exclusion_is_documented	tests/golden/116/GRCh38-run-control	
 neXtProt	neXtProt.pm	error	open			
 NMD	NMD.pm	implemented	open			
 no_check_alleles	Config.pm	implemented	landed:implemented	crates/vep-cli/src/variation_matcher.rs::no_check_alleles_matches_on_start_and_end_only	tests/golden/116/GRCh38-colocated-alt	
