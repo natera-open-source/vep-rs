@@ -209,6 +209,18 @@ fn af_exac_is_refused_as_removed_upstream() {
     assert_refused(&["--everything", "--af_exac"], message);
 }
 
+/// `--bam` opens a BAM file of transcript alignments through Bio::DB::HTS
+/// (AnnotationType/Transcript.pm:391-399), edits each transcript the input
+/// overlaps to the sequence of its alignment (:119, :421-631) and switches on
+/// `--use_transcript_ref` (Config.pm:574-579).
+#[test]
+fn bam_is_refused() {
+    let message = "--bam is not supported: it edits each transcript's sequence to match the transcript's alignment in a BAM file, as a RefSeq cache needs, and switches on --use_transcript_ref; a transcript keeps the sequence the cache gives";
+    assert_refused(&["--bam", "edits.bam"], message);
+    assert_refused(&["-bam", "edits.bam"], message);
+    assert_refused(&["--bam=edits.bam"], message);
+}
+
 /// `--genomes` selects the Ensembl Genomes host (Config.pm:390-396).
 #[test]
 fn genomes_is_refused() {

@@ -1136,6 +1136,9 @@ pub struct Args {
     #[arg(help_heading = "Transcript Sets", long = "use_given_ref")]
     pub use_given_ref: bool,
 
+    #[arg(help_heading = "Transcript Sets", long, value_name = "FILE")]
+    pub bam: Option<String>,
+
     /// Accepted for VEP compatibility; not implemented (no statistics file is written, with or without it)
     #[arg(help_heading = "Statistics", long = "no_stats")]
     pub no_stats: bool,

@@ -55,7 +55,7 @@ attributes-cds-start-end-nf	OutputFactory.pm	documented_subset	landed:documented
 attributes-rseq-refseq-compare	OutputFactory.pm	documented_subset	open			
 AVADA	AVADA.pm	error	open			
 AVI	AVI.pm	error	open			
-bam	Config.pm	error	open			crates/vep-cli/tests/interim_flags.rs::bam_is_refused_as_an_unknown_argument
+bam	Config.pm	error	landed:error	crates/vep-cli/tests/cli_errors.rs::bam_is_refused		
 bam-edit-status-rna-edit	AnnotationType/Transcript.pm	documented_subset	open			
 bam-refseq-model-correction	AnnotationType/Transcript.pm	documented_subset	open			
 BayesDel	BayesDel.pm	implemented	open			
