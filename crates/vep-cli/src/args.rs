@@ -1082,6 +1082,12 @@ pub struct Args {
     #[arg(help_heading = "Plugins", long = "custom_suppress_filter")]
     pub custom_suppress_filter: bool,
 
+    #[arg(help_heading = "Plugins", long, value_name = "FILE")]
+    pub gff: Option<String>,
+
+    #[arg(help_heading = "Plugins", long, value_name = "FILE")]
+    pub gtf: Option<String>,
+
     /// Directory the plugin libraries are looked up in; default <--dir>/Plugins. A
     /// directory that does not exist is warned about when --plugin names a plugin
     /// (an error under --safe). A value holding a glob pattern (`*`, `?`, `[...]`,

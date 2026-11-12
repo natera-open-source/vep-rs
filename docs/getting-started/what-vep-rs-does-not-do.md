@@ -16,7 +16,7 @@ Motif score changes (`MOTIF_SCORE_CHANGE`), high-information positions (`HIGH_IN
 
 ## Custom annotation sources
 
-`--custom <file>,<name>,<format>,...` is accepted and the source is not read, so the run proceeds and no custom field appears; the flag's help text says so. `--gff`, `--gtf`, `--bigwig`, `--phyloP` and `--phastCons`, which Ensembl VEP reads as `--custom` sources, and `--custom_multi_allelic`, `--ucsc_assembly` and `--ucsc_data_root` are refused as unknown arguments (`error: unexpected argument '--gff' found`, exit 2). `--custom_suppress_filter` is refused with an error that begins `ERROR: [cli] --custom_suppress_filter is not supported: it would keep a --custom VCF source's FILTER column out of the output`.
+`--custom <file>,<name>,<format>,...` is accepted and the source is not read, so the run proceeds and no custom field appears; the flag's help text says so. `--bigwig`, `--phyloP` and `--phastCons`, which Ensembl VEP reads as `--custom` sources, and `--custom_multi_allelic`, `--ucsc_assembly` and `--ucsc_data_root` are refused as unknown arguments (`error: unexpected argument '--bigwig' found`, exit 2). `--gff` and `--gtf`, which Ensembl VEP reads as `--custom` sources of transcripts, are refused with an error that begins `ERROR: [cli] --gff is not supported: it would annotate against the transcripts of a GFF3 file` (a GTF file for `--gtf`): transcripts are read from the cache alone. `--custom_suppress_filter` is refused with an error that begins `ERROR: [cli] --custom_suppress_filter is not supported: it would keep a --custom VCF source's FILTER column out of the output`.
 
 Planned for the next release, 0.6.0.
 

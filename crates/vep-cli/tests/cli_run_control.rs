@@ -201,8 +201,8 @@ fn empty_argv_prints_help_and_exits_0() {
 /// leaves in `@ARGV` whole and prints its usage after), in either order, exits 0
 /// with the text of `--help` alone, as Ensembl VEP 116.2 prints its usage and
 /// exits 0 on each of these lines. `--help=1` is refused on both engines
-/// (vep:30; exit 2 here, in clap's words), and so is `--gff --help`: `gff=s`
-/// (Config.pm:260) takes `--help` as its value on both engines, so no usage
+/// (vep:30; exit 2 here, in clap's words), and so is `--bigwig --help`: `bigwig=s`
+/// (Config.pm:262) takes `--help` as its value on both engines, so no usage
 /// prints, and this version refuses the option by name (exit 2).
 #[test]
 fn help_and_version_win_over_a_flag_refused_before_parsing() {
@@ -229,7 +229,7 @@ fn help_and_version_win_over_a_flag_refused_before_parsing() {
         );
         assert_eq!(text(&output.stdout), expected, "{argv:?}");
     }
-    for argv in [&["--help=1"][..], &["--gff", "--help"][..]] {
+    for argv in [&["--help=1"][..], &["--bigwig", "--help"][..]] {
         let output = vep().args(argv).output().unwrap();
         assert_eq!(
             output.status.code(),

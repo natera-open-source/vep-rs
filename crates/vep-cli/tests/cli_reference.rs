@@ -1087,7 +1087,7 @@ fn render_compatibility(group: &Group, command: &Command, sections: &[FlagSectio
          Config.pm:62); `--help=1` and a `--help` behind `--` are refused. A `--help` or \
          `--version` that is the token after a flag taking a string is that value (`-i \
          --help` names the file) on both engines, an Ensembl VEP option this version lacks \
-         included (`--gff --help` is refused as `--gff`, exit 2). After a flag taking a \
+         included (`--bigwig --help` is refused as `--bigwig`, exit 2). After a flag taking a \
          number it is the help or the version, as it is after a flag of this version's own, \
          which Ensembl VEP leaves in `@ARGV` (`--pipeline_depth --help`).\n\n",
     );
