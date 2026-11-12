@@ -48,7 +48,8 @@
   "config-file",
   "vep-environment-variables",
   "option-prefix-abbreviation",
-  "single-dash-long-options"
+  "single-dash-long-options",
+  "nextflow-nf-core-drop-in"
  ],
  "flag_sets": [
   {
@@ -966,6 +967,36 @@
     "exit": 0,
     "output": "tab.txt",
     "format": "tab"
+   }
+  },
+  {
+   "name": "nf-core-ensemblvep-vep",
+   "argv": [
+    "-i",
+    "{input}",
+    "-o",
+    "{out}",
+    "--vcf",
+    "{flags}",
+    "--compress_output",
+    "bgzip",
+    "--assembly",
+    "{assembly}",
+    "--species",
+    "homo_sapiens",
+    "--cache",
+    "--cache_version",
+    "116",
+    "--dir_cache",
+    "{cache_root}",
+    "--fork",
+    "2"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "vcf.vcf",
+    "format": "vcf",
+    "warnings_file": "default.txt_warnings.txt"
    }
   },
   {

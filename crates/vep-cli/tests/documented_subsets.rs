@@ -289,6 +289,32 @@ fn byte_transparent_input_exclusion_is_documented() {
     );
 }
 
+/// `nextflow-nf-core-drop-in`: the nf-core `ENSEMBLVEP_VEP` module's command
+/// line runs on the vep-rs image, while its `perl -MMath::CDF` and `ensembl-vep`
+/// version probes (`ensemblvep/vep/main.nf:29-31`), its summary report, its
+/// `--gtf` input and plugins outside vep-rs's do not carry over.
+#[test]
+fn nextflow_nf_core_drop_in_exclusion_is_documented() {
+    assert_page_states(
+        "getting-started/nextflow-nf-core.md",
+        &[
+            "vep-rs runs that module's command line unchanged",
+            "The vep-rs image does not carry `Math::CDF`, so Nextflow fails the task with \
+             `Unable to evaluate output` after the annotation has been written",
+            "Run the module patched without its `versions_perlmathcdf` output",
+            "vep-rs prints no such line, so the pipeline's version report shows an empty \
+             `ensemblvep` version",
+            "`--stats_file` is accepted and no summary file is written, so the module emits no \
+             `report` and MultiQC shows no VEP section",
+            "The module's `gtf` input runs `vep --gtf`, which vep-rs does not accept",
+            "must be a vep-rs cache in Ensembl VEP's `<dir_cache>/<species>/<version>_<assembly>` \
+             layout",
+            "nf-core modules install their tool from Bioconda, and vep-rs has no Bioconda \
+             package yet",
+        ],
+    );
+}
+
 /// `cache`: a run naming none of `--database`, `--cache`, `--offline` and
 /// `--custom` proceeds on the cache it is given, where Config.pm:993-1017 dies.
 #[test]

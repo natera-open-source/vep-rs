@@ -2445,7 +2445,8 @@ fn value_after<'a>(argv: &'a [String], flag: &str) -> Option<&'a str> {
 pub struct Expect {
     pub exit: i32,
     /// An expected output file (under `expected/`) the run's output is compared
-    /// with as the default run's is: the file the run wrote at `{out}`, or its
+    /// with as the default run's is: the file the run wrote at `{out}`,
+    /// decompressed when the command line names `--compress_output`, or its
     /// standard output when the command line names no `{out}`.
     pub output: Option<String>,
     /// The format `output` is compared in: `default`, `tab`, `vcf` or `json`.
@@ -2761,10 +2762,32 @@ pub fn execute_manifest_run(corpus: &Corpus, run: &ManifestRun, out_dir: &Path) 
     }
     if let Some(expected_name) = &run.expect.output {
         let actual = if run.argv.iter().any(|t| t.contains("{out}")) {
-            fs::read_to_string(&out).unwrap_or_else(|e| {
-                report.push_str(&format!("{label}: no output at {}: {e}\n", out.display()));
-                String::new()
-            })
+            match fs::read(&out) {
+                Err(e) => {
+                    report.push_str(&format!("{label}: no output at {}: {e}\n", out.display()));
+                    String::new()
+                }
+                Ok(bytes) if argv.iter().any(|t| t == "--compress_output") => {
+                    let mut text = String::new();
+                    if !bytes.starts_with(&[0x1f, 0x8b]) {
+                        report.push_str(&format!(
+                            "{label}: --compress_output wrote no gzip stream\n"
+                        ));
+                    } else if let Err(e) =
+                        flate2::read::MultiGzDecoder::new(&bytes[..]).read_to_string(&mut text)
+                    {
+                        report.push_str(&format!(
+                            "{label}: {} does not decompress: {e}\n",
+                            out.display()
+                        ));
+                    }
+                    text
+                }
+                Ok(bytes) => String::from_utf8(bytes).unwrap_or_else(|e| {
+                    report.push_str(&format!("{label}: {} is not UTF-8: {e}\n", out.display()));
+                    String::new()
+                }),
+            }
         } else {
             stdout.clone()
         };

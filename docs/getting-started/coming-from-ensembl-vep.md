@@ -47,4 +47,6 @@ vep --cache --offline --dir_cache $HOME/.vep --assembly GRCh38 \
   -i input.vcf -o output.txt
 ```
 
+An nf-core pipeline's `ENSEMBLVEP_VEP` step runs on the vep-rs image in the same way ([Nextflow and nf-core](nextflow-nf-core.md)).
+
 `--json_cache` names the directory holding `info.json` and `transcripts/`, so `116_GRCh38` itself and not its parent; [Cache setup](../cache-setup.md) covers the GRCh37 command and variation data, and [SIFT and PolyPhen predictions](../cache-predictions.md) covers the matrices.
