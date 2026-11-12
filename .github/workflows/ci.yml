@@ -13,22 +13,86 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Which of the jobs below a pull request can affect, from the paths its merge commit
+  # changes against the base: `rust` for Clippy, Format, Module Docs, MSRV and Advisory
+  # Reachability, `test` for Test, `harness` for Harness Tests; Comparator Tests reads
+  # docs, README.md, CHANGELOG.md, CITATION.cff, .github/ and bioconda/, so it always runs.
+  # Only the paths listed in the `case` below can leave an output `false`: any other path,
+  # a push to main, an empty diff or a checkout that is not a merge sets all three `true`.
+  #
+  # A gated job still starts and reports its required check as a success with its steps
+  # skipped. A matrix job skipped by a job-level `if:` is never expanded, so no check named
+  # Test, Clippy, Format or Module Docs would report and the ruleset would wait on them.
+  # The gated jobs run their steps when this job fails, since an output reads `false` only
+  # when this job wrote it.
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.classify.outputs.rust }}
+      test: ${{ steps.classify.outputs.test }}
+      harness: ${{ steps.classify.outputs.harness }}
+    steps:
+      # The pull_request checkout is the merge commit; depth 2 brings its base parent.
+      - if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - id: classify
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          rust=true test=true harness=true
+          if [ "$EVENT" = pull_request ] && git rev-parse -q --verify 'HEAD^2' > /dev/null; then
+            git diff -z --name-only --no-renames 'HEAD^1' HEAD > "$RUNNER_TEMP/changed"
+            code=false docs=false legal=false n=0
+            while IFS= read -r -d '' path; do
+              n=$((n + 1))
+              echo "changed: $path"
+              case "$path" in
+                .github/workflows/*) code=true ;;
+                # The Rust tests assert the CLI reference and the sentences of many pages.
+                docs/*) docs=true ;;
+                # scripts/docker/stage_release.sh copies both into the image context.
+                LICENSE | NOTICE) legal=true ;;
+                README.md | CHANGELOG.md | CONTRIBUTING.md | AGENTS.md | CLAUDE.md \
+                  | CODE_OF_CONDUCT.md | SECURITY.md | CITATION.cff | .zenodo.json | book.toml \
+                  | theme/* | manuscript/* | bioconda/* | docker/* | .claude/* | .github/*) ;;
+                *) code=true ;;
+              esac
+            done < "$RUNNER_TEMP/changed"
+            if [ "$n" -gt 0 ] && [ "$code" = false ]; then
+              rust=false
+              [ "$docs" = true ] || test=false
+              [ "$legal" = true ] || harness=false
+            fi
+          fi
+          printf 'rust=%s\ntest=%s\nharness=%s\n' "$rust" "$test" "$harness" | tee -a "$GITHUB_OUTPUT"
+
   check:
     name: ${{ matrix.name }}
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         # tools/vep-fields-compare is its own Cargo root, so a `--workspace` command
-        # never reaches it; `comparator` is the same check over that package.
+        # never reaches it; `comparator` is the same check over that package. `gate`
+        # names the `changes` output that decides whether the entry's steps run.
         include:
           - name: Test
+            gate: test
             command: cargo test --workspace --locked
             comparator: cargo test --locked --manifest-path tools/vep-fields-compare/Cargo.toml
           - name: Clippy
+            gate: rust
             command: cargo clippy --workspace -- -D warnings
             comparator: cargo clippy --all-targets --locked --manifest-path tools/vep-fields-compare/Cargo.toml -- -D warnings
           - name: Format
+            gate: rust
             command: cargo fmt --all -- --check
             comparator: cargo fmt --all --manifest-path tools/vep-fields-compare/Cargo.toml -- --check
           # Catches a license header run into a module's `//!` doc line with no
@@ -36,26 +100,34 @@ jobs:
           # joined line is a valid comment, so everything compiles and passes while
           # the first rustdoc line is silently lost.
           - name: Module Docs
+            gate: rust
             command: scripts/check_module_docs.sh
             comparator: scripts/check_module_docs.sh tools
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+      - if: needs.changes.outputs[matrix.gate] == 'false'
+        run: echo "No path this check reads changed; its steps are skipped."
+      - if: needs.changes.outputs[matrix.gate] != 'false'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: needs.changes.outputs[matrix.gate] != 'false'
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
           toolchain: 1.97.1
           components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - if: needs.changes.outputs[matrix.gate] != 'false'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       # The Parquet round-trip test skips itself without the DuckDB CLI; the
       # Test job installs it so the skip cannot hide a regression.
-      - if: matrix.name == 'Test'
+      - if: matrix.name == 'Test' && needs.changes.outputs[matrix.gate] != 'false'
         run: |
           curl -fsSL -o /tmp/duckdb.tar.gz https://github.com/duckdb/duckdb/releases/download/v2.0.0/duckdb-cli-linux-amd64.tar.gz
           echo "c6507206baf7793c6013dbd82368469a45f20dc0e17a6f92f204602f652ed2bc  /tmp/duckdb.tar.gz" | sha256sum --check --strict -
           sudo tar -xzf /tmp/duckdb.tar.gz -C /usr/local/bin duckdb
           duckdb --version
-      - run: ${{ matrix.command }}
-      - run: ${{ matrix.comparator }}
+      - if: needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.command }}
+      - if: needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.comparator }}
 
   # The Python comparators and the golden-corpus generator ship with their own
   # test files; a file that fails to import reports zero failures, so the
@@ -148,10 +220,16 @@ jobs:
   # is asserted so a suite that silently ran nothing cannot pass.
   harness-tests:
     name: Harness Tests
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: |
+      - if: needs.changes.outputs.harness == 'false'
+        run: echo "No path this check reads changed; its steps are skipped."
+      - if: needs.changes.outputs.harness != 'false'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: needs.changes.outputs.harness != 'false'
+        run: |
           set -e
           check() {
             out=$(bash "$1" 2>&1) || { printf '%s\n' "$out"; exit 1; }
@@ -174,25 +252,34 @@ jobs:
   # compiles nothing.
   advisory-reachability:
     name: Advisory Reachability
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+      - if: needs.changes.outputs.rust == 'false'
+        run: echo "No path this check reads changed; its steps are skipped."
+      - if: needs.changes.outputs.rust != 'false'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: needs.changes.outputs.rust != 'false'
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
           toolchain: 1.97.1
-      - run: |
+      - if: needs.changes.outputs.rust != 'false'
+        run: |
           set -euo pipefail
           CARGO_AUDIT_VERSION=0.22.2
           ASSET="cargo-audit-x86_64-unknown-linux-musl-v${CARGO_AUDIT_VERSION}"
           curl -fsSL "https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv${CARGO_AUDIT_VERSION}/${ASSET}.tgz" | tar xz -C /tmp
           install -m 0755 "/tmp/${ASSET}/cargo-audit" "${CARGO_HOME:-$HOME/.cargo}/bin/cargo-audit"
           cargo audit --version
-      - run: scripts/check_advisory_reachability.sh
+      - if: needs.changes.outputs.rust != 'false'
+        run: scripts/check_advisory_reachability.sh
       # tools/vep-fields-compare has its own lockfile, outside the script's audit of the
       # root one. The whole lockfile is audited, with no reachability distinction: an
       # advisory of any class on any crate in it, including a backend the build leaves
       # out, fails here and is cleared by a bump.
-      - run: cargo audit --deny warnings --file tools/vep-fields-compare/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-fields-compare/Cargo.lock
 
   # Builds on the DECLARED minimum supported Rust version rather than the
   # pinned toolchain. Every job above runs the pinned 1.97.1, the toolchain the
@@ -209,13 +296,20 @@ jobs:
   # the old floor.
   msrv:
     name: MSRV
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+      - if: needs.changes.outputs.rust == 'false'
+        run: echo "No path this check reads changed; its steps are skipped."
+      - if: needs.changes.outputs.rust != 'false'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: needs.changes.outputs.rust != 'false'
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
           toolchain: 1.89
       - name: Toolchain matches the declared rust-version
+        if: needs.changes.outputs.rust != 'false'
         run: |
           actual=$(rustc --version | awk '{print $2}')
           for manifest in Cargo.toml tools/vep-fields-compare/Cargo.toml; do
@@ -226,9 +320,12 @@ jobs:
               *) echo "ERROR: [msrv] toolchain $actual is not the declared rust-version $declared in $manifest; update both the toolchain input and the manifest together" >&2; exit 1 ;;
             esac
           done
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - run: cargo build --workspace --locked
-      - run: cargo build --locked --manifest-path tools/vep-fields-compare/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --workspace --locked
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-fields-compare/Cargo.toml
 
   build-release:
     name: Build Release
