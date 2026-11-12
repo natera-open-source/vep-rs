@@ -93,6 +93,14 @@ impl BinaryAnnotator {
     /// The corresponding `.vpdi` index file must exist alongside it
     /// (same path with `.vpdi` extension).
     pub fn open(vpd_path: &Path) -> Result<Self, PluginError> {
+        Self::open_checked(vpd_path, |_, _| Ok(()))
+    }
+
+    /// Validate the exact mapped data and index bytes before parsing either.
+    pub(crate) fn open_checked(
+        vpd_path: &Path,
+        check: impl FnOnce(&[u8], &[u8]) -> Result<(), PluginError>,
+    ) -> Result<Self, PluginError> {
         let vpdi_path = vpd_path.with_extension("vpdi");
         if !vpd_path.exists() {
             return Err(PluginError::Init(format!(
@@ -107,7 +115,12 @@ impl BinaryAnnotator {
             )));
         }
 
-        let index = Self::load_index(&vpdi_path)?;
+        let index_bytes = std::fs::read(&vpdi_path).map_err(|e| {
+            PluginError::Init(format!(
+                "failed to read index file {}: {e}",
+                vpdi_path.display()
+            ))
+        })?;
 
         let file = std::fs::File::open(vpd_path).map_err(|e| {
             PluginError::Init(format!(
@@ -123,6 +136,8 @@ impl BinaryAnnotator {
             ))
         })?;
 
+        check(&mmap, &index_bytes)?;
+        let index = Self::load_index(&index_bytes)?;
         let (column_names, _header_end) = Self::parse_data_header(&mmap)?;
         let column_names = Arc::new(column_names);
 
@@ -138,12 +153,9 @@ impl BinaryAnnotator {
         })
     }
 
-    /// Load the `.vpdi` index file into memory.
-    fn load_index(path: &Path) -> Result<VpdIndex, PluginError> {
-        let bytes = std::fs::read(path).map_err(|e| {
-            PluginError::Init(format!("failed to read index file {}: {e}", path.display()))
-        })?;
-        let mut cursor = io::Cursor::new(bytes.as_slice());
+    /// Parse the loaded `.vpdi` index bytes.
+    fn load_index(bytes: &[u8]) -> Result<VpdIndex, PluginError> {
+        let mut cursor = io::Cursor::new(bytes);
 
         let mut magic = [0u8; 4];
         cursor.read_exact(&mut magic).map_err(read_err)?;

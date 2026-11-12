@@ -13,6 +13,7 @@
 
 pub mod annotation_store;
 pub mod binary_store;
+pub mod provenance;
 pub mod registry;
 pub mod tabix;
 pub mod traits;

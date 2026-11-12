@@ -19,6 +19,8 @@ bigtools = { workspace = true }
 bstr = { workspace = true }
 indexmap = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 parking_lot = { workspace = true }
@@ -26,7 +28,6 @@ rayon = { workspace = true }
 memmap2 = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 criterion = { workspace = true }
 smallvec = { workspace = true }
 

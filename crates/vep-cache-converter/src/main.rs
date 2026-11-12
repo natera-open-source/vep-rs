@@ -33,6 +33,7 @@ use std::time::Instant;
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use tracing::{info, warn};
+use vep_builtins::provenance::{ConversionSettings as TabixConvertConfig, Publication};
 use vep_builtins::PluginError;
 use vep_core::cache_manifest::CacheManifest;
 use vep_core::coordinate::is_cache_path_component;
@@ -155,14 +156,6 @@ fn resolve_json_dir(json_dir: &Option<String>) -> Result<PathBuf> {
     }
 }
 
-/// Shared column layout configuration for tabix conversion.
-struct TabixConvertConfig {
-    chr_col: usize,
-    start_col: usize,
-    end_col: Option<usize>,
-    zero_based: bool,
-}
-
 /// Grouped records: column names + records grouped by chromosome.
 type GroupedRecords = (
     Vec<String>,
@@ -187,7 +180,13 @@ fn convert_plugin_data(
     info!("Converting {} to binary store", input);
     let start = Instant::now();
 
-    let (column_names, grouped_records) = read_tabix_records(input_path, cfg)?;
+    let publication = Publication::begin(input_path, &output_path, *cfg)?;
+    let mut source = publication.source_reader()?;
+    let (column_names, grouped_records) = read_tabix_records_from(&mut source, input_path, cfg)?;
+    let source_digest = source
+        .digest_to_end()
+        .with_context(|| format!("failed to hash {}", input_path.display()))?;
+    let staged_output = publication.data_path();
 
     let total_records: usize = grouped_records.iter().map(|(_, recs)| recs.len()).sum();
     info!(
@@ -198,7 +197,7 @@ fn convert_plugin_data(
     );
 
     let write_start = Instant::now();
-    let writer = vep_builtins::binary_store::BinaryStoreWriter::new(output_path.clone());
+    let writer = vep_builtins::binary_store::BinaryStoreWriter::new(staged_output.clone());
     let (count, data_size, index_size) = writer
         .write(&column_names, &grouped_records)
         .map_err(|e| anyhow::anyhow!("failed to write binary store: {e}"))?;
@@ -213,7 +212,7 @@ fn convert_plugin_data(
 
     if !no_verify {
         let verify_start = Instant::now();
-        let result = verify_concordance(&output_path, &grouped_records, verify_all)?;
+        let result = verify_concordance(&staged_output, &grouped_records, verify_all)?;
 
         if result.mismatches > 0 {
             eprintln!(
@@ -238,6 +237,7 @@ fn convert_plugin_data(
         );
     }
 
+    publication.publish(source_digest, *cfg)?;
     info!(
         "Conversion complete in {:.1}s: {} -> {}",
         start.elapsed().as_secs_f64(),
@@ -252,12 +252,19 @@ fn convert_plugin_data(
 /// position. The file is read with the length of a line capped
 /// ([`vep_builtins::tabix::BoundedLines`]): a line past the cap fails the
 /// conversion, naming the file and the line.
+#[cfg(test)]
 fn read_tabix_records(path: &Path, cfg: &TabixConvertConfig) -> Result<GroupedRecords> {
-    use noodles::bgzf;
-
     let file =
         fs::File::open(path).with_context(|| format!("failed to open {}", path.display()))?;
-    let reader = bgzf::io::Reader::new(file);
+    read_tabix_records_from(file, path, cfg)
+}
+
+fn read_tabix_records_from(
+    source: impl std::io::Read,
+    path: &Path,
+    cfg: &TabixConvertConfig,
+) -> Result<GroupedRecords> {
+    let reader = noodles::bgzf::io::Reader::new(source);
     let buf_reader = BufReader::new(reader);
 
     let mut header_names: Vec<String> = Vec::new();
@@ -901,6 +908,173 @@ fn parse_region_filename(filename: &str) -> Option<(String, u64, u64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn plugin_source(path: &Path, body: &[u8]) {
+        use noodles::core::Position;
+        use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+        use std::io::Write;
+
+        let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(path).unwrap());
+        let mut indexer = noodles::tabix::index::Indexer::default();
+        indexer.set_header(
+            noodles::csi::binning_index::index::header::Builder::default()
+                .set_reference_sequence_name_index(0)
+                .set_start_position_index(1)
+                .set_end_position_index(Some(1))
+                .build(),
+        );
+        for line in std::str::from_utf8(body).unwrap().split_inclusive('\n') {
+            let begin = writer.virtual_position();
+            writer.write_all(line.as_bytes()).unwrap();
+            if line.starts_with('#') {
+                continue;
+            }
+            let mut fields = line.trim_end().split('\t');
+            let Some(chromosome) = fields.next() else {
+                continue;
+            };
+            let Some(position) = fields
+                .next()
+                .and_then(|field| field.parse::<Position>().ok())
+            else {
+                continue;
+            };
+            indexer
+                .add_record(
+                    chromosome,
+                    position,
+                    position,
+                    Chunk::new(begin, writer.virtual_position()),
+                )
+                .unwrap();
+        }
+        writer.finish().unwrap();
+        noodles::tabix::fs::write(
+            PathBuf::from(format!("{}.tbi", path.display())),
+            &indexer.build(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn successful_plugin_conversion_publishes_verifiable_provenance() {
+        for no_verify in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let log = dir.path().join("events.log");
+            let subscriber = tracing_subscriber::fmt()
+                .without_time()
+                .with_ansi(false)
+                .with_writer(fs::File::create(&log).unwrap())
+                .finish();
+            let _guard = tracing::subscriber::set_default(subscriber);
+            let input = dir.path().join("data.tsv.gz");
+            let output = dir.path().join("data.tsv.vpd");
+            plugin_source(&input, b"#chrom\tpos\tscore\n21\t200\tSRC_A\n");
+            let cfg = TabixConvertConfig {
+                chr_col: 0,
+                start_col: 1,
+                end_col: None,
+                zero_based: false,
+            };
+            convert_plugin_data(
+                input.to_str().unwrap(),
+                output.to_str().unwrap(),
+                &cfg,
+                true,
+                no_verify,
+            )
+            .unwrap();
+            let config = vep_builtins::tabix::TabixConfig {
+                file_path: input.clone(),
+                chr_col: 0,
+                start_col: 1,
+                end_col: None,
+                ref_col: None,
+                alt_col: None,
+                zero_based: false,
+            };
+            let store =
+                vep_builtins::annotation_store::open_best_store(&input, config.clone()).unwrap();
+            assert_eq!(
+                store.query("21", 200, 200).unwrap()[0].get("score"),
+                Some("SRC_A")
+            );
+            let tabix = vep_builtins::TabixAnnotator::open(config.clone()).unwrap();
+            assert_eq!(
+                tabix.query("21", 200, 200).unwrap()[0].get("score"),
+                Some("SRC_A")
+            );
+            let path = vep_builtins::provenance::manifest_path(&output);
+            let manifest: serde_json::Value =
+                serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            assert_eq!(
+                manifest["source_sha256"],
+                vep_builtins::provenance::digest_hex(
+                    vep_core::cache_manifest::file_digest(&input).unwrap()
+                )
+            );
+            fs::remove_file(path).unwrap();
+            fs::remove_file(dir.path().join("data.tsv.gz.tbi")).unwrap();
+            assert!(vep_builtins::annotation_store::open_best_store(&input, config).is_err());
+            let text = fs::read_to_string(log).unwrap();
+            assert!(text.contains("using verified binary annotation store"));
+            assert!(text.contains("backend=\"binary\""));
+            for key in ["source_sha256", "data_sha256", "index_sha256"] {
+                assert!(text.contains(manifest[key].as_str().unwrap()), "{key}");
+            }
+            assert!(text.contains("falling back to requested tabix source"));
+        }
+    }
+
+    #[test]
+    fn failed_parsing_or_concordance_keeps_previous_plugin_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("data.tsv.gz");
+        let output = dir.path().join("data.tsv.vpd");
+        plugin_source(&input, b"#chrom\tpos\tscore\n21\t200\tSRC_A\n");
+        let cfg = TabixConvertConfig {
+            chr_col: 0,
+            start_col: 1,
+            end_col: None,
+            zero_based: false,
+        };
+        let convert = || {
+            convert_plugin_data(
+                input.to_str().unwrap(),
+                output.to_str().unwrap(),
+                &cfg,
+                true,
+                false,
+            )
+        };
+        convert().unwrap();
+        let files = [
+            &output,
+            &output.with_extension("vpdi"),
+            &vep_builtins::provenance::manifest_path(&output),
+        ];
+        let before: Vec<_> = files
+            .iter()
+            .map(fs::read)
+            .collect::<Result<_, _>>()
+            .unwrap();
+        for (body, reason) in [
+            (
+                "#chrom\tpos\tscore\n21\tbad\tSRC_B\n".to_string(),
+                "invalid start position",
+            ),
+            (
+                format!("#chrom\tpos\tscore\n21\t200\t{}\n", "x".repeat(65536)),
+                "Concordance verification failed",
+            ),
+        ] {
+            plugin_source(&input, body.as_bytes());
+            assert!(format!("{:#}", convert().unwrap_err()).contains(reason));
+            for (path, expected) in files.iter().zip(&before) {
+                assert_eq!(&fs::read(path).unwrap(), expected);
+            }
+        }
+    }
 
     #[test]
     fn test_parse_region_filename_simple() {
