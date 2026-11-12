@@ -65,7 +65,7 @@ DESCRIPTION_METAS = re.compile(
 HOME_TITLE = re.compile(r"<title>([^<]*)</title>")
 HOME_OG_TITLES = re.compile(r'(<meta (?:property="og:title"|name="twitter:title") content=")[^"]*(">)')
 # A search result shows the title and description; these say what the project is in the words people search.
-HOME_TAGLINE = "a fast Rust reimplementation of Ensembl VEP, the Variant Effect Predictor"
+HOME_TAGLINE = "fast Ensembl VEP (Variant Effect Predictor) in Rust"
 DESCRIPTION_MIN, DESCRIPTION_MAX = 80, 160
 
 

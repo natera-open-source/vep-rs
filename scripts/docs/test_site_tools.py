@@ -508,6 +508,7 @@ def test_menu_title_is_demoted_and_a_title_repeating_the_book_name_collapses(mon
     site, source = built_site(tmp_path)
     finish(monkeypatch, capsys, site, "--source", str(source))
     index = (site / "index.html").read_text(encoding="utf-8")
+    assert postbuild.HOME_TAGLINE == "fast Ensembl VEP (Variant Effect Predictor) in Rust"
     assert f'<p class="menu-title">vep-rs {RELEASE}</p>' in index
     assert "<h1 class=" not in index
     assert f"<title>vep-rs {RELEASE}: {postbuild.HOME_TAGLINE}</title>" in index
