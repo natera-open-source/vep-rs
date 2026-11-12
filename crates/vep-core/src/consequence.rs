@@ -14,7 +14,9 @@ use std::sync::Arc;
 
 use smallvec::SmallVec;
 
-use crate::transcript::Transcript;
+use crate::transcript::{Transcript, TranscriptMeta};
+
+static ABSENT_META_STRING: Option<String> = None;
 
 /// Per-transcript consequence term list.
 ///
@@ -499,7 +501,7 @@ fn derive_introns_from_exons(
 /// positional information (cDNA, CDS, protein coordinates), codon/amino acid
 /// changes, and metadata from the source transcript. Multiple instances are
 /// attached to each [`InputVariant`](crate::variant::InputVariant).
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct TranscriptConsequence {
     /// Transcript stable ID (e.g., "ENST00000366667").
     pub transcript_id: Arc<str>,
@@ -530,11 +532,8 @@ pub struct TranscriptConsequence {
     /// sequence length and the peptide length where it lies in the coding
     /// region and the cache carries the sequence. Set whenever the column's
     /// rule holds, position or not, so a `-` column prints `-/<total>`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cdna_total: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cds_total: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub protein_total: Option<u32>,
     /// The three positions of the allele's own span where the columns print
     /// another span's: for an allele of a `--minimal` split the columns print the
@@ -543,7 +542,6 @@ pub struct TranscriptConsequence {
     /// `OutputFactory/JSON.pm:217-220` clear the cached positions before the
     /// rejoin, so they are recomputed on the trimmed feature and kept). `None`
     /// when the columns are the allele's own.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own_span_positions: Option<Box<OwnSpanPositions>>,
     /// Amino acid change (e.g., "A/V").
     pub amino_acids: Option<String>,
@@ -569,7 +567,6 @@ pub struct TranscriptConsequence {
     /// Bases the insertion or deletion was moved 3' along the transcript before
     /// its terms and positions were computed (`--shift_3prime 1`); 0 when nothing
     /// moved, every other row included.
-    #[serde(default)]
     pub shift_length: u64,
     /// The `Allele` the row prints under `--shift_3prime 1` when it is not the
     /// allele as the record wrote it: the inserted bases rotated along the
@@ -577,13 +574,11 @@ pub struct TranscriptConsequence {
     /// since `codon` rotates the allele's sequence there (`shift_feature_seqs`,
     /// TranscriptVariationAllele.pm:820, 1330-1347) and the row prints that
     /// sequence (OutputFactory.pm:1347); `None` for every other row.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shifted_allele: Option<Arc<str>>,
     /// The reference allele the row was analysed against under
     /// `--use_transcript_ref`, relative to the variant's strand: the transcript's
     /// where the variant maps inside its exons, the input's elsewhere (`USED_REF`,
     /// OutputFactory.pm:1774-1779); `None` without the flag.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub used_ref: Option<Arc<str>>,
     /// SIFT prediction and score.
     pub sift: Option<String>,
@@ -597,45 +592,19 @@ pub struct TranscriptConsequence {
     pub flags: Arc<[String]>,
     /// Transcript Support Level (1-5).
     pub tsl: Option<u8>,
-    /// MANE Select transcript ID, if this transcript carries the MANE_Select tag.
-    /// Used by `--pick`/`--pick_allele`/`flag_pick` to prefer MANE-curated transcripts
-    /// over Ensembl-canonical (Ensembl VEP `pick_order` slot 0).
-    pub mane_select: Option<String>,
-    /// MANE Plus Clinical transcript ID, if this transcript carries the
-    /// MANE_Plus_Clinical tag. Used by `--pick` (Ensembl VEP `pick_order` slot 1).
-    pub mane_plus_clinical: Option<String>,
-    /// APPRIS annotation (e.g. "principal1", "alternative2").
-    /// Used by `--pick` to prefer principal isoforms (Ensembl VEP `pick_order` slot 3).
-    pub appris: Option<String>,
-    /// CCDS ID.
-    pub ccds: Option<String>,
+    /// Immutable source-transcript annotations; absent on rows without a transcript.
+    pub meta: Option<Arc<TranscriptMeta>>,
     /// The transcript carries a `gencode_primary` attribute: the
     /// `GENCODE_PRIMARY` column under `--flag_gencode_primary`.
-    #[serde(default)]
     pub gencode_primary: bool,
-    /// UniProtKB/Swiss-Prot accession(s).
-    pub swissprot: Option<String>,
-    /// UniProtKB/TrEMBL accession(s).
-    pub trembl: Option<String>,
-    /// UniParc accession(s), comma-separated as the cache carries them.
-    #[serde(default)]
-    pub uniparc: Option<String>,
-    /// UniProtKB isoform accession(s), comma-separated as the cache carries them.
-    #[serde(default)]
-    pub uniprot_isoform: Option<String>,
-    /// RefSeq transcript ID.
-    pub refseq: Option<String>,
     /// The transcript's stable-id version: the `.<version>` suffix of the
     /// `Feature` column under `--transcript_version`.
-    #[serde(default)]
     pub transcript_version: Option<u32>,
     /// The gene's stable-id version: the `.<version>` suffix of the `Gene`
     /// column under `--gene_version`.
-    #[serde(default)]
     pub gene_version: Option<u32>,
     /// The gene has at least one phenotype association: the `GENE_PHENO`
     /// column under `--gene_phenotype`.
-    #[serde(default)]
     pub gene_phenotype: bool,
     /// The miRNA secondary-structure elements the variant overlaps on a
     /// `miRNA` transcript, as the SO terms `miRNA_loop` and `miRNA_stem`: the
@@ -644,43 +613,34 @@ pub struct TranscriptConsequence {
     /// `miRNA_stem` twice, and a span reaching one position past the
     /// structure's end lists an empty term. Empty on every other transcript
     /// and when the variant lies outside the structure.
-    #[serde(default)]
     pub mirna: Vec<String>,
     /// Length of the transcript's translateable sequence as the cache stores it,
     /// `None` for a transcript without a translation. The `length` pick
     /// criterion reads it (OutputFactory.pm:743-748 at release/116.2).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cds_length: Option<u32>,
     /// The transcript's spliced length, the sum of its exon lengths
     /// (`Bio::EnsEMBL::Transcript::length`), which the `length` pick criterion
     /// reads for a transcript without a translation.
-    #[serde(default)]
     pub cdna_length: u32,
     /// The cache the transcript came from in a merged cache (`_source_cache`),
     /// which the `ensembl` and `refseq` pick criteria read; `None` on every
     /// single-source cache, where both criteria score alike.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_cache: Option<SourceCache>,
     /// Plugin annotation data (transcript-consequence-level).
     /// Keyed by field name (e.g., "REVEL_score"), value is the annotation string.
-    #[serde(default, skip_serializing_if = "indexmap::IndexMap::is_empty")]
     pub plugin_data: indexmap::IndexMap<String, String>,
     /// Genomic span of the feature (1-based, inclusive), for the structural
     /// variant overlap fields; both zero when unknown.
-    #[serde(default)]
     pub feature_start: u64,
-    #[serde(default)]
     pub feature_end: u64,
     /// Transcript structural context for consequence-filtering plugins (LoFTEE).
     /// Populated at consequence-construction time only when such a plugin is
     /// active; `None` otherwise, and absent from the serialization unless set.
     /// See [`LofteeContext`].
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loftee_ctx: Option<Box<LofteeContext>>,
     /// The motif fields of a `MotifFeature` row of a sequence variant
     /// (`MotifFeatureVariationAllele_to_output_hash`, OutputFactory.pm:1910-1942):
     /// `None` on every other row, a structural variant's motif row included.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub motif: Option<Box<MotifFields>>,
     /// The source transcript's [`Transcript::id_rank`]: `transcript_id`'s
     /// position in the byte order of its chromosome's transcript ids, so two
@@ -688,7 +648,6 @@ pub struct TranscriptConsequence {
     /// different chromosomes, an interchromosomal breakend's mate rows among
     /// them, do not. Never serialized; 0 for a consequence built without a
     /// loaded transcript.
-    #[serde(skip)]
     pub id_rank: u32,
     /// Whether the record's span, for an allele of a `--minimal` split
     /// ([`InputVariant::original_start`](crate::variant::InputVariant::original_start)
@@ -698,8 +657,190 @@ pub struct TranscriptConsequence {
     /// the allele's own span after the rejoin and map the record's span in their
     /// place (OutputFactory.pm:297-323 and 490-502; BaseTranscriptVariation.pm:505-526
     /// and 662-665). `false` for every other row. Never serialized.
-    #[serde(skip)]
     pub record_span_in_cds: bool,
+}
+
+// Preserve the legacy flat schema and field order without cloning metadata
+// while serializing. Keep this mirror in sync with the public runtime fields.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(remote = "TranscriptConsequence", rename = "TranscriptConsequence")]
+struct TranscriptConsequenceWire {
+    transcript_id: Arc<str>,
+    gene_id: Arc<str>,
+    gene_symbol: Option<Arc<str>>,
+    gene_symbol_source: Option<Arc<str>>,
+    hgnc_id: Option<Arc<str>>,
+    consequences: ConsequenceList,
+    impact: Impact,
+    biotype: Option<Arc<str>>,
+    canonical: bool,
+    cdna_position: Option<String>,
+    cds_position: Option<String>,
+    protein_position: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cdna_total: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cds_total: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    protein_total: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    own_span_positions: Option<Box<OwnSpanPositions>>,
+    amino_acids: Option<String>,
+    codons: Option<String>,
+    protein_id: Option<Arc<str>>,
+    distance: Option<u64>,
+    strand: i8,
+    exon: Option<String>,
+    intron: Option<String>,
+    hgvsc: Option<String>,
+    hgvsp: Option<String>,
+    hgvs_offset: Option<i64>,
+    #[serde(default)]
+    shift_length: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    shifted_allele: Option<Arc<str>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    used_ref: Option<Arc<str>>,
+    sift: Option<String>,
+    polyphen: Option<String>,
+    domains: Vec<(String, String)>,
+    feature_type: FeatureType,
+    flags: Arc<[String]>,
+    tsl: Option<u8>,
+    #[serde(getter = "TranscriptConsequence::mane_select")]
+    mane_select: Option<String>,
+    #[serde(getter = "TranscriptConsequence::mane_plus_clinical")]
+    mane_plus_clinical: Option<String>,
+    #[serde(getter = "TranscriptConsequence::appris")]
+    appris: Option<String>,
+    #[serde(getter = "TranscriptConsequence::ccds")]
+    ccds: Option<String>,
+    #[serde(default)]
+    gencode_primary: bool,
+    #[serde(getter = "TranscriptConsequence::swissprot")]
+    swissprot: Option<String>,
+    #[serde(getter = "TranscriptConsequence::trembl")]
+    trembl: Option<String>,
+    #[serde(default, getter = "TranscriptConsequence::uniparc")]
+    uniparc: Option<String>,
+    #[serde(default, getter = "TranscriptConsequence::uniprot_isoform")]
+    uniprot_isoform: Option<String>,
+    #[serde(getter = "TranscriptConsequence::refseq")]
+    refseq: Option<String>,
+    #[serde(default)]
+    transcript_version: Option<u32>,
+    #[serde(default)]
+    gene_version: Option<u32>,
+    #[serde(default)]
+    gene_phenotype: bool,
+    #[serde(default)]
+    mirna: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cds_length: Option<u32>,
+    #[serde(default)]
+    cdna_length: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_cache: Option<SourceCache>,
+    #[serde(default, skip_serializing_if = "indexmap::IndexMap::is_empty")]
+    plugin_data: indexmap::IndexMap<String, String>,
+    #[serde(default)]
+    feature_start: u64,
+    #[serde(default)]
+    feature_end: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    loftee_ctx: Option<Box<LofteeContext>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    motif: Option<Box<MotifFields>>,
+    #[serde(skip)]
+    id_rank: u32,
+    #[serde(skip)]
+    record_span_in_cds: bool,
+}
+
+impl From<TranscriptConsequenceWire> for TranscriptConsequence {
+    fn from(wire: TranscriptConsequenceWire) -> Self {
+        Self {
+            transcript_id: wire.transcript_id,
+            gene_id: wire.gene_id,
+            gene_symbol: wire.gene_symbol,
+            gene_symbol_source: wire.gene_symbol_source,
+            hgnc_id: wire.hgnc_id,
+            consequences: wire.consequences,
+            impact: wire.impact,
+            biotype: wire.biotype,
+            canonical: wire.canonical,
+            cdna_position: wire.cdna_position,
+            cds_position: wire.cds_position,
+            protein_position: wire.protein_position,
+            cdna_total: wire.cdna_total,
+            cds_total: wire.cds_total,
+            protein_total: wire.protein_total,
+            own_span_positions: wire.own_span_positions,
+            amino_acids: wire.amino_acids,
+            codons: wire.codons,
+            protein_id: wire.protein_id,
+            distance: wire.distance,
+            strand: wire.strand,
+            exon: wire.exon,
+            intron: wire.intron,
+            hgvsc: wire.hgvsc,
+            hgvsp: wire.hgvsp,
+            hgvs_offset: wire.hgvs_offset,
+            shift_length: wire.shift_length,
+            shifted_allele: wire.shifted_allele,
+            used_ref: wire.used_ref,
+            sift: wire.sift,
+            polyphen: wire.polyphen,
+            domains: wire.domains,
+            feature_type: wire.feature_type,
+            flags: wire.flags,
+            tsl: wire.tsl,
+            meta: Some(Arc::new(TranscriptMeta {
+                mane_select: wire.mane_select,
+                mane_plus_clinical: wire.mane_plus_clinical,
+                appris: wire.appris,
+                ccds: wire.ccds,
+                refseq: wire.refseq,
+                swissprot: wire.swissprot,
+                trembl: wire.trembl,
+                uniparc: wire.uniparc,
+                uniprot_isoform: wire.uniprot_isoform,
+            })),
+            gencode_primary: wire.gencode_primary,
+            transcript_version: wire.transcript_version,
+            gene_version: wire.gene_version,
+            gene_phenotype: wire.gene_phenotype,
+            mirna: wire.mirna,
+            cds_length: wire.cds_length,
+            cdna_length: wire.cdna_length,
+            source_cache: wire.source_cache,
+            plugin_data: wire.plugin_data,
+            feature_start: wire.feature_start,
+            feature_end: wire.feature_end,
+            loftee_ctx: wire.loftee_ctx,
+            motif: wire.motif,
+            id_rank: wire.id_rank,
+            record_span_in_cds: wire.record_span_in_cds,
+        }
+    }
+}
+
+impl serde::Serialize for TranscriptConsequence {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        TranscriptConsequenceWire::serialize(self, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for TranscriptConsequence {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        TranscriptConsequenceWire::deserialize(deserializer)
+    }
 }
 
 /// The fields a `MotifFeature` row of a sequence variant carries beside its
@@ -808,16 +949,8 @@ impl Default for TranscriptConsequence {
             feature_type: FeatureType::Transcript,
             flags: Arc::from([]),
             tsl: None,
-            mane_select: None,
-            mane_plus_clinical: None,
-            appris: None,
-            ccds: None,
+            meta: None,
             gencode_primary: false,
-            swissprot: None,
-            trembl: None,
-            uniparc: None,
-            uniprot_isoform: None,
-            refseq: None,
             transcript_version: None,
             gene_version: None,
             gene_phenotype: false,
@@ -837,6 +970,72 @@ impl Default for TranscriptConsequence {
 }
 
 impl TranscriptConsequence {
+    /// MANE Select accession, whose presence gives preference over canonical
+    /// transcripts in Ensembl VEP's `pick_order` slot 0.
+    pub fn mane_select(&self) -> &Option<String> {
+        self.meta
+            .as_deref()
+            .map_or(&ABSENT_META_STRING, |meta| &meta.mane_select)
+    }
+
+    /// MANE Plus Clinical accession, whose presence gives preference in
+    /// Ensembl VEP's `pick_order` slot 1.
+    pub fn mane_plus_clinical(&self) -> &Option<String> {
+        self.meta
+            .as_deref()
+            .map_or(&ABSENT_META_STRING, |meta| &meta.mane_plus_clinical)
+    }
+
+    /// APPRIS annotation (e.g. "principal1", "alternative2"), used to prefer
+    /// principal isoforms in Ensembl VEP's `pick_order` slot 3.
+    pub fn appris(&self) -> &Option<String> {
+        self.meta
+            .as_deref()
+            .map_or(&ABSENT_META_STRING, |meta| &meta.appris)
+    }
+
+    /// Borrow the CCDS ID.
+    pub fn ccds(&self) -> &Option<String> {
+        self.meta
+            .as_deref()
+            .map_or(&ABSENT_META_STRING, |meta| &meta.ccds)
+    }
+
+    /// Borrow the RefSeq transcript ID.
+    pub fn refseq(&self) -> &Option<String> {
+        self.meta
+            .as_deref()
+            .map_or(&ABSENT_META_STRING, |meta| &meta.refseq)
+    }
+
+    /// Borrow the UniProtKB/Swiss-Prot accession(s).
+    pub fn swissprot(&self) -> &Option<String> {
+        self.meta
+            .as_deref()
+            .map_or(&ABSENT_META_STRING, |meta| &meta.swissprot)
+    }
+
+    /// Borrow the UniProtKB/TrEMBL accession(s).
+    pub fn trembl(&self) -> &Option<String> {
+        self.meta
+            .as_deref()
+            .map_or(&ABSENT_META_STRING, |meta| &meta.trembl)
+    }
+
+    /// Borrow the UniParc accession(s), comma-separated as cached.
+    pub fn uniparc(&self) -> &Option<String> {
+        self.meta
+            .as_deref()
+            .map_or(&ABSENT_META_STRING, |meta| &meta.uniparc)
+    }
+
+    /// Borrow the UniProtKB isoform accession(s), comma-separated as cached.
+    pub fn uniprot_isoform(&self) -> &Option<String> {
+        self.meta
+            .as_deref()
+            .map_or(&ABSENT_META_STRING, |meta| &meta.uniprot_isoform)
+    }
+
     /// A consequence against `transcript` with every field the transcript
     /// determines filled from it (ids, symbol, biotype, flags, pick criteria,
     /// cross-references, strand, span, rank) and every field the variant
@@ -881,16 +1080,8 @@ impl TranscriptConsequence {
             feature_type: FeatureType::Transcript,
             flags: transcript.flags.clone(),
             tsl: transcript.tsl,
-            mane_select: transcript.mane_select.clone(),
-            mane_plus_clinical: transcript.mane_plus_clinical.clone(),
-            appris: transcript.appris.clone(),
-            ccds: transcript.ccds.clone(),
+            meta: Some(Arc::clone(&transcript.meta)),
             gencode_primary: transcript.gencode_primary,
-            swissprot: transcript.swissprot.clone(),
-            trembl: transcript.trembl.clone(),
-            uniparc: transcript.uniparc.clone(),
-            uniprot_isoform: transcript.uniprot_isoform.clone(),
-            refseq: transcript.refseq.clone(),
             transcript_version: transcript.version,
             gene_version: transcript.gene_version,
             gene_phenotype: transcript.gene_phenotype.is_some_and(|count| count > 0),
@@ -969,17 +1160,19 @@ mod tests {
             hgnc_id: None,
             gene_phenotype,
             canonical: false,
-            mane_select: None,
-            mane_plus_clinical: None,
+            meta: Arc::new(TranscriptMeta {
+                mane_select: None,
+                mane_plus_clinical: None,
+                appris: None,
+                ccds: None,
+                refseq: None,
+                swissprot: None,
+                trembl: None,
+                uniparc: Some("UPI0000000001".to_string()),
+                uniprot_isoform: Some("P00001-2,P00001-3".to_string()),
+            }),
             tsl: None,
-            appris: None,
-            ccds: None,
             protein_id: None,
-            refseq: None,
-            swissprot: None,
-            trembl: None,
-            uniparc: Some("UPI0000000001".to_string()),
-            uniprot_isoform: Some("P00001-2,P00001-3".to_string()),
             exons: vec![exon(100, 200, 1)],
             introns: vec![],
             cdna_coding_start: None,
@@ -1012,8 +1205,8 @@ mod tests {
         let tc = TranscriptConsequence::for_transcript(&annotated_transcript(Some(3)));
         assert_eq!(tc.transcript_version, Some(7));
         assert_eq!(tc.gene_version, Some(12));
-        assert_eq!(tc.uniparc.as_deref(), Some("UPI0000000001"));
-        assert_eq!(tc.uniprot_isoform.as_deref(), Some("P00001-2,P00001-3"));
+        assert_eq!(tc.uniparc().as_deref(), Some("UPI0000000001"));
+        assert_eq!(tc.uniprot_isoform().as_deref(), Some("P00001-2,P00001-3"));
         assert!(tc.gene_phenotype);
         assert!(tc.mirna.is_empty());
 

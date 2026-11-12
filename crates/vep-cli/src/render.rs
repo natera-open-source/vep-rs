@@ -599,7 +599,8 @@ mod tests {
         coding.biotype = Some(Arc::from("protein_coding"));
         coding.tsl = Some(1);
         coding.domains = vec![("Pfam".to_string(), "PF00080".to_string())];
-        coding.uniparc = Some("UPI000012A3C5".to_string());
+        Arc::make_mut(coding.meta.get_or_insert_with(Default::default)).uniparc =
+            Some("UPI000012A3C5".to_string());
         coding
             .plugin_data
             .insert("ZPlugin".to_string(), "a=b;c".to_string());

@@ -704,7 +704,7 @@ impl MaterializedTranscriptIndexes {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vep_core::transcript::Transcript;
+    use vep_core::transcript::{Transcript, TranscriptMeta};
 
     fn mk_tx(stable_id: &str, start: u64, end: u64, strand: Strand) -> Transcript {
         Transcript {
@@ -724,17 +724,9 @@ mod tests {
             hgnc_id: None,
             gene_phenotype: None,
             canonical: false,
-            mane_select: None,
-            mane_plus_clinical: None,
+            meta: Arc::new(TranscriptMeta::default()),
             tsl: None,
-            appris: None,
-            ccds: None,
             protein_id: None,
-            refseq: None,
-            swissprot: None,
-            trembl: None,
-            uniparc: None,
-            uniprot_isoform: None,
             exons: Vec::new(),
             introns: Vec::new(),
             cdna_coding_start: None,

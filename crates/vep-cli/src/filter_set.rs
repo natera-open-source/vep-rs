@@ -137,13 +137,13 @@ impl FilterData for Transcript {
             "_gene_symbol" => self.gene_symbol.as_deref().map(Cow::Borrowed),
             "_gene_symbol_source" => self.gene_symbol_source.as_deref().map(Cow::Borrowed),
             "_gene_hgnc_id" => self.hgnc_id.as_deref().map(Cow::Borrowed),
-            "_ccds" => self.ccds.as_deref().map(Cow::Borrowed),
-            "_refseq" => self.refseq.as_deref().map(Cow::Borrowed),
+            "_ccds" => self.ccds().as_deref().map(Cow::Borrowed),
+            "_refseq" => self.refseq().as_deref().map(Cow::Borrowed),
             "_protein" => self.protein_id.as_deref().map(Cow::Borrowed),
-            "_swissprot" => self.swissprot.as_deref().map(Cow::Borrowed),
-            "_trembl" => self.trembl.as_deref().map(Cow::Borrowed),
-            "_uniparc" => self.uniparc.as_deref().map(Cow::Borrowed),
-            "_uniprot_isoform" => self.uniprot_isoform.as_deref().map(Cow::Borrowed),
+            "_swissprot" => self.swissprot().as_deref().map(Cow::Borrowed),
+            "_trembl" => self.trembl().as_deref().map(Cow::Borrowed),
+            "_uniparc" => self.uniparc().as_deref().map(Cow::Borrowed),
+            "_uniprot_isoform" => self.uniprot_isoform().as_deref().map(Cow::Borrowed),
             "_gene_phenotype" => self.gene_phenotype.map(|n| Cow::Owned(n.to_string())),
             "dbID" => self.db_id.map(|n| Cow::Owned(n.to_string())),
             "cdna_coding_start" => self.cdna_coding_start.map(|n| Cow::Owned(n.to_string())),
@@ -685,6 +685,8 @@ fn perl_number(s: Option<&str>) -> f64 {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use std::sync::Arc;
+    use vep_core::transcript::TranscriptMeta;
 
     /// A hash of string values, the shape Ensembl VEP's filters read.
     struct Hash(HashMap<&'static str, &'static str>);
@@ -1000,16 +1002,19 @@ mod tests {
             hgnc_id: Some("HGNC:1101".into()),
             gene_phenotype: Some(3),
             canonical: true,
-            mane_select: None,
-            mane_plus_clinical: None,
+            meta: Arc::new(TranscriptMeta {
+                mane_select: None,
+                mane_plus_clinical: None,
+                appris: None,
+                ccds: Some("CCDS9344.1".to_string()),
+                refseq: Some("NM_000059.4".to_string()),
+                swissprot: Some("P51587.242".to_string()),
+                trembl: Some("-".to_string()),
+                uniparc: None,
+                uniprot_isoform: None,
+            }),
             tsl: None,
-            appris: None,
-            ccds: Some("CCDS9344.1".to_string()),
             protein_id: Some("ENSP00000369497".into()),
-            refseq: Some("NM_000059.4".to_string()),
-            swissprot: Some("P51587.242".to_string()),
-            trembl: Some("-".to_string()),
-            uniparc: None,
             exons: Vec::new(),
             introns: Vec::new(),
             cdna_coding_start: Some(228),
@@ -1034,7 +1039,6 @@ mod tests {
             gencode_primary: false,
             gencode_basic: false,
             gene_version: Some(17),
-            uniprot_isoform: None,
             attributes: Vec::new(),
             vefc: Some(vep_core::transcript::TranscriptVEFC::default()),
             derived: Default::default(),
@@ -1105,7 +1109,7 @@ mod tests {
     #[test]
     fn uniprot_isoform_reads_the_transcripts_isoform_ids() {
         let mut tx = canonical_transcript();
-        tx.uniprot_isoform = Some("P51587-2,P51587-3".to_string());
+        Arc::make_mut(&mut tx.meta).uniprot_isoform = Some("P51587-2,P51587-3".to_string());
         let filter = |s: &str| FilterSet::transcript_filter(&[s]).unwrap();
         assert!(filter("uniprot_isoform exists").evaluate(&tx));
         assert!(filter("uniprot_isoform is P51587-3").evaluate(&tx));
@@ -1115,10 +1119,10 @@ mod tests {
         assert!(!filter("uniprot_isoform is P51587-4").evaluate(&tx));
         assert!(!filter("uniprot_isoform nex").evaluate(&tx));
         assert!(filter("_uniprot_isoform is P51587-3 and _uniprot_i exists").evaluate(&tx));
-        tx.uniprot_isoform = Some("-".to_string());
+        Arc::make_mut(&mut tx.meta).uniprot_isoform = Some("-".to_string());
         assert!(filter("uniprot_isoform exists and uniprot_isoform is -").evaluate(&tx));
         assert!(!filter("uniprot_isoform is P51587-2").evaluate(&tx));
-        tx.uniprot_isoform = None;
+        Arc::make_mut(&mut tx.meta).uniprot_isoform = None;
         assert!(filter("uniprot_isoform nex").evaluate(&tx));
         assert!(!filter("uniprot_isoform is -").evaluate(&tx));
     }

@@ -167,6 +167,55 @@ mod tests {
     }
 
     #[test]
+    fn transcript_metadata_staging_bytes_are_unchanged() {
+        let mut v = variant();
+        let tc = &mut v.transcript_consequences[0];
+        tc.meta = Some(std::sync::Arc::new(vep_core::transcript::TranscriptMeta {
+            mane_select: Some("".into()),
+            mane_plus_clinical: Some("NM_2.3".into()),
+            appris: Some("principal1".into()),
+            ccds: Some("-".into()),
+            refseq: Some("NM_1.2,,NM_2.3,".into()),
+            swissprot: Some("P1,P2".into()),
+            trembl: Some("T1,,T2,".into()),
+            uniparc: Some("UPI1".into()),
+            uniprot_isoform: Some("-".into()),
+        }));
+
+        let options = FieldOptions {
+            mane: true,
+            mane_select: true,
+            mane_plus_clinical: true,
+            appris: true,
+            ccds: true,
+            uniprot: true,
+            xref_refseq: true,
+            ..Default::default()
+        };
+        let mut f = ParquetOutputFormatter::new(options, vec![]);
+        let mut header = Vec::new();
+        f.write_header(&mut header).unwrap();
+        let rows = f.format_record(&[&v]).unwrap();
+        // Fixed bytes captured from the original inline metadata representation.
+        const LEGACY_HEADER: &str = concat!(
+            "chrom\tpos\tend\tref\talt\tUploaded_variation\tLocation\tAllele\tGene\t",
+            "Feature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\t",
+            "Protein_position\tAmino_acids\tCodons\tExisting_variation\tIMPACT\t",
+            "DISTANCE\tSTRAND\tFLAGS\tMANE\tMANE_SELECT\tMANE_PLUS_CLINICAL\t",
+            "APPRIS\tCCDS\tSWISSPROT\tTREMBL\tUNIPARC\tUNIPROT_ISOFORM\tRefSeq\n"
+        );
+        const LEGACY_ROW: &str = concat!(
+            "21\t100\t100\tA\tG\trs1\t21:100\tG\tENSG1\tENST1\tTranscript\t",
+            "missense_variant\t44\t\t\tE/G\tgAa/gGa\t\tMODERATE\t\t1\t\t",
+            "MANE_Select,MANE_Plus_Clinical\t\tNM_2.3\tP1\t\tP1,P2\tT1,,T2\t",
+            "UPI1\t\tNM_1.2,,NM_2.3"
+        );
+        assert_eq!(header, LEGACY_HEADER.as_bytes());
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0], LEGACY_ROW);
+    }
+
+    #[test]
     fn dash_becomes_empty_except_allele_columns() {
         let f = ParquetOutputFormatter::new(FieldOptions::default(), vec![]);
         let rows = f.format_record(&[&variant()]).unwrap();

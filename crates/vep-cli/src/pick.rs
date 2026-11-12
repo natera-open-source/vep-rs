@@ -334,8 +334,8 @@ impl PickInfo {
     /// A transcript row's values (`:729-768`).
     fn of_transcript(tc: &TranscriptConsequence) -> Self {
         let mut info = PickInfo::defaults(&tc.consequences);
-        info.mane_select = if tc.mane_select.is_some() { 0 } else { 1 };
-        info.mane_plus_clinical = if tc.mane_plus_clinical.is_some() {
+        info.mane_select = if tc.mane_select().is_some() { 0 } else { 1 };
+        info.mane_plus_clinical = if tc.mane_plus_clinical().is_some() {
             0
         } else {
             1
@@ -347,7 +347,7 @@ impl PickInfo {
             1
         };
         // `$tr->{_ccds} && $tr->{_ccds} ne '-'` (`:740`).
-        info.ccds = match tc.ccds.as_deref() {
+        info.ccds = match tc.ccds().as_deref() {
             Some(s) if !s.is_empty() && s != "-" => 0,
             _ => 1,
         };
@@ -364,7 +364,7 @@ impl PickInfo {
         if let Some(tsl) = tc.tsl.filter(|t| *t != 0) {
             info.tsl = i64::from(tsl);
         }
-        info.appris = i64::from(appris_rank(tc.appris.as_deref()));
+        info.appris = i64::from(appris_rank(tc.appris().as_deref()));
         info
     }
 
@@ -651,6 +651,7 @@ fn summarise(record: &mut [InputVariant], most_severe_only: bool) {
 mod tests {
     use super::*;
     use smallvec::smallvec;
+    use std::sync::Arc;
     use vep_core::consequence::{Consequence, FeatureType, Impact};
     use vep_core::variant::InputVariant;
 
@@ -1494,12 +1495,15 @@ mod tests {
     #[test]
     fn pick_info_reads_every_criterion() {
         let mut t = tc("ENST1", "G1", smallvec![Consequence::MissenseVariant]);
-        t.mane_select = Some("NM_1.1".into());
-        t.mane_plus_clinical = Some("NM_2.1".into());
+        Arc::make_mut(t.meta.get_or_insert_with(Default::default)).mane_select =
+            Some("NM_1.1".into());
+        Arc::make_mut(t.meta.get_or_insert_with(Default::default)).mane_plus_clinical =
+            Some("NM_2.1".into());
         t.canonical = true;
-        t.appris = Some("alternative2".into());
+        Arc::make_mut(t.meta.get_or_insert_with(Default::default)).appris =
+            Some("alternative2".into());
         t.tsl = Some(3);
-        t.ccds = Some("CCDS1.1".into());
+        Arc::make_mut(t.meta.get_or_insert_with(Default::default)).ccds = Some("CCDS1.1".into());
         t.cds_length = Some(900);
         t.cdna_length = 2000;
         let info = PickInfo::of_transcript(&t);
@@ -1521,7 +1525,7 @@ mod tests {
         );
         let mut bare = tc("ENST2", "G1", smallvec![Consequence::IntronVariant]);
         bare.biotype = Some("lncRNA".into());
-        bare.ccds = Some("-".into());
+        Arc::make_mut(bare.meta.get_or_insert_with(Default::default)).ccds = Some("-".into());
         bare.tsl = Some(0);
         bare.cdna_length = 700;
         let info = PickInfo::of_transcript(&bare);

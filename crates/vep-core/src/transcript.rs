@@ -11,6 +11,30 @@ use std::sync::{Arc, OnceLock};
 
 use crate::coordinate::Strand;
 
+/// Immutable transcript annotations shared by the transcript and its consequence rows.
+#[derive(Debug, Clone, Default)]
+pub struct TranscriptMeta {
+    /// The `MANE_Select` attribute's value (a RefSeq accession), `Some` when the
+    /// attribute is present, empty when it carries no value.
+    pub mane_select: Option<String>,
+    /// The `MANE_Plus_Clinical` attribute's value, `Some` on presence as above.
+    pub mane_plus_clinical: Option<String>,
+    /// APPRIS annotation as the cache spells it (`principal1`, `alternativeM`).
+    pub appris: Option<String>,
+    /// CCDS ID.
+    pub ccds: Option<String>,
+    /// RefSeq transcript ID.
+    pub refseq: Option<String>,
+    /// UniProtKB/Swiss-Prot accession(s).
+    pub swissprot: Option<String>,
+    /// UniProtKB/TrEMBL accession(s).
+    pub trembl: Option<String>,
+    /// UniParc accession(s).
+    pub uniparc: Option<String>,
+    /// UniProt isoform accession(s).
+    pub uniprot_isoform: Option<String>,
+}
+
 /// An Ensembl transcript loaded from the VEP cache.
 ///
 /// Represents a single transcript isoform with its full annotation: genomic
@@ -18,7 +42,7 @@ use crate::coordinate::Strand;
 /// product, and the pre-computed VEFC cache (translateable sequence, coordinate
 /// mapper, protein features). This is the central data structure for consequence
 /// calculation.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Transcript {
     /// Ensembl stable ID (e.g., "ENST00000366667").
     pub stable_id: Arc<str>,
@@ -54,30 +78,13 @@ pub struct Transcript {
     pub gene_phenotype: Option<u32>,
     /// Whether this is the canonical transcript for the gene.
     pub canonical: bool,
-    /// The `MANE_Select` attribute's value (a RefSeq accession), `Some` when the
-    /// attribute is present, empty when it carries no value.
-    pub mane_select: Option<String>,
-    /// The `MANE_Plus_Clinical` attribute's value, `Some` on presence as above.
-    pub mane_plus_clinical: Option<String>,
+    /// Immutable transcript annotations shared with consequence rows.
+    pub meta: Arc<TranscriptMeta>,
     /// Transcript Support Level: the digits of a `TSL` attribute's `tsl<N>`
     /// value when they are not zero; `tslNA` carries none.
     pub tsl: Option<u8>,
-    /// APPRIS annotation as the cache spells it (`principal1`, `alternativeM`).
-    pub appris: Option<String>,
-    /// CCDS ID.
-    pub ccds: Option<String>,
     /// Protein (ENSP) ID.
     pub protein_id: Option<Arc<str>>,
-    /// RefSeq transcript ID.
-    pub refseq: Option<String>,
-    /// UniProtKB/Swiss-Prot accession(s).
-    pub swissprot: Option<String>,
-    /// UniProtKB/TrEMBL accession(s).
-    pub trembl: Option<String>,
-    /// UniParc accession(s).
-    pub uniparc: Option<String>,
-    /// UniProt isoform accession(s).
-    pub uniprot_isoform: Option<String>,
     /// Exons.
     pub exons: Vec<Exon>,
     /// Introns from the cache's intron list, else the gaps between exons, filled at load time.
@@ -113,14 +120,147 @@ pub struct Transcript {
     /// Facts derived from the fields above, filled on first use and read by
     /// every later row against this transcript ([`Transcript::facts`],
     /// [`Transcript::feature_ordinals`], [`Transcript::spliced_seq`]).
-    #[serde(skip)]
     pub derived: TranscriptDerived,
     /// Position of `stable_id` in the byte order of the chromosome's transcript
     /// ids, counted from 1 and assigned by the loader once the chromosome is
     /// complete: two transcripts of one chromosome compare by rank as their ids
     /// compare, and equal ids share a rank. Never serialized; 0 until assigned.
-    #[serde(skip)]
     pub id_rank: u32,
+}
+
+// Preserve the legacy flat schema and field order without cloning metadata
+// while serializing. Keep this mirror in sync with the public runtime fields.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(remote = "Transcript", rename = "Transcript")]
+struct TranscriptWire {
+    stable_id: Arc<str>,
+    version: Option<u32>,
+    db_id: Option<u64>,
+    gene_stable_id: Arc<str>,
+    gene_version: Option<u32>,
+    chr: String,
+    start: u64,
+    end: u64,
+    strand: Strand,
+    biotype: Arc<str>,
+    source: String,
+    gene_symbol: Option<Arc<str>>,
+    gene_symbol_source: Option<Arc<str>>,
+    hgnc_id: Option<Arc<str>>,
+    gene_phenotype: Option<u32>,
+    canonical: bool,
+    #[serde(getter = "Transcript::mane_select")]
+    mane_select: Option<String>,
+    #[serde(getter = "Transcript::mane_plus_clinical")]
+    mane_plus_clinical: Option<String>,
+    tsl: Option<u8>,
+    #[serde(getter = "Transcript::appris")]
+    appris: Option<String>,
+    #[serde(getter = "Transcript::ccds")]
+    ccds: Option<String>,
+    protein_id: Option<Arc<str>>,
+    #[serde(getter = "Transcript::refseq")]
+    refseq: Option<String>,
+    #[serde(getter = "Transcript::swissprot")]
+    swissprot: Option<String>,
+    #[serde(getter = "Transcript::trembl")]
+    trembl: Option<String>,
+    #[serde(getter = "Transcript::uniparc")]
+    uniparc: Option<String>,
+    #[serde(getter = "Transcript::uniprot_isoform")]
+    uniprot_isoform: Option<String>,
+    exons: Vec<Exon>,
+    introns: Vec<Intron>,
+    cdna_coding_start: Option<u64>,
+    cdna_coding_end: Option<u64>,
+    coding_region_start: Option<u64>,
+    coding_region_end: Option<u64>,
+    translation_start: Option<u64>,
+    translation_end: Option<u64>,
+    translation: Option<Translation>,
+    cdna_sequence: Option<Vec<u8>>,
+    protein_sequence: Option<Vec<u8>>,
+    flags: Arc<[String]>,
+    gencode_basic: bool,
+    gencode_primary: bool,
+    attributes: Vec<Attribute>,
+    vefc: Option<TranscriptVEFC>,
+    #[serde(skip)]
+    derived: TranscriptDerived,
+    #[serde(skip)]
+    id_rank: u32,
+}
+
+impl From<TranscriptWire> for Transcript {
+    fn from(wire: TranscriptWire) -> Self {
+        Self {
+            stable_id: wire.stable_id,
+            version: wire.version,
+            db_id: wire.db_id,
+            gene_stable_id: wire.gene_stable_id,
+            gene_version: wire.gene_version,
+            chr: wire.chr,
+            start: wire.start,
+            end: wire.end,
+            strand: wire.strand,
+            biotype: wire.biotype,
+            source: wire.source,
+            gene_symbol: wire.gene_symbol,
+            gene_symbol_source: wire.gene_symbol_source,
+            hgnc_id: wire.hgnc_id,
+            gene_phenotype: wire.gene_phenotype,
+            canonical: wire.canonical,
+            meta: Arc::new(TranscriptMeta {
+                mane_select: wire.mane_select,
+                mane_plus_clinical: wire.mane_plus_clinical,
+                appris: wire.appris,
+                ccds: wire.ccds,
+                refseq: wire.refseq,
+                swissprot: wire.swissprot,
+                trembl: wire.trembl,
+                uniparc: wire.uniparc,
+                uniprot_isoform: wire.uniprot_isoform,
+            }),
+            tsl: wire.tsl,
+            protein_id: wire.protein_id,
+            exons: wire.exons,
+            introns: wire.introns,
+            cdna_coding_start: wire.cdna_coding_start,
+            cdna_coding_end: wire.cdna_coding_end,
+            coding_region_start: wire.coding_region_start,
+            coding_region_end: wire.coding_region_end,
+            translation_start: wire.translation_start,
+            translation_end: wire.translation_end,
+            translation: wire.translation,
+            cdna_sequence: wire.cdna_sequence,
+            protein_sequence: wire.protein_sequence,
+            flags: wire.flags,
+            gencode_basic: wire.gencode_basic,
+            gencode_primary: wire.gencode_primary,
+            attributes: wire.attributes,
+            vefc: wire.vefc,
+            derived: wire.derived,
+            id_rank: wire.id_rank,
+        }
+    }
+}
+
+impl serde::Serialize for Transcript {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        TranscriptWire::serialize(self, serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Transcript {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        TranscriptWire::deserialize(deserializer)
+    }
 }
 
 /// The lazily filled cells behind [`Transcript::facts`],
@@ -663,6 +803,51 @@ pub struct Intron {
 }
 
 impl Transcript {
+    /// Borrow the MANE Select accession, preserving attribute presence.
+    pub fn mane_select(&self) -> &Option<String> {
+        &self.meta.mane_select
+    }
+
+    /// Borrow the MANE Plus Clinical accession, preserving attribute presence.
+    pub fn mane_plus_clinical(&self) -> &Option<String> {
+        &self.meta.mane_plus_clinical
+    }
+
+    /// Borrow the APPRIS annotation as the cache spells it.
+    pub fn appris(&self) -> &Option<String> {
+        &self.meta.appris
+    }
+
+    /// Borrow the CCDS ID.
+    pub fn ccds(&self) -> &Option<String> {
+        &self.meta.ccds
+    }
+
+    /// Borrow the RefSeq transcript ID.
+    pub fn refseq(&self) -> &Option<String> {
+        &self.meta.refseq
+    }
+
+    /// Borrow the UniProtKB/Swiss-Prot accession(s).
+    pub fn swissprot(&self) -> &Option<String> {
+        &self.meta.swissprot
+    }
+
+    /// Borrow the UniProtKB/TrEMBL accession(s).
+    pub fn trembl(&self) -> &Option<String> {
+        &self.meta.trembl
+    }
+
+    /// Borrow the UniParc accession(s).
+    pub fn uniparc(&self) -> &Option<String> {
+        &self.meta.uniparc
+    }
+
+    /// Borrow the UniProt isoform accession(s).
+    pub fn uniprot_isoform(&self) -> &Option<String> {
+        &self.meta.uniprot_isoform
+    }
+
     /// The per-transcript facts, computed on the first call and shared by every
     /// later one.
     pub fn facts(&self) -> &TranscriptFacts {
@@ -938,17 +1123,9 @@ mod tests {
             hgnc_id: None,
             gene_phenotype: None,
             canonical: false,
-            mane_select: None,
-            mane_plus_clinical: None,
+            meta: Arc::new(TranscriptMeta::default()),
             tsl: None,
-            appris: None,
-            ccds: None,
             protein_id: None,
-            refseq: None,
-            swissprot: None,
-            trembl: None,
-            uniparc: None,
-            uniprot_isoform: None,
             exons,
             introns,
             cdna_coding_start: None,

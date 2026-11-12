@@ -1628,12 +1628,15 @@ mod tests {
         let tc = TranscriptConsequence {
             impact: Impact::LOW,
             strand: 1,
-            ccds: Some("-".to_string()),
-            refseq: Some("-".to_string()),
-            swissprot: Some("-".to_string()),
-            trembl: Some("L7XE61_HUMAN,L7XCZ9_HUMAN".to_string()),
-            uniparc: Some("UPI000002DB1C".to_string()),
-            uniprot_isoform: Some("-".to_string()),
+            meta: Some(std::sync::Arc::new(vep_core::transcript::TranscriptMeta {
+                ccds: Some("-".to_string()),
+                refseq: Some("-".to_string()),
+                swissprot: Some("-".to_string()),
+                trembl: Some("L7XE61_HUMAN,L7XCZ9_HUMAN".to_string()),
+                uniparc: Some("UPI000002DB1C".to_string()),
+                uniprot_isoform: Some("-".to_string()),
+                ..Default::default()
+            })),
             ..Default::default()
         };
         let options = FieldOptions {
