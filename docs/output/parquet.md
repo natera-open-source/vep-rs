@@ -1,6 +1,6 @@
 # Parquet format
 
-This page describes the Parquet output, a vep-rs extension with no Ensembl VEP counterpart: its layout, its schema, the two row shapes and the writer's choices. Selected with `--output_format parquet`. The run writes a TSV intermediate at `<output>.tsv.tmp`, one row per allele x transcript consequence in VEP's row order, and post-processes it to Parquet through the `duckdb` CLI. The intermediate is deleted on success unless the hidden `--keep_intermediate` flag is given.
+This page describes the Parquet output, a vep-rs extension with no Ensembl VEP counterpart: its layout, its schema, the two row shapes and the writer's choices. Selected with `--output_format parquet`. The run writes a TSV intermediate in a fresh staging directory beside the output, one row per allele x transcript consequence in VEP's row order, and post-processes it to Parquet through the `duckdb` CLI. The intermediate is removed with staging unless the hidden `--keep_intermediate` flag retains it at `<output>.tsv.tmp` after conversion succeeds.
 
 The output is a directory, so `-o STDOUT` is refused (`ERROR: [output] --output_format parquet needs a file path: Parquet cannot be written to STDOUT`). `--fields` and `--compress_output` are refused with it too: the column set is fixed, and the files carry their own compression. `--no_headers` leaves the intermediate's column line in place, since DuckDB reads the schema from it.
 
@@ -24,6 +24,14 @@ Read it with `hive_partitioning=false` to keep `chrom` as the stored VARCHAR. Hi
 ```sql
 read_parquet('out.parquet/**/*.parquet', hive_partitioning=false)
 ```
+
+## Replacing a dataset
+
+An existing output requires `--force_overwrite`. The run generates every Parquet file in staging before replacing the entire destination, so chromosomes absent from the new input and stale files inside retained partitions disappear together. A run with no output rows publishes an empty directory, with no Parquet files, just as a fresh empty run does.
+
+Annotation or DuckDB failure leaves the completed destination untouched and removes staging. Successful publication first renames the old directory into staging, then renames the new dataset into place; a failed second rename restores the old directory. If restoration fails, the error names the preserved backup. An abrupt interruption between the renames can leave that backup in `.vep-parquet-*/previous` beside the output. Cleanup failure after publication warns with the staging path; the new output is complete.
+
+Staging needs space for the TSV and the new dataset while the previous dataset remains present. The destination's parent must be writable. A regular file or symbolic link at the destination is refused even with `--force_overwrite`.
 
 ## Schema
 
@@ -93,7 +101,7 @@ scripts/adapters/parquet_to_vep_tab.py <dir|file> [--output tab.txt]
 
 Both flags are hidden from `--help`.
 
-`--keep_intermediate` preserves the TSV intermediate after the DuckDB step for inspection.
+`--keep_intermediate` preserves the TSV intermediate at `<output>.tsv.tmp` after the DuckDB step for inspection. A trailing slash on the output name is removed before this suffix is appended. If retaining it fails, the completed dataset is left untouched.
 
 `--parquet_row_group_size N` sets the rows per row group, rounded up to a multiple of 2,048, DuckDB's vector size. The dictionary size limit follows the rounded value; otherwise a row group with a distinct value in every row would lose its dictionary and its Bloom filter. The flag exists so a small input can be written as several row groups under test:
 

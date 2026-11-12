@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Parquet replacements remove stale partitions and files only after successful generation, preserve completed output on failure, and publish an empty directory when no rows remain. (#105)
 - `vep-cache-converter` skips a `variations/` directory or file whose name is not UTF-8 with its unexpected-name warning instead of copying it under a chromosome name no record reaches. (#78)
 
 ## [0.5.0] - 2026-10-25
