@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Binary plugin queries retain every overlapping record across single and batch lookups; conversion verifies interval boundaries, gaps, source order and multiplicity against tabix. (#104)
 - `vep-cache-converter` skips a `variations/` directory or file whose name is not UTF-8 with its unexpected-name warning instead of copying it under a chromosome name no record reaches. (#78)
 
 ## [0.5.0] - 2026-10-25
