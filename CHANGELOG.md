@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Built-in plugins that write per row annotate transcript rows alone; CADD, gnomADc and GWAS keep their record-level values on every row. (#78)
   - AlphaMissense writes `am_class` and `am_pathogenicity` on each transcript row of the variant and on no other row. (#78)
 - Distribution
-  - The Bioconda recipe `bioconda/vep-rs` builds `vep`, `vep-cache-builder` and `vep-cache-converter` from the release source tarball at the generic CPU floors.
+  - The Bioconda recipe `bioconda/vep-rs` builds `vep`, `vep-cache-builder` and `vep-cache-converter` from the release source tarball at the generic CPU floors. (#109)
 
 ### Changed
 
