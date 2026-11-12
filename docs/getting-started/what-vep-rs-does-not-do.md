@@ -64,8 +64,6 @@ An input, cache variation or FASTA index line longer than 64 MiB is refused unde
 
 ## Bioconda
 
-There is no Bioconda package: vep-rs is installed from a pre-built binary on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page, a build from source or the container image, as [Installation](installation.md) describes. The Bioconda recipe is maintained outside this repository.
-
-Planned for the next release, 0.6.0.
+The recipe [`bioconda/vep-rs`](../../bioconda/vep-rs/meta.yaml) builds `vep`, `vep-cache-builder` and `vep-cache-converter` from the release source tarball, at the generic CPU floors. Bioconda publishes the channel package from that recipe. No package is on the channel yet, so installation is still a release binary, a source build or the container image, as [Installation](installation.md) describes.
 
 To ask for a feature, or to report one this page leaves out, open an issue on the [issue tracker](https://github.com/natera-open-source/vep-rs/issues).

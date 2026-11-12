@@ -22,7 +22,8 @@
   "symbol",
   "biotype",
   "prebuilt-binaries-glibc-floor",
-  "portable-cpu-baseline-builds"
+  "portable-cpu-baseline-builds",
+  "bioconda-distribution"
  ],
  "reference_warnings": [
   "could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta"
