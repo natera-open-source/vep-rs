@@ -61,7 +61,7 @@ bam-refseq-model-correction	AnnotationType/Transcript.pm	documented_subset	open
 BayesDel	BayesDel.pm	implemented	open			
 bcf-input	-	error	landed:error	crates/vep-cli/tests/cli_errors.rs::bcf_input_is_refused		
 bigwig	Config.pm	implemented	open			
-bioconda-distribution	-	implemented	open			
+bioconda-distribution	-	implemented	landed:implemented	scripts/bioconda/test_recipe.py::test_the_shipped_recipe_matches_the_release_contract	tests/golden/116/GRCh37	
 biotype	OutputFactory.pm	implemented	landed:implemented	crates/vep-io/src/output/fields.rs::biotype_column_under_flag	tests/golden/116/GRCh38	
 Blosum62	Blosum62.pm	error	open			
 bnd_intergenic_rows_116	Variation/StructuralVariationOverlap.pm	implemented	landed:implemented	crates/vep-cli/src/runner.rs::breakend_record_with_both_sides_intergenic_writes_two_intergenic_rows;crates/vep-cli/src/runner.rs::breakend_record_whose_mate_is_genic_writes_no_intergenic_row;crates/vep-cli/src/runner.rs::single_breakend_record_with_no_transcript_writes_one_intergenic_row;crates/vep-cli/src/runner.rs::genic_breakend_record_with_intergenic_mate_names_its_own_allele_n_dot;crates/vep-cli/src/runner.rs::breakend_intergenic_verdict_is_per_record;crates/vep-cli/src/annotator.rs::annotator_applies_the_breakend_record_verdict;crates/vep-cli/src/vcf_parser.rs::bracket_breakend_without_mateid_names_its_own_allele_n_dot	tests/golden/116/GRCh38-release116	

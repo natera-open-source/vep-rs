@@ -27,6 +27,7 @@ These scripts read their data locations from environment variables, each with a 
 | `adapters/`    | Convert vep-rs outputs between formats                                        | `duckdb` CLI                  |
 | `release/`     | Render the GitHub release body the release workflow publishes as a draft, and hold its Linux binaries to the glibc floor the page states | Python 3.10+                  |
 | `docker/`      | Stage, tag and smoke-test the container image `.github/workflows/docker.yml` publishes | `gh`, Docker            |
+| `bioconda/`    | Hold the Bioconda recipe to the release source tarball, the three binaries and the generic CPU floors | Python 3.10+ |
 | `parity/`      | Hold `tests/parity/matrix.tsv` to the tree: every flag has a row and every landed row's tests resolve | Python 3.10+ |
 | `docs/`        | Build the documentation site, the release at its root and the preview of main under `main/`, and check its links, metadata and prose (`.github/workflows/pages.yml`); screenshot it for review | Python 3.10+, mdBook; Playwright for `site_screenshots.py` only |
 

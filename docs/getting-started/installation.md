@@ -59,4 +59,16 @@ gh attestation verify oci://ghcr.io/natera-open-source/vep-rs:0.5.0 \
   --repo natera-open-source/vep-rs
 ```
 
+## Bioconda
+
+The recipe [`bioconda/vep-rs`](../../bioconda/vep-rs/meta.yaml) is the Bioconda package. It builds `vep`, `vep-cache-builder` and `vep-cache-converter` from the release source tarball (`vep-rs-X.Y.Z.tar.gz`, the `git archive` the release workflow cuts) with `cargo build --release --locked`.
+
+Linux x86_64 compiles for `x86-64-v2` and Linux aarch64 for a generic CPU, the floors of the generic release archives. `.cargo/config.toml` would otherwise compile for `x86-64-v3` and Neoverse V1, which abort with an illegal-instruction fault below those floors. On Linux the build links conda-forge OpenSSL, the same library the release binaries link.
+
+No package is on the Bioconda channel yet. Once Bioconda publishes the recipe, install it with:
+
+```bash
+conda install -c conda-forge -c bioconda vep-rs
+```
+
 The next step is the [Quick start](quick-start.md), which runs the bundled corpus and then builds a transcript cache.

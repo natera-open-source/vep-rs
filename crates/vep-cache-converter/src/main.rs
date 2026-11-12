@@ -1157,19 +1157,18 @@ mod tests {
     }
 
     /// A scratch directory under the system temporary directory, removed on drop.
+    /// The name carries a counter so two tests that start in the same clock tick
+    /// do not share one and delete each other's files.
     struct Scratch(PathBuf);
 
     impl Scratch {
         fn new() -> Self {
-            let nanos = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos();
-            let dir = std::env::temp_dir().join(format!(
-                "vep-cache-converter-{}-{nanos}",
-                std::process::id()
-            ));
-            fs::create_dir_all(&dir).unwrap();
+            use std::sync::atomic::{AtomicU64, Ordering};
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let n = NEXT.fetch_add(1, Ordering::Relaxed);
+            let dir = std::env::temp_dir()
+                .join(format!("vep-cache-converter-{}-{n}", std::process::id()));
+            fs::create_dir(&dir).unwrap();
             Self(dir)
         }
 
@@ -1184,6 +1183,26 @@ mod tests {
         }
     }
 
+    /// Scratch directories created together are different directories, and each
+    /// one is still present after the others have been created.
+    #[test]
+    fn scratch_directories_created_together_stay_distinct() {
+        let threads = (0..32)
+            .map(|_| std::thread::spawn(Scratch::new))
+            .collect::<Vec<_>>();
+        let dirs: Vec<_> = threads
+            .into_iter()
+            .map(|thread| thread.join().unwrap())
+            .collect();
+        let mut paths: Vec<_> = dirs.iter().map(|dir| dir.path().to_path_buf()).collect();
+        paths.sort();
+        paths.dedup();
+        assert_eq!(paths.len(), dirs.len());
+        for dir in &dirs {
+            assert!(dir.path().is_dir(), "{}", dir.path().display());
+        }
+    }
+
     /// The names of every entry directly under `dir`, sorted.
     fn entries(dir: &Path) -> Vec<String> {
         let mut names: Vec<String> = fs::read_dir(dir)
@@ -1195,9 +1214,13 @@ mod tests {
     }
 
     /// Runs `work` under a subscriber that keeps its warnings, returning the
-    /// result with the warning lines in the order they were emitted.
+    /// result with the warning lines in the order they were emitted. One capture
+    /// runs at a time, because a second subscriber registered in the process can
+    /// cache a warning as disabled.
     fn warnings_during<T>(work: impl FnOnce() -> T) -> (T, Vec<String>) {
         use std::sync::{Arc, Mutex};
+        static ONE: Mutex<()> = Mutex::new(());
+        let _one = ONE.lock().unwrap();
 
         #[derive(Clone, Default)]
         struct Kept(Arc<Mutex<Vec<u8>>>);
@@ -1222,7 +1245,10 @@ mod tests {
             .with_target(false)
             .with_writer(move || writer.clone())
             .finish();
-        let result = tracing::subscriber::with_default(subscriber, work);
+        let result = tracing::subscriber::with_default(subscriber, || {
+            tracing::callsite::rebuild_interest_cache();
+            work()
+        });
         let text = String::from_utf8(kept.0.lock().unwrap().clone()).unwrap();
         (result, text.lines().map(str::to_owned).collect())
     }
