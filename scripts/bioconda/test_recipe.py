@@ -61,12 +61,36 @@ def test_a_github_archive_url_or_a_short_sha256_is_refused() -> None:
 def test_omitting_a_binary_or_installing_bench_plugins_is_refused() -> None:
     meta, build, version = shipped()
     dropped = build.replace("  --bin vep-cache-converter\n", "")
-    dropped = dropped.replace("  target/release/vep-cache-converter \\\n", "")
+    dropped = dropped.replace('  "${release_dir}/vep-cache-converter" \\\n', "")
     errors = check_recipe.recipe_errors(meta, dropped, version)
     assert "build.sh does not build vep-cache-converter" in errors
     assert "build.sh does not install vep-cache-converter" in errors
     extra = build.replace("--bin vep-cache-converter", "--bin vep-cache-converter --bin bench_plugins")
     assert "build.sh installs bench_plugins" in check_recipe.recipe_errors(meta, extra, version)
+
+
+def test_binaries_install_from_the_cargo_build_target_release_dir() -> None:
+    meta, build, version = shipped()
+    assert check_recipe.RELEASE_DIR in build.splitlines()
+    for target, expected in (
+        ("", "target/release"),
+        ("x86_64-unknown-linux-gnu", "target/x86_64-unknown-linux-gnu/release"),
+    ):
+        out = subprocess.run(
+            ["bash", "-c", f'{check_recipe.RELEASE_DIR}; printf %s "$release_dir"'],
+            capture_output=True,
+            text=True,
+            env={"PATH": "/usr/bin:/bin", **({"CARGO_BUILD_TARGET": target} if target else {})},
+        )
+        assert out.returncode == 0, out.stderr
+        assert out.stdout == expected
+    fixed = build.replace(check_recipe.RELEASE_DIR + "\n", "")
+    for binary in check_recipe.BINS:
+        fixed = fixed.replace(f'"${{release_dir}}/{binary}"', f"target/release/{binary}")
+    errors = check_recipe.recipe_errors(meta, fixed, version)
+    assert "build.sh does not take release_dir from CARGO_BUILD_TARGET" in errors
+    assert "build.sh names target/release, which CARGO_BUILD_TARGET moves" in errors
+    assert all(f"build.sh does not install {binary}" in errors for binary in check_recipe.BINS)
 
 
 def test_an_unlocked_build_or_a_measured_cpu_floor_is_refused() -> None:

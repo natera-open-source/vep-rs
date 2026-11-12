@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Bioconda recipe installs the binaries from `target/<triple>/release` when conda-forge's Rust activation sets `CARGO_BUILD_TARGET`, instead of failing on `target/release`.
 - `vep-cache-converter` skips a `variations/` directory or file whose name is not UTF-8 with its unexpected-name warning instead of copying it under a chromosome name no record reaches. (#78)
 
 ## [0.5.0] - 2026-10-25

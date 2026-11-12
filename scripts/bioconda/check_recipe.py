@@ -4,7 +4,8 @@
 The recipe builds vep, vep-cache-builder and vep-cache-converter from the git
 archive the release workflow publishes, with cargo --locked, at the generic CPU
 floors. .cargo/config.toml would otherwise compile for x86-64-v3 and neoverse-v1.
-Linux links conda-forge OpenSSL, which is built for glibc 2.17.
+Linux links conda-forge OpenSSL, which is built for glibc 2.17. The binaries
+install from the release directory CARGO_BUILD_TARGET selects.
 
 usage: check_recipe.py [--root DIR]
 
@@ -24,6 +25,9 @@ SOURCE_URL = (
     "v{{ version }}/vep-rs-{{ version }}.tar.gz"
 )
 BINS = ("vep", "vep-cache-builder", "vep-cache-converter")
+# conda-forge's rust activation exports CARGO_BUILD_TARGET, which moves the binaries to
+# target/<triple>/release.
+RELEASE_DIR = 'release_dir="target/${CARGO_BUILD_TARGET:+${CARGO_BUILD_TARGET}/}release"'
 SHA256_RE = re.compile(r"^  sha256: ([0-9a-f]{64})$", re.MULTILINE)
 VERSION_SET_RE = re.compile(r'^\{% set version = "([^"]+)" %\}$', re.MULTILINE)
 CARGO_VERSION_RE = re.compile(r'^version = "([^"]+)"$', re.MULTILINE)
@@ -145,10 +149,14 @@ def recipe_errors(meta: str, build: str, version: str) -> list[str]:
         errors.append("build.sh does not write THIRDPARTY.yml")
     if "cargo build --release --locked" not in build:
         errors.append("build.sh does not cargo build --release --locked")
+    if RELEASE_DIR not in build.splitlines():
+        errors.append("build.sh does not take release_dir from CARGO_BUILD_TARGET")
+    if "target/release" in code:
+        errors.append("build.sh names target/release, which CARGO_BUILD_TARGET moves")
     for binary in BINS:
         if f"--bin {binary}" not in build:
             errors.append(f"build.sh does not build {binary}")
-        if f"target/release/{binary}" not in build:
+        if f'"${{release_dir}}/{binary}"' not in build:
             errors.append(f"build.sh does not install {binary}")
     if "bench_plugins" in build:
         errors.append("build.sh installs bench_plugins")
