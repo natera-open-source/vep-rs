@@ -20,7 +20,7 @@
 
 The committed caches hold 313 transcripts built from a file whose biotype an Ensembl GFF3 writes under an `ncRNA_gene` line. 23 are in the cache built from a GTF, 266 in the cache built from a GFF3 and 24 in a mitochondrial shard built from the GFF3 that a third corpus splices into a converted cache. The one committed corpus whose reference Ensembl VEP wrote from a file read a GTF, which types every gene `gene`, and the corpora built from a GFF3 compare with Ensembl VEP reading its own cache, where the engines agree.
 
-**How often the shape occurs.** Tier 2: the shape is a non-coding transcript of a cache built from a GTF or GFF3, met where Ensembl VEP reads a GFF3 as its transcript source. The committed caches hold 77,601 transcripts, 313 of them non-coding transcripts built from a file, in three corpora; no committed flag set compares with Ensembl VEP reading a GFF3.
+**How often the shape occurs.** Tier 2: the shape is a non-coding transcript of a cache built from a GTF or GFF3, met where Ensembl VEP reads a GFF3 as its transcript source. The committed caches hold 77,675 transcripts, 313 of them non-coding transcripts built from a file, in three corpora; no committed flag set compares with Ensembl VEP reading a GFF3.
 
 ## 1. LINC00308 and a TMPRSS3 transcript, as the GFF3 writes them
 

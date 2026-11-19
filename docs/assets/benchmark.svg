@@ -1,14 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" class="benchmark-chart" width="680" height="268" role="img" aria-label="vep-rs annotates the four whole-genome datasets 14.9 to 22.4 times faster than fastVEP v0.4.0 and 264 to 411 times faster than Ensembl VEP 116.2 on ARM." data-release="v0.5.0">
-<desc>Release v0.5.0: whole-genome wall time per dataset on ARM for vep-rs v0.5.0, fastVEP v0.4.0, Ensembl VEP 116.2, from the release's population record.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" class="benchmark-chart" width="680" height="268" role="img" aria-label="vep-rs annotates the four whole-genome datasets 4.99 to 18.9 times faster than fastVEP v0.5.0 and 407 to 432 times faster than Ensembl VEP 116.2 on ARM." data-release="v0.6.0">
+<desc>Release v0.6.0: whole-genome wall time per dataset on ARM for vep-rs v0.6.0, fastVEP v0.5.0, Ensembl VEP 116.2, from the release's population record.</desc>
 <style>.benchmark-chart{display:block;max-width:min(100%,400px);height:auto;aspect-ratio:340/405}.benchmark-chart .benchmark-chart-narrow,.benchmark-chart .benchmark-chart-wide{width:100%;height:100%}.benchmark-chart .benchmark-chart-wide{display:none}@media (min-width:640px){.benchmark-chart{max-width:100%;aspect-ratio:680/268}.benchmark-chart .benchmark-chart-narrow{display:none}.benchmark-chart .benchmark-chart-wide{display:inline}}</style>
 <svg class="benchmark-chart-narrow" viewBox="0 0 340 405">
 <text x="1" y="19" font-size="15" font-weight="600" fill="var(--fg)">Wall time, sum of per-chromosome</text>
 <text x="1" y="38" font-size="15" font-weight="600" fill="var(--fg)">medians over 5 machines (Ensembl</text>
 <text x="1" y="57" font-size="15" font-weight="600" fill="var(--fg)">VEP over 1) at 16 threads, ARM</text>
 <rect class="bar-vep-rs" x="1" y="67.6" width="12" height="12" rx="2"/>
-<text x="19" y="79" font-size="15" fill="var(--fg)">vep-rs v0.5.0</text>
+<text x="19" y="79" font-size="15" fill="var(--fg)">vep-rs v0.6.0</text>
 <rect class="bar-fastvep" x="159.9" y="67.6" width="12" height="12" rx="2"/>
-<text x="177.9" y="79" font-size="15" fill="var(--fg)">fastVEP v0.4.0</text>
+<text x="177.9" y="79" font-size="15" fill="var(--fg)">fastVEP v0.5.0</text>
 <rect class="bar-ensembl-vep" x="1" y="89.6" width="12" height="12" rx="2"/>
 <text x="19" y="101" font-size="15" fill="var(--fg)">Ensembl VEP 116.2</text>
 <text x="1" y="131" font-size="15" fill="var(--fg)">gnomAD v4.1 <tspan fill-opacity="0.75">GRCh38</tspan></text>
@@ -18,10 +18,10 @@
 <line x1="171.3" y1="135" x2="171.3" y2="175" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
 <line x1="225.3" y1="135" x2="225.3" y2="175" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
 <line x1="279.3" y1="135" x2="279.3" y2="175" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
-<path class="bar-vep-rs" d="M9.3 137h92.9a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-92.9z"/>
-<text x="111.2" y="147.4" font-size="15" fill="var(--fg)">624 s</text>
-<path class="bar-fastvep" d="M9.3 150h162.3a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-162.3z"/>
-<text x="180.6" y="160.4" font-size="15" fill="var(--fg)">12,018 s</text>
+<path class="bar-vep-rs" d="M9.3 137h91.7a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-91.7z"/>
+<text x="110" y="147.4" font-size="15" fill="var(--fg)">591 s</text>
+<path class="bar-fastvep" d="M9.3 150h141.3a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-141.3z"/>
+<text x="159.6" y="160.4" font-size="15" fill="var(--fg)">4,902 s</text>
 <path class="bar-ensembl-vep" d="M9.3 163h234a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-234z"/>
 <text x="252.3" y="173.4" font-size="15" fill="var(--fg)">255,394 s</text>
 <text x="1" y="192" font-size="15" fill="var(--fg)">gnomAD v2.1.1 <tspan fill-opacity="0.75">GRCh37</tspan></text>
@@ -31,10 +31,10 @@
 <line x1="171.3" y1="196" x2="171.3" y2="236" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
 <line x1="225.3" y1="196" x2="225.3" y2="236" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
 <line x1="279.3" y1="196" x2="279.3" y2="236" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
-<path class="bar-vep-rs" d="M9.3 198h67.8a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-67.8z"/>
-<text x="86.1" y="208.4" font-size="15" fill="var(--fg)">214 s</text>
-<path class="bar-fastvep" d="M9.3 211h140.7a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-140.7z"/>
-<text x="159" y="221.4" font-size="15" fill="var(--fg)">4,783 s</text>
+<path class="bar-vep-rs" d="M9.3 198h67a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-67z"/>
+<text x="85.3" y="208.4" font-size="15" fill="var(--fg)">207 s</text>
+<path class="bar-fastvep" d="M9.3 211h136a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-136z"/>
+<text x="154.3" y="221.4" font-size="15" fill="var(--fg)">3,918 s</text>
 <path class="bar-ensembl-vep" d="M9.3 224h209a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-209z"/>
 <text x="227.3" y="234.4" font-size="15" fill="var(--fg)">88,002 s</text>
 <text x="1" y="253" font-size="15" fill="var(--fg)">1000 Genomes Phase 3 <tspan fill-opacity="0.75">GRCh37</tspan></text>
@@ -44,10 +44,10 @@
 <line x1="171.3" y1="257" x2="171.3" y2="297" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
 <line x1="225.3" y1="257" x2="225.3" y2="297" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
 <line x1="279.3" y1="257" x2="279.3" y2="297" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
-<path class="bar-vep-rs" d="M9.3 259h19a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-19z"/>
-<text x="37.3" y="269.4" font-size="15" fill="var(--fg)">27 s</text>
-<path class="bar-fastvep" d="M9.3 272h82.4a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-82.4z"/>
-<text x="100.7" y="282.4" font-size="15" fill="var(--fg)">398 s</text>
+<path class="bar-vep-rs" d="M9.3 259h9.4a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-9.4z"/>
+<text x="27.7" y="269.4" font-size="15" fill="var(--fg)">18 s</text>
+<path class="bar-fastvep" d="M9.3 272h52.8a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-52.8z"/>
+<text x="71.1" y="282.4" font-size="15" fill="var(--fg)">113 s</text>
 <path class="bar-ensembl-vep" d="M9.3 285h150.3a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-150.3z"/>
 <text x="168.6" y="295.4" font-size="15" fill="var(--fg)">7,209 s</text>
 <text x="1" y="314" font-size="15" fill="var(--fg)">1000 Genomes high-coverage <tspan fill-opacity="0.75">GRCh38</tspan></text>
@@ -57,10 +57,10 @@
 <line x1="171.3" y1="318" x2="171.3" y2="358" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
 <line x1="225.3" y1="318" x2="225.3" y2="358" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
 <line x1="279.3" y1="318" x2="279.3" y2="358" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
-<path class="bar-vep-rs" d="M9.3 320h38a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-38z"/>
-<text x="56.3" y="330.4" font-size="15" fill="var(--fg)">60 s</text>
-<path class="bar-fastvep" d="M9.3 333h102.8a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-102.8z"/>
-<text x="121.1" y="343.4" font-size="15" fill="var(--fg)">951 s</text>
+<path class="bar-vep-rs" d="M9.3 320h27.6a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-27.6z"/>
+<text x="45.9" y="330.4" font-size="15" fill="var(--fg)">39 s</text>
+<path class="bar-fastvep" d="M9.3 333h65.4a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-65.4z"/>
+<text x="83.7" y="343.4" font-size="15" fill="var(--fg)">193 s</text>
 <path class="bar-ensembl-vep" d="M9.3 346h168.8a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-168.8z"/>
 <text x="187.1" y="356.4" font-size="15" fill="var(--fg)">15,817 s</text>
 <text x="9.3" y="376" font-size="15" text-anchor="middle" fill-opacity="0.75" fill="var(--fg)">10</text>
@@ -75,9 +75,9 @@
 <text x="1" y="19" font-size="15" font-weight="600" fill="var(--fg)">Wall time, sum of per-chromosome medians over</text>
 <text x="1" y="38" font-size="15" font-weight="600" fill="var(--fg)">5 machines (Ensembl VEP over 1) at 16 threads, ARM</text>
 <rect class="bar-vep-rs" x="1" y="48.6" width="12" height="12" rx="2"/>
-<text x="19" y="60" font-size="15" fill="var(--fg)">vep-rs v0.5.0</text>
+<text x="19" y="60" font-size="15" fill="var(--fg)">vep-rs v0.6.0</text>
 <rect class="bar-fastvep" x="159.9" y="48.6" width="12" height="12" rx="2"/>
-<text x="177.9" y="60" font-size="15" fill="var(--fg)">fastVEP v0.4.0</text>
+<text x="177.9" y="60" font-size="15" fill="var(--fg)">fastVEP v0.5.0</text>
 <rect class="bar-ensembl-vep" x="328.1" y="48.6" width="12" height="12" rx="2"/>
 <text x="346.1" y="60" font-size="15" fill="var(--fg)">Ensembl VEP 116.2</text>
 <line x1="196" y1="68" x2="196" y2="244" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
@@ -88,34 +88,34 @@
 <line x1="639.9" y1="68" x2="639.9" y2="244" stroke="var(--fg)" stroke-opacity="0.25" stroke-width="1"/>
 <text x="186" y="86.9" font-size="15" text-anchor="end" fill="var(--fg)">gnomAD v4.1</text>
 <text x="186" y="103.9" font-size="15" text-anchor="end" fill-opacity="0.75" fill="var(--fg)">GRCh38</text>
-<path class="bar-vep-rs" d="M196 72h155.4a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-155.4z"/>
-<text x="360.4" y="82.4" font-size="15" fill="var(--fg)">624 s</text>
-<path class="bar-fastvep" d="M196 85h269.4a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-269.4z"/>
-<text x="474.4" y="95.4" font-size="15" fill="var(--fg)">12,018 s</text>
+<path class="bar-vep-rs" d="M196 72h153.3a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-153.3z"/>
+<text x="358.3" y="82.4" font-size="15" fill="var(--fg)">591 s</text>
+<path class="bar-fastvep" d="M196 85h234.9a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-234.9z"/>
+<text x="439.9" y="95.4" font-size="15" fill="var(--fg)">4,902 s</text>
 <path class="bar-ensembl-vep" d="M196 98h387.3a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-387.3z"/>
 <text x="592.3" y="108.4" font-size="15" fill="var(--fg)">255,394 s</text>
 <text x="186" y="130.9" font-size="15" text-anchor="end" fill="var(--fg)">gnomAD v2.1.1</text>
 <text x="186" y="147.9" font-size="15" text-anchor="end" fill-opacity="0.75" fill="var(--fg)">GRCh37</text>
-<path class="bar-vep-rs" d="M196 116h114.1a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-114.1z"/>
-<text x="319.1" y="126.4" font-size="15" fill="var(--fg)">214 s</text>
-<path class="bar-fastvep" d="M196 129h233.9a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-233.9z"/>
-<text x="438.9" y="139.4" font-size="15" fill="var(--fg)">4,783 s</text>
+<path class="bar-vep-rs" d="M196 116h112.8a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-112.8z"/>
+<text x="317.8" y="126.4" font-size="15" fill="var(--fg)">207 s</text>
+<path class="bar-fastvep" d="M196 129h226.2a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-226.2z"/>
+<text x="431.2" y="139.4" font-size="15" fill="var(--fg)">3,918 s</text>
 <path class="bar-ensembl-vep" d="M196 142h346.2a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-346.2z"/>
 <text x="551.2" y="152.4" font-size="15" fill="var(--fg)">88,002 s</text>
 <text x="186" y="174.9" font-size="15" text-anchor="end" fill="var(--fg)">1000 Genomes</text>
 <text x="186" y="191.9" font-size="15" text-anchor="end" fill="var(--fg)">Phase 3 <tspan fill-opacity="0.75">GRCh37</tspan></text>
-<path class="bar-vep-rs" d="M196 160h33.8a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-33.8z"/>
-<text x="238.8" y="170.4" font-size="15" fill="var(--fg)">27 s</text>
-<path class="bar-fastvep" d="M196 173h138.1a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-138.1z"/>
-<text x="343.1" y="183.4" font-size="15" fill="var(--fg)">398 s</text>
+<path class="bar-vep-rs" d="M196 160h18.1a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-18.1z"/>
+<text x="223.1" y="170.4" font-size="15" fill="var(--fg)">18 s</text>
+<path class="bar-fastvep" d="M196 173h89.4a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-89.4z"/>
+<text x="294.4" y="183.4" font-size="15" fill="var(--fg)">113 s</text>
 <path class="bar-ensembl-vep" d="M196 186h249.7a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-249.7z"/>
 <text x="454.7" y="196.4" font-size="15" fill="var(--fg)">7,209 s</text>
 <text x="186" y="218.9" font-size="15" text-anchor="end" fill="var(--fg)">1000 Genomes</text>
 <text x="186" y="235.9" font-size="15" text-anchor="end" fill="var(--fg)">high-coverage <tspan fill-opacity="0.75">GRCh38</tspan></text>
-<path class="bar-vep-rs" d="M196 204h65.1a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-65.1z"/>
-<text x="270.1" y="214.4" font-size="15" fill="var(--fg)">60 s</text>
-<path class="bar-fastvep" d="M196 217h171.6a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-171.6z"/>
-<text x="376.6" y="227.4" font-size="15" fill="var(--fg)">951 s</text>
+<path class="bar-vep-rs" d="M196 204h48a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-48z"/>
+<text x="253" y="214.4" font-size="15" fill="var(--fg)">39 s</text>
+<path class="bar-fastvep" d="M196 217h110a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-110z"/>
+<text x="315" y="227.4" font-size="15" fill="var(--fg)">193 s</text>
 <path class="bar-ensembl-vep" d="M196 230h280a4 4 0 0 1 4 4v2a4 4 0 0 1 -4 4h-280z"/>
 <text x="485" y="240.4" font-size="15" fill="var(--fg)">15,817 s</text>
 <text x="196" y="260" font-size="15" text-anchor="middle" fill-opacity="0.75" fill="var(--fg)">10</text>

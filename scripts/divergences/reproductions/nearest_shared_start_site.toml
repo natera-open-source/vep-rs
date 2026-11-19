@@ -3,7 +3,7 @@ page = "docs/divergences/nearest-shared-site.md"
 verified_against = "116.2"
 image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
 input_class = "observed"
-input_class_basis = "2 · 28,701 of 77,601 cache transcripts · 3 flag sets, 102 corpora"
+input_class_basis = "2 · 28,753 of 77,675 cache transcripts · 3 flag sets, 103 corpora"
 notes = "Seven protein-coding transcripts of GRIK1 end at 29940022; the deletion above the site and the substitution two bases below it each receive the one object its own search direction returns. Which of the seven that is follows the line order of the start-site table Ensembl VEP's first run writes into the cache directory, so the run reads a linked copy of the cache, the ids are masked and one id is compared with the list of seven."
 prepare = [
   "mkdir -p \"$STAGE/perl-cache/homo_sapiens\" && cp -al \"$PERL_CACHE\" \"$STAGE/perl-cache/homo_sapiens/116_GRCh38\"",

@@ -3,7 +3,7 @@ page = "docs/divergences/refseq-edited-model-deleted-span-term.md"
 verified_against = "116.2"
 image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
 input_class = "observed"
-input_class_basis = "2 · 8 of 77,601 cache transcripts · 10 flag sets, 4 corpora"
+input_class_basis = "2 · 8 of 77,675 cache transcripts · 10 flag sets, 4 corpora"
 notes = "The single-exon model NM_198689.3 lacks the fifteen genomic bases 21:46020656-46020670 between its CDS positions 134 and 135; a substitution inside them maps to no transcript coordinate."
 
 [input]

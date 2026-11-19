@@ -23,7 +23,7 @@ A deletion that also runs to the last coding base belongs to [`downstream_utr_fr
 
 Where a deletion lies in a repeat, and the repeat reaches an exon's last base, the spliced sequence lets the deletion sit further 3' than the coordinates the plugin holds. This page keeps the value that follows from the coordinates the plugin holds, vep-rs's, because the plugin's description says the sequence includes "any amino acids overlapped by the variant itself". The other reading is the translation from the spliced sequence's first changed codon, on such a row a later codon than the first one the change touches at those coordinates.
 
-Of the 116,640 GRCh37 and 515,551 GRCh38 rows of this class and `downstream_utr_frame_past_coding_end`, 51 and 246 have that shape. The format comparator accepts all of them, 7 and 37 under `downstream_utr_frame_past_coding_end` and the rest under this class. The other reading's value is Ensembl VEP's on 14 and 71 of them, neither engine's on 37 and 175 and vep-rs's on none.
+Of the GRCh37 and GRCh38 rows of this class and `downstream_utr_frame_past_coding_end`, 51 and 246 have that shape. The format comparator accepts all of them, 7 and 37 under `downstream_utr_frame_past_coding_end` and the rest under this class. The other reading's value is Ensembl VEP's on 14 and 71 of them, neither engine's on 37 and 175 and vep-rs's on none.
 
 ## 1. A one-base deletion that changes the codon it starts in
 

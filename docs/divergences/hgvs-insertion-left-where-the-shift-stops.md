@@ -36,7 +36,7 @@ The class is built into the format comparator and applied once per row, and the 
 
 On the genome-wide ClinVar GRCh37 file Ensembl VEP 116.2 writes an `HGVS_OFFSET` equal to the bound on 236 rows of an insertion, from 61 records and 171 transcripts. vep-rs writes a duplication further 3' on 204 of them, an insertion further 3' on 10 and no HGVSc on 21. On the one row left the run ends exactly where the walk does, and the engines agree. On the GRCh38 file the walk reaches its bound on 1,289 rows, from 72 records and 864 transcripts: 1,168, 43, 77 and 1 in the same order.
 
-The inserted alleles are 602 to 8,940 bases long, and every row is a forward-strand transcript's. Each of these records writes its insertion at the first point of its run, which on a reverse-strand transcript is the most 3' point.
+The inserted alleles are hundreds to thousands of bases long, and every row is a forward-strand transcript's. Each of these records writes its insertion at the first point of its run, which on a reverse-strand transcript is the most 3' point.
 
 ## 1. A copy of 602 bases described 204 positions before the end of its run
 

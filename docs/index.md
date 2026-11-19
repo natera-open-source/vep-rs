@@ -1,15 +1,28 @@
 # vep-rs
 
-vep-rs is a drop-in replacement for Ensembl VEP in Rust, with the same flags and output formats: it runs up to 411 times faster than Ensembl VEP and matches Ensembl VEP exactly except for [the documented divergences](intended-divergences.md).
+vep-rs is a drop-in replacement for Ensembl VEP in Rust, with the same flags and output formats: it runs up to 432 times faster than Ensembl VEP and matches Ensembl VEP exactly except for [the documented divergences](intended-divergences.md).
 
 It does the work of Ensembl VEP, the Variant Effect Predictor: for each variant of a VCF file it writes the genes and transcripts affected and the consequence on each. [Install](#install) a binary, a container or the source.
+
+<figure class="home-figure">
+<a href="assets/comparison.png">
+
+![Counts are of the 31 plugins vep-rs supports, of Ensembl VEP's 87. Plugins vep-rs does not port are not counted; the README lists them by reason. Four panels comparing vep-rs v0.6.0 and fastVEP v0.5.0 against Ensembl VEP 116.2: raw F1 per dataset, wall time per dataset and architecture, raw F1 per plugin and the plugins each tool reads.](assets/comparison.png)
+
+</a>
+<figcaption>
+
+Counts are of the 31 plugins vep-rs supports, of Ensembl VEP's 87. Plugins vep-rs does not port are not counted; the README lists them by reason. vep-rs v0.6.0 against Ensembl VEP 116.2, with fastVEP v0.5.0 as comparator.
+
+</figcaption>
+</figure>
 
 ## Why vep-rs
 
 <div class="home-reasons">
 
-- **Fast on whole genomes.** All of gnomAD v4.1, 759,336,320 variants, annotates in 624 s on one ARM machine.
-- **Scored against Ensembl VEP.** Release 116.2, on six whole-genome datasets.
+- **Fast on whole genomes.** All of gnomAD v4.1, 759,336,320 variants, annotates in 591 s on one ARM machine.
+- **Scored against Ensembl VEP.** Release 116.2, on six whole-genome datasets and [31 plugins](plugins.md#support-table).
 - **The same command line.** Ensembl VEP's input files, flag names and output layouts, plus typed Parquet.
 
 </div>

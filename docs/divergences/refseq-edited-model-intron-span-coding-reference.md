@@ -25,7 +25,7 @@ The reference peptide is the translation of that window. Every predicate that co
 
 **How often the shape occurs.** Tier 3 of [Intended divergences from Ensembl VEP](../intended-divergences.md): the data that page counts does not carry the shape. The shape is a record whose reference, as the engines parse it, has two or more bases, with both ends on coding bases of an edited model and one or more whole introns inside. A scan of genome-wide ClinVar against the whole RefSeq cache of each assembly finds fifteen rows of the shape, a row being one record on one model. There are 3 on GRCh38, from 3 records, and 12 on GRCh37, from 9 records. Section 2 lists them.
 
-Of the 77,601 transcripts of the committed caches, 61, in 4 corpora, are coding models with an RNA edit and an intron between two bases of their coding sequence, the models that can carry the shape. That count is an upper bound on what can carry the shape, not a count of records that show it: no committed record does, which is why the entry is tier 3.
+Of the 77,675 transcripts of the committed caches, 61, in 4 corpora, are coding models with an RNA edit and an intron between two bases of their coding sequence, the models that can carry the shape. That count is an upper bound on what can carry the shape, not a count of records that show it: no committed record does, which is why the entry is tier 3.
 
 The reference halves of `Codons` and `Amino_acids` differ between the engines on all fifteen. The coding terms of `Consequence`, the impact and the protein notation are equal on ten rows. On the other five a term or the notation differs: the term on 3 of them, the protein notation on all 5 and the impact on none.
 

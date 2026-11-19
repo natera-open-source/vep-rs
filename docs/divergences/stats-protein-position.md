@@ -108,7 +108,7 @@ No comparator of this repository reads the statistics report of a `--hgvs` run. 
 
 **In short.** On `21 39428463 tiny_cds_end T C`, both engines write the same coding row on `ENST00000451131` (LCA5L, reverse strand, a `cds_end_NF` model of 10 residues): `incomplete_terminal_codon_variant` with `coding_sequence_variant`, `Protein_position` 11. Ensembl VEP's `[Position in protein]` chart prints that row under an eleventh key, `110-120%`, and `0` under `90-100%`; vep-rs counts it under `90-100%`, the only decile a position at or past a protein's end can belong to.
 
-The shape is tier 2 of [Intended divergences from Ensembl VEP](../intended-divergences.md): 19 of the 77,601 transcripts of the committed caches (245 per million) end in a partial codon after at most ten residues, in 6 corpora, and 6 flag sets run `--stats_text`. No comparison of this repository reads such a report, so nothing is set aside.
+The shape is tier 2 of [Intended divergences from Ensembl VEP](../intended-divergences.md): 19 of the 77,675 transcripts of the committed caches (245 per million) end in a partial codon after at most ten residues, in 6 corpora, and 6 flag sets run `--stats_text`. No comparison of this repository reads such a report, so nothing is set aside.
 
 ### 2.1 The record
 

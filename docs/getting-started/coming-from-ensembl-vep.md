@@ -1,6 +1,6 @@
 # Coming from Ensembl VEP
 
-How to move from Ensembl VEP to vep-rs as a drop-in alternative: what stays the same and what changes when the same command line runs on vep-rs.
+How to move from Ensembl VEP to vep-rs, a drop-in replacement for Ensembl VEP: what stays the same and what changes when the same command line runs on vep-rs.
 
 ## The commands to swap in
 

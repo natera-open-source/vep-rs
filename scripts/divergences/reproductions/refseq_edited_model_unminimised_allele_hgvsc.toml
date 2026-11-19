@@ -3,7 +3,7 @@ page = "docs/divergences/refseq-edited-model-unminimised-allele-hgvsc.md"
 verified_against = "116.2"
 image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
 input_class = "observed"
-input_class_basis = "2 · 136 of 77,601 cache transcripts · 1 flag set, 4 corpora"
+input_class_basis = "2 · 136 of 77,675 cache transcripts · 1 flag set, 4 corpora"
 notes = "Two records on GRCh38 chromosome 21 that change the one base 21:38575677 and keep a base they share with the reference: the first is written from 21:38575676 and keeps that base before the changed one, the second is written from 21:38575677 and keeps the base after it. The reverse-strand model NM_004449.4 carries _rna_edit attributes and prints BAM_EDIT=OK; the changed base is its coding base 24, and the model spells both bases of each record as the genome does. Ensembl VEP clips the kept base from the two alleles as it builds the HGVSc and then, on a model with an _rna_edit attribute, writes the row's whole alleles in their place, so its notation is a substitution naming two bases a side at c.24; vep-rs spells the alleles the clip leaves, one base a side."
 
 [input]

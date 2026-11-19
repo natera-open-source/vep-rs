@@ -3,7 +3,7 @@ page = "docs/divergences/gxf-reverse-utr.md"
 verified_against = "116.2"
 image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
 input_class = "observed"
-input_class_basis = "2 · 22,236 of 77,601 cache transcripts · 0 flag sets, 107 corpora"
+input_class_basis = "2 · 22,298 of 77,675 cache transcripts · 0 flag sets, 107 corpora"
 notes = "A substitution in the stop codon of TMPRSS3 (reverse strand) read from the corpus GTF: the extension count after extTer comes from the 3' UTR, which Ensembl VEP reads mirrored about the transcript."
 
 [input]

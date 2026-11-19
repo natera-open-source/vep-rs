@@ -1,0 +1,3389 @@
+{
+  "image": "docs/assets/comparison.png",
+  "canvas": {
+    "width_px": 1080,
+    "height_px": 1350
+  },
+  "alt_text": "Four panels comparing vep-rs v0.6.0 and fastVEP v0.5.0 against Ensembl VEP 116.2. (a) Raw F1 per dataset as a bar for each of vep-rs and fastVEP, with each tool's adjusted F1 as a marker joined to the end of the bar by a line where the two differ. (b) Wall time per dataset and architecture of vep-rs, fastVEP and Ensembl VEP, a circle each, filled for ARM and open for x86; from left to right, the circles of every dataset and architecture are those of vep-rs, fastVEP and Ensembl VEP; each wall-time cell of Ensembl VEP holds 1 run, against 5 for vep-rs and fastVEP. (c) Raw F1 per plugin (plugins verified on real data; TranscriptAnnotator on its committed table; plugins whose data cannot be redistributed on synthetic fixtures, marked synthetic) as a bar for each of vep-rs and fastVEP, with each tool's adjusted F1 as a marker joined to the end of the bar by a line where the two differ: fastVEP has a figure on 14 of the 57 rows, its marker on 12 of them, and a cross (no such source) on 43; vep-rs's adjusted F1 is exactly 1 on 57 of the 57 rows. (d) The plugins read by vep-rs and fastVEP, a bar each: 31 of 31 and 7 of 31. A marker standing at the end of its bar means that the tool's raw and adjusted F1 are equal as drawn. On a row of a plugin verified on real data, vep-rs's counts are summed over the genome-wide ClinVar dataset of the row's genome build and whole-genome population datasets of that build (GRCh37: gnomAD v2.1.1 and 1000 Genomes Phase 3; GRCh38: gnomAD v4.1 and 1000 Genomes high-coverage), except on gnomADMt GRCh38 (ClinVar alone); fastVEP's counts are summed over the genome-wide ClinVar dataset of the row's genome build and whole-genome population datasets of that build (GRCh37: gnomAD v2.1.1 and 1000 Genomes Phase 3; GRCh38: gnomAD v4.1 and 1000 Genomes high-coverage). The plugin panel's 57 rows carry 32 row names for 31 plugins: CADD is scored under CADD and CADD (structural variants). A row's figure is summed over the sets of the row that the record holds for the tool, and the tools differ in them on 4 rows: dbNSFP GRCh37 synthetic (vep-rs 5, fastVEP 1), dbNSFP GRCh38 synthetic (vep-rs 9, fastVEP 1), SpliceAI GRCh37 synthetic (vep-rs 4, fastVEP 1) and SpliceAI GRCh38 synthetic (vep-rs 4, fastVEP 1). An F1 of exactly 1 has no place on a scale of 1 - F1: it is drawn where the axis reads 1, past a break in the axis line, and 66 of the 66 adjusted markers of vep-rs stand there. The plugin panel runs over both columns: its groups from Committed table on continue in the second column, under the same title.",
+  "caption": "**vep-rs v0.6.0 against Ensembl VEP 116.2, with fastVEP v0.5.0 as comparator.** (a) Raw F1 per dataset on a log(1 - F1) axis; a marker is its tool's adjusted F1, joined to the end of its bar by a line where the two differ. All six is the pool of the six whole-genome datasets, the ClinVar and the population datasets. (b) Wall time per dataset and architecture: a ClinVar line is the median of its runs, any other the sum of its dataset's cell medians (the record's methodology note: \"a dataset's figure is the sum of its per-chromosome medians\"); each wall-time cell of Ensembl VEP holds 1 run, against 5 for vep-rs and fastVEP. (c) Raw F1 per plugin: plugins verified on real data; TranscriptAnnotator on its committed table; plugins whose data cannot be redistributed on synthetic fixtures, marked synthetic. On a row of a plugin verified on real data, vep-rs's counts are summed over the genome-wide ClinVar dataset of the row's genome build and whole-genome population datasets of that build (GRCh37: gnomAD v2.1.1 and 1000 Genomes Phase 3; GRCh38: gnomAD v4.1 and 1000 Genomes high-coverage), except on gnomADMt GRCh38 (ClinVar alone); fastVEP's counts are summed over the genome-wide ClinVar dataset of the row's genome build and whole-genome population datasets of that build (GRCh37: gnomAD v2.1.1 and 1000 Genomes Phase 3; GRCh38: gnomAD v4.1 and 1000 Genomes high-coverage). The bar is each tool's per-feature raw F1, the marker its tool's adjusted F1, joined to the end of its bar by a line where the two differ, as in (a); a cross marks a plugin for which the comparator has no counterpart (\"no such source\"). LoFTEE's reference ran with stand-ins for the MaxEntScan files its module bundles, on the Ensembl VEP image with samtools added. (d) The plugins each tool reads, of the 31 that vep-rs supports: vep-rs 31 and fastVEP 7; plugins vep-rs does not port are not counted and are listed by reason in the README. The plugin panel's 57 rows carry 32 row names for 31 plugins: CADD is scored under CADD and CADD (structural variants). A row's figure is summed over the sets of the row that the record holds for the tool, and the tools differ in them on 4 rows: dbNSFP GRCh37 synthetic (vep-rs 5, fastVEP 1), dbNSFP GRCh38 synthetic (vep-rs 9, fastVEP 1), SpliceAI GRCh37 synthetic (vep-rs 4, fastVEP 1) and SpliceAI GRCh38 synthetic (vep-rs 4, fastVEP 1). On an F1 axis a value is a place, not a length: every bar starts at the left edge of its plot, left of where an F1 of 0 stands, and ends at the place of its F1. A marker standing at the end of its bar means that the tool's raw and adjusted F1 are equal as drawn. On a comparator's adjusted F1 the record's note reads: \"The adjusted figure sets aside the same documented classes as for vep-rs; where the engine produces none of their shapes it equals the raw one.\" fastVEP's adjusted F1 is left out where no record holds its adjusted counts. An F1 of exactly 1 has no place on a scale of 1 - F1: it is drawn where the axis reads 1, past a break in the axis line, and 66 of the 66 adjusted markers of vep-rs stand there. vep-rs matches Ensembl VEP exactly except for the documented divergences. Every value is in the records listed under Provenance records.",
+  "notes": [],
+  "sources": [
+    {
+      "text": "a dataset's figure is the sum of its per-chromosome medians",
+      "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+      "key": "methodology_note"
+    },
+    {
+      "text": "1",
+      "record": "docs/concordance-provenance/2026-11-12-comparator-walltime-v0.6.0.json",
+      "key": "per_cell_aggregates[engine=perl,suite_id=s01,arch=arm64].n_clones; per_cell_aggregates[engine=perl,suite_id=s01,arch=x86_64].n_clones; per_cell_aggregates[engine=perl,suite_id=s02,arch=arm64].n_clones; per_cell_aggregates[engine=perl,suite_id=s02,arch=x86_64].n_clones"
+    },
+    {
+      "text": "1",
+      "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+      "key": "wall_time.ensembl_vep.n_clones_per_cell"
+    },
+    {
+      "text": "5",
+      "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+      "key": "per_cell_aggregates[suite_id=s01,arch=arm64,no target_cpu].n_clones; per_cell_aggregates[suite_id=s01,arch=x86_64,no target_cpu].n_clones; per_cell_aggregates[suite_id=s02,arch=arm64,no target_cpu].n_clones; per_cell_aggregates[suite_id=s02,arch=x86_64,no target_cpu].n_clones"
+    },
+    {
+      "text": "5",
+      "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+      "key": "wall_time.vep_rs.per_dataset[dataset=gnomad_v4.1_genomes,arch=arm64].n_clones_per_cell; wall_time.vep_rs.per_dataset[dataset=gnomad_v4.1_genomes,arch=x86_64].n_clones_per_cell; wall_time.vep_rs.per_dataset[dataset=gnomad_v2.1.1_genomes,arch=arm64].n_clones_per_cell; wall_time.vep_rs.per_dataset[dataset=gnomad_v2.1.1_genomes,arch=x86_64].n_clones_per_cell; wall_time.vep_rs.per_dataset[dataset=1000g_phase3_20130502,arch=arm64].n_clones_per_cell; wall_time.vep_rs.per_dataset[dataset=1000g_phase3_20130502,arch=x86_64].n_clones_per_cell; wall_time.vep_rs.per_dataset[dataset=1000g_highcov_20220422,arch=arm64].n_clones_per_cell; wall_time.vep_rs.per_dataset[dataset=1000g_highcov_20220422,arch=x86_64].n_clones_per_cell"
+    },
+    {
+      "text": "5",
+      "record": "docs/concordance-provenance/2026-11-12-comparator-walltime-v0.6.0.json",
+      "key": "per_cell_aggregates[engine=fastvep,suite_id=s01,arch=arm64].n_clones; per_cell_aggregates[engine=fastvep,suite_id=s01,arch=x86_64].n_clones; per_cell_aggregates[engine=fastvep,suite_id=s02,arch=arm64].n_clones; per_cell_aggregates[engine=fastvep,suite_id=s02,arch=x86_64].n_clones"
+    },
+    {
+      "text": "5",
+      "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+      "key": "wall_time.fastvep.per_dataset[dataset=gnomad_v4.1_genomes,arch=arm64].n_clones_per_cell; wall_time.fastvep.per_dataset[dataset=gnomad_v4.1_genomes,arch=x86_64].n_clones_per_cell; wall_time.fastvep.per_dataset[dataset=gnomad_v2.1.1_genomes,arch=arm64].n_clones_per_cell; wall_time.fastvep.per_dataset[dataset=gnomad_v2.1.1_genomes,arch=x86_64].n_clones_per_cell; wall_time.fastvep.per_dataset[dataset=1000g_phase3_20130502,arch=arm64].n_clones_per_cell; wall_time.fastvep.per_dataset[dataset=1000g_phase3_20130502,arch=x86_64].n_clones_per_cell; wall_time.fastvep.per_dataset[dataset=1000g_highcov_20220422,arch=arm64].n_clones_per_cell; wall_time.fastvep.per_dataset[dataset=1000g_highcov_20220422,arch=x86_64].n_clones_per_cell"
+    },
+    {
+      "text": "On a row of a plugin verified on real data, vep-rs's counts are summed over the genome-wide ClinVar dataset of the row's genome build and whole-genome population datasets of that build (GRCh37: gnomAD v2.1.1 and 1000 Genomes Phase 3; GRCh38: gnomAD v4.1 and 1000 Genomes high-coverage), except on gnomADMt GRCh38 (ClinVar alone); fastVEP's counts are summed over the genome-wide ClinVar dataset of the row's genome build and whole-genome population datasets of that build (GRCh37: gnomAD v2.1.1 and 1000 Genomes Phase 3; GRCh38: gnomAD v4.1 and 1000 Genomes high-coverage).",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json and docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+      "key": "the per-feature entries of each engine on a row of the plugin panel scored on real data, in real_data and population_data: their datasets, each named by its label among the population record's datasets"
+    },
+    {
+      "text": "no such source",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "absent[engine=fastvep].reason (one reason for every plugin the record lists as absent for the engine)"
+    },
+    {
+      "text": "LoFTEE's reference ran with stand-ins for the MaxEntScan files its module bundles, on the Ensembl VEP image with samtools added.",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "perl_reference[3].stand_ins.plugin, perl_reference[3].derived_image.package"
+    },
+    {
+      "text": "87",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "not_ported.of"
+    },
+    {
+      "text": "The plugin panel's 57 rows carry 32 row names for 31 plugins: CADD is scored under CADD and CADD (structural variants).",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "rows: plugin"
+    },
+    {
+      "text": "A row's figure is summed over the sets of the row that the record holds for the tool, and the tools differ in them on 4 rows: dbNSFP GRCh37 synthetic (vep-rs 5, fastVEP 1), dbNSFP GRCh38 synthetic (vep-rs 9, fastVEP 1), SpliceAI GRCh37 synthetic (vep-rs 4, fastVEP 1) and SpliceAI GRCh38 synthetic (vep-rs 4, fastVEP 1).",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "the per-feature entries of each engine on a row of the plugin panel (plugin, assembly, dataset or corpus): their number"
+    },
+    {
+      "text": "5",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "synthetic_fixtures[plugin=dbNSFP,assembly=GRCh37,corpus=GRCh37-plugin-dbnsfp,engine=vep-rs,projection=feature]: the number of entries"
+    },
+    {
+      "text": "1",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "synthetic_fixtures[plugin=dbNSFP,assembly=GRCh37,corpus=GRCh37-plugin-dbnsfp,engine=fastvep,projection=feature]: the number of entries"
+    },
+    {
+      "text": "9",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "synthetic_fixtures[plugin=dbNSFP,assembly=GRCh38,corpus=GRCh38-plugin-dbnsfp,engine=vep-rs,projection=feature]: the number of entries"
+    },
+    {
+      "text": "1",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "synthetic_fixtures[plugin=dbNSFP,assembly=GRCh38,corpus=GRCh38-plugin-dbnsfp,engine=fastvep,projection=feature]: the number of entries"
+    },
+    {
+      "text": "4",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "synthetic_fixtures[plugin=SpliceAI,assembly=GRCh37,corpus=GRCh37-plugin-spliceai,engine=vep-rs,projection=feature]: the number of entries"
+    },
+    {
+      "text": "1",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "synthetic_fixtures[plugin=SpliceAI,assembly=GRCh37,corpus=GRCh37-plugin-spliceai,engine=fastvep,projection=feature]: the number of entries"
+    },
+    {
+      "text": "4",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "synthetic_fixtures[plugin=SpliceAI,assembly=GRCh38,corpus=GRCh38-plugin-spliceai,engine=vep-rs,projection=feature]: the number of entries"
+    },
+    {
+      "text": "1",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "synthetic_fixtures[plugin=SpliceAI,assembly=GRCh38,corpus=GRCh38-plugin-spliceai,engine=fastvep,projection=feature]: the number of entries"
+    },
+    {
+      "text": "The adjusted figure sets aside the same documented classes as for vep-rs; where the engine produces none of their shapes it equals the raw one.",
+      "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+      "key": "comparator_concordance.note"
+    },
+    {
+      "text": "An F1 of exactly 1 has no place on a scale of 1 - F1: it is drawn where the axis reads 1, past a break in the axis line, and 66 of the 66 adjusted markers of vep-rs stand there.",
+      "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json and docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "the adjusted counts of vep-rs on every row of the F1 panels: equal counts are an F1 of exactly 1"
+    },
+    {
+      "text": "14",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "panels[id=c]: the rows that hold a value of tool=fastvep, kind=bar: their number"
+    },
+    {
+      "text": "57",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "panels[id=c]: its rows: their number"
+    },
+    {
+      "text": "12",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "panels[id=c]: the rows that hold a value of tool=fastvep, kind=marker: their number"
+    },
+    {
+      "text": "43",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "panels[id=c]: the rows that hold a value of tool=fastvep, kind=text: their number"
+    },
+    {
+      "text": "57",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "panels[id=c]: the rows whose value of tool=vep-rs, kind=marker has equal counts: their number"
+    },
+    {
+      "text": "The plugin panel runs over both columns: its groups from Committed table on continue in the second column, under the same title.",
+      "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "key": "rows: scored_on (the plugin panel's groups in the order the figure gives them, which the layout splits over the two columns)"
+    }
+  ],
+  "tools": [
+    {
+      "id": "vep-rs",
+      "name": "vep-rs",
+      "version": "v0.6.0",
+      "colour": "#0072B2"
+    },
+    {
+      "id": "fastvep",
+      "name": "fastVEP",
+      "version": "v0.5.0",
+      "colour": "#E69F00"
+    },
+    {
+      "id": "ensembl-vep",
+      "name": "Ensembl VEP",
+      "version": "116.2",
+      "colour": "#009E73"
+    }
+  ],
+  "records": [
+    {
+      "file": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+      "sha256": "fe3d2e59ff943b20723865cbec283b1cf15f897ad9425435444ceb1b90353b4e"
+    },
+    {
+      "file": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+      "sha256": "7967366a0aee19432788bd584334e6a3e316b4e0ce067ea41c1eea60392d58da"
+    },
+    {
+      "file": "docs/concordance-provenance/2026-11-18-comparator-fastvep-v0.5.0.json",
+      "sha256": "98878da2df2a4a77cf49bdbd84d333d9830be76f1a6747d4fa6a7ebc8c6daf39"
+    },
+    {
+      "file": "docs/concordance-provenance/2026-11-12-comparator-walltime-v0.6.0.json",
+      "sha256": "ae44a789f722e83fa600f5cd17c2dd379f9f1ea8866afb49aed741174a12d8b6"
+    },
+    {
+      "file": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+      "sha256": "d6e027605014c4cd10729fa1d2f3b94961f1c9e0aed9f3d07def302fc4d2e3e2"
+    }
+  ],
+  "panels": [
+    {
+      "id": "a",
+      "title": "Concordance per dataset",
+      "groups": [
+        {
+          "label": "Genome-wide ClinVar",
+          "rows": [
+            {
+              "label": "ClinVar GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999929250",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "concordance.s01: intersection, perl, rust",
+                  "counts": [
+                    33481512,
+                    33483881,
+                    33483881
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "concordance.s01: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    33481512,
+                    33481512,
+                    33481512
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.994836380",
+                  "record": "docs/concordance-provenance/2026-11-18-comparator-fastvep-v0.5.0.json",
+                  "key": "concordance.s01: intersection, perl, engine_tuples",
+                  "counts": [
+                    33439866,
+                    33483881,
+                    33742985
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.994842092",
+                  "record": "docs/concordance-provenance/2026-11-18-comparator-fastvep-v0.5.0.json",
+                  "key": "concordance.s01.adjusted: intersection, perl, engine_tuples",
+                  "counts": [
+                    33439866,
+                    33483688,
+                    33742792
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "ClinVar GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999905298",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "concordance.s02: intersection, perl, rust",
+                  "counts": [
+                    125560727,
+                    125572619,
+                    125572619
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "concordance.s02: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    125560727,
+                    125560727,
+                    125560727
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.999982066",
+                  "record": "docs/concordance-provenance/2026-11-18-comparator-fastvep-v0.5.0.json",
+                  "key": "concordance.s02: intersection, perl, engine_tuples",
+                  "counts": [
+                    125570367,
+                    125572619,
+                    125572619
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.999990699",
+                  "record": "docs/concordance-provenance/2026-11-18-comparator-fastvep-v0.5.0.json",
+                  "key": "concordance.s02.adjusted: intersection, perl, engine_tuples",
+                  "counts": [
+                    125570367,
+                    125571535,
+                    125571535
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Whole-genome population datasets",
+          "rows": [
+            {
+              "label": "gnomAD v4.1 GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999998755",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "population_concordance.per_dataset[dataset=gnomad_v4.1_genomes]: intersection, perl_tuples, vep_rs_tuples",
+                  "counts": [
+                    9601550872,
+                    9601562823,
+                    9601562823
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "population_concordance.per_dataset[dataset=gnomad_v4.1_genomes]: intersection, perl_tuples - excluded_perl, vep_rs_tuples - excluded_rust",
+                  "counts": [
+                    9601550872,
+                    9601550872,
+                    9601550872
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.999997730",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "comparator_concordance.per_dataset[dataset=gnomad_v4.1_genomes]: intersection, perl_tuples, engine_tuples",
+                  "counts": [
+                    9601541024,
+                    9601562823,
+                    9601562823
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.999998149",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "comparator_concordance.per_dataset[dataset=gnomad_v4.1_genomes]: intersection, perl_tuples - excluded_perl, engine_tuples - excluded_rust",
+                  "counts": [
+                    9601541024,
+                    9601558796,
+                    9601558796
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "gnomAD v2.1.1 GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999999005",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "population_concordance.per_dataset[dataset=gnomad_v2.1.1_genomes]: intersection, perl_tuples, vep_rs_tuples",
+                  "counts": [
+                    885664021,
+                    885664902,
+                    885664902
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "population_concordance.per_dataset[dataset=gnomad_v2.1.1_genomes]: intersection, perl_tuples - excluded_perl, vep_rs_tuples - excluded_rust",
+                  "counts": [
+                    885664021,
+                    885664021,
+                    885664021
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.992171351",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "comparator_concordance.per_dataset[dataset=gnomad_v2.1.1_genomes]: intersection, perl_tuples, engine_tuples",
+                  "counts": [
+                    880554964,
+                    885664902,
+                    889340923
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.992171764",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "comparator_concordance.per_dataset[dataset=gnomad_v2.1.1_genomes]: intersection, perl_tuples - excluded_perl, engine_tuples - excluded_rust",
+                  "counts": [
+                    880554964,
+                    885664533,
+                    889340554
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "1000 Genomes Phase 3 GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999999400",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "population_concordance.per_dataset[dataset=1000g_phase3_20130502]: intersection, perl_tuples, vep_rs_tuples",
+                  "counts": [
+                    286649306,
+                    286649478,
+                    286649478
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "population_concordance.per_dataset[dataset=1000g_phase3_20130502]: intersection, perl_tuples - excluded_perl, vep_rs_tuples - excluded_rust",
+                  "counts": [
+                    286649306,
+                    286649306,
+                    286649306
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.991905131",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "comparator_concordance.per_dataset[dataset=1000g_phase3_20130502]: intersection, perl_tuples, engine_tuples",
+                  "counts": [
+                    284965729,
+                    286649478,
+                    287933151
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.991905307",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "comparator_concordance.per_dataset[dataset=1000g_phase3_20130502]: intersection, perl_tuples - excluded_perl, engine_tuples - excluded_rust",
+                  "counts": [
+                    284965729,
+                    286649427,
+                    287933100
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "1000 Genomes high-coverage GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999990864",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "population_concordance.per_dataset[dataset=1000g_highcov_20220422]: intersection, perl_tuples, vep_rs_tuples",
+                  "counts": [
+                    905821243,
+                    905822094,
+                    905836944
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "population_concordance.per_dataset[dataset=1000g_highcov_20220422]: intersection, perl_tuples - excluded_perl, vep_rs_tuples - excluded_rust",
+                  "counts": [
+                    905821243,
+                    905821243,
+                    905821243
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.998446204",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "comparator_concordance.per_dataset[dataset=1000g_highcov_20220422]: intersection, perl_tuples, engine_tuples",
+                  "counts": [
+                    904433297,
+                    905822094,
+                    905859484
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.998454606",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "comparator_concordance.per_dataset[dataset=1000g_highcov_20220422]: intersection, perl_tuples - excluded_perl, engine_tuples - excluded_rust",
+                  "counts": [
+                    904433297,
+                    905821896,
+                    905844436
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "The six whole-genome datasets, pooled",
+          "rows": [
+            {
+              "label": "All six",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999996998",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "summed over population_concordance.per_dataset (intersection, perl_tuples, vep_rs_tuples) and concordance.s01, concordance.s02 (intersection, perl, rust)",
+                  "counts": [
+                    11838727681,
+                    11838755797,
+                    11838770647
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "summed over population_concordance.per_dataset (intersection, perl_tuples - excluded_perl, vep_rs_tuples - excluded_rust) and concordance.s01, concordance.s02 (adj_intersection, adj_perl, adj_rust)",
+                  "counts": [
+                    11838727681,
+                    11838727681,
+                    11838727681
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.999081303",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json and docs/concordance-provenance/2026-11-18-comparator-fastvep-v0.5.0.json",
+                  "key": "summed over comparator_concordance.per_dataset (intersection, perl_tuples, engine_tuples) and, in docs/concordance-provenance/2026-11-18-comparator-fastvep-v0.5.0.json, concordance.s01, concordance.s02 (intersection, perl, engine_tuples)",
+                  "counts": [
+                    11830505247,
+                    11838755797,
+                    11844011985
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.999082429",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json and docs/concordance-provenance/2026-11-18-comparator-fastvep-v0.5.0.json",
+                  "key": "summed over comparator_concordance.per_dataset (intersection, perl_tuples - excluded_perl, engine_tuples - excluded_rust) and, in docs/concordance-provenance/2026-11-18-comparator-fastvep-v0.5.0.json, the adjusted blocks of concordance.s01, concordance.s02 (intersection, perl, engine_tuples)",
+                  "counts": [
+                    11830505247,
+                    11838749875,
+                    11843991213
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Structural variants",
+          "rows": [
+            {
+              "label": "SV per-VCF, 16 files pooled GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.963822119",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "concordance.s07: intersection, perl, rust",
+                  "counts": [
+                    315565,
+                    317047,
+                    337773
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "concordance.s07: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    315565,
+                    315565,
+                    315565
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.245961547",
+                  "record": "docs/concordance-provenance/2026-11-18-comparator-fastvep-v0.5.0.json",
+                  "key": "concordance.s07: intersection, perl, engine_tuples",
+                  "counts": [
+                    74205,
+                    317047,
+                    286340
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.246102670",
+                  "record": "docs/concordance-provenance/2026-11-18-comparator-fastvep-v0.5.0.json",
+                  "key": "concordance.s07.adjusted: intersection, perl, engine_tuples",
+                  "counts": [
+                    74205,
+                    316874,
+                    286167
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "SV per-VCF, 16 files pooled GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.905536410",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "concordance.s08: intersection, perl, rust",
+                  "counts": [
+                    1444384,
+                    1455318,
+                    1734800
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "concordance.s08: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    1444384,
+                    1444384,
+                    1444384
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.228874968",
+                  "record": "docs/concordance-provenance/2026-11-18-comparator-fastvep-v0.5.0.json",
+                  "key": "concordance.s08: intersection, perl, engine_tuples",
+                  "counts": [
+                    317120,
+                    1455318,
+                    1315802
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.228904209",
+                  "record": "docs/concordance-provenance/2026-11-18-comparator-fastvep-v0.5.0.json",
+                  "key": "concordance.s08.adjusted: intersection, perl, engine_tuples",
+                  "counts": [
+                    317120,
+                    1455141,
+                    1315625
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b",
+      "title": "Wall time per dataset and architecture",
+      "groups": [
+        {
+          "label": "ClinVar GRCh37",
+          "rows": [
+            {
+              "label": "ARM",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.90",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "per_cell_aggregates[suite_id=s01,arch=arm64,no target_cpu].median_sec"
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "6.85",
+                  "record": "docs/concordance-provenance/2026-11-12-comparator-walltime-v0.6.0.json",
+                  "key": "per_cell_aggregates[engine=fastvep,suite_id=s01,arch=arm64].median_sec"
+                },
+                {
+                  "tool": "ensembl-vep",
+                  "kind": "marker",
+                  "value": "719.22",
+                  "record": "docs/concordance-provenance/2026-11-12-comparator-walltime-v0.6.0.json",
+                  "key": "per_cell_aggregates[engine=perl,suite_id=s01,arch=arm64].median_sec"
+                }
+              ]
+            },
+            {
+              "label": "x86",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "2.78",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "per_cell_aggregates[suite_id=s01,arch=x86_64,no target_cpu].median_sec"
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "9.84",
+                  "record": "docs/concordance-provenance/2026-11-12-comparator-walltime-v0.6.0.json",
+                  "key": "per_cell_aggregates[engine=fastvep,suite_id=s01,arch=x86_64].median_sec"
+                },
+                {
+                  "tool": "ensembl-vep",
+                  "kind": "marker",
+                  "value": "837.80",
+                  "record": "docs/concordance-provenance/2026-11-12-comparator-walltime-v0.6.0.json",
+                  "key": "per_cell_aggregates[engine=perl,suite_id=s01,arch=x86_64].median_sec"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "ClinVar GRCh38",
+          "rows": [
+            {
+              "label": "ARM",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "8.02",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "per_cell_aggregates[suite_id=s02,arch=arm64,no target_cpu].median_sec"
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "12.84",
+                  "record": "docs/concordance-provenance/2026-11-12-comparator-walltime-v0.6.0.json",
+                  "key": "per_cell_aggregates[engine=fastvep,suite_id=s02,arch=arm64].median_sec"
+                },
+                {
+                  "tool": "ensembl-vep",
+                  "kind": "marker",
+                  "value": "2543.75",
+                  "record": "docs/concordance-provenance/2026-11-12-comparator-walltime-v0.6.0.json",
+                  "key": "per_cell_aggregates[engine=perl,suite_id=s02,arch=arm64].median_sec"
+                }
+              ]
+            },
+            {
+              "label": "x86",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "9.26",
+                  "record": "docs/concordance-provenance/2026-11-19-release-v0.6.0.json",
+                  "key": "per_cell_aggregates[suite_id=s02,arch=x86_64,no target_cpu].median_sec"
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "17.97",
+                  "record": "docs/concordance-provenance/2026-11-12-comparator-walltime-v0.6.0.json",
+                  "key": "per_cell_aggregates[engine=fastvep,suite_id=s02,arch=x86_64].median_sec"
+                },
+                {
+                  "tool": "ensembl-vep",
+                  "kind": "marker",
+                  "value": "3093.35",
+                  "record": "docs/concordance-provenance/2026-11-12-comparator-walltime-v0.6.0.json",
+                  "key": "per_cell_aggregates[engine=perl,suite_id=s02,arch=x86_64].median_sec"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "gnomAD v4.1 GRCh38",
+          "rows": [
+            {
+              "label": "ARM",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "591",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.vep_rs.per_dataset[dataset=gnomad_v4.1_genomes,arch=arm64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "4902",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.fastvep.per_dataset[dataset=gnomad_v4.1_genomes,arch=arm64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "ensembl-vep",
+                  "kind": "marker",
+                  "value": "255394",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.ensembl_vep.per_dataset[dataset=gnomad_v4.1_genomes,arch=arm64].sum_of_cell_medians_sec"
+                }
+              ]
+            },
+            {
+              "label": "x86",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "799",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.vep_rs.per_dataset[dataset=gnomad_v4.1_genomes,arch=x86_64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "6079",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.fastvep.per_dataset[dataset=gnomad_v4.1_genomes,arch=x86_64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "ensembl-vep",
+                  "kind": "marker",
+                  "value": "265212",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.ensembl_vep.per_dataset[dataset=gnomad_v4.1_genomes,arch=x86_64].sum_of_cell_medians_sec"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "gnomAD v2.1.1 GRCh37",
+          "rows": [
+            {
+              "label": "ARM",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "207",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.vep_rs.per_dataset[dataset=gnomad_v2.1.1_genomes,arch=arm64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "3918",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.fastvep.per_dataset[dataset=gnomad_v2.1.1_genomes,arch=arm64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "ensembl-vep",
+                  "kind": "marker",
+                  "value": "88002",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.ensembl_vep.per_dataset[dataset=gnomad_v2.1.1_genomes,arch=arm64].sum_of_cell_medians_sec"
+                }
+              ]
+            },
+            {
+              "label": "x86",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "377",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.vep_rs.per_dataset[dataset=gnomad_v2.1.1_genomes,arch=x86_64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "4397",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.fastvep.per_dataset[dataset=gnomad_v2.1.1_genomes,arch=x86_64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "ensembl-vep",
+                  "kind": "marker",
+                  "value": "103809",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.ensembl_vep.per_dataset[dataset=gnomad_v2.1.1_genomes,arch=x86_64].sum_of_cell_medians_sec"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "1000 Genomes Phase 3 GRCh37",
+          "rows": [
+            {
+              "label": "ARM",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "18",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.vep_rs.per_dataset[dataset=1000g_phase3_20130502,arch=arm64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "113",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.fastvep.per_dataset[dataset=1000g_phase3_20130502,arch=arm64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "ensembl-vep",
+                  "kind": "marker",
+                  "value": "7209",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.ensembl_vep.per_dataset[dataset=1000g_phase3_20130502,arch=arm64].sum_of_cell_medians_sec"
+                }
+              ]
+            },
+            {
+              "label": "x86",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "22",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.vep_rs.per_dataset[dataset=1000g_phase3_20130502,arch=x86_64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "142",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.fastvep.per_dataset[dataset=1000g_phase3_20130502,arch=x86_64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "ensembl-vep",
+                  "kind": "marker",
+                  "value": "7039",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.ensembl_vep.per_dataset[dataset=1000g_phase3_20130502,arch=x86_64].sum_of_cell_medians_sec"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "1000 Genomes high-coverage GRCh38",
+          "rows": [
+            {
+              "label": "ARM",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "39",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.vep_rs.per_dataset[dataset=1000g_highcov_20220422,arch=arm64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "193",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.fastvep.per_dataset[dataset=1000g_highcov_20220422,arch=arm64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "ensembl-vep",
+                  "kind": "marker",
+                  "value": "15817",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.ensembl_vep.per_dataset[dataset=1000g_highcov_20220422,arch=arm64].sum_of_cell_medians_sec"
+                }
+              ]
+            },
+            {
+              "label": "x86",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "52",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.vep_rs.per_dataset[dataset=1000g_highcov_20220422,arch=x86_64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "262",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.fastvep.per_dataset[dataset=1000g_highcov_20220422,arch=x86_64].sum_of_cell_medians_sec"
+                },
+                {
+                  "tool": "ensembl-vep",
+                  "kind": "marker",
+                  "value": "17660",
+                  "record": "docs/concordance-provenance/2026-11-19-population-v0.6.0.json",
+                  "key": "wall_time.ensembl_vep.per_dataset[dataset=1000g_highcov_20220422,arch=x86_64].sum_of_cell_medians_sec"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c",
+      "title": "Concordance per plugin",
+      "groups": [
+        {
+          "label": "Genome-wide ClinVar, gnomAD and 1000 Genomes",
+          "rows": [
+            {
+              "label": "AlphaMissense GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999898999",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=AlphaMissense,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=AlphaMissense,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=AlphaMissense,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    27293920,
+                    27293920,
+                    27299434
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=AlphaMissense,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=AlphaMissense,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=AlphaMissense,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    27293920,
+                    27293920,
+                    27293920
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.477551794",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=AlphaMissense,assembly=GRCh37,dataset=clinvar_grch37,engine=fastvep,projection=feature] and population_data[plugin=AlphaMissense,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=AlphaMissense,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=fastvep,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    14796779,
+                    27293920,
+                    34675396
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "AlphaMissense GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999989474",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=AlphaMissense,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=AlphaMissense,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=AlphaMissense,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    182213448,
+                    182213448,
+                    182217284
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=AlphaMissense,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=AlphaMissense,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=AlphaMissense,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    182213448,
+                    182213448,
+                    182213448
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.678869469",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=AlphaMissense,assembly=GRCh38,dataset=clinvar_grch38,engine=fastvep,projection=feature] and population_data[plugin=AlphaMissense,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=AlphaMissense,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=fastvep,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    180985403,
+                    182213448,
+                    350983024
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "AncestralAllele GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=AncestralAllele,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=AncestralAllele,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=AncestralAllele,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    1138649670,
+                    1138649670,
+                    1138649670
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=AncestralAllele,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=AncestralAllele,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=AncestralAllele,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    1138649670,
+                    1138649670,
+                    1138649670
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=AncestralAllele,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "AncestralAllele GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=AncestralAllele,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=AncestralAllele,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=AncestralAllele,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    9601363499,
+                    9601363499,
+                    9601363499
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=AncestralAllele,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=AncestralAllele,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=AncestralAllele,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    9601363499,
+                    9601363499,
+                    9601363499
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=AncestralAllele,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "Blosum62 GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999999933",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=Blosum62,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=Blosum62,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=Blosum62,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    14821386,
+                    14821388,
+                    14821386
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=Blosum62,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=Blosum62,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=Blosum62,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    14821386,
+                    14821386,
+                    14821386
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=Blosum62,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "Blosum62 GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=Blosum62,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=Blosum62,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=Blosum62,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    96829002,
+                    96829002,
+                    96829002
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=Blosum62,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=Blosum62,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=Blosum62,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    96829002,
+                    96829002,
+                    96829002
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=Blosum62,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "Conservation GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=Conservation,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=Conservation,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=Conservation,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    9867420929,
+                    9867420929,
+                    9867420929
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=Conservation,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=Conservation,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=Conservation,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    9867420929,
+                    9867420929,
+                    9867420929
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=Conservation,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "DosageSensitivity GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=DosageSensitivity,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=DosageSensitivity,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=DosageSensitivity,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    1798317572,
+                    1798317572,
+                    1798317572
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=DosageSensitivity,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=DosageSensitivity,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=DosageSensitivity,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    1798317572,
+                    1798317572,
+                    1798317572
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=DosageSensitivity,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "DosageSensitivity GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999999663",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=DosageSensitivity,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=DosageSensitivity,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=DosageSensitivity,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    14187431686,
+                    14187431686,
+                    14187441252
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=DosageSensitivity,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=DosageSensitivity,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=DosageSensitivity,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    14187431686,
+                    14187431686,
+                    14187431686
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=DosageSensitivity,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "Downstream GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.788775391",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=Downstream,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=Downstream,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=Downstream,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    1157042,
+                    1461951,
+                    1471817
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=Downstream,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=Downstream,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=Downstream,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    1157042,
+                    1157042,
+                    1157042
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=Downstream,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "Downstream GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.788627126",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=Downstream,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=Downstream,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=Downstream,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    8127741,
+                    10273147,
+                    10339233
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=Downstream,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=Downstream,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=Downstream,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    8127741,
+                    8127741,
+                    8127741
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=Downstream,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "gnomADc GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=gnomADc,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=gnomADc,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=gnomADc,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    13255991683,
+                    13255991683,
+                    13255991683
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=gnomADc,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=gnomADc,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=gnomADc,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    13255991683,
+                    13255991683,
+                    13255991683
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=gnomADc,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "gnomADc GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999974559",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=gnomADc,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=gnomADc,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=gnomADc,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    15951642432,
+                    15951642432,
+                    15952454100
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=gnomADc,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=gnomADc,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=gnomADc,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    15951642432,
+                    15951642432,
+                    15951642432
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=gnomADc,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "gnomADMt GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=gnomADMt,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature]: intersection, perl, rust",
+                  "counts": [
+                    297545,
+                    297545,
+                    297545
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=gnomADMt,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    297545,
+                    297545,
+                    297545
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=gnomADMt,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "GWAS GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.992879519",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=GWAS,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=GWAS,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=GWAS,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    46871133,
+                    47507412,
+                    46907131
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=GWAS,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=GWAS,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=GWAS,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    46871133,
+                    46871133,
+                    46871133
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=GWAS,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "HGVSIntronOffset GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999994243",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=HGVSIntronOffset,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=HGVSIntronOffset,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=HGVSIntronOffset,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    1645143439,
+                    1645147996,
+                    1645157824
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=HGVSIntronOffset,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=HGVSIntronOffset,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=HGVSIntronOffset,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    1645143439,
+                    1645143439,
+                    1645143439
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=HGVSIntronOffset,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "HGVSIntronOffset GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999989214",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=HGVSIntronOffset,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=HGVSIntronOffset,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=HGVSIntronOffset,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    16960595049,
+                    16960725510,
+                    16960830466
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=HGVSIntronOffset,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=HGVSIntronOffset,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=HGVSIntronOffset,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    16960595049,
+                    16960595049,
+                    16960595049
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=HGVSIntronOffset,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "LOEUF GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LOEUF,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    736165178,
+                    736165178,
+                    736165178
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LOEUF,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    736165178,
+                    736165178,
+                    736165178
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.372314570",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LOEUF,assembly=GRCh37,dataset=clinvar_grch37,engine=fastvep,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=fastvep,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    311128337,
+                    736165178,
+                    935154519
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.372314570",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LOEUF,assembly=GRCh37,dataset=clinvar_grch37,engine=fastvep,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=fastvep,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    311128337,
+                    736165178,
+                    935154519
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "LOEUF GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LOEUF,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    6310931246,
+                    6310931246,
+                    6310931246
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LOEUF,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    6310931246,
+                    6310931246,
+                    6310931246
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.126740983",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LOEUF,assembly=GRCh38,dataset=clinvar_grch38,engine=fastvep,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=fastvep,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    895335349,
+                    6310931246,
+                    7817653301
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.126740983",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LOEUF,assembly=GRCh38,dataset=clinvar_grch38,engine=fastvep,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=LOEUF,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=fastvep,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    895335349,
+                    6310931246,
+                    7817653301
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "LoFTEE GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.701585606",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LoFTEE,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=LoFTEE,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=LoFTEE,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    15438701,
+                    22020844,
+                    21990039
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LoFTEE,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=LoFTEE,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=LoFTEE,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    15438701,
+                    15438701,
+                    15438701
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=LoFTEE,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "LoFtool GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LoFtool,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=LoFtool,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=LoFtool,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    772751242,
+                    772751242,
+                    772751242
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LoFtool,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=LoFtool,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=LoFtool,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    772751242,
+                    772751242,
+                    772751242
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=LoFtool,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "LoFtool GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LoFtool,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=LoFtool,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=LoFtool,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    6140527244,
+                    6140527244,
+                    6140527244
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=LoFtool,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=LoFtool,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=LoFtool,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    6140527244,
+                    6140527244,
+                    6140527244
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=LoFtool,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "NearestExonJB GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999984102",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=NearestExonJB,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=NearestExonJB,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=NearestExonJB,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    48368707,
+                    48368873,
+                    48370079
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=NearestExonJB,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=NearestExonJB,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=NearestExonJB,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    48368707,
+                    48368707,
+                    48368707
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=NearestExonJB,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "NearestExonJB GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999998706",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=NearestExonJB,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=NearestExonJB,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=NearestExonJB,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    445542603,
+                    445543072,
+                    445543287
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=NearestExonJB,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=NearestExonJB,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=NearestExonJB,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    445542603,
+                    445542603,
+                    445542603
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=NearestExonJB,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "NMD GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.998091399",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=NMD,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=NMD,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=NMD,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    317427,
+                    318050,
+                    318018
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=NMD,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=NMD,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=NMD,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    317427,
+                    317427,
+                    317427
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=NMD,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "NMD GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.997522027",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=NMD,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=NMD,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=NMD,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    2069136,
+                    2074273,
+                    2074279
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=NMD,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=NMD,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=NMD,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    2069136,
+                    2069136,
+                    2069136
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=NMD,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "OpenTargets GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=OpenTargets,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=OpenTargets,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=OpenTargets,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    237997475,
+                    237997475,
+                    237997475
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=OpenTargets,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=OpenTargets,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=OpenTargets,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    237997475,
+                    237997475,
+                    237997475
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=OpenTargets,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "pLI GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=pLI,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=pLI,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=pLI,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    896438668,
+                    896438668,
+                    896438668
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=pLI,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=pLI,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=pLI,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    896438668,
+                    896438668,
+                    896438668
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.335976085",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=pLI,assembly=GRCh37,dataset=clinvar_grch37,engine=fastvep,projection=feature] and population_data[plugin=pLI,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=pLI,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=fastvep,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    302758935,
+                    896438668,
+                    905826126
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.335976085",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=pLI,assembly=GRCh37,dataset=clinvar_grch37,engine=fastvep,projection=feature] and population_data[plugin=pLI,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=pLI,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=fastvep,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    302758935,
+                    896438668,
+                    905826126
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "pLI GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=pLI,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=pLI,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=pLI,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    7149538152,
+                    7149538152,
+                    7149538152
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=pLI,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=pLI,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=pLI,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    7149538152,
+                    7149538152,
+                    7149538152
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.321559950",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=pLI,assembly=GRCh38,dataset=clinvar_grch38,engine=fastvep,projection=feature] and population_data[plugin=pLI,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=pLI,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=fastvep,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    2330496309,
+                    7149538152,
+                    7345403197
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.321559950",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=pLI,assembly=GRCh38,dataset=clinvar_grch38,engine=fastvep,projection=feature] and population_data[plugin=pLI,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=pLI,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=fastvep,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    2330496309,
+                    7149538152,
+                    7345403197
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "REVEL GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999667478",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=REVEL,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=REVEL,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=REVEL,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    12325910,
+                    12333981,
+                    12326039
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=REVEL,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=REVEL,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=REVEL,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    12325910,
+                    12325910,
+                    12325910
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.491066649",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=REVEL,assembly=GRCh37,dataset=clinvar_grch37,engine=fastvep,projection=feature] and population_data[plugin=REVEL,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=REVEL,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=fastvep,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    11947490,
+                    12333981,
+                    36325361
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.491066649",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=REVEL,assembly=GRCh37,dataset=clinvar_grch37,engine=fastvep,projection=feature] and population_data[plugin=REVEL,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=REVEL,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=fastvep,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    11947490,
+                    12333981,
+                    36325361
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "REVEL GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999615257",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=REVEL,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=REVEL,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=REVEL,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    15509565,
+                    15521504,
+                    15509565
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=REVEL,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=REVEL,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=REVEL,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    15509565,
+                    15509565,
+                    15509565
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.141474058",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=REVEL,assembly=GRCh38,dataset=clinvar_grch38,engine=fastvep,projection=feature] and population_data[plugin=REVEL,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=REVEL,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=fastvep,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    15056993,
+                    15521504,
+                    197337209
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.141474058",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=REVEL,assembly=GRCh38,dataset=clinvar_grch38,engine=fastvep,projection=feature] and population_data[plugin=REVEL,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=fastvep,projection=feature] and population_data[plugin=REVEL,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=fastvep,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    15056993,
+                    15521504,
+                    197337209
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "TSSDistance GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=TSSDistance,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=TSSDistance,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=TSSDistance,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    125704335,
+                    125704335,
+                    125704335
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=TSSDistance,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=TSSDistance,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=TSSDistance,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    125704335,
+                    125704335,
+                    125704335
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=TSSDistance,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "TSSDistance GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=TSSDistance,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=TSSDistance,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=TSSDistance,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    988520633,
+                    988520633,
+                    988520633
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=TSSDistance,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=TSSDistance,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=TSSDistance,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    988520633,
+                    988520633,
+                    988520633
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=TSSDistance,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "UTRAnnotator GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.968210791",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=UTRAnnotator,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=UTRAnnotator,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=UTRAnnotator,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    9178678,
+                    9481803,
+                    9478279
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=UTRAnnotator,assembly=GRCh37,dataset=clinvar_grch37,engine=vep-rs,projection=feature] and population_data[plugin=UTRAnnotator,assembly=GRCh37,dataset=gnomad_v2.1.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=UTRAnnotator,assembly=GRCh37,dataset=1000g_phase3_20130502,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    9178678,
+                    9178678,
+                    9178678
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=UTRAnnotator,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "UTRAnnotator GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.972618929",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=UTRAnnotator,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=UTRAnnotator,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=UTRAnnotator,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    125068398,
+                    128606861,
+                    128571761
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "real_data[plugin=UTRAnnotator,assembly=GRCh38,dataset=clinvar_grch38,engine=vep-rs,projection=feature] and population_data[plugin=UTRAnnotator,assembly=GRCh38,dataset=gnomad_v4.1_genomes,engine=vep-rs,projection=feature] and population_data[plugin=UTRAnnotator,assembly=GRCh38,dataset=1000g_highcov_20220422,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    125068398,
+                    125068398,
+                    125068398
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=UTRAnnotator,engine=fastvep].reason"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Committed table",
+          "rows": [
+            {
+              "label": "TranscriptAnnotator GRCh37",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "committed_table[plugin=TranscriptAnnotator,assembly=GRCh37,corpus=GRCh37-plugin-transcript-annotator,engine=vep-rs,projection=feature]: intersection, perl, rust",
+                  "counts": [
+                    18,
+                    18,
+                    18
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "committed_table[plugin=TranscriptAnnotator,assembly=GRCh37,corpus=GRCh37-plugin-transcript-annotator,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    18,
+                    18,
+                    18
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=TranscriptAnnotator,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "TranscriptAnnotator GRCh38",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "committed_table[plugin=TranscriptAnnotator,assembly=GRCh38,corpus=GRCh38-plugin-transcript-annotator,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 4 entries",
+                  "counts": [
+                    117,
+                    117,
+                    117
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "committed_table[plugin=TranscriptAnnotator,assembly=GRCh38,corpus=GRCh38-plugin-transcript-annotator,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 4 entries",
+                  "counts": [
+                    117,
+                    117,
+                    117
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=TranscriptAnnotator,engine=fastvep].reason"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "Synthetic fixtures (data that cannot be redistributed)",
+          "rows": [
+            {
+              "label": "AVI GRCh38 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=AVI,assembly=GRCh38,corpus=GRCh38-plugin-avi,engine=vep-rs,projection=feature]: intersection, perl, rust",
+                  "counts": [
+                    414,
+                    414,
+                    414
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=AVI,assembly=GRCh38,corpus=GRCh38-plugin-avi,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    414,
+                    414,
+                    414
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=AVI,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "BayesDel GRCh37 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=BayesDel,assembly=GRCh37,corpus=GRCh37-plugin-bayesdel-fixture,engine=vep-rs,projection=feature]: intersection, perl, rust",
+                  "counts": [
+                    118,
+                    118,
+                    118
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=BayesDel,assembly=GRCh37,corpus=GRCh37-plugin-bayesdel-fixture,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    118,
+                    118,
+                    118
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=BayesDel,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "BayesDel GRCh38 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=BayesDel,assembly=GRCh38,corpus=GRCh38-plugin-bayesdel-fixture,engine=vep-rs,projection=feature]: intersection, perl, rust",
+                  "counts": [
+                    14,
+                    14,
+                    14
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=BayesDel,assembly=GRCh38,corpus=GRCh38-plugin-bayesdel-fixture,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    14,
+                    14,
+                    14
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=BayesDel,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "CADD GRCh37 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=CADD,assembly=GRCh37,corpus=GRCh37-plugin-cadd,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    708,
+                    708,
+                    708
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=CADD,assembly=GRCh37,corpus=GRCh37-plugin-cadd,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    708,
+                    708,
+                    708
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=CADD,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "CADD GRCh38 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=CADD,assembly=GRCh38,corpus=GRCh38-plugin-cadd,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 4 entries",
+                  "counts": [
+                    112,
+                    112,
+                    112
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=CADD,assembly=GRCh38,corpus=GRCh38-plugin-cadd,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 4 entries",
+                  "counts": [
+                    112,
+                    112,
+                    112
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=CADD,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "CADD (structural variants) GRCh38 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=CADD (structural variants),assembly=GRCh38,corpus=GRCh38-plugin-cadd-sv,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    120,
+                    120,
+                    120
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=CADD (structural variants),assembly=GRCh38,corpus=GRCh38-plugin-cadd-sv,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    120,
+                    120,
+                    120
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=CADD,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "ClinPred GRCh37 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=ClinPred,assembly=GRCh37,corpus=GRCh37-plugin-clinpred-fixture,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 2 entries",
+                  "counts": [
+                    78,
+                    78,
+                    78
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=ClinPred,assembly=GRCh37,corpus=GRCh37-plugin-clinpred-fixture,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 2 entries",
+                  "counts": [
+                    78,
+                    78,
+                    78
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=ClinPred,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "ClinPred GRCh38 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=ClinPred,assembly=GRCh38,corpus=GRCh38-plugin-clinpred-fixture,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 2 entries",
+                  "counts": [
+                    14,
+                    14,
+                    14
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=ClinPred,assembly=GRCh38,corpus=GRCh38-plugin-clinpred-fixture,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 2 entries",
+                  "counts": [
+                    14,
+                    14,
+                    14
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=ClinPred,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "dbNSFP GRCh37 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=dbNSFP,assembly=GRCh37,corpus=GRCh37-plugin-dbnsfp,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 5 entries",
+                  "counts": [
+                    697,
+                    697,
+                    697
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=dbNSFP,assembly=GRCh37,corpus=GRCh37-plugin-dbnsfp,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 5 entries",
+                  "counts": [
+                    697,
+                    697,
+                    697
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.012578616",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=dbNSFP,assembly=GRCh37,corpus=GRCh37-plugin-dbnsfp,engine=fastvep,projection=feature]: intersection, perl, rust",
+                  "counts": [
+                    2,
+                    88,
+                    230
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.012578616",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=dbNSFP,assembly=GRCh37,corpus=GRCh37-plugin-dbnsfp,engine=fastvep,projection=feature]: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    2,
+                    88,
+                    230
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "dbNSFP GRCh38 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=dbNSFP,assembly=GRCh38,corpus=GRCh38-plugin-dbnsfp,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 9 entries",
+                  "counts": [
+                    4670,
+                    4670,
+                    4670
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=dbNSFP,assembly=GRCh38,corpus=GRCh38-plugin-dbnsfp,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 9 entries",
+                  "counts": [
+                    4670,
+                    4670,
+                    4670
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.062717770",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=dbNSFP,assembly=GRCh38,corpus=GRCh38-plugin-dbnsfp,engine=fastvep,projection=feature]: intersection, perl, rust",
+                  "counts": [
+                    18,
+                    126,
+                    448
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.062717770",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=dbNSFP,assembly=GRCh38,corpus=GRCh38-plugin-dbnsfp,engine=fastvep,projection=feature]: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    18,
+                    126,
+                    448
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "dbscSNV GRCh37 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=dbscSNV,assembly=GRCh37,corpus=GRCh37-plugin-dbscsnv,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 2 entries",
+                  "counts": [
+                    188,
+                    188,
+                    188
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=dbscSNV,assembly=GRCh37,corpus=GRCh37-plugin-dbscsnv,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 2 entries",
+                  "counts": [
+                    188,
+                    188,
+                    188
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=dbscSNV,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "dbscSNV GRCh38 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=dbscSNV,assembly=GRCh38,corpus=GRCh38-plugin-dbscsnv,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 2 entries",
+                  "counts": [
+                    1376,
+                    1376,
+                    1376
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=dbscSNV,assembly=GRCh38,corpus=GRCh38-plugin-dbscsnv,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 2 entries",
+                  "counts": [
+                    1376,
+                    1376,
+                    1376
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=dbscSNV,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "MaxEntScan GRCh37 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.995277957",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=MaxEntScan,assembly=GRCh37,corpus=GRCh37-plugin-maxentscan-fixture,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    4637,
+                    4659,
+                    4659
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=MaxEntScan,assembly=GRCh37,corpus=GRCh37-plugin-maxentscan-fixture,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    4637,
+                    4637,
+                    4637
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=MaxEntScan,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "MaxEntScan GRCh38 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.999236164",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=MaxEntScan,assembly=GRCh38,corpus=GRCh38-plugin-maxentscan-fixture,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 3 entries",
+                  "counts": [
+                    14390,
+                    14401,
+                    14401
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=MaxEntScan,assembly=GRCh38,corpus=GRCh38-plugin-maxentscan-fixture,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 3 entries",
+                  "counts": [
+                    14390,
+                    14390,
+                    14390
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=MaxEntScan,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "PrimateAI GRCh37 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=PrimateAI,assembly=GRCh37,corpus=GRCh37-plugin-primateai-fixture,engine=vep-rs,projection=feature]: intersection, perl, rust",
+                  "counts": [
+                    88,
+                    88,
+                    88
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=PrimateAI,assembly=GRCh37,corpus=GRCh37-plugin-primateai-fixture,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    88,
+                    88,
+                    88
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=PrimateAI,assembly=GRCh37,corpus=GRCh37-plugin-primateai-fixture,engine=fastvep,projection=feature]: intersection, perl, rust",
+                  "counts": [
+                    88,
+                    88,
+                    88
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=PrimateAI,assembly=GRCh37,corpus=GRCh37-plugin-primateai-fixture,engine=fastvep,projection=feature]: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    88,
+                    88,
+                    88
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "PrimateAI GRCh38 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=PrimateAI,assembly=GRCh38,corpus=GRCh38-plugin-primateai-fixture,engine=vep-rs,projection=feature]: intersection, perl, rust",
+                  "counts": [
+                    11,
+                    11,
+                    11
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=PrimateAI,assembly=GRCh38,corpus=GRCh38-plugin-primateai-fixture,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    11,
+                    11,
+                    11
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=PrimateAI,assembly=GRCh38,corpus=GRCh38-plugin-primateai-fixture,engine=fastvep,projection=feature]: intersection, perl, rust",
+                  "counts": [
+                    11,
+                    11,
+                    11
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=PrimateAI,assembly=GRCh38,corpus=GRCh38-plugin-primateai-fixture,engine=fastvep,projection=feature]: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    11,
+                    11,
+                    11
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "SpliceAI GRCh37 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.928977273",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=SpliceAI,assembly=GRCh37,corpus=GRCh37-plugin-spliceai,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 4 entries",
+                  "counts": [
+                    1962,
+                    2002,
+                    2222
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=SpliceAI,assembly=GRCh37,corpus=GRCh37-plugin-spliceai,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 4 entries",
+                  "counts": [
+                    1962,
+                    1962,
+                    1962
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.810256410",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=SpliceAI,assembly=GRCh37,corpus=GRCh37-plugin-spliceai,engine=fastvep,projection=feature]: intersection, perl, rust",
+                  "counts": [
+                    79,
+                    91,
+                    104
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.882681564",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=SpliceAI,assembly=GRCh37,corpus=GRCh37-plugin-spliceai,engine=fastvep,projection=feature]: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    79,
+                    83,
+                    96
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "SpliceAI GRCh38 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "0.935861684",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=SpliceAI,assembly=GRCh38,corpus=GRCh38-plugin-spliceai,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 4 entries",
+                  "counts": [
+                    1678,
+                    1738,
+                    1848
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=SpliceAI,assembly=GRCh38,corpus=GRCh38-plugin-spliceai,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 4 entries",
+                  "counts": [
+                    1678,
+                    1678,
+                    1678
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "0.759036145",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=SpliceAI,assembly=GRCh38,corpus=GRCh38-plugin-spliceai,engine=fastvep,projection=feature]: intersection, perl, rust",
+                  "counts": [
+                    63,
+                    79,
+                    87
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "marker",
+                  "value": "0.887323944",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=SpliceAI,assembly=GRCh38,corpus=GRCh38-plugin-spliceai,engine=fastvep,projection=feature]: adj_intersection, adj_perl, adj_rust",
+                  "counts": [
+                    63,
+                    67,
+                    75
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "SpliceVault GRCh37 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=SpliceVault,assembly=GRCh37,corpus=GRCh37-plugin-splicevault-fixture,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 2 entries",
+                  "counts": [
+                    189,
+                    189,
+                    189
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=SpliceVault,assembly=GRCh37,corpus=GRCh37-plugin-splicevault-fixture,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 2 entries",
+                  "counts": [
+                    189,
+                    189,
+                    189
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=SpliceVault,engine=fastvep].reason"
+                }
+              ]
+            },
+            {
+              "label": "SpliceVault GRCh38 synthetic",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=SpliceVault,assembly=GRCh38,corpus=GRCh38-plugin-splicevault-fixture,engine=vep-rs,projection=feature]: intersection, perl, rust, summed over 2 entries",
+                  "counts": [
+                    245,
+                    245,
+                    245
+                  ]
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "marker",
+                  "value": "1.000000000",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "synthetic_fixtures[plugin=SpliceVault,assembly=GRCh38,corpus=GRCh38-plugin-splicevault-fixture,engine=vep-rs,projection=feature]: adj_intersection, adj_perl, adj_rust, summed over 2 entries",
+                  "counts": [
+                    245,
+                    245,
+                    245
+                  ]
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "no such source",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "absent[plugin=SpliceVault,engine=fastvep].reason"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "d",
+      "title": "Plugins read by vep-rs and fastVEP",
+      "groups": [
+        {
+          "label": "",
+          "rows": [
+            {
+              "label": "vep-rs",
+              "values": [
+                {
+                  "tool": "vep-rs",
+                  "kind": "bar",
+                  "value": "31",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "support[engine=vep-rs].read"
+                },
+                {
+                  "tool": "vep-rs",
+                  "kind": "text",
+                  "value": "31 of 31",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "support[engine=vep-rs].read, of"
+                }
+              ]
+            },
+            {
+              "label": "fastVEP",
+              "values": [
+                {
+                  "tool": "fastvep",
+                  "kind": "bar",
+                  "value": "7",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "support[engine=fastvep].read"
+                },
+                {
+                  "tool": "fastvep",
+                  "kind": "text",
+                  "value": "7 of 31",
+                  "record": "docs/concordance-provenance/2026-11-19-plugins-v0.6.0.json",
+                  "key": "support[engine=fastvep].read, of"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Counts are of the 31 plugins vep-rs supports, of Ensembl VEP's 87. Plugins vep-rs does not port are not counted; the README lists them by reason."
+    }
+  ]
+}

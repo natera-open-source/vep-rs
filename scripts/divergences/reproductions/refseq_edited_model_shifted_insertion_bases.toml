@@ -3,7 +3,7 @@ page = "docs/divergences/refseq-edited-model-shifted-insertion-bases.md"
 verified_against = "116.2"
 image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
 input_class = "observed"
-input_class_basis = "2 · 136 of 77,601 cache transcripts · 1 flag set, 4 corpora"
+input_class_basis = "2 · 136 of 77,675 cache transcripts · 1 flag set, 4 corpora"
 notes = "GA inserted after c.203 of the forward-strand model NM_006933.7, whose three _rna_edit substitutions lie far from the site; both engines shift the insertion one base past the G it repeats, and Ensembl VEP keeps the written bases in the HGVSc of a model carrying an _rna_edit attribute while vep-rs rotates them along the shift."
 
 [input]

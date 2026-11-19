@@ -121,7 +121,8 @@ sentence's place that the render is a draft of a state that is not shipped. The 
 says, panel by panel, what the panel holds as it is drawn: its tools and the mark each has, for the
 wall-time panel the order of the tools' circles on a row from the left, since that panel tells its
 tools apart by colour alone, and for
-the plugin panel on how many rows a comparator has a figure and on how many a cross, and on how
+the plugin panel what its groups of rows are scored on, in the caption's clauses, on how many rows
+a comparator has a figure and on how many a cross, and on how
 many the released tool's adjusted F1 is exactly 1. Both texts say in one sentence which datasets
 each tool's counts cover on the rows scored on real data, from the entries each row sums: the
 population datasets a tool's rows sum beside ClinVar, assembly by assembly and each as the
@@ -316,7 +317,7 @@ AGREE_SENTENCE = "A marker standing at the end of its bar means that the tool's 
 # counts: the plugin panel's row names where they are more than its plugins, the rows whose tools are summed
 # over different numbers of sets, and the place of an F1 of exactly 1. The last two strings are the keys the
 # values file names for the sentences before them.
-NAMES_SENTENCE = "The plugin panel's {rows} gate rows carry {names} row names for {plugins} plugin{plural}: {doubled}."
+NAMES_SENTENCE = "The plugin panel's {rows} rows carry {names} row names for {plugins} plugin{plural}: {doubled}."
 UNEVEN_SENTENCE = "A row's figure is summed over the sets of the row that the record holds for the tool, and the tools differ in them on {count} row{plural}: {rows}."
 # The sentence of the caption and of the alternative text on the datasets a tool's counts cover on the plugin
 # panel's rows scored on real data, which names the bar by no second word: its clause for a tool whose rows sum
@@ -330,7 +331,7 @@ COVERAGE_SUMMED = (
 COVERAGE_FEWER = ", except on {rows}"
 COVERAGE_ALONE = "{tool}'s counts are of the genome-wide ClinVar dataset of the row's genome build alone"
 COVERAGE_KEY = (
-    "the per-feature entries of each engine on a gate row scored on real data, in real_data and population_data: their datasets, each "
+    "the per-feature entries of each engine on a row of the plugin panel scored on real data, in real_data and population_data: their datasets, each "
     "named by its label among the population record's datasets"
 )
 EXACT_SENTENCE = (
@@ -341,7 +342,7 @@ EXACT_SENTENCE = (
 # columns: read without the image, that text alone says so.
 CONTINUES_SENTENCE = "The plugin panel runs over both columns: its groups from {group} on continue in the second column, under the same title."
 CONTINUES_KEY = "rows: scored_on (the plugin panel's groups in the order the figure gives them, which the layout splits over the two columns)"
-UNEVEN_KEY = "the per-feature entries of each engine on a gate row (plugin, assembly, dataset or corpus): their number"
+UNEVEN_KEY = "the per-feature entries of each engine on a row of the plugin panel (plugin, assembly, dataset or corpus): their number"
 # The key of the reason the caption quotes for a tool's crosses: the record states it once per plugin it lists as
 # absent for the tool's engine, and one reason for all of them.
 ABSENT_KEY = "absent[engine={engine}].reason (one reason for every plugin the record lists as absent for the engine)"
@@ -1288,7 +1289,7 @@ def plugin_row(reader: Reader, index: dict, absent: dict, engines: dict, row_key
     if len(set(sets.values())) > 1:
         # The tools' figures on this row are summed over different numbers of the sets of its own key: the texts
         # say so, and each number is kept with the entries it counts. A population dataset is no such set.
-        reader.uneven.append((split_tag(label)[0], sets, set_keys))
+        reader.uneven.append((label, sets, set_keys))
     return {"label": label, "values": values}
 
 
@@ -1562,7 +1563,8 @@ def exact_sentence(exact: int, markers: int, released: str) -> str:
 def alt_sentence(reader: Reader, panel: dict) -> str:
     """The alternative text's sentence for a panel, which says what the panel holds as it is drawn: the tools
     with a mark in it and the mark each has. The wall-time panel's also names the order of the tools' circles
-    on a row, from the left, and the runs a cell holds. The plugin panel's also says, for each comparator, on how many
+    on a row, from the left, and the runs a cell holds. The plugin panel's also says what its groups of rows are
+    scored on, in the caption's clauses, and, for each comparator, on how many
     rows it has a figure, on how many of those its marker where that is fewer, and on how many a cross; and, as
     the panel's result, on how many rows the released tool's adjusted F1 is exactly 1. Every count is of the
     panel's own values, and each number of rows the sentence prints is kept among the values file's sources."""
@@ -1585,7 +1587,8 @@ def alt_sentence(reader: Reader, panel: dict) -> str:
         reads = [value["value"] for row in rows for value in row["values"] if value["kind"] == "text"]
         return f"The plugins read by {and_list(holders('bar'))}, a bar each: {and_list(reads)}."
     barred, marked = holders("bar"), holders("marker")
-    sentence = f"Raw F1 per {F1_ROWS[panel['id']]} as a bar for {'each of ' if len(barred) > 1 else ''}{and_list(barred)}"
+    groups = f" ({'; '.join(plugin_clauses(reader, panel))})" if panel["id"] == "c" else ""
+    sentence = f"Raw F1 per {F1_ROWS[panel['id']]}{groups} as a bar for {'each of ' if len(barred) > 1 else ''}{and_list(barred)}"
     if marked:
         whose = ("each tool's" if len(barred) > 1 else "its") if marked == barred else f"{and_list(marked)}'s"
         sentence += f", with {whose} adjusted F1 as a marker joined to the end of the bar by a line where the two differ"

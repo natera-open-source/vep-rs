@@ -3,7 +3,7 @@ page = "docs/divergences/hgvsp-stop-named-on-incomplete-coding-sequence.md"
 verified_against = "116.2"
 image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
 input_class = "observed"
-input_class_basis = "2 · 4,230 of 77,601 cache transcripts · 23 flag sets, 100 corpora"
+input_class_basis = "2 · 4,232 of 77,675 cache transcripts · 23 flag sets, 101 corpora"
 notes = "Two records written for the entry, on GRCh37, each a substitution of one base on chromosome 1: the first changes 1:3548777, the last base of the coding sequence of the reverse-strand ENST00000424367, which is flagged cds_end_NF and whose coding sequence of 913 bases ends on the first base of codon 305, and the second changes 1:865692, the first coding base of the forward-strand ENST00000341065, which is flagged cds_start_NF and whose coding sequence opens on the second base of its first codon and is closed by a stop codon. Ensembl VEP writes the stop unchanged at residue 305 on the first and at residue 1 on the second, the equals sign percent-encoded as the default output writes it; vep-rs writes no HGVSp on either, and every other column is the same in both engines' rows."
 
 prepare = [

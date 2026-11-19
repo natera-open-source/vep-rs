@@ -3,7 +3,7 @@ page = "docs/divergences/domains-order-region-file-copy.md"
 verified_against = "116.2"
 image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
 input_class = "observed"
-input_class_basis = "2 · 1 of 77,601 cache transcripts · 7 flag sets, 1 corpus"
+input_class_basis = "2 · 1 of 77,675 cache transcripts · 7 flag sets, 1 corpus"
 notes = "ENST00000348990 is stored in the region files 25000001-26000000 and 26000001-27000000 of chromosome 21, its 49 protein features in two orders. The record lies 170,588 bases inside the second region, so Ensembl VEP, annotating it alone, reads that file's copy; vep-rs keeps the lowest region file's copy whatever the input."
 
 [input]

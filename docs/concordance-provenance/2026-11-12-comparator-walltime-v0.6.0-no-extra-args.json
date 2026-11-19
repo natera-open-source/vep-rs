@@ -1,0 +1,490 @@
+{
+  "cells": [
+    "s01",
+    "s02"
+  ],
+  "clone_manifest_note": "Instance ids are positional (clone-<engine>-<arch>-<index>); every clone ran the sweep and the binary or image this record pins.",
+  "clones": [
+    {
+      "arch": "arm64",
+      "binary_md5": "33d96a9a67c742cd8914d90b5a5d2bee",
+      "completed_at_utc": "2026-11-12T05:41:22Z",
+      "dataset_inventory_sha256": "beb7885f0af09a6715f05b78ce45c11cbdc2563690b2fcc0d2178bdaa38ec890",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "final_state": "terminated",
+      "instance_id": "clone-fastvep-arm64-001",
+      "instance_type": "c9gd.8xlarge",
+      "role": "comparator_walltime",
+      "run_index": 1,
+      "suites": [
+        "s01",
+        "s02"
+      ],
+      "sweep_id": "sweep-20261112T050002Z",
+      "wall_time_sec": {
+        "s01": 6.9,
+        "s02": 12.83
+      }
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "33d96a9a67c742cd8914d90b5a5d2bee",
+      "completed_at_utc": "2026-11-12T05:42:16Z",
+      "dataset_inventory_sha256": "beb7885f0af09a6715f05b78ce45c11cbdc2563690b2fcc0d2178bdaa38ec890",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "final_state": "terminated",
+      "instance_id": "clone-fastvep-arm64-002",
+      "instance_type": "c9gd.8xlarge",
+      "role": "comparator_walltime",
+      "run_index": 2,
+      "suites": [
+        "s01",
+        "s02"
+      ],
+      "sweep_id": "sweep-20261112T050002Z",
+      "wall_time_sec": {
+        "s01": 6.96,
+        "s02": 12.84
+      }
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "33d96a9a67c742cd8914d90b5a5d2bee",
+      "completed_at_utc": "2026-11-12T05:41:32Z",
+      "dataset_inventory_sha256": "beb7885f0af09a6715f05b78ce45c11cbdc2563690b2fcc0d2178bdaa38ec890",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "final_state": "terminated",
+      "instance_id": "clone-fastvep-arm64-003",
+      "instance_type": "c9gd.8xlarge",
+      "role": "comparator_walltime",
+      "run_index": 3,
+      "suites": [
+        "s01",
+        "s02"
+      ],
+      "sweep_id": "sweep-20261112T050002Z",
+      "wall_time_sec": {
+        "s01": 7.01,
+        "s02": 12.82
+      }
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "33d96a9a67c742cd8914d90b5a5d2bee",
+      "completed_at_utc": "2026-11-12T05:41:32Z",
+      "dataset_inventory_sha256": "beb7885f0af09a6715f05b78ce45c11cbdc2563690b2fcc0d2178bdaa38ec890",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "final_state": "terminated",
+      "instance_id": "clone-fastvep-arm64-004",
+      "instance_type": "c9gd.8xlarge",
+      "role": "comparator_walltime",
+      "run_index": 4,
+      "suites": [
+        "s01",
+        "s02"
+      ],
+      "sweep_id": "sweep-20261112T050002Z",
+      "wall_time_sec": {
+        "s01": 7.01,
+        "s02": 12.84
+      }
+    },
+    {
+      "arch": "arm64",
+      "binary_md5": "33d96a9a67c742cd8914d90b5a5d2bee",
+      "completed_at_utc": "2026-11-12T05:41:34Z",
+      "dataset_inventory_sha256": "beb7885f0af09a6715f05b78ce45c11cbdc2563690b2fcc0d2178bdaa38ec890",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "final_state": "terminated",
+      "instance_id": "clone-fastvep-arm64-005",
+      "instance_type": "c9gd.8xlarge",
+      "role": "comparator_walltime",
+      "run_index": 5,
+      "suites": [
+        "s01",
+        "s02"
+      ],
+      "sweep_id": "sweep-20261112T050002Z",
+      "wall_time_sec": {
+        "s01": 6.71,
+        "s02": 12.82
+      }
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "b38809af2c0a14e258a732c9a3f5ffaa",
+      "completed_at_utc": "2026-11-12T05:42:40Z",
+      "dataset_inventory_sha256": "beb7885f0af09a6715f05b78ce45c11cbdc2563690b2fcc0d2178bdaa38ec890",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "final_state": "terminated",
+      "instance_id": "clone-fastvep-x86_64-001",
+      "instance_type": "c8id.8xlarge",
+      "role": "comparator_walltime",
+      "run_index": 1,
+      "suites": [
+        "s01",
+        "s02"
+      ],
+      "sweep_id": "sweep-20261112T050002Z",
+      "wall_time_sec": {
+        "s01": 9.78,
+        "s02": 17.86
+      }
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "b38809af2c0a14e258a732c9a3f5ffaa",
+      "completed_at_utc": "2026-11-12T05:43:05Z",
+      "dataset_inventory_sha256": "beb7885f0af09a6715f05b78ce45c11cbdc2563690b2fcc0d2178bdaa38ec890",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "final_state": "terminated",
+      "instance_id": "clone-fastvep-x86_64-002",
+      "instance_type": "c8id.8xlarge",
+      "role": "comparator_walltime",
+      "run_index": 2,
+      "suites": [
+        "s01",
+        "s02"
+      ],
+      "sweep_id": "sweep-20261112T050002Z",
+      "wall_time_sec": {
+        "s01": 9.7,
+        "s02": 17.68
+      }
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "b38809af2c0a14e258a732c9a3f5ffaa",
+      "completed_at_utc": "2026-11-12T05:43:06Z",
+      "dataset_inventory_sha256": "beb7885f0af09a6715f05b78ce45c11cbdc2563690b2fcc0d2178bdaa38ec890",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "final_state": "terminated",
+      "instance_id": "clone-fastvep-x86_64-003",
+      "instance_type": "c8id.8xlarge",
+      "role": "comparator_walltime",
+      "run_index": 3,
+      "suites": [
+        "s01",
+        "s02"
+      ],
+      "sweep_id": "sweep-20261112T050002Z",
+      "wall_time_sec": {
+        "s01": 9.65,
+        "s02": 17.55
+      }
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "b38809af2c0a14e258a732c9a3f5ffaa",
+      "completed_at_utc": "2026-11-12T05:43:07Z",
+      "dataset_inventory_sha256": "beb7885f0af09a6715f05b78ce45c11cbdc2563690b2fcc0d2178bdaa38ec890",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "final_state": "terminated",
+      "instance_id": "clone-fastvep-x86_64-004",
+      "instance_type": "c8id.8xlarge",
+      "role": "comparator_walltime",
+      "run_index": 4,
+      "suites": [
+        "s01",
+        "s02"
+      ],
+      "sweep_id": "sweep-20261112T050002Z",
+      "wall_time_sec": {
+        "s01": 9.7,
+        "s02": 17.73
+      }
+    },
+    {
+      "arch": "x86_64",
+      "binary_md5": "b38809af2c0a14e258a732c9a3f5ffaa",
+      "completed_at_utc": "2026-11-12T05:42:57Z",
+      "dataset_inventory_sha256": "beb7885f0af09a6715f05b78ce45c11cbdc2563690b2fcc0d2178bdaa38ec890",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "final_state": "terminated",
+      "instance_id": "clone-fastvep-x86_64-005",
+      "instance_type": "c8id.8xlarge",
+      "role": "comparator_walltime",
+      "run_index": 5,
+      "suites": [
+        "s01",
+        "s02"
+      ],
+      "sweep_id": "sweep-20261112T050002Z",
+      "wall_time_sec": {
+        "s01": 9.65,
+        "s02": 17.89
+      }
+    },
+    {
+      "arch": "arm64",
+      "completed_at_utc": "2026-10-27T00:37:54Z",
+      "dataset_inventory_sha256": "584ca4c50f4e197432a90e7bdfe63aabc8f40ceb291a09fae8c44791f10974a7",
+      "engine": "perl",
+      "engine_version": "release_116.2",
+      "final_state": "terminated",
+      "image_digest": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+      "instance_id": "clone-perl-arm64-001",
+      "instance_type": "c9gd.8xlarge",
+      "role": "comparator_walltime",
+      "run_index": 1,
+      "suites": [
+        "s01",
+        "s02"
+      ],
+      "sweep_id": "sweep-20261026T222306Z",
+      "wall_time_sec": {
+        "s01": 719.22,
+        "s02": 2543.75
+      }
+    },
+    {
+      "arch": "x86_64",
+      "completed_at_utc": "2026-10-27T01:09:05Z",
+      "dataset_inventory_sha256": "584ca4c50f4e197432a90e7bdfe63aabc8f40ceb291a09fae8c44791f10974a7",
+      "engine": "perl",
+      "engine_version": "release_116.2",
+      "final_state": "terminated",
+      "image_digest": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+      "instance_id": "clone-perl-x86_64-001",
+      "instance_type": "c8id.8xlarge",
+      "role": "comparator_walltime",
+      "run_index": 1,
+      "suites": [
+        "s01",
+        "s02"
+      ],
+      "sweep_id": "sweep-20261026T222306Z",
+      "wall_time_sec": {
+        "s01": 837.8,
+        "s02": 3093.35
+      }
+    }
+  ],
+  "dataset_inventory_note": "One dataset inventory digest per engine and architecture, read from the clones' COMPLETE markers: every clone of an engine on one architecture timed the same synced dataset.",
+  "dataset_inventory_sha256_fastvep_arm64": "beb7885f0af09a6715f05b78ce45c11cbdc2563690b2fcc0d2178bdaa38ec890",
+  "dataset_inventory_sha256_fastvep_x86_64": "beb7885f0af09a6715f05b78ce45c11cbdc2563690b2fcc0d2178bdaa38ec890",
+  "dataset_inventory_sha256_perl_arm64": "584ca4c50f4e197432a90e7bdfe63aabc8f40ceb291a09fae8c44791f10974a7",
+  "dataset_inventory_sha256_perl_x86_64": "584ca4c50f4e197432a90e7bdfe63aabc8f40ceb291a09fae8c44791f10974a7",
+  "date": "2026-11-12",
+  "engines": {
+    "fastvep": {
+      "binary_md5": {
+        "arm64": "33d96a9a67c742cd8914d90b5a5d2bee",
+        "x86_64": "b38809af2c0a14e258a732c9a3f5ffaa"
+      },
+      "cache_prefix": "caches/fastvep-v0.5.0-ensembl116",
+      "cells": [
+        "s01",
+        "s02"
+      ],
+      "n_clones_per_arch": {
+        "arm64": 5,
+        "x86_64": 5
+      },
+      "n_clones_per_cell": 5,
+      "sweep_id": "sweep-20261112T050002Z",
+      "version": "v0.5.0"
+    },
+    "perl": {
+      "cells": [
+        "s01",
+        "s02"
+      ],
+      "digest": "sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+      "image": "ensemblorg/ensembl-vep:release_116.2",
+      "n_clones_per_arch": {
+        "arm64": 1,
+        "x86_64": 1
+      },
+      "n_clones_per_cell": 1,
+      "sweep_id": "sweep-20261026T222306Z",
+      "version": "release_116.2"
+    }
+  },
+  "generated_at_utc": "2026-11-12T20:11:08Z",
+  "harvest_problems": {
+    "fastvep": [],
+    "perl": []
+  },
+  "instance_types": {
+    "arm64": "c9gd.8xlarge",
+    "x86_64": "c8id.8xlarge"
+  },
+  "measurement_entrypoint": "scripts/concordance/run_clone_measurement.sh",
+  "methodology": "cross_instance_parallel_clone",
+  "methodology_note": "c9gd.8xlarge (ARM Graviton5) and c8id.8xlarge (Intel x86_64), 32 vCPU / 64 GiB / local NVMe instance store, the newest available class per architecture (Graviton5 against 8th-generation Intel); 5 fresh fastVEP clones and 1 Ensembl VEP clone per architecture, each booting the stock base image and syncing the dataset to local NVMe, then running scripts/concordance/run_clone_measurement.sh --walltime-only --engine <engine> on the cells: one cold-cache warmup, discarded and its output deleted, then one timed run per cell; fastVEP at 16 threads and Ensembl VEP at --fork 16 on sites-only inputs. Median and P5/P95 across the clones per cell (Weibull, R type 6); below 20 clones the P5 and P95 are the cell's minimum and maximum.",
+  "per_cell_aggregates": [
+    {
+      "arch": "arm64",
+      "assembly": "GRCh37",
+      "condition": "sites_only",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "instance_type": "c9gd.8xlarge",
+      "max": 7.01,
+      "median_sec": 6.96,
+      "min": 6.71,
+      "n_clones": 5,
+      "p25": 6.805,
+      "p5": 6.71,
+      "p75": 7.01,
+      "p95": 7.01,
+      "p95_p5_ratio": 1.045,
+      "suite": "ClinVar_GRCh37",
+      "suite_id": "s01"
+    },
+    {
+      "arch": "arm64",
+      "assembly": "GRCh38",
+      "condition": "sites_only",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "instance_type": "c9gd.8xlarge",
+      "max": 12.84,
+      "median_sec": 12.83,
+      "min": 12.82,
+      "n_clones": 5,
+      "p25": 12.82,
+      "p5": 12.82,
+      "p75": 12.84,
+      "p95": 12.84,
+      "p95_p5_ratio": 1.002,
+      "suite": "ClinVar_GRCh38",
+      "suite_id": "s02"
+    },
+    {
+      "arch": "x86_64",
+      "assembly": "GRCh37",
+      "condition": "sites_only",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "instance_type": "c8id.8xlarge",
+      "max": 9.78,
+      "median_sec": 9.7,
+      "min": 9.65,
+      "n_clones": 5,
+      "p25": 9.65,
+      "p5": 9.65,
+      "p75": 9.74,
+      "p95": 9.78,
+      "p95_p5_ratio": 1.013,
+      "suite": "ClinVar_GRCh37",
+      "suite_id": "s01"
+    },
+    {
+      "arch": "x86_64",
+      "assembly": "GRCh38",
+      "condition": "sites_only",
+      "engine": "fastvep",
+      "engine_version": "v0.5.0",
+      "instance_type": "c8id.8xlarge",
+      "max": 17.89,
+      "median_sec": 17.73,
+      "min": 17.55,
+      "n_clones": 5,
+      "p25": 17.615,
+      "p5": 17.55,
+      "p75": 17.875,
+      "p95": 17.89,
+      "p95_p5_ratio": 1.019,
+      "suite": "ClinVar_GRCh38",
+      "suite_id": "s02"
+    },
+    {
+      "arch": "arm64",
+      "assembly": "GRCh37",
+      "condition": "sites_only",
+      "engine": "perl",
+      "engine_version": "release_116.2",
+      "instance_type": "c9gd.8xlarge",
+      "max": 719.22,
+      "median_sec": 719.22,
+      "min": 719.22,
+      "n_clones": 1,
+      "p25": 719.22,
+      "p5": 719.22,
+      "p75": 719.22,
+      "p95": 719.22,
+      "p95_p5_ratio": 1.0,
+      "suite": "ClinVar_GRCh37",
+      "suite_id": "s01"
+    },
+    {
+      "arch": "arm64",
+      "assembly": "GRCh38",
+      "condition": "sites_only",
+      "engine": "perl",
+      "engine_version": "release_116.2",
+      "instance_type": "c9gd.8xlarge",
+      "max": 2543.75,
+      "median_sec": 2543.75,
+      "min": 2543.75,
+      "n_clones": 1,
+      "p25": 2543.75,
+      "p5": 2543.75,
+      "p75": 2543.75,
+      "p95": 2543.75,
+      "p95_p5_ratio": 1.0,
+      "suite": "ClinVar_GRCh38",
+      "suite_id": "s02"
+    },
+    {
+      "arch": "x86_64",
+      "assembly": "GRCh37",
+      "condition": "sites_only",
+      "engine": "perl",
+      "engine_version": "release_116.2",
+      "instance_type": "c8id.8xlarge",
+      "max": 837.8,
+      "median_sec": 837.8,
+      "min": 837.8,
+      "n_clones": 1,
+      "p25": 837.8,
+      "p5": 837.8,
+      "p75": 837.8,
+      "p95": 837.8,
+      "p95_p5_ratio": 1.0,
+      "suite": "ClinVar_GRCh37",
+      "suite_id": "s01"
+    },
+    {
+      "arch": "x86_64",
+      "assembly": "GRCh38",
+      "condition": "sites_only",
+      "engine": "perl",
+      "engine_version": "release_116.2",
+      "instance_type": "c8id.8xlarge",
+      "max": 3093.35,
+      "median_sec": 3093.35,
+      "min": 3093.35,
+      "n_clones": 1,
+      "p25": 3093.35,
+      "p5": 3093.35,
+      "p75": 3093.35,
+      "p95": 3093.35,
+      "p95_p5_ratio": 1.0,
+      "suite": "ClinVar_GRCh38",
+      "suite_id": "s02"
+    }
+  ],
+  "per_cell_aggregates_note": "One entry per engine, cell and architecture over the clones' timed runs; the release record's vep-rs entries of the same cells and classes are the denominators of the README's ratios.",
+  "record": "comparator-walltime",
+  "release": "v0.6.0",
+  "scope": "fastVEP v0.5.0 and Ensembl VEP 116.2 timed on the genome-wide ClinVar files, cells s01, s02, on c9gd.8xlarge (arm64) and c8id.8xlarge (x86_64), the release classes vep-rs v0.6.0 was timed on, under the release wall-time protocol; the README's ClinVar rows state these medians beside vep-rs's with the ratio between them. Wall time only: no concordance is scored here.",
+  "sweep_ids": {
+    "fastvep": "sweep-20261112T050002Z",
+    "perl": "sweep-20261026T222306Z"
+  },
+  "unstable_cells": [],
+  "unstable_cells_note": "Cells whose P95 over P5 exceeds 1.3; with fewer than 20 clones the P5 and P95 are the cell's minimum and maximum, so the ratio is the range."
+}

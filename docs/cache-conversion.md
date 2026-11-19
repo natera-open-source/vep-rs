@@ -79,7 +79,7 @@ One behaviour of Ensembl VEP 116.2 on a RefSeq or merged cache is not reproduced
 
 The chromosome 21 of the GRCh38 merged cache carries 325 stable identifiers at more than one locus, every one a `compmerge.*` model that only `--all_refseq` admits, and the chromosome 21 GRCh38 RefSeq cache carries the same 325; the GRCh37 chromosome 21 caches carry none. The `GRCh38-merged` corpus's 76 records under `--merged --all_refseq` lose 128 rows on 59 identifiers in Ensembl VEP and none in vep-rs, with no other row differing; no committed flag set runs that pair. The `GRCh38-refseq` corpus's `--all_refseq` run keeps every row only by record placement: no record of that corpus loads the regions of its two dual-locus models' other copies.
 
-**How often the shape occurs.** Tier 2: the shape is a transcript whose stable identifier its cache carries at two or more loci. The count is over the caches committed with the golden corpora, not over the full caches of the paragraph above: of their 77,601 transcripts, 38 have the shape (490 per million), all in one corpus's cache. The buffer that loads both copies keeps the one listed first. One flag set runs `--all_refseq`, the GRCh38 RefSeq corpus's `--refseq --all_refseq`.
+**How often the shape occurs.** Tier 2: the shape is a transcript whose stable identifier its cache carries at two or more loci. The count is over the caches committed with the golden corpora, not over the full caches of the paragraph above: of their 77,675 transcripts, 38 have the shape (489 per million), all in one corpus's cache. The buffer that loads both copies keeps the one listed first. One flag set runs `--all_refseq`, the GRCh38 RefSeq corpus's `--refseq --all_refseq`.
 
 #### `compmerge.264.Heart.chr21` at two loci of chromosome 21
 

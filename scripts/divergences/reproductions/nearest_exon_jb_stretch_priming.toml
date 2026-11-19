@@ -3,7 +3,7 @@ page = "docs/plugins/transcript-model.md#3-nearestexonjb-a-value-on-an-upstream-
 verified_against = "116.2"
 image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
 input_class = "observed"
-input_class_basis = "2 · 78 of 77,601 cache transcripts · 2 flag sets, 12 corpora"
+input_class_basis = "2 · 78 of 77,675 cache transcripts · 2 flag sets, 12 corpora"
 
 # ENST00000624847 (forward strand) has 2-base introns at 6358575-6358576 and 6358739-6358740; its first exon spans
 # 6354264-6354522. The first record is nine bases before that exon, the second inside the first short intron:

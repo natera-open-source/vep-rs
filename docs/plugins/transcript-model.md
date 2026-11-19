@@ -569,8 +569,8 @@ most 12. The `GRCh38-plugin-computed` corpus's cache holds no transcript with an
 intron of 13 bases or fewer, so no row of its two comparison cases is set aside.
 
 **How often the shape occurs.** Tier 2: the shape is a transcript with an
-intron of 13 bases or fewer, 78 of the 77,601 transcripts of the committed
-caches (1,005 per million), in 12 corpora. A record within 12 bases of such an
+intron of 13 bases or fewer, 78 of the 77,675 transcripts of the committed
+caches (1,004 per million), in 12 corpora. A record within 12 bases of such an
 exon boundary shows it once an earlier record primed the stretch; 2 flag sets
 run the plugin.
 

@@ -3,7 +3,7 @@ page = "docs/divergences/refseq-edited-model-hgvs-offset.md"
 verified_against = "116.2"
 image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
 input_class = "observed"
-input_class_basis = "2 · 59 of 77,601 cache transcripts · 1 flag set, 4 corpora"
+input_class_basis = "2 · 59 of 77,675 cache transcripts · 1 flag set, 4 corpora"
 notes = "A 21-base duplication in the single exon of the edited model NM_198689.3 (KRTAP10-7, forward strand), beside two TSPEAR models on the reverse strand whose zero shift is computed first."
 
 [input]

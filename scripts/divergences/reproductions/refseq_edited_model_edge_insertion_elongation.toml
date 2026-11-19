@@ -3,7 +3,7 @@ page = "docs/divergences/refseq-edited-model-edge-insertion-elongation.md"
 verified_against = "116.2"
 image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
 input_class = "observed"
-input_class_basis = "2 · 8 of 77,601 cache transcripts · 10 flag sets, 4 corpora"
+input_class_basis = "2 · 8 of 77,675 cache transcripts · 10 flag sets, 4 corpora"
 notes = "The forward-strand models NM_130444.3 and NM_030582.4 end at 21:45513720, as the unedited model NM_001379500.1 does, and each carries one edit that removes nine bases (`4092 4100` and `3387 3395`), so the cached mapper numbers that base 6587 and 5882 where their exons sum to 6596 and 5891. The record is the point between 21:45513720 and 21:45513721: a symbolic insertion with END at its POS and no SVLEN has start POS + 1 and end POS (BaseVCF4.pm:262-264, 302-309). Its one mapped neighbour becomes the coordinate (6588, 6587) or (5883, 5882) (Mapper.pm:485-580), whose start is at most the unedited exon total, so within_cdna accepts it (VariationEffect.pm:680), and complete_within_feature holds for a point that straddles the feature's end (VariationEffect.pm:163-166). Ensembl VEP therefore writes feature_elongation beside downstream_gene_variant on the two edited models' rows. On NM_001379500.1 the base is numbered 5408, the exon total, the coordinate (5409, 5408) is refused, and both engines write downstream_gene_variant alone, as vep-rs does on all three rows."
 
 [input]

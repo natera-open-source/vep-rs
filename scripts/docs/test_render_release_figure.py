@@ -1434,7 +1434,8 @@ def test_the_texts_say_from_the_records_own_counts_what_the_image_leaves_unsaid(
         ours, theirs = (sum((e["plugin"], e["assembly"], e["engine"], e["projection"]) == (row["plugin"], row["assembly"], engine, "feature")
                             for e in PLUGINS[lists[row["scored_on"]]]) for engine in ("vep-rs", "fastvep"))
         if theirs and ours != theirs:
-            uneven.append(f"{row['plugin']} {row['assembly']} (vep-rs {ours}, fastVEP {theirs})")
+            tag = " synthetic" if row["scored_on"] == "synthetic_fixture" else ""
+            uneven.append(f"{row['plugin']} {row['assembly']}{tag} (vep-rs {ours}, fastVEP {theirs})")
     assert uneven
     sets = (f"A row's figure is summed over the sets of the row that the record holds for the tool, and the tools differ in them on "
             f"{len(uneven)} rows: {figure.and_list(uneven)}.")
@@ -1445,7 +1446,7 @@ def test_the_texts_say_from_the_records_own_counts_what_the_image_leaves_unsaid(
         held.setdefault(row_name.split(" (")[0], []).append(row_name)
     doubled = [f"{plugin} is scored under {figure.and_list(under)}" for plugin, under in held.items() if len(under) > 1]
     assert doubled and len(names) == len(held) + len(doubled)
-    named = f"The plugin panel's {len(PLUGINS['rows'])} gate rows carry {len(names)} row names for {len(held)} plugins: {figure.and_list(doubled)}."
+    named = f"The plugin panel's {len(PLUGINS['rows'])} rows carry {len(names)} row names for {len(held)} plugins: {figure.and_list(doubled)}."
     # Where an F1 of exactly 1 stands, with how many of the released tool's adjusted markers stand there.
     ours = [value for panel_id in ("a", "c") for row in rows_of(document, panel_id).values() for value in row["values"]
             if (value["tool"], value["kind"]) == ("vep-rs", "marker")]
@@ -1480,7 +1481,7 @@ def test_the_sentence_on_differing_sets_reads_one_row_where_exactly_one_row_diff
               and len(feature_sets(PLUGINS, row["plugin"], row["assembly"], "vep-rs")) == 2]
     assert len(uneven) == 3
     several = values_of(tmp_path / "several")
-    listed = [f"{plugin} {assembly} (vep-rs 2, fastVEP 1)" for plugin, assembly in uneven]
+    listed = [f"{plugin} {assembly} synthetic (vep-rs 2, fastVEP 1)" for plugin, assembly in uneven]
     assert f"{lead}3 rows: {figure.and_list(listed)}." in several["caption"]
     # All but the first brought to one set of the released tool: one row differs, and both texts say "1 row".
     plugins = copy.deepcopy(PLUGINS)
@@ -1491,6 +1492,36 @@ def test_the_sentence_on_differing_sets_reads_one_row_where_exactly_one_row_diff
     for text in (one["caption"], one["alt_text"]):
         assert text.count(sentence) == 1 and "1 rows" not in text and text.count("differ in them") == 1
     assert [source["key"] for source in one["sources"] if source["text"] == sentence] == [figure.UNEVEN_KEY]
+
+
+def test_the_sentence_on_differing_sets_names_each_row_by_the_label_the_figure_draws(tmp_path):
+    # A second set of the released tool on a row scored on real data that scores the comparator too: the tools
+    # differ in their sets there, as they do on the fixture's rows scored on synthetic fixtures.
+    plugins = copy.deepcopy(PLUGINS)
+    held = next(e for e in plugins["real_data"]
+                if (e["plugin"], e["assembly"], e["engine"], e["projection"]) == ("LOEUF", "GRCh38", "vep-rs", "feature"))
+    plugins["real_data"].append(copy.deepcopy(held))
+    document = values_of(tmp_path, record_set(plugins=plugins))
+    (sentence,) = [source["text"] for source in document["sources"] if source["key"] == figure.UNEVEN_KEY]
+    listed = sentence.removesuffix(".").split(" rows: ", 1)[1]
+    names = re.split(r" \(vep-rs \d+, fastVEP \d+\)(?:, | and |$)", listed)[:-1]
+    assert names == ["dbNSFP GRCh37 synthetic", "dbNSFP GRCh38 synthetic", "LOEUF GRCh38", "SpliceAI GRCh38 synthetic"]
+    # Each name is a row label of the panel, and it ends in the tag exactly on a row of the synthetic group.
+    groups = {label: group for group, label in rows_of(document, "c")}
+    assert [groups[name].startswith("Synthetic fixtures") for name in names] == [name.endswith(" synthetic") for name in names]
+    assert [groups[name] for name in names if not name.endswith(" synthetic")] == [REAL_GROUP]
+    for text in (document["caption"], document["alt_text"]):
+        assert text.count(sentence) == 1
+
+
+def test_neither_text_nor_a_key_of_the_sources_calls_a_row_of_the_plugin_panel_a_gate_row(tmp_path):
+    document = values_of(tmp_path)
+    keys = [source["key"] for source in document["sources"]]
+    assert not any("gate row" in text for text in (document["caption"], document["alt_text"], *keys))
+    # The keys of the two sentences on the entries of a row name the row by its panel.
+    assert keys.count("the per-feature entries of each engine on a row of the plugin panel (plugin, assembly, dataset or corpus): their number") == 1
+    assert keys.count("the per-feature entries of each engine on a row of the plugin panel scored on real data, in real_data and "
+                      "population_data: their datasets, each named by its label among the population record's datasets") == 1
 
 
 def test_the_sentence_on_row_names_reads_one_plugin_where_the_rows_are_of_one_plugin(tmp_path):
@@ -1506,7 +1537,7 @@ def test_the_sentence_on_row_names_reads_one_plugin_where_the_rows_are_of_one_pl
     plugins = copy.deepcopy(PLUGINS)
     plugins["rows"] = [row for row in plugins["rows"] if row["plugin"] in names]
     one = values_of(tmp_path / "one", record_set(plugins=plugins))
-    sentence = (f"The plugin panel's {len(plugins['rows'])} gate rows carry {len(names)} row names for 1 plugin: "
+    sentence = (f"The plugin panel's {len(plugins['rows'])} rows carry {len(names)} row names for 1 plugin: "
                 f"{plugin} is scored under {figure.and_list(names)}.")
     assert len(plugins["rows"]) >= len(names) == 2
     for text in (one["caption"], one["alt_text"]):
@@ -1620,6 +1651,7 @@ def test_every_number_of_sets_the_texts_print_stands_in_the_values_file_with_the
     assert len(expected) == 6 and [source["text"] for source in counted] == [str(number) for *_, number in expected]
     (sentence,) = [source["text"] for source in document["sources"] if source["key"] == figure.UNEVEN_KEY]
     assert re.findall(r"(?:vep-rs|fastVEP) (\d+)", sentence) == [source["text"] for source in counted]
+    kinds = {(row["plugin"], row["assembly"]): row["scored_on"] for row in PLUGINS["rows"]}
     for source, (plugin, assembly, tool, number) in zip(counted, expected):
         # The key names the entries the number counts: the record's list, the row and the tool's engine.
         list_name, key_plugin, key_assembly, target, target_value, engine = selector.match(source["key"]).groups()
@@ -1627,7 +1659,8 @@ def test_every_number_of_sets_the_texts_print_stands_in_the_values_file_with_the
         entries = [e for e in PLUGINS[list_name] if (e["plugin"], e["assembly"], e.get(target), e["engine"], e["projection"])
                    == (plugin, assembly, target_value, engine, "feature")]
         assert len(entries) == number == int(source["text"])
-        assert f"{plugin} {assembly} (" in sentence and f"{tool} {number}" in sentence
+        tag = " synthetic" if kinds[(plugin, assembly)] == "synthetic_fixture" else ""
+        assert f"{plugin} {assembly}{tag} (" in sentence and f"{tool} {number}" in sentence
     # The number of plugins the reference lists, which the note under the panel of counts prints, is a source too.
     listed = {"text": str(PLUGINS["not_ported"]["of"]), "record": name, "key": "not_ported.of"}
     assert document["sources"].count(listed) == 1 and f"of Ensembl VEP's {listed['text']}." in panel(document, "d")["note"]
@@ -1732,12 +1765,14 @@ def test_alternative_text_is_one_line_the_image_syntax_carries_and_says_what_eac
     scored, marked, crossed = (sum(("fastvep", kind) in marks(row) for row in rows) for kind in ("bar", "marker", "text"))
     exact = sum(len(set(value["counts"])) == 1 for row in rows for value in row["values"] if (value["tool"], value["kind"]) == ("vep-rs", "marker"))
     assert (len(rows), scored, marked, crossed, exact) == (59, 16, 15, 43, 59)
+    groups = ("plugins verified on real data; TranscriptAnnotator on its committed table; plugins whose data cannot be redistributed on "
+              "synthetic fixtures, marked synthetic; custom-annotation sources on the genome-wide ClinVar datasets")
     assert alt.startswith(
         f"Four panels {lead} (a) Raw F1 per dataset as a bar for each of vep-rs and fastVEP, with each tool's adjusted F1 as a marker "
         "joined to the end of the bar by a line where the two differ. "
         "(b) Wall time per dataset and architecture of vep-rs, fastVEP and Ensembl VEP, a circle each, filled for ARM and open for x86; "
         f"from left to right, the circles of every dataset and architecture are those of vep-rs, fastVEP and Ensembl VEP; {RUNS_CLAUSE}. "
-        "(c) Raw F1 per plugin as a bar for each of vep-rs and fastVEP, with each tool's adjusted F1 as a marker joined to the end of the "
+        f"(c) Raw F1 per plugin ({groups}) as a bar for each of vep-rs and fastVEP, with each tool's adjusted F1 as a marker joined to the end of the "
         f"bar by a line where the two differ: fastVEP has a figure on {scored} of the {len(rows)} rows, its marker on {marked} of them, and a cross "
         f"(no such source) on {crossed}; vep-rs's adjusted F1 is exactly 1 on {exact} of the {len(rows)} rows. "
         f"(d) The plugins read by vep-rs and fastVEP, a bar each: {READS}.")
@@ -1761,7 +1796,7 @@ def test_alternative_text_is_one_line_the_image_syntax_carries_and_says_what_eac
                    "the bar by a line where the two differ. "
                    "(b) Wall time per dataset and architecture of vep-rs, fastVEP and Ensembl VEP, a circle each, filled for ARM and open for x86; "
                    f"from left to right, the circles of every dataset and architecture are those of vep-rs, fastVEP and Ensembl VEP; {RUNS_CLAUSE}. "
-                   "(c) Raw F1 per plugin as a bar for vep-rs, with its adjusted F1 as a marker joined to the end of the bar by a "
+                   f"(c) Raw F1 per plugin ({groups}) as a bar for vep-rs, with its adjusted F1 as a marker joined to the end of the bar by a "
                    f"line where the two differ: vep-rs's adjusted F1 is exactly 1 on {exact} of the {len(rows)} rows. "
                    f"(d) The plugins read by vep-rs and fastVEP, a bar each: {READS}.")
     # A comparator without adjusted counts on the datasets: the markers of that panel are named as the released tool's.
@@ -1772,6 +1807,34 @@ def test_alternative_text_is_one_line_the_image_syntax_carries_and_says_what_eac
         del row["excluded_perl"], row["excluded_rust"]
     alt = values_of(tmp_path / "bare", record_set(fastvep=bare, population=uncounted))["alt_text"]
     assert "(a) Raw F1 per dataset as a bar for each of vep-rs and fastVEP, with vep-rs's adjusted F1 as a marker joined" in alt
+
+
+def test_the_alternative_text_says_what_the_plugin_panels_groups_are_scored_on_in_the_captions_clauses(tmp_path):
+    synthetic = "plugins whose data cannot be redistributed on synthetic fixtures, marked synthetic"
+
+    def clauses(document: dict) -> str:
+        """The clauses of the caption of `document` on the plugin panel's groups."""
+        caption = document["caption"]
+        start = caption.index("(c) Raw F1 per plugin: ") + len("(c) Raw F1 per plugin: ")
+        return caption[start:caption.index(". ", start)]
+
+    def draws_synthetic(document: dict) -> bool:
+        return any(group["label"].startswith("Synthetic fixtures") for group in panel(document, "c")["groups"])
+
+    # The panel's sentence holds the caption's clauses in the caption's order, one for each group the panel draws.
+    document = values_of(tmp_path)
+    alt = document["alt_text"]
+    assert draws_synthetic(document) and synthetic in clauses(document).split("; ")
+    assert alt.count(f"(c) Raw F1 per plugin ({clauses(document)}) as a bar for ") == 1 and alt.count(synthetic) == 1
+    # A record without rows scored on synthetic fixtures draws no such group, and the alternative text holds no such clause.
+    plugins = copy.deepcopy(PLUGINS)
+    plugins["rows"] = [row for row in plugins["rows"] if row["scored_on"] != "synthetic_fixture"]
+    plugins["synthetic_fixtures"] = []
+    fewer = values_of(tmp_path / "fewer", record_set(plugins=plugins))
+    assert clauses(fewer) == ("plugins verified on real data; TranscriptAnnotator on its committed table; "
+                              "custom-annotation sources on the genome-wide ClinVar datasets")
+    assert not draws_synthetic(fewer) and "synthetic" not in fewer["alt_text"]
+    assert fewer["alt_text"].count(f"(c) Raw F1 per plugin ({clauses(fewer)}) as a bar for ") == 1
 
 
 def test_each_count_the_alternative_text_gives_of_the_plugin_panel_is_counted_from_its_values_and_kept_among_the_sources(tmp_path):
@@ -3911,10 +3974,20 @@ def readme_mismatches(readme: str, document: dict) -> list[str]:
                 column = next(c for c in shown if c.startswith(f"{labels[value['tool']]} (s)"))
                 compare(f"(b) {group['label']} {row['label']} {value['tool']}", value["value"], shown[column].split(" ")[0])
     if any(p["id"] == "c" for p in document["panels"]):
-        data = {REAL_GROUP: "ClinVar", "Committed table": "committed table",
+        data = {"Committed table": "committed table",
                 "Synthetic fixtures (data that cannot be redistributed)": "synthetic fixture", "Custom annotation (--custom sources)": "ClinVar"}
         rows = [row for heading in ("Plugins", "Synthetic fixtures (data that cannot be redistributed)", "Custom annotation (`--custom` sources)")
                 for row in found.get(heading, [])]
+
+        def states(group_label: str, cell: str) -> bool:
+            """Whether a README row's Data cell is the data of a figure group. The group of plugins verified on
+            real data is named for its datasets, and a row of it states its ClinVar dataset alone or the sum over
+            ClinVar and the population datasets the cell names."""
+            head = cell.split(" (")[0]
+            if group_label.startswith("Genome-wide ClinVar"):
+                return head == "ClinVar" or head.startswith(("ClinVar, ", "ClinVar and "))
+            return head == data[group_label]
+
         for group in panel(document, "c")["groups"]:
             for row in group["rows"]:
                 plugin, assembly = row["label"].removesuffix(" synthetic").rsplit(" ", 1)
@@ -3923,12 +3996,12 @@ def readme_mismatches(readme: str, document: dict) -> list[str]:
                     if value["tool"] in comparators and value["kind"] != "text":
                         engine += " (per feature)"
                     matching = [r for r in rows if r["Engine"] == engine and r["Plugin or source"] == plugin and r["Assembly"] == assembly
-                                and r["Data"].split(" (")[0] == data[group["label"]]]
+                                and states(group["label"], r["Data"])]
                     assert len(matching) == 1, f"{len(matching)} README rows state {engine} on {row['label']}"
                     column = "Adjusted F1" if value["kind"] == "marker" else "Raw F1"
-                    # The plugin tables state a row on its ClinVar dataset: a figure that sums entries of the
-                    # population datasets with it has its row there and no cell that states it.
-                    if f"{figure.POPULATION_LIST}[" in value["key"]:
+                    # A figure value that sums entries of the population datasets is held to a row that states
+                    # the same sum; a row of the ClinVar dataset alone has no cell that states it.
+                    if f"{figure.POPULATION_LIST}[" in value["key"] and matching[0]["Data"].split(" (")[0] == "ClinVar":
                         continue
                     compare(f"(c) {row['label']} {value['tool']} {value['kind']}", value["value"], matching[0][column])
         support = found["Plugins each tool reads"]

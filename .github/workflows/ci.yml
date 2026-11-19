@@ -254,7 +254,7 @@ jobs:
             "scripts/parity/test_plugin_gate_rows.py 41"
             "scripts/validation/test_diff_caches.py 4"
             "scripts/docs/test_site_tools.py 149"
-            "scripts/docs/test_render_release_figure.py 172"
+            "scripts/docs/test_render_release_figure.py 175"
             "scripts/fixtures/test_maxentscan_fixture_matrices.py 19"
             "scripts/data/test_write_loftee_stand_ins.py 14"
             "scripts/divergences/test_check_divergence_order.py 34"
