@@ -1,6 +1,6 @@
 # A `--minimal` record with one intergenic allele under `--no_intergenic`
 
-A difference in which rows are written under `--minimal --no_intergenic` for one multi-allelic shape; nothing is set aside, since no measured dataset runs the flags.
+A difference in which rows are written under `--minimal --no_intergenic` for one multi-allelic shape; nothing is set aside, since no measured dataset runs the flags. Where one allele of a record whose alleles trim overlaps no transcript, Ensembl VEP writes nothing for the record; vep-rs removes that allele's intergenic row and keeps the other allele's transcript row.
 
 Under `--minimal`, Ensembl VEP splits a multi-allelic record whose alleles trim into one feature per allele (`InputBuffer.pm` lines 638-718) and annotates each feature on its own. An allele that overlaps no transcript gets an intergenic overlap of its own (`VariationFeature.pm` lines 822-840). At output the split features are merged back into the record's first feature (`OutputFactory.pm` lines 2272-2354).
 

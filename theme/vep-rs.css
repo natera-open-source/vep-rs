@@ -254,8 +254,8 @@ html:not(.js) .hljs-addition {
 }
 
 /* Layout: a grid of the content column and the page table of contents. Text
-   keeps the measure; from 1280 px tables, code blocks and the chart may use
-   the wider content column. The stock .content is a scroll container
+   keeps the measure; from 1280 px tables, code blocks, the chart and the
+   release figure may use the wider content column. The stock .content is a scroll container
    (overflow-y: auto), which pins every sticky descendant to a box that never
    scrolls. */
 
@@ -299,8 +299,8 @@ html:not(.js) .hljs-addition {
         justify-self: stretch;
     }
 
-    /* The landing page: the chart keeps its first screen short, and its
-       blocks sit closer together. */
+    /* A page that inlines the chart: the chart keeps its first screen short,
+       and its blocks sit closer together. */
     .content main > svg.benchmark-chart {
         width: auto;
         height: auto;
@@ -817,6 +817,94 @@ pre > code::-webkit-scrollbar-track {
 .coal .bar-fastvep,
 .ayu .bar-fastvep {
     fill: #199e70;
+}
+
+/* Home page: the opening sentence, the release figure and the row of
+   reasons. The row's class marks the page, since the stock theme gives a
+   page no class and the page stands with and without the figure. */
+
+.home-figure {
+    margin: 1.5em 0 2em;
+}
+
+.home-figure p {
+    margin: 0;
+}
+
+/* The release figure, on the home page and on the Benchmarks page. It is
+   drawn on white, so it keeps that ground and a frame in every theme; the
+   copy the stock theme enlarges on a click keeps its own box. */
+.content main img[src$="assets/comparison.png"]:not(.img-wrapper > img) {
+    display: block;
+    width: 100%;
+    height: auto;
+    box-sizing: border-box;
+    border: 1px solid var(--table-border-color);
+    border-radius: 6px;
+    background: #fff;
+}
+
+.home-figure figcaption {
+    margin-block-start: 0.6em;
+    font-size: 0.875em;
+    opacity: 0.85;
+}
+
+/* Below 480 px the list indent of `.content main ul` outranks this rule, and
+   the reasons keep that indent. */
+.home-reasons ul {
+    list-style: none;
+    padding: 0;
+}
+
+.home-reasons li > strong:first-child {
+    display: block;
+}
+
+/* Four short sections need no list of their own. */
+.content:has(> main > .home-reasons) .pagetoc {
+    display: none;
+}
+
+@media only screen and (min-width: 1280px) {
+    .content:has(> main > .home-reasons) {
+        grid-template-columns: minmax(0, max-content);
+    }
+
+    /* The figure's own width in pixels: wider would only enlarge it. */
+    .content main:has(> .home-reasons) {
+        max-width: 1080px;
+    }
+
+    /* The figure's block leaves the text measure for the width of the content
+       column, up to the figure's own width; the paragraph under it keeps the
+       measure. */
+    .content main > :has(img[src$="assets/comparison.png"]) {
+        max-width: 1080px;
+    }
+
+    .content main > .home-reasons {
+        max-width: none;
+    }
+
+    /* The opening sentence: three lines of at most 80 characters at this
+       size and measure. */
+    .content main:has(> .home-reasons) > p:first-of-type {
+        max-width: 37em;
+        font-size: 1.25em;
+        line-height: 1.5;
+        text-wrap: balance;
+    }
+
+    .home-reasons ul {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 2em;
+    }
+
+    .content main .home-reasons li + li {
+        margin-block-start: 0;
+    }
 }
 
 /* Sidebar */

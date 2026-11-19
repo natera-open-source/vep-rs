@@ -43,9 +43,25 @@ Ensembl VEP's: its `perl_reference` is `-`, its Test 1 is the pytest function th
 procedure's mechanism, named `scripts/<dir>/test_<name>.py::<fn>`, and its Test 2 is a corpus whose
 `covers` names the row, as for any other row.
 
+## The plugin support table
+
+A plugin row is one whose `perl_reference` is `<item>.pm`, the plugin's own module in the Ensembl
+VEP plugin collection. Each has a row in the support table of `docs/plugins.md`, the six-column
+table under its `## Support table` heading, whose first cell is the plugin name (linked or bare) and
+whose fifth is one of three status phrases. The status fixes the matrix row's `target`: `supported,
+verified on real data` and `supported on the user's licensed file, verified on synthetic fixtures` are
+`implemented`, and a supported status also needs the row landed; `not ported` is `error`, and fits any
+open row, a port decided but not landed included. Every table row names a matrix row by its `item`,
+so a plugin whose module is named otherwise (LoFTEE, `LoF.pm`) is checked through its table row
+alone, and the rows keep alphabetical order of the plugin name, case ignored. A port's table status
+turns supported in the pull request that lands its row.
+
 `python3 scripts/parity/check_parity_matrix.py` fails a pull request whose `args.rs` declares a flag
 without a row, whose landed row lacks a required test or keeps an `interim`, whose `removed` row lands
 while `args.rs` still declares the flag, whose process row names an Ensembl VEP module, whose named
 test or corpus does not resolve, or whose corpus `covers` names something that is not a row; it reads
 the flags from the attributes of `args.rs`, and `cargo test -p vep-cli --test parity_matrix` asks clap
-for the same list, hidden and flattened flags included.
+for the same list, hidden and flattened flags included. It also fails a pull request whose support
+table names a plugin without a matrix row, gives a status that contradicts the row's `target` or a
+supported status to a row still open, leaves alphabetical order, lacks a plugin row of the matrix, or
+is malformed: a row without six cells, a status outside the three phrases, or a name given twice.

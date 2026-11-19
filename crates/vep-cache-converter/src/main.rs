@@ -11,21 +11,23 @@
 //!   The variation files are the Ensembl VEP dumper's own, copied unchanged to
 //!   `variations/<chr>/`: `all_vars.gz` with its `.csi` or `.tbi`, or
 //!   `{start}-{end}_var.gz`, read from `variations/<chr>/`, or with a `{chr}_`
-//!   prefix from directly under `variations/`. Regulatory shards,
-//!   `<start>-<end>.json` or `.json.gz` arrays of regulatory and motif features,
-//!   are copied unchanged to `regulatory/<chr>/` once each parses as the
-//!   annotator parses it; metadata advertises them only after that tree has
-//!   been written. The checksum manifest
-//!   `CHECKSUMS.sha256` is written last, over every file then under the output
-//!   directory: the files this conversion wrote and any an earlier use of the
-//!   same `--output-dir` left there.
+//!   prefix from directly under `variations/`. The regulatory tree, the
+//!   binding matrices table `regulatory/binding_matrices.json` and the shards
+//!   `regulatory/<chr>/<start>-<end>.json` or `.json.gz` (arrays of regulatory
+//!   and motif features), is copied unchanged once every shard parses as the
+//!   annotator parses it against the table and the metadata's cell-type list;
+//!   metadata advertises the tree only after it has been written. The checksum
+//!   manifest `CHECKSUMS.sha256` is written last, over every file then under
+//!   the output directory: the files this conversion wrote and any an earlier
+//!   use of the same `--output-dir` left there.
 //! - **convert-plugin-data**: Convert tabix-indexed plugin data files
 //!   (`.tsv.gz`) to the binary annotation store format (`.vpd` + `.vpdi`)
 //!   for mmap-backed zero-copy lookups.
 
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::fs;
-use std::io::BufReader;
+use std::io::{BufReader, Seek};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
@@ -33,8 +35,12 @@ use std::time::Instant;
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use tracing::{info, warn};
+use vep_builtins::binary_store::ContentIdentity;
+use vep_builtins::tabix::TabixConfig;
 use vep_builtins::PluginError;
-use vep_core::cache_manifest::CacheManifest;
+use vep_cli::regulatory::{count_shard_features, BindingMatrices};
+use vep_core::cache_info::REGULATORY_SCHEMA;
+use vep_core::cache_manifest::{CacheManifest, HashingReader};
 use vep_core::coordinate::is_cache_path_component;
 
 #[derive(Parser)]
@@ -81,9 +87,18 @@ enum Commands {
         #[arg(long, default_value_t = 1)]
         start_col: usize,
 
-        /// 0-based column index for end position. If omitted, end = start.
+        /// 0-based column index for end position. If omitted, end = start. With
+        /// --ref-col the column is a VCF INFO column, read for its `END` key, the
+        /// reference allele's span otherwise; without it the cell is read to its
+        /// leading integer.
         #[arg(long)]
         end_col: Option<usize>,
+
+        /// 0-based column index for the reference allele (a VCF REF column), read
+        /// beside --end-col: its length spans a record whose end column holds no
+        /// `END` at or past the start.
+        #[arg(long)]
+        ref_col: Option<usize>,
 
         /// Whether positions are 0-based (like BED). Default: false (1-based).
         #[arg(long, default_value_t = false)]
@@ -114,14 +129,18 @@ fn main() -> Result<()> {
             chr_col,
             start_col,
             end_col,
+            ref_col,
             zero_based,
             verify_all,
             no_verify,
         }) => {
-            let cfg = TabixConvertConfig {
+            let cfg = TabixConfig {
+                file_path: PathBuf::from(&input),
                 chr_col,
                 start_col,
                 end_col,
+                ref_col,
+                alt_col: None,
                 zero_based,
             };
             convert_plugin_data(&input, &output, &cfg, verify_all, no_verify)?;
@@ -155,25 +174,32 @@ fn resolve_json_dir(json_dir: &Option<String>) -> Result<PathBuf> {
     }
 }
 
-/// Shared column layout configuration for tabix conversion.
-struct TabixConvertConfig {
-    chr_col: usize,
-    start_col: usize,
-    end_col: Option<usize>,
-    zero_based: bool,
-}
-
-/// Grouped records: column names + records grouped by chromosome.
+/// Grouped records: column names + records grouped by chromosome, and the
+/// identity of the file they were read from.
 type GroupedRecords = (
     Vec<String>,
     Vec<(String, Vec<vep_builtins::tabix::TabixRecord>)>,
+    ContentIdentity,
 );
+
+/// Whether `a` and `b` name one file: the same path, or paths that resolve to
+/// the same one, as a relative spelling or a symbolic link of it does. A path
+/// that does not resolve names no existing file.
+fn is_same_file(a: &Path, b: &Path) -> bool {
+    if a == b {
+        return true;
+    }
+    match (fs::canonicalize(a), fs::canonicalize(b)) {
+        (Ok(resolved_a), Ok(resolved_b)) => resolved_a == resolved_b,
+        _ => false,
+    }
+}
 
 /// Convert a tabix-indexed plugin data file to binary annotation store.
 fn convert_plugin_data(
     input: &str,
     output: &str,
-    cfg: &TabixConvertConfig,
+    cfg: &TabixConfig,
     verify_all: bool,
     no_verify: bool,
 ) -> Result<()> {
@@ -183,11 +209,40 @@ fn convert_plugin_data(
     if !input_path.exists() {
         bail!("Input file not found: {}", input);
     }
+    // The store's two files replace whatever lies at their paths, so neither
+    // may be the table the store is read from, or the table's index.
+    let index_path = output_path.with_extension("vpdi");
+    let table_index = PathBuf::from(format!("{input}.tbi"));
+    for (written, named) in [
+        (&output_path, format!("--output {output}")),
+        (
+            &index_path,
+            format!("the index of --output {output}, {},", index_path.display()),
+        ),
+    ] {
+        for (kept, role) in [
+            (input_path, "the input table"),
+            (table_index.as_path(), "the input table's index"),
+        ] {
+            if is_same_file(written, kept) {
+                bail!("{named} is {role}; name another --output");
+            }
+        }
+    }
 
     info!("Converting {} to binary store", input);
     let start = Instant::now();
 
-    let (column_names, grouped_records) = read_tabix_records(input_path, cfg)?;
+    // The table the verification reads against is opened before anything is
+    // read or written, so an input without its index fails here, with no
+    // store left behind it.
+    let table = if no_verify {
+        None
+    } else {
+        Some(open_table(cfg)?)
+    };
+
+    let (column_names, grouped_records, source) = read_tabix_records(input_path, cfg)?;
 
     let total_records: usize = grouped_records.iter().map(|(_, recs)| recs.len()).sum();
     info!(
@@ -200,7 +255,7 @@ fn convert_plugin_data(
     let write_start = Instant::now();
     let writer = vep_builtins::binary_store::BinaryStoreWriter::new(output_path.clone());
     let (count, data_size, index_size) = writer
-        .write(&column_names, &grouped_records)
+        .write(&column_names, &grouped_records, cfg, &source)
         .map_err(|e| anyhow::anyhow!("failed to write binary store: {e}"))?;
 
     info!(
@@ -211,29 +266,46 @@ fn convert_plugin_data(
         write_start.elapsed().as_secs_f64()
     );
 
-    if !no_verify {
+    if let Some(table) = &table {
         let verify_start = Instant::now();
-        let result = verify_concordance(&output_path, &grouped_records, verify_all)?;
+        // A plugin reads a store named for its table on the next run, so a
+        // store that answers otherwise than the table, or whose verification
+        // did not run to its end, does not stay.
+        let result =
+            match verify_concordance(&output_path, &grouped_records, cfg, table, verify_all) {
+                Ok(result) => result,
+                Err(error) => {
+                    let error = error.context("Concordance verification failed");
+                    if let Err(removal) = remove_store(&output_path) {
+                        return Err(removal.context(format!("{error:#}")));
+                    }
+                    return Err(error);
+                }
+            };
 
+        let positions = if verify_all { "total" } else { "sampled" };
         if result.mismatches > 0 {
             eprintln!(
-                "Concordance: FAIL ({} mismatches in {} sampled positions)",
+                "Concordance: FAIL ({} mismatches in {} {positions} positions)",
                 result.mismatches, result.checked
             );
             for mismatch in &result.mismatch_details[..result.mismatch_details.len().min(10)] {
                 eprintln!("  {}", mismatch);
             }
-            bail!(
+            let failure = format!(
                 "Concordance verification failed: {} mismatches",
                 result.mismatches
             );
+            if let Err(removal) = remove_store(&output_path) {
+                return Err(removal.context(failure));
+            }
+            bail!(failure);
         }
 
         info!(
-            "Concordance: PASS ({}/{} {} positions match) in {:.1}s",
+            "Concordance: PASS ({}/{} {positions} positions match) in {:.1}s",
             result.checked,
             result.checked,
-            if verify_all { "total" } else { "sampled" },
             verify_start.elapsed().as_secs_f64()
         );
     }
@@ -251,19 +323,28 @@ fn convert_plugin_data(
 /// Read all records from a tabix file, grouped by chromosome and sorted by
 /// position. The file is read with the length of a line capped
 /// ([`vep_builtins::tabix::BoundedLines`]): a line past the cap fails the
-/// conversion, naming the file and the line.
-fn read_tabix_records(path: &Path, cfg: &TabixConvertConfig) -> Result<GroupedRecords> {
+/// conversion, naming the file and the line. A line keeps everything but its
+/// line end, as Ensembl VEP's tabix iterator hands it to a plugin, so a
+/// trailing cell that is empty or whitespace stays a cell of the record. A
+/// record's start and span are the tabix reader's ([`TabixConfig::record_start`],
+/// [`TabixConfig::record_end`]), so the store answers a query as the table does.
+/// The identity returned is of the bytes this read consumed, the file's
+/// whole stream, so the store is bound to the content it was built from
+/// whatever replaces the file afterwards.
+fn read_tabix_records(path: &Path, cfg: &TabixConfig) -> Result<GroupedRecords> {
     use noodles::bgzf;
 
-    let file =
+    let mut file =
         fs::File::open(path).with_context(|| format!("failed to open {}", path.display()))?;
-    let reader = bgzf::io::Reader::new(file);
+    let mut hashed = HashingReader::new(&file);
+    let reader = bgzf::io::Reader::new(&mut hashed);
     let buf_reader = BufReader::new(reader);
 
     let mut header_names: Vec<String> = Vec::new();
     let mut header_arc: Option<Arc<Vec<String>>> = None;
     let mut records_by_chr: BTreeMap<String, Vec<vep_builtins::tabix::TabixRecord>> =
         BTreeMap::new();
+    let mut before_first_row = true;
 
     for line_result in vep_builtins::tabix::BoundedLines::new(buf_reader, path) {
         // The reader's errors name a plugin; the file is the conversion's input.
@@ -271,43 +352,47 @@ fn read_tabix_records(path: &Path, cfg: &TabixConvertConfig) -> Result<GroupedRe
             PluginError::Init(message) | PluginError::Run(message) => anyhow::anyhow!(message),
             PluginError::Io(error) => anyhow::Error::from(error),
         })?;
-        let line = line.trim();
+        let line = vep_builtins::tabix::lossy_text(line);
         if line.is_empty() {
             continue;
         }
 
+        // The header is read as the tabix reader's header read takes it
+        // ([`vep_builtins::tabix::parse_header`]): the last `#` line before the
+        // first row, or that row itself when no `#` line precedes it and its
+        // start cell leads with no integer. A `#` line after the first row is a
+        // comment the index skips.
         if line.starts_with('#') {
-            let trimmed = line.trim_start_matches('#');
-            header_names = trimmed.split('\t').map(|s| s.to_string()).collect();
-            header_arc = Some(Arc::new(header_names.clone()));
+            if before_first_row {
+                let trimmed = line.trim_start_matches('#');
+                header_names = trimmed.split('\t').map(|s| s.to_string()).collect();
+                header_arc = Some(Arc::new(header_names.clone()));
+            }
             continue;
         }
 
         let columns: Vec<String> = line.split('\t').map(|s| s.to_string()).collect();
+        let bare_header = before_first_row
+            && header_arc.is_none()
+            && columns
+                .get(cfg.start_col)
+                .and_then(|cell| vep_builtins::tabix::leading_integer(cell))
+                .is_none();
+        before_first_row = false;
+        if bare_header {
+            header_names = columns;
+            header_arc = Some(Arc::new(header_names.clone()));
+            continue;
+        }
         if columns.len() <= cfg.chr_col || columns.len() <= cfg.start_col {
             continue;
         }
 
         let chr = columns[cfg.chr_col].clone();
-        let start_raw: u64 = columns[cfg.start_col]
-            .parse()
+        let start = cfg
+            .record_start(&columns[cfg.start_col])
             .with_context(|| format!("invalid start position: {}", columns[cfg.start_col]))?;
-        let start = if cfg.zero_based {
-            start_raw
-                .checked_add(1)
-                .with_context(|| format!("invalid start position: {start_raw}"))?
-        } else {
-            start_raw
-        };
-
-        let end = if let Some(ec) = cfg.end_col {
-            columns
-                .get(ec)
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(start)
-        } else {
-            start
-        };
+        let end = cfg.record_end(start, &columns);
 
         let record = vep_builtins::tabix::TabixRecord {
             chr: chr.clone(),
@@ -320,129 +405,248 @@ fn read_tabix_records(path: &Path, cfg: &TabixConvertConfig) -> Result<GroupedRe
         records_by_chr.entry(chr).or_default().push(record);
     }
 
+    // A stable sort by start alone: the rows at one start keep the file's
+    // order, the order `tabix` prints them in, whatever their ends.
     for records in records_by_chr.values_mut() {
-        records.sort_by_key(|r| (r.start, r.end));
+        records.sort_by_key(|r| r.start);
     }
 
     let grouped: Vec<(String, Vec<vep_builtins::tabix::TabixRecord>)> =
         records_by_chr.into_iter().collect();
 
-    Ok((header_names, grouped))
+    let read_failed = || format!("failed to read {}", path.display());
+    let sha256 = hashed.digest_to_end().with_context(read_failed)?;
+    let length = file.stream_position().with_context(read_failed)?;
+
+    Ok((header_names, grouped, ContentIdentity { sha256, length }))
 }
 
 /// Result of concordance verification.
 struct VerifyResult {
+    /// The positions probed.
     checked: usize,
     mismatches: usize,
     mismatch_details: Vec<String>,
 }
 
-/// Verify concordance between the binary store and the original data.
+impl VerifyResult {
+    /// Count how `from_store` differs from `from_table`, the records each
+    /// answered at `at`: one mismatch for another count of records, else one
+    /// for each record whose span or cells differ. Returns whether any did.
+    fn compare(
+        &mut self,
+        at: std::fmt::Arguments<'_>,
+        from_table: &[vep_builtins::tabix::TabixRecord],
+        from_store: &[&vep_builtins::tabix::TabixRecord],
+        chr_col: usize,
+    ) -> bool {
+        if from_store.len() != from_table.len() {
+            self.mismatches += 1;
+            self.mismatch_details.push(format!(
+                "{at} record count: table={}, store={}",
+                from_table.len(),
+                from_store.len()
+            ));
+            return true;
+        }
+
+        let before = self.mismatches;
+        for (i, (table_record, store_record)) in from_table.iter().zip(from_store).enumerate() {
+            let table_line = record_line(table_record, chr_col);
+            let store_line = record_line(store_record, chr_col);
+            if table_line != store_line {
+                self.mismatches += 1;
+                self.mismatch_details.push(format!(
+                    "{at} record[{i}]: table='{table_line}', store='{store_line}'"
+                ));
+            }
+        }
+        self.mismatches != before
+    }
+}
+
+/// The most record starts a conversion checks unless every one is asked for.
+const SAMPLED_STARTS: usize = 1000;
+
+/// The probes one batch query of the store carries.
+const BATCH_PROBES: usize = 64;
+
+/// The input table through the tabix reader the plugins use without a store,
+/// handing a line over as it hands one to a plugin, the whitespace before its
+/// line end kept, as the conversion reads it.
+fn open_table(cfg: &TabixConfig) -> Result<vep_builtins::tabix::TabixAnnotator> {
+    let table = vep_builtins::tabix::TabixAnnotator::open(cfg.clone()).map_err(|e| {
+        anyhow::anyhow!("failed to open the table for verification, which --no-verify skips: {e}")
+    })?;
+    Ok(table.keeping_trailing_whitespace())
+}
+
+/// Verify the store against `table`, the input it was built from: at each
+/// probed position ([`probe_positions`]), the store's records and the tabix
+/// reader's, record for record in the order each returns them and cell for
+/// cell, so a plugin reads the same rows in the same order through either,
+/// whether it asks position by position or in batches ([`verify_probes`]).
 fn verify_concordance(
     vpd_path: &Path,
     source_records: &[(String, Vec<vep_builtins::tabix::TabixRecord>)],
+    cfg: &TabixConfig,
+    table: &vep_builtins::tabix::TabixAnnotator,
     verify_all: bool,
 ) -> Result<VerifyResult> {
-    use vep_builtins::annotation_store::AnnotationStore;
-
-    let store = vep_builtins::binary_store::BinaryAnnotator::open(vpd_path)
+    let store = vep_builtins::binary_store::BinaryAnnotator::open(vpd_path, cfg)
         .map_err(|e| anyhow::anyhow!("failed to open binary store for verification: {e}"))?;
+    let probes = probe_positions(source_records, verify_all);
+    verify_probes(&store, table, &probes, cfg.chr_col)
+}
 
-    let mut checked = 0usize;
-    let mut mismatches = 0usize;
-    let mut mismatch_details = Vec::new();
-
-    let mut all_positions: Vec<(&str, u64)> = Vec::new();
-    for (chr, records) in source_records {
-        for record in records {
-            all_positions.push((chr.as_str(), record.start));
-        }
-    }
-
-    let positions_to_check: Vec<(&str, u64)> = if verify_all || all_positions.len() <= 1000 {
-        all_positions
+/// The positions the verification probes, sorted and each once: at every
+/// checked start, the start and, for each of the table's records there, its
+/// end, its midpoint, the position past its end and the one before its start,
+/// so a store that loses a record inside its span or returns it outside it
+/// differs from the table at a probe. The checked starts are every distinct
+/// record start when `verify_all` is set or `source_records`, sorted by start
+/// as the conversion reads them, hold at most [`SAMPLED_STARTS`] of them;
+/// otherwise every n-th from the first, n the smallest stride that keeps the
+/// sample within that count, so a conversion probes the same positions on
+/// every run.
+fn probe_positions(
+    source_records: &[(String, Vec<vep_builtins::tabix::TabixRecord>)],
+    verify_all: bool,
+) -> Vec<(&str, u64)> {
+    let starts = || {
+        source_records.iter().flat_map(|(chr, records)| {
+            records
+                .chunk_by(|a, b| a.start == b.start)
+                .map(move |at_start| (chr.as_str(), at_start))
+        })
+    };
+    let stride = if verify_all {
+        1
     } else {
-        use rand::seq::SliceRandom;
-        let mut rng = rand::rng();
-        let mut sampled = all_positions.clone();
-        sampled.shuffle(&mut rng);
-        sampled.truncate(1000);
-        sampled
+        starts().count().div_ceil(SAMPLED_STARTS).max(1)
     };
 
-    let mut source_lookup: std::collections::HashMap<
-        (&str, u64),
-        Vec<&vep_builtins::tabix::TabixRecord>,
-    > = std::collections::HashMap::new();
-    for (chr, records) in source_records {
-        for record in records {
-            source_lookup
-                .entry((chr.as_str(), record.start))
-                .or_default()
-                .push(record);
+    let mut probes = Vec::new();
+    for (chr, at_start) in starts().step_by(stride) {
+        for record in at_start {
+            let (start, end) = (record.start, record.end);
+            // A generic end cell can read below its start, and such a row has
+            // no midpoint.
+            let midpoint = end.checked_sub(start).map(|span| start + span / 2);
+            let positions = [
+                Some(start),
+                Some(end),
+                midpoint,
+                end.checked_add(1),
+                start.checked_sub(1),
+            ];
+            probes.extend(positions.into_iter().flatten().map(|pos| (chr, pos)));
         }
     }
+    probes.sort_unstable();
+    probes.dedup();
+    probes
+}
 
-    for (chr, pos) in &positions_to_check {
-        let binary_records = store
-            .query(chr, *pos, *pos)
-            .map_err(|e| anyhow::anyhow!("binary store query failed: {e}"))?;
+/// Compare `store` with `table` at each of `probes`, `(chromosome, position)`
+/// pairs, against the table's answer to a query of the one position: the
+/// store's answer to the same query, to a batch query of the position alone
+/// and, for the probes in runs of [`BATCH_PROBES`], to one batch query
+/// carrying the run in order and one carrying it reversed. A batch of one
+/// position holds no other record's start, so a store answering a batch by
+/// the starts inside its regions differs there, where a run's batch carries
+/// the start of a record beside the positions inside its span. A probe is
+/// counted by the first of the four that differs, which its line names.
+fn verify_probes(
+    store: &dyn vep_builtins::annotation_store::AnnotationStore,
+    table: &dyn vep_builtins::annotation_store::AnnotationStore,
+    probes: &[(&str, u64)],
+    chr_col: usize,
+) -> Result<VerifyResult> {
+    let batch_of = |regions: &[(&str, u64, u64)]| {
+        store
+            .query_batch(regions)
+            .map_err(|e| anyhow::anyhow!("binary store batch query failed: {e}"))
+    };
+    let mut result = VerifyResult {
+        checked: probes.len(),
+        mismatches: 0,
+        mismatch_details: Vec::new(),
+    };
 
-        let source = source_lookup
-            .get(&(*chr, *pos))
-            .map(|v| v.as_slice())
-            .unwrap_or(&[]);
-
-        checked += 1;
-
-        if binary_records.len() != source.len() {
-            mismatches += 1;
-            mismatch_details.push(format!(
-                "chr{}:{} record count mismatch: source={}, binary={}",
-                chr,
-                pos,
-                source.len(),
-                binary_records.len()
-            ));
-            continue;
+    for run in probes.chunks(BATCH_PROBES) {
+        let mut from_table = Vec::with_capacity(run.len());
+        let mut differs = Vec::with_capacity(run.len());
+        for &(chr, pos) in run {
+            let from_store = store
+                .query(chr, pos, pos)
+                .map_err(|e| anyhow::anyhow!("binary store query failed: {e}"))?;
+            let expected = table
+                .query(chr, pos, pos)
+                .map_err(|e| anyhow::anyhow!("table query failed: {e}"))?;
+            let mut differed = result.compare(
+                format_args!("{chr}:{pos}"),
+                &expected,
+                &from_store.iter().collect::<Vec<_>>(),
+                chr_col,
+            );
+            if !differed {
+                differed = result.compare(
+                    format_args!("{chr}:{pos} alone in a batch"),
+                    &expected,
+                    &batch_of(&[(chr, pos, pos)])?.lookup(chr, pos, pos),
+                    chr_col,
+                );
+            }
+            differs.push(differed);
+            from_table.push(expected);
         }
 
-        for (i, (src, bin)) in source.iter().zip(binary_records.iter()).enumerate() {
-            if src.columns.len() != bin.columns.len() {
-                mismatches += 1;
-                mismatch_details.push(format!(
-                    "chr{}:{} record[{}] column count: source={}, binary={}",
-                    chr,
-                    pos,
-                    i,
-                    src.columns.len(),
-                    bin.columns.len()
-                ));
-                continue;
-            }
-            for (col_idx, (sv, bv)) in src.columns.iter().zip(bin.columns.iter()).enumerate() {
-                if sv != bv {
-                    mismatches += 1;
-                    let col_name = src
-                        .header
-                        .as_ref()
-                        .and_then(|h| h.get(col_idx))
-                        .map(|s| s.as_str())
-                        .unwrap_or("?");
-                    mismatch_details.push(format!(
-                        "chr{}:{} record[{}].{}: source='{}', binary='{}'",
-                        chr, pos, i, col_name, sv, bv
-                    ));
+        let forward: Vec<(&str, u64, u64)> =
+            run.iter().map(|&(chr, pos)| (chr, pos, pos)).collect();
+        let reversed: Vec<(&str, u64, u64)> = forward.iter().rev().copied().collect();
+        for (regions, order) in [(&forward, "a batch"), (&reversed, "a reversed batch")] {
+            let batch = batch_of(regions)?;
+            let held = run.iter().zip(&from_table).zip(&mut differs);
+            for ((&(chr, pos), expected), differed) in held {
+                if !*differed {
+                    *differed = result.compare(
+                        format_args!("{chr}:{pos} in {order}"),
+                        expected,
+                        &batch.lookup(chr, pos, pos),
+                        chr_col,
+                    );
                 }
             }
         }
     }
 
-    Ok(VerifyResult {
-        checked,
-        mismatches,
-        mismatch_details,
-    })
+    Ok(result)
+}
+
+/// A record as one comparable line: its span, then its cells tab-joined with
+/// the chromosome cell restored from the record's chromosome, which the tabix
+/// reader moves out of a record's cells and the store keeps in them.
+fn record_line(record: &vep_builtins::tabix::TabixRecord, chr_col: usize) -> String {
+    let mut cells = record.columns.clone();
+    if let Some(cell) = cells.get_mut(chr_col) {
+        cell.clone_from(&record.chr);
+    }
+    format!("{}-{}\t{}", record.start, record.end, cells.join("\t"))
+}
+
+/// Remove the store at `vpd_path` and its index. Both unlinks run whatever
+/// the other's outcome, the index first, so one failed unlink leaves a lone
+/// file: data without an index is refused by
+/// [`vep_builtins::binary_store::BinaryAnnotator::open`], and an index alone
+/// is never looked for. The first failure is the error.
+fn remove_store(vpd_path: &Path) -> Result<()> {
+    let remove = |path: &Path| {
+        fs::remove_file(path).with_context(|| format!("failed to remove {}", path.display()))
+    };
+    let index_removed = remove(&vpd_path.with_extension("vpdi"));
+    let data_removed = remove(vpd_path);
+    index_removed.and(data_removed)
 }
 
 /// Run the full cache conversion.
@@ -468,11 +672,13 @@ fn convert_cache(json_dir: &Path, output_dir: &str, _region_size: u64) -> Result
         &output_path.join("variations"),
     )?;
 
+    let info = read_info_json(json_dir)?;
     let regulatory_regions = copy_regulatory_files(
         &json_dir.join("regulatory"),
         &output_path.join("regulatory"),
+        &info,
     )?;
-    copy_info_json(json_dir, output_path, regulatory_regions != 0)?;
+    copy_info_json(json_dir, output_path, info, regulatory_regions != 0)?;
 
     let listed = CacheManifest::write(output_path).context("Failed to write CHECKSUMS.sha256")?;
 
@@ -491,34 +697,78 @@ fn convert_cache(json_dir: &Path, output_dir: &str, _region_size: u64) -> Result
     Ok(())
 }
 
-/// Copy `info.json`, and `chr_synonyms.txt` when the source has one, once
-/// [`validate_info`] accepts the metadata. Regulatory availability describes the
-/// successfully written output, not the source's potentially stale marker.
-fn copy_info_json(json_dir: &Path, output_path: &Path, regulatory_written: bool) -> Result<()> {
-    let src = json_dir.join("info.json");
-    let dst = output_path.join("info.json");
+/// The source cache's metadata, as read and as parsed, once [`validate_info`]
+/// accepts it.
+struct SourceInfo {
+    content: String,
+    value: serde_json::Value,
+}
 
+impl SourceInfo {
+    /// The cache's cell-type list, the names every regulatory feature's
+    /// activity string is aligned to; empty when the metadata lists none.
+    fn cell_types(&self) -> Vec<String> {
+        self.value
+            .get("cell_types")
+            .and_then(|list| list.as_array())
+            .map(|names| {
+                names
+                    .iter()
+                    .filter_map(|name| name.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn regulatory_schema(&self) -> Option<u64> {
+        self.value.get("regulatory_schema").and_then(|v| v.as_u64())
+    }
+}
+
+fn read_info_json(json_dir: &Path) -> Result<SourceInfo> {
+    let src = json_dir.join("info.json");
     let content =
         fs::read_to_string(&src).with_context(|| format!("Failed to read {}", src.display()))?;
-
-    let mut value: serde_json::Value = serde_json::from_str(&content)
+    let value: serde_json::Value = serde_json::from_str(&content)
         .with_context(|| format!("Failed to parse info.json at {}", src.display()))?;
     validate_info(&value).with_context(|| format!("{} is not a cache's info", src.display()))?;
     let species = value["species"].as_str().unwrap_or_default();
     let assembly = value["assembly"].as_str().unwrap_or_default();
     info!("Cache info: species={}, assembly={}", species, assembly);
+    Ok(SourceInfo { content, value })
+}
+
+/// The metadata keys that describe the regulatory tree, kept only when the
+/// conversion wrote one.
+const REGULATORY_KEYS: [&str; 3] = ["regulatory", "cell_types", "regulatory_schema"];
+
+/// Copy `info.json`, and `chr_synonyms.txt` when the source has one. Regulatory
+/// availability describes the successfully written output, not the source's
+/// potentially stale marker: with a written tree the marker is set and the
+/// `cell_types` list and `regulatory_schema` pass through as the source wrote
+/// them; without one the three keys go.
+fn copy_info_json(
+    json_dir: &Path,
+    output_path: &Path,
+    info: SourceInfo,
+    regulatory_written: bool,
+) -> Result<()> {
+    let dst = output_path.join("info.json");
+    let SourceInfo { content, mut value } = info;
 
     let regulatory_changed = if regulatory_written {
         value.get("regulatory").and_then(|value| value.as_bool()) != Some(true)
     } else {
-        value.get("regulatory").is_some()
+        REGULATORY_KEYS.iter().any(|key| value.get(key).is_some())
     };
     let content = if regulatory_changed {
         let metadata = value.as_object_mut().expect("validated metadata object");
         if regulatory_written {
             metadata.insert("regulatory".into(), serde_json::Value::Bool(true));
         } else {
-            metadata.remove("regulatory");
+            for key in REGULATORY_KEYS {
+                metadata.remove(key);
+            }
         }
         serde_json::to_string_pretty(&value).context("Failed to encode info.json")?
     } else {
@@ -541,9 +791,11 @@ fn copy_info_json(json_dir: &Path, output_path: &Path, regulatory_written: bool)
 /// non-empty `species` and `assembly`, the two lines Ensembl VEP's dumper
 /// writes first (`Pipeline/DumpVEP/Dumper/Core.pm:95`; the resolution compares
 /// the assembly with `--assembly` and the cache directory's name), a
-/// `contig_order` that is a list of strings when present, and a
-/// `variation_cols` that is a list of strings when present; any other shape is
-/// an error.
+/// `contig_order`, a `variation_cols` and a `cell_types` that are lists of
+/// strings when present, a `regulatory_schema` that is a whole number when
+/// present, and a `bam` (the alignment file of a BAM-edited cache) and a
+/// `source_type` (the transcript set the cache holds) that are strings when
+/// present; any other shape is an error.
 fn validate_info(value: &serde_json::Value) -> Result<()> {
     let Some(obj) = value.as_object() else {
         bail!("info.json is not a JSON object");
@@ -554,7 +806,13 @@ fn validate_info(value: &serde_json::Value) -> Result<()> {
             _ => bail!("info.json lacks a non-empty {key} string"),
         }
     }
-    for key in ["contig_order", "variation_cols"] {
+    if obj
+        .get("regulatory_schema")
+        .is_some_and(|value| !value.is_u64())
+    {
+        bail!("info.json regulatory_schema is not a whole number");
+    }
+    for key in ["contig_order", "variation_cols", "cell_types"] {
         if let Some(list) = obj.get(key) {
             let is_string_list = list
                 .as_array()
@@ -562,6 +820,11 @@ fn validate_info(value: &serde_json::Value) -> Result<()> {
             if !is_string_list {
                 bail!("info.json {key} is not a list of strings");
             }
+        }
+    }
+    for key in ["bam", "source_type"] {
+        if obj.get(key).is_some_and(|value| !value.is_string()) {
+            bail!("info.json {key} is not a string");
         }
     }
     Ok(())
@@ -577,27 +840,56 @@ fn regulatory_shard_range(name: &str) -> Option<(u64, u64)> {
     Some((start.parse().ok()?, end.parse().ok()?))
 }
 
-/// Preserve the Storable converter's regulatory JSON tree byte for byte.
-/// A shard must parse as the annotator parses it (`vep_cli::regulatory`)
-/// before it counts toward cache availability: an array of regulatory and
-/// motif features, inflated first when it is a `.json.gz`.
-fn copy_regulatory_files(src_dir: &Path, dst_dir: &Path) -> Result<usize> {
+/// Preserve the Storable converter's regulatory JSON tree byte for byte: the
+/// binding matrices table and every shard. A shard must parse as the annotator
+/// parses it (`vep_cli::regulatory`) before it counts toward cache
+/// availability: an array of regulatory and motif features, inflated first when
+/// it is a `.json.gz`, every activity string aligned to the metadata's
+/// `cell_types` list and every motif naming a matrix of the table. A tree whose
+/// metadata declares no `regulatory_schema`, or a schema this build does not
+/// read, was written by another converter and is refused.
+fn copy_regulatory_files(src_dir: &Path, dst_dir: &Path, info: &SourceInfo) -> Result<usize> {
     if !src_dir.exists() {
         return Ok(0);
     }
-    let mut chromosomes: Vec<_> = fs::read_dir(src_dir)
+    let mut entries: Vec<_> = fs::read_dir(src_dir)
         .with_context(|| format!("Failed to read {}", src_dir.display()))?
         .collect::<std::result::Result<Vec<_>, _>>()?;
-    chromosomes.sort_by_key(|entry| entry.file_name());
+    entries.sort_by_key(|entry| entry.file_name());
+    if !entries.iter().any(|entry| entry.path().is_dir()) {
+        // No chromosome directory, so no tree: nothing is written and the
+        // metadata needs no schema.
+        for entry in &entries {
+            warn_of_stray_regulatory_file(&entry.file_name());
+        }
+        return Ok(0);
+    }
+    match info.regulatory_schema() {
+        Some(schema) if schema == u64::from(REGULATORY_SCHEMA) => {}
+        None => bail!(
+            "regulatory shards of {} predate the current converter: reconvert the cache",
+            src_dir.display()
+        ),
+        Some(schema) => bail!(
+            "regulatory shards of {} declare schema {schema}; this build reads schema {REGULATORY_SCHEMA}: reconvert the cache",
+            src_dir.display()
+        ),
+    }
+    let cell_types = info.cell_types();
+    let matrices = BindingMatrices::load(src_dir, &CacheManifest::absent(src_dir))?;
+    fs::create_dir_all(dst_dir)
+        .with_context(|| format!("Failed to create {}", dst_dir.display()))?;
+    fs::copy(
+        src_dir.join(BindingMatrices::FILE_NAME),
+        dst_dir.join(BindingMatrices::FILE_NAME),
+    )
+    .with_context(|| format!("Failed to copy {}", BindingMatrices::FILE_NAME))?;
     let mut written = 0;
-    for chromosome in chromosomes {
+    for chromosome in entries {
         let file_name = chromosome.file_name();
         let chr_name = file_name.to_string_lossy();
         if !chromosome.path().is_dir() {
-            warn!(
-                "Skipping file with unexpected name: regulatory/{}",
-                chr_name
-            );
+            warn_of_stray_regulatory_file(&file_name);
             continue;
         }
         // A record names its chromosome as text, so a directory whose name is
@@ -629,7 +921,7 @@ fn copy_regulatory_files(src_dir: &Path, dst_dir: &Path) -> Result<usize> {
                 );
                 continue;
             }
-            vep_cli::regulatory::count_shard_features(&path)
+            count_shard_features(&path, &cell_types, &matrices)
                 .with_context(|| format!("{} is not a regulatory shard", path.display()))?;
             let content =
                 fs::read(&path).with_context(|| format!("Failed to read {}", path.display()))?;
@@ -643,6 +935,17 @@ fn copy_regulatory_files(src_dir: &Path, dst_dir: &Path) -> Result<usize> {
         }
     }
     Ok(written)
+}
+
+/// Warns of a file directly under `regulatory/` other than the binding matrices
+/// table, the one file that belongs there beside the chromosome directories.
+fn warn_of_stray_regulatory_file(file_name: &OsStr) {
+    if file_name != BindingMatrices::FILE_NAME {
+        warn!(
+            "Skipping file with unexpected name: regulatory/{}",
+            file_name.to_string_lossy()
+        );
+    }
 }
 
 /// Copy the variation files into the runtime layout `variations/<chr>/`.
@@ -1013,6 +1316,7 @@ mod tests {
         let tmp = Scratch::new();
         let names = [OsStr::new("21"), OsStr::from_bytes(b"21\xff")];
         let regulatory = tmp.path().join("regulatory");
+        write_regulatory_tree(tmp.path(), &[]);
         for chr in names {
             let dir = regulatory.join(chr);
             fs::create_dir_all(&dir).unwrap();
@@ -1020,10 +1324,14 @@ mod tests {
         }
         let out = tmp.path().join("out");
         assert_eq!(
-            copy_regulatory_files(&regulatory, &out.join("regulatory")).unwrap(),
+            copy_regulatory_files(&regulatory, &out.join("regulatory"), &regulatory_info())
+                .unwrap(),
             1
         );
-        assert_eq!(entries(&out.join("regulatory")), ["21"]);
+        assert_eq!(
+            entries(&out.join("regulatory")),
+            ["21", BindingMatrices::FILE_NAME]
+        );
 
         let variations = tmp.path().join("variations");
         for chr in names {
@@ -1108,23 +1416,32 @@ mod tests {
     /// A regulatory chromosome directory whose name starts with a dot is
     /// skipped with the warning every unexpected name gets: the annotator
     /// passes over such a directory, so copying it would write a chromosome
-    /// never read. The directory beside it is copied.
+    /// never read. The directory beside it is copied, the matrices table
+    /// beside them is copied without a warning, and any other file warns.
     #[test]
     fn a_dot_named_regulatory_directory_is_skipped_with_a_warning() {
         let tmp = Scratch::new();
         let regulatory = tmp.path().join("regulatory");
-        for chr in [".hidden", "21"] {
-            let dir = regulatory.join(chr);
-            fs::create_dir_all(&dir).unwrap();
-            fs::write(dir.join("1-1000000.json"), b"[]").unwrap();
-        }
+        write_regulatory_tree(
+            tmp.path(),
+            &[
+                (".hidden/1-1000000.json", b"[]"),
+                ("21/1-1000000.json", b"[]"),
+            ],
+        );
+        fs::write(regulatory.join("notes.txt"), b"notes").unwrap();
         let out = tmp.path().join("out");
-        let (written, warnings) = warnings_during(|| copy_regulatory_files(&regulatory, &out));
+        let (written, warnings) =
+            warnings_during(|| copy_regulatory_files(&regulatory, &out, &regulatory_info()));
         assert_eq!(written.unwrap(), 1);
-        assert_eq!(entries(&out), ["21"]);
-        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert_eq!(entries(&out), ["21", BindingMatrices::FILE_NAME]);
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
         assert!(
             warnings[0].contains("Skipping directory with unexpected name: regulatory/.hidden"),
+            "{warnings:?}"
+        );
+        assert!(
+            warnings[1].contains("Skipping file with unexpected name: regulatory/notes.txt"),
             "{warnings:?}"
         );
     }
@@ -1156,30 +1473,22 @@ mod tests {
         assert_eq!(variation_file_kind("1-1000000.json"), None);
     }
 
-    /// A scratch directory under the system temporary directory, removed on drop.
-    /// The name carries a counter so two tests that start in the same clock tick
-    /// do not share one and delete each other's files.
-    struct Scratch(PathBuf);
+    /// A scratch directory under the system temporary directory, unique to the
+    /// test that made it and removed on drop.
+    struct Scratch(tempfile::TempDir);
 
     impl Scratch {
         fn new() -> Self {
-            use std::sync::atomic::{AtomicU64, Ordering};
-            static NEXT: AtomicU64 = AtomicU64::new(0);
-            let n = NEXT.fetch_add(1, Ordering::Relaxed);
-            let dir = std::env::temp_dir()
-                .join(format!("vep-cache-converter-{}-{n}", std::process::id()));
-            fs::create_dir(&dir).unwrap();
-            Self(dir)
+            Self(
+                tempfile::Builder::new()
+                    .prefix("vep-cache-converter-")
+                    .tempdir()
+                    .unwrap(),
+            )
         }
 
         fn path(&self) -> &Path {
-            &self.0
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
+            self.0.path()
         }
     }
 
@@ -1214,13 +1523,9 @@ mod tests {
     }
 
     /// Runs `work` under a subscriber that keeps its warnings, returning the
-    /// result with the warning lines in the order they were emitted. One capture
-    /// runs at a time, because a second subscriber registered in the process can
-    /// cache a warning as disabled.
+    /// result with the warning lines in the order they were emitted.
     fn warnings_during<T>(work: impl FnOnce() -> T) -> (T, Vec<String>) {
         use std::sync::{Arc, Mutex};
-        static ONE: Mutex<()> = Mutex::new(());
-        let _one = ONE.lock().unwrap();
 
         #[derive(Clone, Default)]
         struct Kept(Arc<Mutex<Vec<u8>>>);
@@ -1236,6 +1541,7 @@ mod tests {
             }
         }
 
+        leave_callsite_interest_to_the_thread();
         let kept = Kept::default();
         let writer = kept.clone();
         let subscriber = tracing_subscriber::fmt()
@@ -1245,12 +1551,61 @@ mod tests {
             .with_target(false)
             .with_writer(move || writer.clone())
             .finish();
-        let result = tracing::subscriber::with_default(subscriber, || {
-            tracing::callsite::rebuild_interest_cache();
-            work()
-        });
+        let result = tracing::subscriber::with_default(subscriber, work);
         let text = String::from_utf8(kept.0.lock().unwrap().clone()).unwrap();
         (result, text.lines().map(str::to_owned).collect())
+    }
+
+    /// Installs, once per test binary, a global default subscriber that enables
+    /// nothing and answers every callsite with `Interest::sometimes`, so the
+    /// subscriber of the emitting thread decides each event. `tracing` caches a
+    /// callsite's interest when a thread first reaches it, computed from that
+    /// thread's dispatcher while one scoped subscriber is registered; a test
+    /// emitting a warning with no subscriber on its thread would cache the
+    /// callsite as never enabled, and [`warnings_during`] running on another
+    /// thread, its subscriber registered before that first hit, would lose the
+    /// same warning. The converter's own global subscriber is set by `main`,
+    /// which no test runs.
+    fn leave_callsite_interest_to_the_thread() {
+        use tracing::level_filters::LevelFilter;
+        use tracing::span::{Attributes, Id, Record};
+        use tracing::subscriber::Interest;
+        use tracing::{Event, Metadata, Subscriber};
+
+        struct Sink;
+
+        impl Subscriber for Sink {
+            fn register_callsite(&self, _: &'static Metadata<'static>) -> Interest {
+                Interest::sometimes()
+            }
+
+            fn max_level_hint(&self) -> Option<LevelFilter> {
+                Some(LevelFilter::OFF)
+            }
+
+            fn enabled(&self, _: &Metadata<'_>) -> bool {
+                false
+            }
+
+            fn new_span(&self, _: &Attributes<'_>) -> Id {
+                Id::from_u64(1)
+            }
+
+            fn record(&self, _: &Id, _: &Record<'_>) {}
+
+            fn record_follows_from(&self, _: &Id, _: &Id) {}
+
+            fn event(&self, _: &Event<'_>) {}
+
+            fn enter(&self, _: &Id) {}
+
+            fn exit(&self, _: &Id) {}
+        }
+
+        static SINK: std::sync::Once = std::sync::Once::new();
+        SINK.call_once(|| {
+            let _ = tracing::subscriber::set_global_default(Sink);
+        });
     }
 
     #[test]
@@ -1287,6 +1642,27 @@ mod tests {
         assert!(error.to_string().contains("JSON variation shard"));
     }
 
+    /// Control: a converted cache carries a stored list the dump cut at 1,024
+    /// bytes as the dump wrote it, cut item included; the annotator decides
+    /// what to print when it writes. The record's ids are invented.
+    #[test]
+    fn a_stored_list_cut_at_the_dump_length_is_copied_whole() {
+        let ids: Vec<String> = (1..=113).map(|n| (99_000_000 + n).to_string()).collect();
+        let pubmed = format!("{},9900011", ids.join(","));
+        assert_eq!(pubmed.len(), 1024);
+        let record = format!("rs9920000001 . . 500 . A/G . . . . . . {pubmed} .\n");
+        let tmp = Scratch::new();
+        let src = tmp.path().join("variations");
+        fs::create_dir_all(src.join("21")).unwrap();
+        fs::write(src.join("21").join("1-1000000_var.gz"), &record).unwrap();
+        let dst = tmp.path().join("out");
+        assert_eq!(copy_variation_files(&src, &dst).unwrap(), (1, 1));
+        assert_eq!(
+            fs::read(dst.join("21/1-1000000_var.gz")).unwrap(),
+            record.as_bytes()
+        );
+    }
+
     /// A conversion ends with `CHECKSUMS.sha256` in the output directory: one
     /// entry per written file, the manifest itself excepted, each the digest
     /// of the file's bytes, so the runtime's check of every file passes and
@@ -1297,17 +1673,8 @@ mod tests {
         let src = tmp.path().join("src");
         fs::create_dir_all(src.join("transcripts")).unwrap();
         fs::create_dir_all(src.join("variations")).unwrap();
-        fs::create_dir_all(src.join("regulatory/21")).unwrap();
-        fs::write(
-            src.join("regulatory/21/1-1000000.json"),
-            br#"[{"stable_id":"ENSR_FIXTURE","start":10,"end":20,"strand":0,"feature_type":"RegulatoryFeature","biotype":"enhancer"}]"#,
-        )
-        .unwrap();
-        fs::write(
-            src.join("info.json"),
-            r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":116}"#,
-        )
-        .unwrap();
+        write_regulatory_tree(&src, &[("21/1-1000000.json", ENHANCER_SHARD)]);
+        fs::write(src.join("info.json"), REGULATORY_INFO).unwrap();
         fs::write(src.join("chr_synonyms.txt"), "21\tNC_000021.9\n").unwrap();
         fs::write(src.join("transcripts/21_1-1000000.json"), b"[]").unwrap();
         fs::write(src.join("variations/21_all_vars.gz"), b"gz").unwrap();
@@ -1324,6 +1691,7 @@ mod tests {
             "chr_synonyms.txt",
             "info.json",
             "regulatory/21/1-1000000.json",
+            "regulatory/binding_matrices.json",
             "transcripts/21/1-1000000.json",
             "variations/21/all_vars.gz",
             "variations/21/all_vars.gz.csi",
@@ -1361,19 +1729,20 @@ mod tests {
     /// `info.json` is copied with `chr_synonyms.txt` beside it; a metadata set
     /// the runtime could not resolve a cache from (no species or assembly, a
     /// `contig_order` or `variation_cols` that is not a list of strings, a
-    /// non-object) is refused.
+    /// `bam` or `source_type` that is not a string, a non-object) is refused.
     #[test]
     fn info_json_is_validated_and_synonyms_travel_with_it() {
         let tmp = Scratch::new();
         let src = tmp.path().join("src");
         fs::create_dir_all(&src).unwrap();
         let good = r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":116,
-            "contig_order":["1","X"],"source_versions":{}}"#;
+            "contig_order":["1","X"],"source_versions":{},
+            "bam":"interim_GRCh38.p10_knownrefseq_alignments_2017-01-13.bam","source_type":"refseq"}"#;
         fs::write(src.join("info.json"), good).unwrap();
         fs::write(src.join("chr_synonyms.txt"), "21\tNC_000021.9\n").unwrap();
         let dst = tmp.path().join("dst");
         fs::create_dir_all(&dst).unwrap();
-        copy_info_json(&src, &dst, false).unwrap();
+        copy_info_json(&src, &dst, read_info_json(&src).unwrap(), false).unwrap();
         assert_eq!(fs::read_to_string(dst.join("info.json")).unwrap(), good);
         assert_eq!(
             fs::read_to_string(dst.join("chr_synonyms.txt")).unwrap(),
@@ -1391,6 +1760,22 @@ mod tests {
                 r#"{"species":"homo_sapiens","assembly":"GRCh38","variation_cols":[1]}"#,
                 "variation_cols is not a list of strings",
             ),
+            (
+                r#"{"species":"homo_sapiens","assembly":"GRCh38","bam":true}"#,
+                "bam is not a string",
+            ),
+            (
+                r#"{"species":"homo_sapiens","assembly":"GRCh38","source_type":["refseq"]}"#,
+                "source_type is not a string",
+            ),
+            (
+                r#"{"species":"homo_sapiens","assembly":"GRCh38","cell_types":"A549,HUVEC"}"#,
+                "cell_types is not a list of strings",
+            ),
+            (
+                r#"{"species":"homo_sapiens","assembly":"GRCh38","regulatory_schema":"1"}"#,
+                "regulatory_schema is not a whole number",
+            ),
             ("[]", "not a JSON object"),
         ];
         for (text, reason) in refused {
@@ -1402,37 +1787,83 @@ mod tests {
         }
     }
 
+    /// A regulatory tree in the converter's shape: the enhancer of the fixture
+    /// list's first two epigenomes and a motif naming the forward matrix.
+    const ENHANCER_SHARD: &[u8] = br#"[{"stable_id":"ENSR_FIXTURE","dbid":1,"start":10,"end":20,"feature_type":"RegulatoryFeature","biotype":"enhancer","activity":"AI"},
+{"stable_id":"ENSM_FIXTURE","dbid":2,"start":12,"end":15,"strand":1,"feature_type":"MotifFeature","score":1.5,"seq":"ACGT","matrix":"ENSPFM_FORWARD"}]"#;
+    const MATRICES: &[u8] = br#"{"ENSPFM_FORWARD":{"name":"forward","source":"fixture","threshold":1.0,"length":4,"frequencies":[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],"transcription_factors":["TF_A"]}}"#;
+    const REGULATORY_INFO: &str = r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":116,
+        "regulatory":true,"regulatory_schema":1,"cell_types":["A549","HUVEC"]}"#;
+
+    /// The metadata of a regulatory tree in the converter's shape, for a call
+    /// of `copy_regulatory_files` outside `convert_cache`.
+    fn regulatory_info() -> SourceInfo {
+        SourceInfo {
+            content: REGULATORY_INFO.to_string(),
+            value: serde_json::from_str(REGULATORY_INFO).unwrap(),
+        }
+    }
+
+    /// Writes the matrices table and the named shards under `src/regulatory/`.
+    fn write_regulatory_tree(src: &Path, shards: &[(&str, &[u8])]) {
+        fs::create_dir_all(src.join("regulatory")).unwrap();
+        fs::write(src.join("regulatory/binding_matrices.json"), MATRICES).unwrap();
+        for (relative, body) in shards {
+            let path = src.join("regulatory").join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, body).unwrap();
+        }
+    }
+
+    /// The matrices table and every shard, `.json` or `.json.gz`, are copied
+    /// byte for byte once each shard parses against the table and the
+    /// metadata's cell-type list, and `cell_types` and `regulatory_schema`
+    /// pass through `info.json` as the source wrote them; a tree whose
+    /// metadata declares no schema, or another schema, is refused.
     #[test]
-    fn regulatory_shards_preserve_raw_matrices_and_empty_arrays() {
+    fn regulatory_table_and_schema_key_are_copied() {
         use std::io::Write;
         let tmp = Scratch::new();
         let src = tmp.path().join("src");
-        fs::create_dir_all(src.join("LRG_485")).unwrap();
-        let raw = br#"[{
-          "stable_id":"ENSM00000587149","start":45009809,"end":45009823,"strand":-1,
-          "feature_type":"MotifFeature","binding_matrix":{
-            "stable_id":"ENSPFM0363","name":"MAFF_fixture","transcription_factors":["MAFK"],
-            "frequencies":{"1":{"A":137,"C":73,"G":62,"T":250}}}}]"#;
-        fs::write(src.join("LRG_485/1-1000000.json"), raw).unwrap();
-        fs::write(src.join("LRG_485/1000001-2000000.json"), b"[]\n").unwrap();
-        fs::write(src.join("LRG_485/not-a-region.json"), b"{}").unwrap();
-        // A gzip-compressed shard is copied as it is, once its inflated content parses.
+        fs::create_dir_all(src.join("transcripts")).unwrap();
         let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-        encoder.write_all(raw).unwrap();
+        encoder.write_all(ENHANCER_SHARD).unwrap();
         let compressed = encoder.finish().unwrap();
-        fs::write(src.join("LRG_485/2000001-3000000.json.gz"), &compressed).unwrap();
+        write_regulatory_tree(
+            &src,
+            &[
+                ("LRG_485/1-1000000.json", ENHANCER_SHARD),
+                ("LRG_485/1000001-2000000.json", b"[]\n"),
+                ("LRG_485/not-a-region.json", b"{}"),
+                ("LRG_485/2000001-3000000.json.gz", &compressed),
+            ],
+        );
+        fs::write(src.join("info.json"), REGULATORY_INFO).unwrap();
         let dst = tmp.path().join("dst");
-        assert_eq!(copy_regulatory_files(&src, &dst).unwrap(), 3);
-        assert_eq!(fs::read(dst.join("LRG_485/1-1000000.json")).unwrap(), raw);
+        convert_cache(&src, dst.to_str().unwrap(), 1_000_000).unwrap();
+        let out = dst.join("regulatory");
         assert_eq!(
-            fs::read(dst.join("LRG_485/1000001-2000000.json")).unwrap(),
+            fs::read(out.join("binding_matrices.json")).unwrap(),
+            MATRICES
+        );
+        assert_eq!(
+            fs::read(out.join("LRG_485/1-1000000.json")).unwrap(),
+            ENHANCER_SHARD
+        );
+        assert_eq!(
+            fs::read(out.join("LRG_485/1000001-2000000.json")).unwrap(),
             b"[]\n"
         );
         assert_eq!(
-            fs::read(dst.join("LRG_485/2000001-3000000.json.gz")).unwrap(),
+            fs::read(out.join("LRG_485/2000001-3000000.json.gz")).unwrap(),
             compressed
         );
-        assert!(!dst.join("LRG_485/not-a-region.json").exists());
+        assert!(!out.join("LRG_485/not-a-region.json").exists());
+        let metadata: serde_json::Value =
+            serde_json::from_slice(&fs::read(dst.join("info.json")).unwrap()).unwrap();
+        assert_eq!(metadata["regulatory"], true);
+        assert_eq!(metadata["regulatory_schema"], 1);
+        assert_eq!(metadata["cell_types"], serde_json::json!(["A549", "HUVEC"]));
         assert_eq!(
             regulatory_shard_range("1-1000000.json"),
             Some((1, 1_000_000))
@@ -1443,10 +1874,27 @@ mod tests {
         );
         assert_eq!(regulatory_shard_range("1-1000000.json.bak"), None);
         assert_eq!(regulatory_shard_range("not-a-region.json"), None);
+
+        for (info, phrase) in [
+            (
+                r#"{"species":"homo_sapiens","assembly":"GRCh38","regulatory":true,"cell_types":["A549","HUVEC"]}"#,
+                "predate the current converter: reconvert the cache",
+            ),
+            (
+                r#"{"species":"homo_sapiens","assembly":"GRCh38","regulatory":true,"regulatory_schema":2,"cell_types":["A549","HUVEC"]}"#,
+                "declare schema 2; this build reads schema 1: reconvert the cache",
+            ),
+        ] {
+            fs::write(src.join("info.json"), info).unwrap();
+            let error = convert_cache(&src, dst.to_str().unwrap(), 1_000_000).unwrap_err();
+            assert!(format!("{error:#}").contains(phrase), "{error:#}");
+            assert!(!dst.join("info.json").exists());
+        }
     }
 
     /// The converter refuses what the annotator refuses: a shard that is not an
-    /// array, a transcript-typed element and a motif without a binding matrix.
+    /// array, a transcript-typed element, a motif naming a matrix the table
+    /// lacks and an activity string not aligned to the cell-type list.
     #[test]
     fn regulatory_shards_are_parsed_as_the_annotator_parses_them() {
         for (shard, phrase) in [
@@ -1456,43 +1904,748 @@ mod tests {
                 "unknown variant `Transcript`",
             ),
             (
-                br#"[{"stable_id":"ENSM_X","start":1,"end":2,"strand":1,"feature_type":"MotifFeature"}]"#,
-                "motif feature ENSM_X has no binding matrix",
+                br#"[{"stable_id":"ENSM_X","start":1,"end":2,"strand":1,"feature_type":"MotifFeature","matrix":"ENSPFM_ABSENT"}]"#,
+                "motif feature ENSM_X names the binding matrix ENSPFM_ABSENT, which binding_matrices.json lacks",
+            ),
+            (
+                br#"[{"stable_id":"ENSR_X","start":1,"end":2,"feature_type":"RegulatoryFeature","activity":"A"}]"#,
+                "regulatory feature ENSR_X carries 1 activity codes where the cache lists 2 cell types",
             ),
         ] {
             let tmp = Scratch::new();
             let src = tmp.path().join("src");
-            fs::create_dir_all(src.join("21")).unwrap();
-            fs::write(src.join("21/1-1000000.json"), shard).unwrap();
-            let error = copy_regulatory_files(&src, &tmp.path().join("dst")).unwrap_err();
+            write_regulatory_tree(&src, &[("21/1-1000000.json", shard)]);
+            fs::write(src.join("info.json"), REGULATORY_INFO).unwrap();
+            let info = read_info_json(&src).unwrap();
+            let error =
+                copy_regulatory_files(&src.join("regulatory"), &tmp.path().join("dst"), &info)
+                    .unwrap_err();
             let text = format!("{error:#}");
             assert!(text.contains("is not a regulatory shard"), "{text}");
             assert!(text.contains(phrase), "{text}");
         }
     }
 
+    /// A source marker without a written tree is dropped with the cell-type
+    /// list and the schema key; a `regulatory/` holding no chromosome
+    /// directory writes nothing and needs no schema key, naming any stray file;
+    /// a failed conversion leaves no `info.json`.
     #[test]
     fn regulatory_marker_requires_written_shards_and_failures_leave_no_info() {
         let tmp = Scratch::new();
         let src = tmp.path().join("src");
-        fs::create_dir_all(&src).unwrap();
+        fs::create_dir_all(src.join("regulatory")).unwrap();
+        fs::write(src.join("regulatory/notes.txt"), b"notes").unwrap();
         fs::write(
             src.join("info.json"),
             r#"{"species":"homo_sapiens","assembly":"GRCh38","regulatory":true}"#,
         )
         .unwrap();
         let dst = tmp.path().join("dst");
+        let (converted, warnings) =
+            warnings_during(|| convert_cache(&src, dst.to_str().unwrap(), 1_000_000));
+        converted.unwrap();
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("Skipping file with unexpected name: regulatory/notes.txt")),
+            "{warnings:?}"
+        );
+        assert!(!dst.join("regulatory").exists());
+        fs::write(src.join("info.json"), REGULATORY_INFO).unwrap();
         convert_cache(&src, dst.to_str().unwrap(), 1_000_000).unwrap();
         let metadata: serde_json::Value =
             serde_json::from_slice(&fs::read(dst.join("info.json")).unwrap()).unwrap();
-        assert!(metadata.get("regulatory").is_none());
+        for key in ["regulatory", "cell_types", "regulatory_schema"] {
+            assert!(metadata.get(key).is_none(), "{key}: {metadata}");
+        }
 
-        fs::create_dir_all(src.join("regulatory/21")).unwrap();
-        fs::write(src.join("regulatory/21/1-1000000.json"), b"{}").unwrap();
+        write_regulatory_tree(&src, &[("21/1-1000000.json", b"{}")]);
         fs::write(dst.join("info.json"), br#"{"regulatory":true}"#).unwrap();
         let error = convert_cache(&src, dst.to_str().unwrap(), 1_000_000).unwrap_err();
         assert!(error.to_string().contains("is not a regulatory shard"));
         assert!(!dst.join("info.json").exists());
+    }
+
+    /// The layout of a table indexed on its second column alone, one record a
+    /// base.
+    fn point_config(path: &Path, zero_based: bool) -> TabixConfig {
+        TabixConfig {
+            file_path: path.to_path_buf(),
+            chr_col: 0,
+            start_col: 1,
+            end_col: None,
+            ref_col: None,
+            alt_col: None,
+            zero_based,
+        }
+    }
+
+    /// A tabix indexer on the columns `cfg` reads, as `tabix` is given them.
+    fn indexer_for(cfg: &TabixConfig) -> noodles::tabix::index::Indexer {
+        use noodles::csi::binning_index::index::header::format::CoordinateSystem;
+        use noodles::csi::binning_index::index::header::{Builder as HeaderBuilder, Format};
+
+        let coordinates = if cfg.zero_based {
+            CoordinateSystem::Bed
+        } else {
+            CoordinateSystem::Gff
+        };
+        let mut indexer = noodles::tabix::index::Indexer::default();
+        indexer.set_header(
+            HeaderBuilder::default()
+                .set_format(Format::Generic(coordinates))
+                .set_reference_sequence_name_index(cfg.chr_col)
+                .set_start_position_index(cfg.start_col)
+                .set_end_position_index(cfg.end_col)
+                .build(),
+        );
+        indexer
+    }
+
+    /// Index `row` at `chunk` on the span `cfg` reads from it.
+    fn index_row(
+        indexer: &mut noodles::tabix::index::Indexer,
+        cfg: &TabixConfig,
+        row: &str,
+        chunk: noodles::csi::binning_index::index::reference_sequence::bin::Chunk,
+    ) {
+        use noodles::core::Position;
+
+        let position = |at: u64| Position::try_from(usize::try_from(at).unwrap()).unwrap();
+        let cells: Vec<String> = row.split('\t').map(str::to_string).collect();
+        let start = cfg.record_start(&cells[cfg.start_col]).unwrap();
+        let end = cfg.record_end(start, &cells);
+        indexer
+            .add_record(&cells[cfg.chr_col], position(start), position(end), chunk)
+            .unwrap();
+    }
+
+    /// Write `header` and `rows` as a bgzip-compressed, tabix-indexed table at
+    /// `path`, each row indexed on the span `cfg` reads from it, as `tabix`
+    /// indexes a row on the columns it is given; the `.tbi` sits beside the
+    /// table, where the reader looks. `rows` are sorted by start, as `tabix`
+    /// requires.
+    fn write_indexed_table(path: &Path, header: &str, rows: &[&str], cfg: &TabixConfig) {
+        use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+        use std::io::Write;
+
+        let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(path).unwrap());
+        writeln!(writer, "{header}").unwrap();
+        let mut indexer = indexer_for(cfg);
+        for row in rows {
+            let from = writer.virtual_position();
+            writeln!(writer, "{row}").unwrap();
+            index_row(
+                &mut indexer,
+                cfg,
+                row,
+                Chunk::new(from, writer.virtual_position()),
+            );
+        }
+        writer.finish().unwrap();
+        noodles::tabix::fs::write(format!("{}.tbi", path.display()), &indexer.build()).unwrap();
+    }
+
+    /// The rows at one start come back from the store in the table's order,
+    /// the order `tabix` prints them in, whatever their ends: a plugin taking a
+    /// position's first or last row reads the same one through the store as
+    /// through the table. The conversion's verification compares the two paths
+    /// record for record, so a store answering a position in another order
+    /// than the table fails it.
+    #[test]
+    fn rows_at_one_start_keep_the_tables_order() {
+        use vep_builtins::annotation_store::AnnotationStore;
+        let tmp = Scratch::new();
+        let path = tmp.path().join("svs.tsv.gz");
+        let cfg = TabixConfig {
+            end_col: Some(2),
+            ..point_config(&path, true)
+        };
+        write_indexed_table(
+            &path,
+            "#Chrom\tStart\tEnd\tType\tName",
+            &[
+                "21\t5029000\t5047000\tDEL\tfirst_in_file",
+                "21\t5029000\t5040000\tDEL\tsecond_in_file",
+                "21\t5029000\t5035000\tDEL\tthird_in_file",
+                "21\t5029001\t5047000\tDEL\tnext_start",
+            ],
+            &cfg,
+        );
+        let (column_names, grouped, source) = read_tabix_records(&path, &cfg).unwrap();
+        let names = |records: &[vep_builtins::tabix::TabixRecord]| -> Vec<String> {
+            records.iter().map(|r| r.columns[4].clone()).collect()
+        };
+        assert_eq!(
+            names(&grouped[0].1),
+            [
+                "first_in_file",
+                "second_in_file",
+                "third_in_file",
+                "next_start"
+            ]
+        );
+
+        let vpd = tmp.path().join("svs.tsv.vpd");
+        let table = open_table(&cfg).unwrap();
+        let result = verify_concordance(&vpd, &grouped, &cfg, &table, true);
+        assert!(result.is_err(), "no store to verify yet");
+        convert_plugin_data(
+            path.to_str().unwrap(),
+            vpd.to_str().unwrap(),
+            &cfg,
+            true,
+            false,
+        )
+        .unwrap();
+        let store = vep_builtins::binary_store::BinaryAnnotator::open(&vpd, &cfg).unwrap();
+        let from_table = names(&table.query("21", 5029001, 5029001).unwrap());
+        assert_eq!(
+            from_table,
+            ["first_in_file", "second_in_file", "third_in_file"]
+        );
+        assert_eq!(
+            names(&store.query("21", 5029001, 5029001).unwrap()),
+            from_table
+        );
+        let verified = verify_concordance(&vpd, &grouped, &cfg, &table, true).unwrap();
+        // The two starts, and each row's end, midpoint and neighbours.
+        assert_eq!((verified.checked, verified.mismatches), (13, 0));
+
+        // A store holding the position's rows in another order fails the
+        // verification naming the position and the first row out of place.
+        let mut reordered = grouped.clone();
+        reordered[0].1.swap(0, 2);
+        let other = tmp.path().join("other.vpd");
+        vep_builtins::binary_store::BinaryStoreWriter::new(other.clone())
+            .write(&column_names, &reordered, &cfg, &source)
+            .unwrap();
+        let verified = verify_concordance(&other, &grouped, &cfg, &table, true).unwrap();
+        // Two rows are out of place at each of the nine probes from the first
+        // start to the second row's end, the first and third up to the third
+        // row's end and the first and second past it, and a probe is counted
+        // once, by its single query.
+        assert_eq!(verified.mismatches, 18, "{:?}", verified.mismatch_details);
+        assert_eq!(
+            verified.mismatch_details[0],
+            "21:5029001 record[0]: table='5029001-5047000\t21\t5029000\t5047000\tDEL\tfirst_in_file', \
+             store='5029001-5035000\t21\t5029000\t5035000\tDEL\tthird_in_file'"
+        );
+    }
+
+    /// The verification probes inside a record's span, not its start alone: a
+    /// store whose index records no span for the chromosome returns a row at
+    /// its start and loses it at every position past it, where the table
+    /// returns it, and no other row starts inside the span. The verification
+    /// fails at the first position that loses the row.
+    #[test]
+    fn a_store_that_loses_a_spanning_row_fails_the_verification() {
+        use vep_builtins::annotation_store::AnnotationStore;
+        let tmp = Scratch::new();
+        let path = tmp.path().join("lone.tsv.gz");
+        let cfg = TabixConfig {
+            end_col: Some(2),
+            ..point_config(&path, false)
+        };
+        write_indexed_table(
+            &path,
+            "#chrom\tstart\tend\tname",
+            &["21\t100\t300\tlone", "21\t500\t500\tp500"],
+            &cfg,
+        );
+        let vpd = tmp.path().join("lone.tsv.vpd");
+        convert_plugin_data(
+            path.to_str().unwrap(),
+            vpd.to_str().unwrap(),
+            &cfg,
+            true,
+            false,
+        )
+        .unwrap();
+
+        // The chromosome's index entry: the length of its name, the name, then
+        // its longest span, the 200 bases of the first row.
+        let vpdi = tmp.path().join("lone.tsv.vpdi");
+        let mut index = fs::read(&vpdi).unwrap();
+        let entry = [&2u16.to_le_bytes()[..], b"21", &200u64.to_le_bytes()].concat();
+        let at = index
+            .windows(entry.len())
+            .position(|bytes| bytes == entry)
+            .expect("the index holds chromosome 21's entry");
+        index[at + 4..at + 12].fill(0);
+        fs::write(&vpdi, index).unwrap();
+
+        let grouped = read_tabix_records(&path, &cfg).unwrap().1;
+        let table = open_table(&cfg).unwrap();
+        let store = vep_builtins::binary_store::BinaryAnnotator::open(&vpd, &cfg).unwrap();
+        assert_eq!(store.query("21", 100, 100).unwrap().len(), 1);
+        assert!(store.query("21", 200, 200).unwrap().is_empty());
+        assert_eq!(table.query("21", 200, 200).unwrap().len(), 1);
+
+        let verified = verify_concordance(&vpd, &grouped, &cfg, &table, true).unwrap();
+        assert!(
+            verified.mismatches > 0,
+            "the verification passed a store that loses a spanning row: {} positions checked, \
+             {} mismatches",
+            verified.checked,
+            verified.mismatches
+        );
+        assert_eq!(
+            verified.mismatch_details[0],
+            "21:200 record count: table=1, store=0"
+        );
+    }
+
+    /// A record on chromosome 21 spanning `start..=end`, named in its one cell
+    /// after the chromosome's.
+    fn spanning(start: u64, end: u64, name: &str) -> vep_builtins::tabix::TabixRecord {
+        vep_builtins::tabix::TabixRecord {
+            chr: "21".into(),
+            start,
+            end,
+            columns: ["21", name].map(String::from).to_vec(),
+            header: None,
+        }
+    }
+
+    /// Each record of a checked start is probed at its start, its end, its
+    /// midpoint and the positions on either side of its span, each position
+    /// once; a row whose end reads below its start has no midpoint, and a
+    /// span reaching either end of the position range has no neighbour past
+    /// it. Past a thousand starts the default sample is every n-th start from
+    /// the first, the same starts on every call, and `--verify-all` takes
+    /// every start.
+    #[test]
+    fn probes_cover_each_records_span_and_neighbours_at_a_fixed_stride() {
+        let positions = |records: Vec<vep_builtins::tabix::TabixRecord>, verify_all| -> Vec<u64> {
+            probe_positions(&[("21".to_string(), records)], verify_all)
+                .into_iter()
+                .map(|(_, position)| position)
+                .collect()
+        };
+        let spans = || {
+            vec![
+                spanning(150, 260, "long"),
+                spanning(150, 200, "short"),
+                spanning(300, 300, "point"),
+                spanning(400, 390, "end_below_start"),
+            ]
+        };
+        let probed = [
+            149, 150, 175, 200, 201, 205, 260, 261, 299, 300, 301, 390, 391, 399, 400,
+        ];
+        assert_eq!(positions(spans(), true), probed);
+        assert_eq!(positions(spans(), false), probed);
+        assert!(positions(Vec::new(), false).is_empty());
+        assert_eq!(
+            positions(vec![spanning(0, u64::MAX, "whole_range")], true),
+            [0, u64::MAX / 2, u64::MAX]
+        );
+
+        let points = |count: u64| -> Vec<vep_builtins::tabix::TabixRecord> {
+            (1..=count)
+                .map(|i| spanning(10 * i, 10 * i, "point"))
+                .collect()
+        };
+        assert_eq!(positions(points(1000), false).len(), 3000);
+        // 2,500 starts are sampled at a stride of 3: 834 starts, 3 probes each.
+        let sampled = positions(points(2500), false);
+        assert_eq!(sampled.len(), 2502);
+        assert_eq!(sampled[..6], [9, 10, 11, 39, 40, 41]);
+        assert_eq!(sampled, positions(points(2500), false));
+        assert_eq!(positions(points(2500), true).len(), 7500);
+    }
+
+    /// Records answered from memory by overlap and in their own order, as a
+    /// table answers a query, whose batch query can answer otherwise.
+    struct Rows {
+        rows: Vec<vep_builtins::tabix::TabixRecord>,
+        batches: Batches,
+    }
+
+    /// How [`Rows`] answers a batch query.
+    #[derive(Clone, Copy)]
+    enum Batches {
+        /// As it answers a single query.
+        AsSingleQueries,
+        /// With the records starting inside a region alone.
+        ByStartAlone,
+        /// With the records of a batch of several regions in reverse order.
+        ReversedAmongSeveral,
+        /// With the records of a batch of several regions in reverse order
+        /// when the regions come in descending order.
+        ReversedWhenDescending,
+    }
+
+    impl vep_builtins::annotation_store::AnnotationStore for Rows {
+        fn query_batch(
+            &self,
+            regions: &[(&str, u64, u64)],
+        ) -> Result<vep_builtins::tabix::BatchQueryResult, PluginError> {
+            let descending = regions
+                .first()
+                .zip(regions.last())
+                .is_some_and(|(first, last)| first.1 > last.1);
+            let reversed = regions.len() > 1
+                && match self.batches {
+                    Batches::ReversedAmongSeveral => true,
+                    Batches::ReversedWhenDescending => descending,
+                    Batches::AsSingleQueries | Batches::ByStartAlone => false,
+                };
+            let mut rows: Vec<_> = self.rows.iter().collect();
+            if reversed {
+                rows.reverse();
+            }
+            let mut by_start: std::collections::HashMap<String, BTreeMap<u64, Vec<_>>> =
+                std::collections::HashMap::new();
+            for row in rows {
+                let reach = match self.batches {
+                    Batches::ByStartAlone => row.start,
+                    _ => row.end,
+                };
+                if regions
+                    .iter()
+                    .any(|&(chr, start, end)| row.chr == chr && row.start <= end && reach >= start)
+                {
+                    by_start
+                        .entry(row.chr.clone())
+                        .or_default()
+                        .entry(row.start)
+                        .or_default()
+                        .push(row.clone());
+                }
+            }
+            Ok(vep_builtins::tabix::BatchQueryResult::from_records(
+                by_start,
+            ))
+        }
+
+        fn query(
+            &self,
+            chr: &str,
+            start: u64,
+            end: u64,
+        ) -> Result<Vec<vep_builtins::tabix::TabixRecord>, PluginError> {
+            let overlaps = |row: &&vep_builtins::tabix::TabixRecord| {
+                row.chr == chr && row.start <= end && row.end >= start
+            };
+            Ok(self.rows.iter().filter(overlaps).cloned().collect())
+        }
+
+        fn header(&self) -> Option<&[String]> {
+            None
+        }
+    }
+
+    /// The verification asks every probe again through the store's batch
+    /// query: alone, then with the probes beside it, in order and reversed.
+    /// A store whose single queries answer as the table fails it when its
+    /// batches hold only the records starting inside a region, which a batch
+    /// of one position shows and a batch carrying the record's start hides,
+    /// and when a batch of several regions returns a start's records in
+    /// another order, always or only for regions in descending order. A
+    /// position is counted once, by the first batch that differs, and named
+    /// with it.
+    #[test]
+    fn a_store_whose_batches_answer_otherwise_fails_the_verification() {
+        let rows = || {
+            vec![
+                spanning(150, 260, "long"),
+                spanning(150, 200, "short"),
+                spanning(300, 300, "point"),
+            ]
+        };
+        let verified = |rows: Vec<vep_builtins::tabix::TabixRecord>, batches: Batches| {
+            let source = [("21".to_string(), rows.clone())];
+            let table = Rows {
+                rows: rows.clone(),
+                batches: Batches::AsSingleQueries,
+            };
+            let store = Rows { rows, batches };
+            verify_probes(&store, &table, &probe_positions(&source, true), 0).unwrap()
+        };
+
+        let sound = verified(rows(), Batches::AsSingleQueries);
+        assert_eq!((sound.checked, sound.mismatches), (11, 0));
+
+        // A record starting before the position is lost at each of the five
+        // probes past the shared start that one reaches: 175, 200, 201, 205
+        // and 260.
+        let by_start_alone = verified(rows(), Batches::ByStartAlone);
+        assert_eq!(by_start_alone.mismatches, 5);
+        assert_eq!(
+            by_start_alone.mismatch_details[0],
+            "21:175 alone in a batch record count: table=2, store=0"
+        );
+
+        // The two records at the shared start change places at each of the
+        // three probes both reach: 150, 175 and 200.
+        for (batches, order) in [
+            (Batches::ReversedAmongSeveral, "a batch"),
+            (Batches::ReversedWhenDescending, "a reversed batch"),
+        ] {
+            let reordered = verified(rows(), batches);
+            assert_eq!(reordered.mismatches, 6, "{:?}", reordered.mismatch_details);
+            assert_eq!(
+                reordered.mismatch_details[0],
+                format!(
+                    "21:150 in {order} record[0]: table='150-260\t21\tlong', \
+                     store='150-200\t21\tshort'"
+                )
+            );
+        }
+
+        // Thirty single positions put 90 probes, more than one run of batch
+        // probes, before two records sharing a start, whose seven probes are
+        // held to the table as those of the first run are.
+        let late = || {
+            let points = (1..=30).map(|i| spanning(10 * i, 10 * i, "point"));
+            let spans = [
+                spanning(1000, 1100, "late"),
+                spanning(1000, 1050, "late_short"),
+            ];
+            points.chain(spans).collect::<Vec<_>>()
+        };
+        let sound = verified(late(), Batches::AsSingleQueries);
+        assert_eq!((sound.checked, sound.mismatches), (97, 0));
+        let by_start_alone = verified(late(), Batches::ByStartAlone);
+        assert_eq!(by_start_alone.mismatches, 4);
+        assert_eq!(
+            by_start_alone.mismatch_details[0],
+            "21:1025 alone in a batch record count: table=2, store=0"
+        );
+        let reordered = verified(late(), Batches::ReversedAmongSeveral);
+        assert_eq!(reordered.mismatches, 6, "{:?}", reordered.mismatch_details);
+        assert_eq!(
+            reordered.mismatch_details[0],
+            "21:1000 in a batch record[0]: table='1000-1100\t21\tlate', \
+             store='1000-1050\t21\tlate_short'"
+        );
+    }
+
+    /// The verification reads the input through the tabix reader, so an input
+    /// without its index fails the conversion before the store is written;
+    /// `--no-verify` converts it.
+    #[test]
+    fn an_input_without_its_index_fails_before_the_store_is_written() {
+        let tmp = Scratch::new();
+        let path = tmp.path().join("scores.tsv.gz");
+        let cfg = point_config(&path, false);
+        write_indexed_table(&path, "#chrom\tpos\tscore", &["21\t100\t0.5"], &cfg);
+        fs::remove_file(format!("{}.tbi", path.display())).unwrap();
+        let vpd = tmp.path().join("scores.tsv.vpd");
+        let convert = |no_verify: bool| {
+            convert_plugin_data(
+                path.to_str().unwrap(),
+                vpd.to_str().unwrap(),
+                &cfg,
+                false,
+                no_verify,
+            )
+        };
+        let error = format!("{:#}", convert(false).unwrap_err());
+        assert!(
+            error.starts_with(
+                "failed to open the table for verification, which --no-verify skips: "
+            ) && error.contains("tabix index not found"),
+            "{error}"
+        );
+        assert!(
+            !vpd.exists(),
+            "no store is written for an input the verification cannot read"
+        );
+        convert(true).unwrap();
+        assert!(vpd.exists());
+    }
+
+    /// A store the verification faults is removed with its index, so the
+    /// plugin reads the table on its next run instead of a store answering
+    /// otherwise than the table: here the table's index predates its last row,
+    /// so the tabix reader finds no row at the position the store holds one.
+    #[test]
+    fn a_store_the_verification_faults_is_removed() {
+        let tmp = Scratch::new();
+        let path = tmp.path().join("scores.tsv.gz");
+        let cfg = point_config(&path, false);
+        let header = "#chrom\tpos\tscore";
+        write_indexed_table(&path, header, &["21\t100\t0.5"], &cfg);
+        let index = format!("{}.tbi", path.display());
+        let stale_index = fs::read(&index).unwrap();
+        write_indexed_table(&path, header, &["21\t100\t0.5", "21\t200\t0.7"], &cfg);
+        fs::write(&index, stale_index).unwrap();
+
+        let vpd = tmp.path().join("scores.tsv.vpd");
+        let error = convert_plugin_data(
+            path.to_str().unwrap(),
+            vpd.to_str().unwrap(),
+            &cfg,
+            true,
+            false,
+        )
+        .unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            "Concordance verification failed: 1 mismatches"
+        );
+        assert!(!vpd.exists() && !tmp.path().join("scores.tsv.vpdi").exists());
+    }
+
+    /// A verification that does not run to its end removes the store as a
+    /// faulted one is removed: here the table's index names a block past the
+    /// end of the file, the shape of an index built for a longer table, so the
+    /// tabix reader's query fails rather than answers, and the store the query
+    /// could not check does not stay for the plugin's next run.
+    #[test]
+    fn a_store_whose_verification_cannot_run_is_removed() {
+        use noodles::bgzf::VirtualPosition;
+        use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+
+        let tmp = Scratch::new();
+        let path = tmp.path().join("scores.tsv.gz");
+        let cfg = point_config(&path, false);
+        let row = "21\t100\t0.5";
+        write_indexed_table(&path, "#chrom\tpos\tscore", &[row], &cfg);
+        let past_the_end = 1_000_000;
+        let mut indexer = indexer_for(&cfg);
+        index_row(
+            &mut indexer,
+            &cfg,
+            row,
+            Chunk::new(
+                VirtualPosition::try_from((past_the_end, 0)).unwrap(),
+                VirtualPosition::try_from((past_the_end, 64)).unwrap(),
+            ),
+        );
+        noodles::tabix::fs::write(format!("{}.tbi", path.display()), &indexer.build()).unwrap();
+
+        let vpd = tmp.path().join("scores.tsv.vpd");
+        let error = convert_plugin_data(
+            path.to_str().unwrap(),
+            vpd.to_str().unwrap(),
+            &cfg,
+            true,
+            false,
+        )
+        .unwrap_err();
+        assert!(
+            !vpd.exists() && !tmp.path().join("scores.tsv.vpdi").exists(),
+            "the store stays after: {error:#}"
+        );
+        let message = format!("{error:#}");
+        assert!(
+            message.starts_with(
+                "Concordance verification failed: table query failed: plugin execution failed: \
+                 index "
+            ) && message.ends_with(&format!("no block at offset {past_the_end} holds byte 0")),
+            "{message}"
+        );
+    }
+
+    /// A removal whose unlink of one file fails still unlinks the other, so
+    /// the pair never survives whole: here the data path is a directory, which
+    /// no file unlink removes, and the index beside it goes.
+    #[test]
+    fn a_removal_that_fails_on_one_file_still_removes_the_other() {
+        let tmp = Scratch::new();
+        let vpd = tmp.path().join("scores.tsv.vpd");
+        let vpdi = tmp.path().join("scores.tsv.vpdi");
+        fs::create_dir(&vpd).unwrap();
+        fs::write(&vpdi, b"index").unwrap();
+
+        let error = remove_store(&vpd).unwrap_err();
+        assert!(
+            format!("{error:#}").starts_with(&format!("failed to remove {}", vpd.display())),
+            "{error:#}"
+        );
+        assert!(vpd.exists() && !vpdi.exists());
+    }
+
+    /// A removal whose unlink of the index fails still unlinks the data, and
+    /// the first failure is the error: here the index path is a directory, so
+    /// the error names it and the data file beside it goes; with both paths
+    /// directories the error names the index, the first unlink, not the data.
+    #[test]
+    fn a_removal_reports_the_index_failure_first_and_still_removes_the_data() {
+        let tmp = Scratch::new();
+        let vpd = tmp.path().join("scores.tsv.vpd");
+        let vpdi = tmp.path().join("scores.tsv.vpdi");
+        fs::create_dir(&vpdi).unwrap();
+        fs::write(&vpd, b"data").unwrap();
+
+        let error = remove_store(&vpd).unwrap_err();
+        assert!(
+            format!("{error:#}").starts_with(&format!("failed to remove {}", vpdi.display())),
+            "{error:#}"
+        );
+        assert!(!vpd.exists() && vpdi.exists());
+
+        fs::create_dir(&vpd).unwrap();
+        let error = remove_store(&vpd).unwrap_err();
+        assert!(
+            format!("{error:#}").starts_with(&format!("failed to remove {}", vpdi.display())),
+            "{error:#}"
+        );
+        assert!(vpd.exists() && vpdi.exists());
+    }
+
+    /// A VCF's records are spanned as the tabix reader spans them: the INFO
+    /// `END` when it lies at or past the start, else the reference allele from
+    /// the start, so a store built from the file answers a query inside a
+    /// deletion's span, or at a base of a multi-base reference, with the record,
+    /// as the table does; a start cell is read to its leading integer. The
+    /// conversion's verification compares each position's query with the
+    /// table's.
+    #[test]
+    fn a_store_spans_its_records_as_the_tabix_reader_does() {
+        use vep_builtins::annotation_store::AnnotationStore;
+        let tmp = Scratch::new();
+        let path = tmp.path().join("spans.vcf.gz");
+        let cfg = TabixConfig {
+            end_col: Some(7),
+            ref_col: Some(3),
+            ..point_config(&path, false)
+        };
+        write_indexed_table(
+            &path,
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO",
+            &[
+                "21\t100\tdel\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=300",
+                "21\t140\tref4\tACGT\tA\t.\t.\tDP=3",
+                "21\t150\tend_in_ref\tACGT\tA\t.\t.\tEND=151",
+                "21\t160x\tprefix\tA\tG\t.\t.\tDP=1",
+            ],
+            &cfg,
+        );
+        let (_, grouped, _) = read_tabix_records(&path, &cfg).unwrap();
+        let spans: Vec<(u64, u64)> = grouped[0].1.iter().map(|r| (r.start, r.end)).collect();
+        assert_eq!(spans, [(100, 300), (140, 143), (150, 151), (160, 160)]);
+
+        let vpd = tmp.path().join("spans.vcf.vpd");
+        convert_plugin_data(
+            path.to_str().unwrap(),
+            vpd.to_str().unwrap(),
+            &cfg,
+            true,
+            false,
+        )
+        .unwrap();
+        let store = vep_builtins::binary_store::BinaryAnnotator::open(&vpd, &cfg).unwrap();
+        let ids_at = |start: u64, end: u64| -> Vec<String> {
+            store
+                .query("21", start, end)
+                .unwrap()
+                .iter()
+                .map(|r| r.columns[2].clone())
+                .collect()
+        };
+        assert_eq!(ids_at(250, 250), ["del"]);
+        assert_eq!(ids_at(143, 143), ["del", "ref4"]);
+        assert_eq!(ids_at(144, 144), ["del"]);
+        assert_eq!(ids_at(151, 151), ["del", "end_in_ref"]);
+        assert_eq!(ids_at(152, 152), ["del"]);
+        assert_eq!(ids_at(160, 160), ["del", "prefix"]);
+        assert!(ids_at(301, 400).is_empty());
     }
 
     /// A plugin data file whose second data line is one byte over the cap
@@ -1512,12 +2665,7 @@ mod tests {
         let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(&path).unwrap());
         writer.write_all(&body).unwrap();
         writer.try_finish().unwrap();
-        let cfg = TabixConvertConfig {
-            chr_col: 0,
-            start_col: 1,
-            end_col: None,
-            zero_based: false,
-        };
+        let cfg = point_config(&path, false);
         let error = read_tabix_records(&path, &cfg).unwrap_err();
         assert_eq!(
             format!("{error:#}"),
@@ -1539,16 +2687,170 @@ mod tests {
         let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(&path).unwrap());
         writer.write_all(body.as_bytes()).unwrap();
         writer.try_finish().unwrap();
-        let cfg = TabixConvertConfig {
-            chr_col: 0,
-            start_col: 1,
-            end_col: None,
-            zero_based: true,
-        };
+        let cfg = point_config(&path, true);
         let error = read_tabix_records(&path, &cfg).unwrap_err();
         assert_eq!(
             format!("{error:#}"),
             format!("invalid start position: {}", u64::MAX)
         );
+    }
+
+    /// A record's last cell keeps its trailing whitespace and a whitespace-only
+    /// last cell stays a cell, as Ensembl VEP's tabix iterator hands the line to
+    /// a plugin with its line end alone removed; a line ending in a tab keeps
+    /// its empty last cell, which a plugin counting the line's fields drops.
+    #[test]
+    fn a_trailing_cell_keeps_its_whitespace() {
+        use std::io::Write;
+        let tmp = Scratch::new();
+        let path = tmp.path().join("cells.tsv.gz");
+        let body = "#chrom\tpos\tname\tnote\n21\t100\tA\t0.5 \n21\t101\tB\t \n21\t102\tC\t\r\n";
+        let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(&path).unwrap());
+        writer.write_all(body.as_bytes()).unwrap();
+        writer.try_finish().unwrap();
+        let cfg = point_config(&path, false);
+        let (header, grouped, _) = read_tabix_records(&path, &cfg).unwrap();
+        assert_eq!(header, ["chrom", "pos", "name", "note"]);
+        let cells: Vec<Vec<String>> = grouped
+            .iter()
+            .flat_map(|(_, records)| records.iter().map(|record| record.columns.clone()))
+            .collect();
+        assert_eq!(
+            cells,
+            [
+                ["21", "100", "A", "0.5 "],
+                ["21", "101", "B", " "],
+                ["21", "102", "C", ""],
+            ]
+        );
+    }
+
+    /// A table whose header row carries no `#`, the header form the dbscSNV plugin
+    /// documents (dbscSNV.pm:61-62), converts
+    /// with that row as its column names, as the tabix reader's header read
+    /// takes it: the first row under no `#` line whose start cell leads with no
+    /// integer. A first row whose start cell leads with an integer is a record,
+    /// whatever follows the integer, and the table then has no header; a bare
+    /// header is read only as the file's first row, and a `#` line after the
+    /// first row is a comment. Every table written here is made up.
+    #[test]
+    fn a_bare_header_row_is_the_column_names() {
+        use std::io::Write;
+        use vep_builtins::annotation_store::AnnotationStore;
+        let tmp = Scratch::new();
+        let path = tmp.path().join("bare.synthetic.tsv.gz");
+        let cfg = point_config(&path, false);
+        write_indexed_table(
+            &path,
+            "chr\tpos\tref\talt\tada_score",
+            &["21\t100\tA\tC\t0.9", "21\t200x\tA\tG\t0.1"],
+            &cfg,
+        );
+        let (header, grouped, _) = read_tabix_records(&path, &cfg).unwrap();
+        assert_eq!(header, ["chr", "pos", "ref", "alt", "ada_score"]);
+        let starts: Vec<u64> = grouped[0].1.iter().map(|r| r.start).collect();
+        assert_eq!(starts, [100, 200]);
+        assert_eq!(grouped[0].1[0].get("ada_score"), Some("0.9"));
+
+        let vpd = tmp.path().join("bare.synthetic.tsv.vpd");
+        convert_plugin_data(
+            path.to_str().unwrap(),
+            vpd.to_str().unwrap(),
+            &cfg,
+            true,
+            false,
+        )
+        .unwrap();
+        let store = vep_builtins::binary_store::BinaryAnnotator::open(&vpd, &cfg).unwrap();
+        assert_eq!(
+            store.header().unwrap(),
+            ["chr", "pos", "ref", "alt", "ada_score"]
+        );
+        assert_eq!(
+            store.query("21", 200, 200).unwrap()[0].get("ada_score"),
+            Some("0.1")
+        );
+
+        let headerless = tmp.path().join("headerless.synthetic.tsv.gz");
+        let cfg = point_config(&headerless, false);
+        write_indexed_table(
+            &headerless,
+            "21\t100.5\tA\tC\t0.5",
+            &["21\t200\tA\tG\t0.7"],
+            &cfg,
+        );
+        let (header, grouped, _) = read_tabix_records(&headerless, &cfg).unwrap();
+        assert!(header.is_empty());
+        let starts: Vec<u64> = grouped[0].1.iter().map(|r| r.start).collect();
+        assert_eq!(
+            starts,
+            [100, 200],
+            "the first row is a record at its leading integer"
+        );
+
+        let late = tmp.path().join("late.synthetic.tsv.gz");
+        let cfg = point_config(&late, false);
+        let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(&late).unwrap());
+        writer
+            .write_all(b"21\t100\tA\tC\t0.5\n21\tpos\tA\tG\t0.7\n")
+            .unwrap();
+        writer.try_finish().unwrap();
+        let error = read_tabix_records(&late, &cfg).unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            "invalid start position: pos",
+            "a header row after the first row is a row with no start"
+        );
+
+        // A `#` line after the first row is a comment, as the index skips it;
+        // the header stays the one the first row settled.
+        let commented = tmp.path().join("commented.tsv.gz");
+        let cfg = point_config(&commented, false);
+        let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(&commented).unwrap());
+        writer
+            .write_all(b"chr\tpos\tref\n21\t100\tA\n#x\ty\tz\n21\t200\tC\n")
+            .unwrap();
+        writer.try_finish().unwrap();
+        let (header, grouped, _) = read_tabix_records(&commented, &cfg).unwrap();
+        assert_eq!(header, ["chr", "pos", "ref"]);
+        assert_eq!(grouped[0].1.len(), 2);
+
+        // A zero-based start cell at the integer maximum leads with an integer,
+        // so the row is a record, as the reader reads it, with no one-based form.
+        let widest = tmp.path().join("widest.tsv.gz");
+        let cfg = point_config(&widest, true);
+        let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(&widest).unwrap());
+        writer
+            .write_all(format!("21\t{}\tA\n", u64::MAX).as_bytes())
+            .unwrap();
+        writer.try_finish().unwrap();
+        let error = read_tabix_records(&widest, &cfg).unwrap_err();
+        assert_eq!(
+            format!("{error:#}"),
+            format!("invalid start position: {}", u64::MAX)
+        );
+    }
+
+    /// A byte that is not UTF-8 (Latin-1 `é`, 0xE9) in a header or a data cell
+    /// converts, written as U+FFFD in the cell, the form a live tabix query gives
+    /// the same bytes; the conversion reads the file as Ensembl VEP's tabix
+    /// iterator hands its lines over, bytes with the line end removed.
+    #[test]
+    fn a_cell_that_is_not_utf8_converts_as_the_query_path_reads_it() {
+        use std::io::Write;
+        let tmp = Scratch::new();
+        let path = tmp.path().join("cells.tsv.gz");
+        let body = b"#chrom\tpos\tname\tcaf\xE9\n21\t100\tA\t0.5\xE9\n";
+        let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(&path).unwrap());
+        writer.write_all(body).unwrap();
+        writer.try_finish().unwrap();
+        let cfg = point_config(&path, false);
+        let (header, grouped, _) = read_tabix_records(&path, &cfg).unwrap();
+        assert_eq!(header, ["chrom", "pos", "name", "caf\u{FFFD}"]);
+        let cells: Vec<Vec<String>> = grouped
+            .iter()
+            .flat_map(|(_, records)| records.iter().map(|record| record.columns.clone()))
+            .collect();
+        assert_eq!(cells, [["21", "100", "A", "0.5\u{FFFD}"]]);
     }
 }

@@ -1,0 +1,41 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "PERL_HASH_SEED=0 PERL_PERTURB_KEYS=0 vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --plugin UTRAnnotator,file={corpus}/data/uORF_5UTR_GRCh38_PUBLIC.chr21.txt --dir_plugins {corpus}/data [--tab|--vcf|--json]",
+ "vep_environment": "PERL_HASH_SEED=0 PERL_PERTURB_KEYS=0: the UTRAnnotator plugin writes the key=value pairs of 5UTR_annotation, the order of its effect groups and, when more than one analysis fires, the chosen 5UTR_consequence in Perl hash order (UTRAnnotator.pm:262-288 at VEP_plugins release/116), so the reference is generated with a fixed hash seed and no key perturbation; the golden tests compare the pairs and groups as a multiset (the order_only mask) and the corpus carries no record on which two analyses fire for one row",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "plugin": "UTRAnnotator (VEP_plugins release/116, UTRAnnotator.pm, the copy the image ships at /plugins); data/uORF_5UTR_GRCh38_PUBLIC.chr21.txt: the header line and the chromosome 21 rows of uORF_5UTR_GRCh38_PUBLIC.txt from https://github.com/Ensembl/UTRannotator (commit 40e30db003d72435eb3744ee747029294abbcf3a, MIT licence), whose sha256 is e220023a747465dcdf6725ce809511bccc20b7a9990288da91032a1a7f51ebce; the slice carries 379 rows",
+ "plugin_data_sha256": {
+  "uORF_5UTR_GRCh38_PUBLIC.chr21.txt": "77b25c993c5f0e6e181fc5b8e8b8e83880a9140323c1580f823da71d5f190f4c"
+ },
+ "fasta": "GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N, written at 60 bases per line; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form",
+ "input": "variants.vcf: 24 hand-placed chromosome 21 records in the 5' UTRs of protein-coding transcripts on both strands, named in the ID column by their design, the transcript they were designed on and the UTR index of the allele: a substitution that creates a start codon (uaug_gained_snv) and an insertion that completes one at the insertion point (uaug_gained_ins_junction); a substitution and a two-base substitution that create a stop codon inside an existing upstream ORF (ustop_gained_snv, ustop_gained_mnv); a substitution that removes an upstream ORF's stop codon (ustop_lost_snv); a substitution that removes a start codon of an upstream ORF (uaug_lost_snv) or of an overlapping ORF (uaug_lost_oorf_snv); a one-base deletion and insertion inside an upstream ORF (uframeshift_del, uframeshift_ins) and inside an overlapping ORF (uframeshift_oorf_ins); the same designs on upstream ORFs the evidence file lists (_ev, Evidence=True); and a deletion of a whole 5' UTR exon (whole_utr_exon_del), which the max-overlap-80 set drops from the analysis. The reference base is the primary assembly's; the corpus leaves out the records of the documented divergence utrannotator_gained_start_window (docs/plugins/transcript-model.md)",
+ "generator": "candidate records designed from the JSON cache's 5' UTR sequences and exon models, both engines run on them and the agreeing designs kept; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; the reference extract and mask described under fasta; the reference runs recorded under vep_command and under each flag_sets entry's vep_command, in the image, PERL_HASH_SEED=0 PERL_PERTURB_KEYS=0; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite utr=<reference>=<input> --k 100 --seed 1 --covers UTRAnnotator --matrix tests/parity/matrix.tsv --fasta-name reference.fa.gz --flag=--plugin --flag=UTRAnnotator,file={corpus}/data/uORF_5UTR_GRCh38_PUBLIC.chr21.txt --flag=--dir_plugins --flag={corpus}/data; build_golden_corpus.py flag-set --name max-overlap-80; masks order_only; build_golden_corpus.py classify (the default run and the flag set)",
+ "variants_vcf_sha256": "ca4d632886b5ecee7a1a1cf7d6a5e34b06a3f0cacb16e8b80bff0b83fc391d22",
+ "sha256": {
+  "default.txt": "378aea23a4914bb62039f516bbf188cd03522c0d159321bae870c33a891fb1ba",
+  "json.jsonl": "98df90a1f075ee125012c37684a28f026e5fa63e8b4f73b30c91e5acd6f84e1f",
+  "tab.txt": "d079cb4a1397011d5d7a2f6ea083d3e1bc057612554cc4f574e104f2638b3749",
+  "vcf.vcf": "804bfbd39f0e4db4c2222c27b8da6fb68298b438c9eca83ce47f8f4a12380487"
+ },
+ "flag_sets": {
+  "max-overlap-80": {
+   "flags": [
+    "--plugin",
+    "UTRAnnotator,file={corpus}/data/uORF_5UTR_GRCh38_PUBLIC.chr21.txt,max_overlap=80",
+    "--dir_plugins",
+    "{corpus}/data"
+   ],
+   "expected_dir": "expected_max-overlap-80",
+   "vep_command": "PERL_HASH_SEED=0 PERL_PERTURB_KEYS=0 vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --plugin UTRAnnotator,file={corpus}/data/uORF_5UTR_GRCh38_PUBLIC.chr21.txt,max_overlap=80 --dir_plugins {corpus}/data [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "0491f94f1f6ccdf4085220d0cdbe87bfaf23fcb245c73fcd7bafaa0b6bd23ba4",
+    "json.jsonl": "bd38b3a299aa48b5a118ed3a149407de4ec7ccca6b993528854202bc659672e7",
+    "tab.txt": "1d44909e1a7bd069b4ed445dbe3576f632f1207e7b705c477900bbc5cfebe569",
+    "vcf.vcf": "6ab0db702685dc0f7b9fa1d18fbc26be3e69968fbef3fb551483a7a87aec7abb"
+   }
+  }
+ }
+}

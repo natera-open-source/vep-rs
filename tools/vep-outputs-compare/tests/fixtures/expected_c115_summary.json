@@ -1,0 +1,272 @@
+{
+  "generated_at_utc": "{{GENERATED_AT}}",
+  "perl_dir": "{{PERL_DIR}}",
+  "rust_dir": "{{RUST_DIR}}",
+  "report_dir": "{{REPORT_DIR}}",
+  "glob": "*.txt",
+  "missing_rust_pairs": [
+    "only_reference.txt"
+  ],
+  "extra_rust_pairs": [
+    "only_scored.txt"
+  ],
+  "aggregate": {
+    "perl_tuple_count": 15,
+    "rust_tuple_count": 20,
+    "intersection_count": 8,
+    "precision": 0.4,
+    "recall": 0.5333333333333333,
+    "f1": 0.4571428571428572,
+    "top_missing_consequence_sets": [
+      [
+        "intron_variant",
+        2
+      ],
+      [
+        "5_prime_UTR_variant,start_lost,start_retained_variant",
+        1
+      ],
+      [
+        "synonymous_variant",
+        1
+      ],
+      [
+        "coding_transcript_variant",
+        1
+      ],
+      [
+        "frameshift_variant,stop_gained",
+        1
+      ],
+      [
+        "intron_variant,splice_region_variant",
+        1
+      ]
+    ],
+    "top_extra_consequence_sets": [
+      [
+        "transcript_ablation",
+        3
+      ],
+      [
+        "missense_variant",
+        2
+      ],
+      [
+        "downstream_gene_variant",
+        1
+      ],
+      [
+        "intron_variant,splice_region_variant",
+        1
+      ],
+      [
+        "intron_variant,splice_polypyrimidine_tract_variant",
+        1
+      ],
+      [
+        "5_prime_UTR_variant,start_retained_variant",
+        1
+      ],
+      [
+        "NMD_transcript_variant",
+        1
+      ],
+      [
+        "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+        1
+      ],
+      [
+        "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
+        1
+      ]
+    ],
+    "context_collapsed": {
+      "perl_tuple_count": 15,
+      "rust_tuple_count": 20,
+      "intersection_count": 9,
+      "precision": 0.45,
+      "recall": 0.6,
+      "f1": 0.5142857142857143,
+      "collapsed_terms": [
+        "NMD_transcript_variant",
+        "coding_transcript_variant",
+        "non_coding_transcript_variant"
+      ]
+    },
+    "adjusted": {
+      "perl_tuple_count": 13,
+      "rust_tuple_count": 17,
+      "intersection_count": 8,
+      "precision": 0.47058823529411764,
+      "recall": 0.6153846153846154,
+      "f1": 0.5333333333333333,
+      "excluded_perl_tuples": 2,
+      "excluded_rust_tuples": 3,
+      "excluded_categories": {
+        "intronic_overcall_swap": {
+          "count": 3,
+          "excluded": 1
+        },
+        "ppt_overcall_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "frameshift_splice_cascade_swap": {
+          "count": 1,
+          "excluded": 0
+        },
+        "splice_lastwrite_swap": {
+          "count": 0,
+          "excluded": 0
+        },
+        "start_cooccurrence_swap": {
+          "count": 1,
+          "excluded": 1
+        },
+        "sv_transcript_selection": {
+          "count": 1,
+          "excluded": 1,
+          "perl": 0,
+          "rust": 1
+        }
+      }
+    }
+  },
+  "files": [
+    {
+      "file_name": "sample_a.txt",
+      "perl_tuple_count": 10,
+      "rust_tuple_count": 14,
+      "intersection_count": 6,
+      "precision": 0.42857142857142855,
+      "recall": 0.6,
+      "f1": 0.5,
+      "missing_in_rust": 4,
+      "extra_in_rust": 8,
+      "top_missing_consequence_sets": [
+        [
+          "intron_variant",
+          2
+        ],
+        [
+          "5_prime_UTR_variant,start_lost,start_retained_variant",
+          1
+        ],
+        [
+          "synonymous_variant",
+          1
+        ]
+      ],
+      "top_extra_consequence_sets": [
+        [
+          "missense_variant",
+          2
+        ],
+        [
+          "transcript_ablation",
+          2
+        ],
+        [
+          "downstream_gene_variant",
+          1
+        ],
+        [
+          "intron_variant,splice_region_variant",
+          1
+        ],
+        [
+          "intron_variant,splice_polypyrimidine_tract_variant",
+          1
+        ],
+        [
+          "5_prime_UTR_variant,start_retained_variant",
+          1
+        ]
+      ],
+      "context_collapsed_precision": 0.42857142857142855,
+      "context_collapsed_recall": 0.6,
+      "context_collapsed_f1": 0.5,
+      "context_collapsed_missing_in_rust": 4,
+      "context_collapsed_extra_in_rust": 8
+    },
+    {
+      "file_name": "sample_b.txt",
+      "perl_tuple_count": 5,
+      "rust_tuple_count": 6,
+      "intersection_count": 2,
+      "precision": 0.3333333333333333,
+      "recall": 0.4,
+      "f1": 0.3636363636363636,
+      "missing_in_rust": 3,
+      "extra_in_rust": 4,
+      "top_missing_consequence_sets": [
+        [
+          "coding_transcript_variant",
+          1
+        ],
+        [
+          "frameshift_variant,stop_gained",
+          1
+        ],
+        [
+          "intron_variant,splice_region_variant",
+          1
+        ]
+      ],
+      "top_extra_consequence_sets": [
+        [
+          "NMD_transcript_variant",
+          1
+        ],
+        [
+          "transcript_ablation",
+          1
+        ],
+        [
+          "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+          1
+        ],
+        [
+          "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
+          1
+        ]
+      ],
+      "context_collapsed_precision": 0.5,
+      "context_collapsed_recall": 0.6,
+      "context_collapsed_f1": 0.5454545454545454,
+      "context_collapsed_missing_in_rust": 2,
+      "context_collapsed_extra_in_rust": 3
+    }
+  ],
+  "assembly": "GRCh38",
+  "canonical_contigs_filter_active": true,
+  "canonical_contigs_set": [
+    "1",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "2",
+    "20",
+    "21",
+    "22",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "M",
+    "MT",
+    "X",
+    "Y"
+  ]
+}

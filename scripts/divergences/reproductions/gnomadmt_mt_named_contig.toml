@@ -1,0 +1,34 @@
+entry = "gnomadmt_mt_named_contig"
+page = "docs/divergences/gnomadmt-mt-named-contig.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", CHROM, which admits MT as a contig name, and the gnomADMt plugin's header, \"file : (mandatory) Tabix-indexed VCF file from gnomAD\", which fixes no contig name; not seen in the measured datasets"
+notes = "Against the slice as committed, whose contig is chrM, both engines write the five haplogroup fields on this row."
+prepare = [
+  "zcat \"$CORPUS/data/gnomad.v3.1.chrM.slice.vcf.bgz\" | sed -e 's/^##contig=<ID=chrM,/##contig=<ID=MT,/' -e 's/^chrM/MT/' | bgzip > \"$STAGE/gnomad_MT.vcf.bgz\"",
+  "tabix -p vcf \"$STAGE/gnomad_MT.vcf.bgz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+MT	3	MT_3_T_C	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-gnomadmt/json_cache"
+
+[run]
+flags = ["--plugin", "gnomADMt,file={stage}/gnomad_MT.vcf.bgz"]
+
+[compare]
+kind = "rows"
+where = { record = "MT_3_T_C", feature = "ENST00000387314" }
+columns = ["Location", "Allele", "Feature", "Consequence", "gnomAD_hap_AC_het", "gnomAD_hap_AN"]
+
+[expected]
+ensembl_vep = ["MT:3 | C | ENST00000387314 | upstream_gene_variant | - | -"]
+vep_rs = ["MT:3 | C | ENST00000387314 | upstream_gene_variant | 0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|1|0|0|0|0|0|0 | 2680|1537|868|603|34|282|91|14784|701|934|3144|2732|663|2977|4724|5672|126|1|1298|366|7|393|3080|6037|1234|819|546|12|89"]

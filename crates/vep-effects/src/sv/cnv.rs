@@ -17,12 +17,13 @@
 //! (`Bio/EnsEMBL/Variation/...`, `Config.pm` being `Utils/Config.pm`).
 
 use super::{
-    engulfed_transcript_row_terms, is_mature_mirna_sv, overlaps_any_exon,
+    engulfed_transcript_row_terms, frameshift_intron_span, is_mature_mirna_sv, overlaps_any_exon,
     overlaps_any_intron_trimmed, overlaps_cds_exon, overlaps_five_prime_utr,
     overlaps_polypyrimidine_tract, overlaps_three_prime_utr, perl_coding_pre_predicate,
     perl_partial_codon,
 };
 use smallvec::{smallvec, SmallVec};
+use std::sync::Arc;
 use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
@@ -45,6 +46,13 @@ enum CopyNumberClass {
 /// (`Utils/VariationEffect.pm:246-256`).
 pub(super) fn is_copy_number_gain(variant: &InputVariant) -> bool {
     parse_copy_number(variant) == CopyNumberClass::Duplication
+}
+
+/// Whether the record's copy number is the deletion shape (`<CN0>`), the one
+/// copy-number allele this module reads as a `deletion`
+/// (`Utils/VariationEffect.pm:205-213`).
+pub(super) fn is_copy_number_loss(variant: &InputVariant) -> bool {
+    parse_copy_number(variant) == CopyNumberClass::Deletion
 }
 
 /// The copy-number reading of a variant annotated as a copy number variation.
@@ -83,7 +91,7 @@ fn parse_copy_number(variant: &InputVariant) -> CopyNumberClass {
 /// The specific consequences depend on the inferred copy number class.
 pub fn calculate(
     variant: &InputVariant,
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
@@ -165,7 +173,12 @@ pub fn calculate(
     // Ensembl VEP predicates (only for CN0=deletion and CN2=duplication classes):
     // feature_truncation = within_cdna AND (partial_overlap OR complete_within) AND deletion
     // feature_elongation = within_cdna AND complete_within_feature AND duplication
-    let within_cdna = overlaps_any_exon(transcript, sv_start, sv_end);
+    // `within_cdna` holds for an exonic span and for one wholly inside a frameshift
+    // intron, which takes the terms of `frameshift_intron_span` in place of the
+    // exon and intron tests below.
+    let frameshift_intron = frameshift_intron_span(transcript, sv_start, sv_end);
+    let within_cdna =
+        overlaps_any_exon(transcript, sv_start, sv_end) || frameshift_intron.is_some();
     let complete_within = sv_start >= tx_start && sv_end <= tx_end;
     let extends_beyond = sv_start < tx_start || sv_end > tx_end;
 
@@ -205,17 +218,22 @@ pub fn calculate(
     let is_coding = transcript.has_cds();
 
     if is_coding {
-        // A complete and an incomplete CDS get the same term:
-        // `CodingTranscriptVariant` is not emitted on the CNV path.
-        if overlaps_cds_exon(transcript, sv_start, sv_end) {
+        // A complete and an incomplete CDS get the same term.
+        if overlaps_cds_exon(transcript, sv_start, sv_end)
+            || frameshift_intron.is_some_and(|span| span.coding)
+        {
             consequences.push(Consequence::CodingSequenceVariant);
         }
 
-        if overlaps_five_prime_utr(transcript, sv_start, sv_end) {
+        if overlaps_five_prime_utr(transcript, sv_start, sv_end)
+            || frameshift_intron.is_some_and(|span| span.five_prime_utr)
+        {
             consequences.push(Consequence::FivePrimeUtrVariant);
         }
 
-        if overlaps_three_prime_utr(transcript, sv_start, sv_end) {
+        if overlaps_three_prime_utr(transcript, sv_start, sv_end)
+            || frameshift_intron.is_some_and(|span| span.three_prime_utr)
+        {
             consequences.push(Consequence::ThreePrimeUtrVariant);
         }
     }
@@ -238,10 +256,10 @@ pub fn calculate(
         consequences.push(Consequence::SplicePolypyrimidineTractVariant);
     }
 
-    // Context terms for non-coding transcripts: always added alongside other consequences.
-    // Perl's SV annotation adds non_coding_transcript_variant for non-coding transcripts
-    // even when other consequences (intron_variant, etc.) are already present.
-    // Perl's within_non_coding_gene excludes mature_miRNA.
+    // Context term for a non-coding, non-NMD transcript, added beside intron_variant and
+    // the splice terms and withheld when non_coding_transcript_exon_variant or
+    // mature_miRNA_variant is present: Ensembl VEP's `within_non_coding_gene`
+    // (`Utils/VariationEffect.pm:495-500`) excludes the mature miRNA and non-coding exon hits.
     if !is_coding
         && !transcript.facts().is_nmd
         && !consequences.iter().any(|c| {
@@ -259,15 +277,10 @@ pub fn calculate(
         consequences.push(Consequence::NmdTranscriptVariant);
     }
 
-    // Coding transcript context: only as fallback when no other consequences assigned.
-    // Perl's SV annotation does not add coding_transcript_variant alongside
-    // intron_variant or coding_sequence_variant; it is only a sole-consequence fallback.
+    // A row no predicate claims carries Ensembl VEP's default term,
+    // `intergenic_variant` (`BaseVariationFeatureOverlapAllele.pm:285`).
     if consequences.is_empty() {
-        if is_coding {
-            consequences.push(Consequence::CodingTranscriptVariant);
-        } else {
-            consequences.push(Consequence::NonCodingTranscriptVariant);
-        }
+        consequences.push(Consequence::IntergenicVariant);
     }
 
     consequences.sort_by_key(|c| c.rank());
@@ -283,7 +296,7 @@ pub fn calculate(
 
 /// Compute upstream/downstream gene variant consequence.
 fn compute_upstream_downstream(
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     sv_start: u64,
     sv_end: u64,
     upstream_distance: u64,
@@ -330,7 +343,7 @@ fn compute_upstream_downstream(
 
 /// Build a `TranscriptConsequence` from common transcript fields.
 fn build_consequence(
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     consequences: ConsequenceList,
     impact: Impact,
     distance: Option<u64>,
@@ -350,9 +363,24 @@ mod tests {
     //
     use crate::sv::tests::make_mature_mirna_transcript;
     use crate::test_helpers::make_test_transcript;
-
     use vep_core::consequence::FeatureType;
     use vep_core::variant::VariantClass;
+
+    /// [`super::calculate`] on a transcript the test owns: the row shares a copy of
+    /// it, as the index shares its handle.
+    fn calculate(
+        variant: &InputVariant,
+        transcript: &Transcript,
+        upstream_distance: u64,
+        downstream_distance: u64,
+    ) -> Option<TranscriptConsequence> {
+        super::calculate(
+            variant,
+            &Arc::new(transcript.clone()),
+            upstream_distance,
+            downstream_distance,
+        )
+    }
 
     /// Helper: build a CNV variant with specified alt allele and sv_end.
     fn make_cnv(alt: &[u8], start: u64, sv_end: u64) -> InputVariant {
@@ -385,9 +413,6 @@ mod tests {
     /// `complete_overlap`/`within_feature`/<biotype>, so the miRNA predicate is not
     /// skipped by `_skip_oc`; `get_all_OverlapConsequences` then sets
     /// `assigned_tier = 2` and stops before the tier-3 context terms.
-    ///
-    /// With `is_mature_mirna_sv` tested below the `fully_contains` short-circuit
-    /// this assert fails with `[NonCodingTranscriptVariant]`.
     #[test]
     fn test_cnv_fully_containing_mirna_gives_mature_mirna_only() {
         let tx = make_mature_mirna_transcript();
@@ -465,7 +490,7 @@ mod tests {
             vec![Consequence::IntergenicVariant]
         );
         assert_eq!(tc.impact, Impact::MODIFIER);
-        assert_eq!(&*tc.transcript_id, "ENST00000000001");
+        assert_eq!(tc.transcript_id(), "ENST00000000001");
     }
 
     #[test]
@@ -778,12 +803,12 @@ mod tests {
         let tx = make_test_transcript();
         let v = make_cnv(b"<CNV>", 25_000_100, 25_001_500);
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        assert_eq!(&*tc.transcript_id, "ENST00000000001");
-        assert_eq!(&*tc.gene_id, "ENSG00000000001");
-        assert_eq!(tc.gene_symbol, Some("TEST1".into()));
+        assert_eq!(tc.transcript_id(), "ENST00000000001");
+        assert_eq!(tc.gene_id(), "ENSG00000000001");
+        assert_eq!(tc.gene_symbol(), Some("TEST1"));
         assert_eq!(tc.strand, 1);
         assert!(tc.canonical);
-        assert_eq!(tc.biotype, Some("protein_coding".into()));
+        assert_eq!(tc.biotype(), Some("protein_coding"));
         assert_eq!(tc.feature_type, FeatureType::Transcript);
         assert!(tc.cdna_position.is_none());
         assert!(tc.cds_position.is_none());
@@ -969,5 +994,48 @@ mod tests {
                 "stop_lost",
             ],
         );
+    }
+
+    /// A copy-number span wholly inside a frameshift intron. Ensembl VEP 116.2 writes
+    /// `coding_sequence_variant` for `<CNV>`, `<CN1>` and `<CN3>` over GRCh37
+    /// `21:38600094-38600097` on ENST00000288304 (a 4-base intron inside its coding
+    /// region) and `intron_variant` for the same alleles in an ordinary intron; the
+    /// deletion and duplication classes add `feature_truncation` and
+    /// `feature_elongation`.
+    #[test]
+    fn a_copy_number_span_inside_a_frameshift_intron_is_coding() {
+        let tx = crate::sv::deletion::frameshift_intron_test_transcript();
+        let terms = |alt: &[u8], start: u64, end: u64| {
+            let tc = calculate(&make_cnv(alt, start, end), &tx, 5000, 5000).unwrap();
+            let mut terms: Vec<String> = tc.consequences.iter().map(|c| c.to_string()).collect();
+            terms.sort();
+            terms
+        };
+        // The 9-base intron of the coding region.
+        assert_eq!(
+            terms(b"<CNV>", 25_002_101, 25_002_109),
+            ["coding_sequence_variant"]
+        );
+        assert_eq!(
+            terms(b"<CN0>", 25_002_101, 25_002_109),
+            ["coding_sequence_variant", "feature_truncation"]
+        );
+        assert_eq!(
+            terms(b"<CN2>", 25_002_103, 25_002_107),
+            ["coding_sequence_variant", "feature_elongation"]
+        );
+        // The introns of the two UTRs.
+        assert_eq!(
+            terms(b"<CNV>", 25_000_021, 25_000_025),
+            ["5_prime_UTR_variant"]
+        );
+        assert_eq!(
+            terms(b"<CN0>", 25_005_001, 25_005_013),
+            ["3_prime_UTR_variant", "feature_truncation"]
+        );
+        // Nine bases inside an ordinary intron keep the intronic reading.
+        for alt in [&b"<CNV>"[..], b"<CN0>", b"<CN2>"] {
+            assert_eq!(terms(alt, 25_001_000, 25_001_008), ["intron_variant"]);
+        }
     }
 }

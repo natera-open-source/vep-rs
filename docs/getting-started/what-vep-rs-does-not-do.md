@@ -1,69 +1,86 @@
 # What vep-rs does not do
 
-This page is for a reader who brings an Ensembl VEP command line to vep-rs and wants to know, in one place, which Ensembl VEP features vep-rs does not have and what a run does when asked for one. Every flag Ensembl VEP accepts is honoured, refused with an error that names it, or accepted without effect with its help text saying so. The [CLI reference](../cli-reference.md) and its [Compatibility with Ensembl VEP](../cli/compatibility.md) page carry the per-flag detail; each family below gets its flags, what a run does with them, and the release that adds the feature, if any.
+What to expect when a command line brought from Ensembl VEP asks vep-rs for a feature it does not have: which features those are and what the run does.
+
+Every flag Ensembl VEP accepts is honoured, refused with an error that names it, or accepted without effect with its help text saying so. The [CLI reference](../cli-reference.md) and its [Compatibility with Ensembl VEP](../cli/compatibility.md) page carry the per-flag detail. Each family below gets its flags and what a run does with them.
 
 ## RefSeq and merged caches
 
-`--refseq` and `--merged` select the cache, the species directory suffixed `_refseq` or `_merged`, as Ensembl VEP does. Under `--json_cache`, `--merged` changes nothing and `--refseq` only puts RefSeq transcripts first when an HGVS notation names a gene. `--exclude_predicted` adds Ensembl VEP's own filter, `not stable_id match ^X._`, which drops RefSeq's predicted `XM_` and `XR_` models. A converted RefSeq or merged cache annotates every transcript it carries, including those Ensembl VEP drops without `--all_refseq`, each as an Ensembl transcript. The `REFSEQ_MATCH`, `BAM_EDIT`, `REFSEQ_OFFSET` and `SOURCE` columns are not written, a BAM-edited transcript's edited sequence is not used, and the `ensembl` and `refseq` pick criteria tie; `--all_refseq` and `--bam` are refused as unknown arguments (exit 2).
-
-Planned for the next release, 0.6.0.
-
-## Regulatory and motif features
-
-`--regulatory`, alone or through `--everything`, writes `RegulatoryFeature` and `MotifFeature` rows from a cache converted with its regulatory features ([Regulatory and motif features](../regulatory.md)); on a cache without regulatory data it writes one warnings-file line and no such row.
-
-Motif score changes (`MOTIF_SCORE_CHANGE`), high-information positions (`HIGH_INF_POS`) and cell-type activity (`CELL_TYPE`) are not written ([the divergence page](../divergences/regulatory-rows.md)). `--cell_type` is refused as an unknown argument; `--regulatory_gff` and `--extended_promoters` are each refused with an error naming the flag: regulatory features are read from the cache alone.
+The RefSeq and merged caches that `--refseq` and `--merged` annotate are Ensembl's, converted ([Cache setup](../cache-setup.md#refseq-and-merged-caches)): vep-rs builds no RefSeq model natively and produces no merged cache. `--bam`, which corrects RefSeq transcript models against an alignment file as a cache, GFF, GTF or database source is read, is refused with an error naming the route (exit 1); a converted RefSeq or merged cache carries the edits Ensembl applied when it was dumped.
 
 ## Custom annotation sources
 
-`--custom <file>,<name>,<format>,...` is accepted and the source is not read, so the run proceeds and no custom field appears; the flag's help text says so. `--gff`, `--gtf`, `--bigwig`, `--phyloP` and `--phastCons`, which Ensembl VEP reads as `--custom` sources, and `--custom_multi_allelic`, `--ucsc_assembly` and `--ucsc_data_root` are refused as unknown arguments (`error: unexpected argument '--gff' found`, exit 2). `--custom_suppress_filter` is refused with an error that begins `ERROR: [cli] --custom_suppress_filter is not supported: it would keep a --custom VCF source's FILTER column out of the output`.
+`--custom` reads local VCF, BED, GFF promoter and bigWig sources ([Custom annotation](../custom-annotation.md)). Two things Ensembl VEP reads through it are not read. A remote file (`http://`, `ftp://` or any URL) is refused with an error naming a local copy, where Ensembl VEP reads it over the network. A GFF or GTF transcript model is refused with the two-step cache recipe, where Ensembl VEP reads it in place of its cache.
 
-Planned for the next release, 0.6.0.
+A BAM is not read. Ensembl VEP corrects such a model against one named by `--bam`. `--bam` is refused, and `format=bam` is refused as an unsupported format (exit 1), as Ensembl VEP refuses it.
+
+A `--custom` run still reads a cache, where Ensembl VEP accepts the source as the run's only annotation source. `--gff` and `--gtf`, Ensembl VEP's shortcuts to a `--custom` transcript source, are refused with an error that prints the cache recipe (exit 1): build a cache from the file with `vep-cache-builder` and annotate against it ([A GTF or GFF3 as the transcript model](../cache-from-gtf-or-gff3.md)). `--phyloP` and `--phastCons` read their bigWigs from a local mirror alone: the remote root Ensembl VEP reads by default is refused ([Conservation shortcuts](../output/custom-bigwig.md#conservation-shortcuts)).
 
 ## Plugins
 
-`--plugin <Name>,<params>`, `--dir_plugins` and `--safe` work as in Ensembl VEP. A name resolves to one of the built-in plugins listed on [Plugins](../plugins.md), else to a shared library under `--dir_plugins`; a name that resolves to neither is skipped with a warning, or refused under `--safe` (an error that begins `ERROR: [plugin] Failed to load plugin <Name>`). The rest of Ensembl VEP's plugin catalogue has no vep-rs counterpart: those plugins are Perl modules, which vep-rs cannot load, so `--plugin` with one of their names is that warning or that error. The built-in plugins ship as [Plugins](../plugins.md) documents them; this release publishes no measurement of their agreement with the Ensembl VEP plugin modules, and 0.6.0 measures it.
+Ensembl VEP's plugins are Perl modules, which vep-rs cannot load. A `--plugin` name resolves to one of the built-in plugins listed on [Plugins](../plugins.md), else to a shared library under `--dir_plugins`. The rest of Ensembl VEP's plugin catalogue has no vep-rs counterpart.
 
-Planned for the next release, 0.6.0.
+What a run does with any other name:
 
-## The statistics report
+- With the name of a plugin from that catalogue and no shared library of that name, `--plugin` ends the run (exit 1), with or without `--safe`. The error begins `ERROR: [plugin] <Name> is an Ensembl VEP plugin vep-rs does not provide:` and states the reason.
+- A `.pm` file, by path or under `--dir_plugins`, ends the run with an error that begins `ERROR: [plugin] <path> is an Ensembl VEP Perl plugin`.
+- A name that is none of these is skipped with a warning, or refused under `--safe` (an error that begins `ERROR: [plugin] Failed to load plugin <Name>`).
+- Under `--safe` a plugins directory that does not exist ends the run before any of these (`ERROR: [plugin] Plugins directory '<dir>' not found.`).
 
-`--no_stats`, `--stats_file` (`--sf`) and `--stats_text` are accepted and change nothing: no statistics file is written, with or without them. `--stats_html` is refused as an unknown argument (`error: unexpected argument '--stats_html' found`, exit 2). Ensembl VEP writes the report, a summary of the run's records and consequences, as HTML beside the output by default and as text under `--stats_text`.
-
-Planned for the next release, 0.6.0.
+A built-in plugin's data file is a local path. A URL (`http://`, `ftp://` or any
+other scheme) fails the plugin's instantiation with `remote data files are not
+supported; download <url> and index it locally`, where Ensembl VEP's tabix
+plugins stream an `http://` or `ftp://` file over the network
+(`BaseVepTabixPlugin.pm` lines 271-274). LoFTEE's `key:value` word holding a
+URL is dropped and logged instead, as Ensembl VEP's plugin drops it
+([LoFTEE](../plugins/loftee.md)).
 
 ## Parquet columns
 
-`--output_format parquet` writes a fixed column set, five key columns and then the default `--tab` columns ([Parquet](../output/parquet.md)); `--fields` beside it is refused with an error: `ERROR: [output] --fields applies to --tab and --vcf output; the Parquet column set is fixed`. Parquet is vep-rs's own format, with no Ensembl VEP counterpart; a column set chosen with `--fields` is what it lacks.
-
-Planned for the next release, 0.6.0.
+`--output_format parquet` writes a fixed column set, six key columns and then the default `--tab` columns, each under a declared type ([Parquet](../output/parquet.md)). `--fields` beside it is refused with an error: `ERROR: [output] --fields applies to --tab and --vcf output; the Parquet column set is fixed`. Parquet is vep-rs's own format, with no Ensembl VEP counterpart; a column set chosen with `--fields` is what it lacks.
 
 ## The companion tools
 
-Ensembl VEP ships `filter_vep`, which filters an annotated output by field expressions, `haplo`, which computes transcript haplotypes from phased genotypes, and `variant_recoder`, which translates a variant between its identifiers and notations. vep-rs's own programs are `vep`, `vep-cache-builder` and `vep-cache-converter`, so the release archives and the container image carry no program by those names.
+Ensembl VEP ships three companion tools:
 
-Planned for the next release, 0.6.0.
+- `filter_vep`, which filters an annotated output by field expressions;
+- `haplo`, which computes transcript haplotypes from phased genotypes;
+- `variant_recoder`, which translates a variant between its identifiers and notations.
 
-## Progress and debug output
+The release archives and the container image carry no `haplo`.
 
-`--no_progress` and `--debug` are refused as unknown arguments (`error: unexpected argument '--no_progress' found`, exit 2). Ensembl VEP's `--no_progress` suppresses its progress bars and `--debug` prints plugin-loading detail; neither changes an annotation.
+`filter_vep` is `vep filter` ([its page](../cli/filter.md)). Its `--ontology` is answered from the built-in Sequence Ontology table instead of an Ensembl database. The database connection flags (`--host`, `--port`, `--user`, `--pass`, `--version`, `--registry`) are refused with an error naming the flag.
 
-Planned for the next release, 0.6.0.
+`variant_recoder` is `vep recode` ([its page](../cli/recode.md)): the same options over the cache alone. The synonyms and the co-located variants come from the cache's variation data, where `variant_recoder` reads the Ensembl database. So the merged dbSNP identifiers the database lists as synonyms (`Archive dbSNP`) are not written. `--lrg` and `--ambiguous_hgvs` are refused with the database connection flags.
+
+A RefSeq notation appears only with a merged cache, a ClinGen allele identifier is not an input, and `ga4gh_vrs` is written only for a chromosome whose synonyms name an `NC_` accession. For any other chromosome the `ga4gh_vrs` key is still present under `--ga4gh_vrs`, as it is in `variant_recoder`, and holds an empty list.
+
+## Debug output
+
+`--debug` is accepted without effect. Ensembl VEP reads it only to print the plugin directories and modules it loads, and that detail is not printed. The flag changes no annotation.
 
 ## Ensembl database mode
 
-`--database`, `--host`, `--port`, `--user`, `--password`, `--registry`, `--db_version`, `--genomes` and `--is_multispecies` are each refused with an error naming the flag; the error for `--database` begins `ERROR: [cli] --database is not supported: vep-rs reads a local cache only and never connects to an Ensembl database`. `--lrg` and `--ambiguous_hgvs`, which need the database, are refused with them. Database mode is refused for good and is not planned: vep-rs reads a local cache only.
+`--database`, `--host`, `--port`, `--user`, `--password`, `--registry`, `--db_version`, `--genomes` and `--is_multispecies` are each refused with an error naming the flag. `--lrg` and `--ambiguous_hgvs`, which need the database, are refused with them. The error for `--database` begins `ERROR: [cli] --database is not supported: vep-rs reads a local cache only and never connects to an Ensembl database`.
+
+The refusal holds under `--offline` too. Ensembl VEP accepts `--offline --database`, since its `--offline` option set switches `--database` off before the incompatibility check runs (`Config.pm` line 766, then line 769), and runs offline. vep-rs refuses the pair.
 
 ## 1000 Genomes pilot coordinates
 
-`--gp` is refused with an error naming it, which begins `ERROR: [cli] --gp is not supported: it reads a GRCh37 chr:pos from the INFO/GP field that some 1000 Genomes VCFs carry`. In Ensembl VEP the flag reads a record's chromosome and position from the `GP` field of its INFO column, the convention of the 1000 Genomes pilot VCFs, and skips a record without that field (`Config.pm` line 120, `Parser/VCF.pm` lines 271-285). Not planned.
+`--gp` is refused with an error naming it, which begins `ERROR: [cli] --gp is not supported: it reads a GRCh37 chr:pos from the INFO/GP field that some 1000 Genomes VCFs carry`. In Ensembl VEP the flag reads a record's chromosome and position from the `GP` field of its INFO column and skips a record without that field (`Config.pm` line 120, `Parser/VCF.pm` lines 271-285). That field is the convention of the 1000 Genomes pilot VCFs.
 
 ## Very long lines
 
-An input, cache variation or FASTA index line longer than 64 MiB is refused under the `input`, `cache` or `fasta` component (exit 1), with `longer than the 67108864-byte limit for one line` in the message, where Ensembl VEP reads such a line whole. Such a line drops a plugin at load (the `Failed to instantiate plugin` warning, or the `plugin` error under `--safe`); met by a query, it is a `plugin execution error` warning, `--safe` or not, and the batch loses that plugin's values and every later plugin's. `vep-cache-builder` refuses a GFF3, GTF, protein FASTA or core-dump line longer than 16 MiB under the `cache-builder` component, with `16777216-byte` in the message, and `vep-cache-converter` a plugin data line over 64 MiB.
+The limits, by what reads the line:
+
+- An input, cache variation or FASTA index line longer than 64 MiB is refused under the `input`, `cache` or `fasta` component (exit 1), with `longer than the 67108864-byte limit for one line` in the message. Ensembl VEP reads such a line whole.
+- Such a line drops a plugin at load (the `Failed to instantiate plugin` warning, or the `plugin` error under `--safe`).
+- A plugin query that reads it costs the queried variants that plugin's values, with a `Plugin '<Name>' went wrong` warning, `--safe` or not.
+- `vep-cache-builder` refuses a GFF3, GTF, protein FASTA or core-dump line longer than 16 MiB under the `cache-builder` component, with `16777216-byte` in the message.
+- `vep-cache-converter` refuses a plugin data line over 64 MiB.
 
 ## Bioconda
 
-The recipe [`bioconda/vep-rs`](../../bioconda/vep-rs/meta.yaml) builds `vep`, `vep-cache-builder` and `vep-cache-converter` from the release source tarball, at the generic CPU floors. Bioconda publishes the channel package from that recipe. No package is on the channel yet, so installation is still a release binary, a source build or the container image, as [Installation](installation.md) describes.
+There is no Bioconda package: vep-rs is installed from a pre-built binary on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page, a build from source or the container image, as [Installation](installation.md) describes. A pipeline that installs Ensembl VEP from Bioconda runs vep-rs from the container image or the release archive instead ([Workflow managers](workflow-managers.md)). The repository holds a Bioconda recipe, which builds the binaries from a published release's source tarball and is not a channel package ([Installation](installation.md#bioconda)).
 
 To ask for a feature, or to report one this page leaves out, open an issue on the [issue tracker](https://github.com/natera-open-source/vep-rs/issues).

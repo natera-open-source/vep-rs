@@ -1,0 +1,32 @@
+entry = "hgvs_shift_sequence_edge_window"
+page = "docs/divergences/hgvs-shift-near-sequence-edge.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "seen in the mitochondrial records of the ClinVar GRCh37 and GRCh38 files: 4 of 3,122 records on each, 20 rows under --hgvs"
+notes = "A three-base deletion 291 bases into the Arabidopsis mitochondrial genome, on the reverse-strand ATMG00010.1; the repeat admits a four-base shift towards the transcript's 3' end, and the flank Ensembl VEP walks is cut 1,000 bases into the clipped slice."
+
+[input]
+format = "vcf"
+text = """
+Mt	290	mt_del3_290_TCTT_T	TCTT	T	.	.	.
+"""
+
+[cache]
+species = "arabidopsis_thaliana"
+assembly = "TAIR10"
+version = "63"
+json_cache = "tests/golden/116/TAIR10-arabidopsis/json_cache"
+fasta = "tests/golden/116/TAIR10-arabidopsis/reference.fa.gz"
+
+[run]
+flags = ["--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = "mt_del3_290_TCTT_T", feature = "ATMG00010.1" }
+columns = ["Consequence", "Codons", "HGVSc", "HGVSp", "HGVS_OFFSET"]
+
+[expected]
+ensembl_vep = ["inframe_deletion | AAG/- | ATMG00010.1:c.444_446del | ATMG00010.1:p.Lys149del | -2"]
+vep_rs = ["inframe_deletion | AAG/- | ATMG00010.1:c.446_448del | ATMG00010.1:p.Lys149del | -4"]

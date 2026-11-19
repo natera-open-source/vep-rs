@@ -1,0 +1,31 @@
+entry = "cell_type_empty_value_key"
+page = "docs/divergences/cell-type-comma-names.md#an-empty---cell_type-value"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --cell_type option's documented value, a single cell type or a comma-separated list with no minimum count stated (Ensembl VEP documentation, \"Running Ensembl VEP\", --cell_type); not seen in the measured datasets"
+notes = "A --cell_type value that splits to no name; the default format's RegulatoryFeature row of the enhancer ENSR21_C6M55."
+
+[input]
+format = "vcf"
+text = """
+21	46699255	rs868224642	G	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-regulatory/json_cache"
+
+[run]
+flags = ["--regulatory", "--cell_type", ","]
+format = "default"
+
+[compare]
+kind = "field"
+field = "CELL_TYPE"
+where = { record = "rs868224642", feature = "ENSR21_C6M55" }
+
+[expected]
+ensembl_vep = [""]
+vep_rs = ["-"]

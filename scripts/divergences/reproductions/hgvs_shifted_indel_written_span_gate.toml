@@ -1,0 +1,31 @@
+entry = "hgvs_shifted_indel_written_span_gate"
+page = "docs/divergences/hgvs-shifted-indel-written-span-gate.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 137,702 per million · 23 flag sets, 104 corpora"
+notes = "A T inserted two bases before the first base of ENST00000602620; the shift carries it 17 bases into the transcript's opening run of Ts."
+
+[input]
+format = "vcf"
+text = """
+21	16420340	ins_before_ENST00000602620	C	CT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-release116/json_cache"
+fasta = "tests/golden/116/GRCh38-identifiers/reference.fa.gz"
+
+[run]
+flags = ["--hgvs", "--shift_3prime", "1", "--shift_length"]
+
+[compare]
+kind = "rows"
+where = { record = "ins_before_ENST00000602620", feature = "ENST00000602620" }
+columns = ["Consequence", "cDNA_position", "SHIFT_LENGTH", "HGVSc", "HGVS_OFFSET"]
+
+[expected]
+ensembl_vep = ["non_coding_transcript_exon_variant | 15-16 | 17 | - | -"]
+vep_rs = ["non_coding_transcript_exon_variant | 15-16 | 17 | ENST00000602620.2:n.15dup | 17"]

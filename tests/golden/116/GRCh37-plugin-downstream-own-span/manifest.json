@@ -1,0 +1,894 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh37",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 200,
+ "included_records": {
+  "ownspan37": [
+   "1397100",
+   "1444038",
+   "1703957",
+   "2583096",
+   "2833728",
+   "2948877",
+   "3066443",
+   "4730422",
+   "817103",
+   "988798"
+  ]
+ },
+ "max_span": 1000000,
+ "cache_cost_flank": 5000,
+ "flags": [
+  "--hgvs",
+  "--plugin",
+  "Downstream"
+ ],
+ "fasta": "reference.fa.gz",
+ "covers": [
+  "Downstream"
+ ],
+ "suites": {
+  "ownspan37": {
+   "reference": "output.txt",
+   "input": "candidates.vcf",
+   "rows": 115,
+   "combinations": 8
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 21,
+   "exemplar_records": 6
+  },
+  "frameshift_variant": {
+   "observed_rows": 38,
+   "exemplar_records": 10
+  },
+  "intron_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 4
+  },
+  "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 6
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 40,
+   "exemplar_records": 5
+  }
+ },
+ "variant_classes": {
+  "deletion": 87,
+  "insertion": 28
+ },
+ "records": [
+  {
+   "suite": "ownspan37",
+   "vcf": "19\t13136318\t2948877\tACAAT\tA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "ownspan37",
+   "vcf": "21\t46916424\t1444038\tGC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "ownspan37",
+   "vcf": "21\t46925057\t2833728\tGGA\tG\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ownspan37",
+   "vcf": "21\t46925109\t988798\tG\tGC\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ownspan37",
+   "vcf": "21\t46925136\t4730422\tC\tCTCCCGGCCCCCCAGGCCCCCCAGGGCCCCCTTCATTTCCTGGCCCTCACAGGCAGAGTAAGTCAGTGGGGAGTGGGCCCCGGGCAGAGGCCGCCTCGTGTGGCTTCGTGTTCCCACCTTGGTTTCTCTCCTGCAGCTATCAGCGT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant",
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ownspan37",
+   "vcf": "X\t152955921\t817103\tCG\tC\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ownspan37",
+   "vcf": "X\t152956806\t1397100\tTAC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ownspan37",
+   "vcf": "X\t152959652\t3066443\tTC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "ownspan37",
+   "vcf": "X\t152960006\t1703957\tACGACATTGCCTGTATGATCGGGTAC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "ownspan37",
+   "vcf": "X\t152960073\t2583096\tC\tCCCGCTGGTCTGCATGGTAAGGGCTGGGGGAGGTGGGGCAGGGCGGGGGGCGAGGCAGGGCGGGGTAGGGGCCCCATTAACCGCAGCATTCTGGTCCGTAGGGCATCTTCATCTTCAACGTTGTGTACTACGAG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "without-hgvs",
+   "flags": [
+    "--plugin",
+    "Downstream"
+   ],
+   "input": "variants.without-hgvs.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_without-hgvs",
+   "covers": [
+    "Downstream"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "DownstreamProtein",
+    "ProteinLengthChange"
+   ],
+   "field_divergences": [
+    {
+     "location": "21:46916425",
+     "allele": "-",
+     "feature": "ENST00000342220",
+     "feature_type": "Transcript",
+     "record_indices": [
+      1
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "DownstreamProtein",
+     "vep": "PQDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+     "vep_rs": "GPQDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+     "expected_divergence": "downstream_start_past_own_codon"
+    },
+    {
+     "location": "21:46916425",
+     "allele": "-",
+     "feature": "ENST00000355480",
+     "feature_type": "Transcript",
+     "record_indices": [
+      1
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "DownstreamProtein",
+     "vep": "PQDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+     "vep_rs": "GPQDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+     "expected_divergence": "downstream_start_past_own_codon"
+    },
+    {
+     "location": "21:46916425",
+     "allele": "-",
+     "feature": "ENST00000359759",
+     "feature_type": "Transcript",
+     "record_indices": [
+      1
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "DownstreamProtein",
+     "vep": "PQDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+     "vep_rs": "GPQDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+     "expected_divergence": "downstream_start_past_own_codon"
+    },
+    {
+     "location": "21:46916425",
+     "allele": "-",
+     "feature": "ENST00000400337",
+     "feature_type": "Transcript",
+     "record_indices": [
+      1
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "DownstreamProtein",
+     "vep": "PQDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+     "vep_rs": "GPQDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+     "expected_divergence": "downstream_start_past_own_codon"
+    },
+    {
+     "location": "X:152959653",
+     "allele": "-",
+     "feature": "ENST00000253122",
+     "feature_type": "Transcript",
+     "record_indices": [
+      7
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "DownstreamProtein",
+     "vep": "KGRSLWPSVVPSALSSISPW",
+     "vep_rs": "FKGRSLWPSVVPSALSSISPW",
+     "expected_divergence": "downstream_start_past_own_codon"
+    },
+    {
+     "location": "X:152959653",
+     "allele": "-",
+     "feature": "ENST00000430077",
+     "feature_type": "Transcript",
+     "record_indices": [
+      7
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "DownstreamProtein",
+     "vep": "KGRSLWPSVVPSALSSISPW",
+     "vep_rs": "FKGRSLWPSVVPSALSSISPW",
+     "expected_divergence": "downstream_start_past_own_codon"
+    },
+    {
+     "location": "X:152959653",
+     "allele": "-",
+     "feature": "ENST00000442457",
+     "feature_type": "Transcript",
+     "record_indices": [
+      7
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "DownstreamProtein",
+     "vep": "KGRSLWPSVVPSALSSISPW",
+     "vep_rs": "FKGRSLWPSVVPSALSSISPW",
+     "expected_divergence": "downstream_start_past_own_codon"
+    },
+    {
+     "location": "X:152960007-152960031",
+     "allele": "-",
+     "feature": "ENST00000253122",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "DownstreamProtein",
+     "vep": "DLAPG",
+     "vep_rs": "DDLAPG",
+     "expected_divergence": "downstream_start_past_own_codon"
+    },
+    {
+     "location": "X:152960007-152960031",
+     "allele": "-",
+     "feature": "ENST00000430077",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "consequence_set": "frameshift_variant",
+     "field": "DownstreamProtein",
+     "vep": "DLAPG",
+     "vep_rs": "DDLAPG",
+     "expected_divergence": "downstream_start_past_own_codon"
+    }
+   ],
+   "field_divergence_summary": {
+    "downstream_start_past_own_codon": 9
+   }
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "DownstreamProtein",
+  "ProteinLengthChange",
+  "HGVSc",
+  "HGVS_OFFSET"
+ ],
+ "field_divergences": [
+  {
+   "location": "19:13136319-13136322",
+   "allele": "-",
+   "feature": "ENST00000358552",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "KNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "vep_rs": "TKNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "19:13136319-13136322",
+   "allele": "-",
+   "feature": "ENST00000360105",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "KNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "vep_rs": "TKNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "19:13136319-13136322",
+   "allele": "-",
+   "feature": "ENST00000397661",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "KNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "vep_rs": "TKNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "19:13136319-13136322",
+   "allele": "-",
+   "feature": "ENST00000585575",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "KNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "vep_rs": "TKNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "19:13136319-13136322",
+   "allele": "-",
+   "feature": "ENST00000586873",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST00000586873.1:c.374_376del",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "19:13136319-13136322",
+   "allele": "-",
+   "feature": "ENST00000586873",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "3",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "19:13136319-13136322",
+   "allele": "-",
+   "feature": "ENST00000587260",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "KNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "vep_rs": "TKNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "19:13136319-13136322",
+   "allele": "-",
+   "feature": "ENST00000587760",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "KNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "vep_rs": "TKNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "19:13136319-13136322",
+   "allele": "-",
+   "feature": "ENST00000588228",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "KNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "vep_rs": "TKNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "19:13136319-13136322",
+   "allele": "-",
+   "feature": "ENST00000590027",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "KNW",
+   "vep_rs": "TKNW",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "19:13136319-13136322",
+   "allele": "-",
+   "feature": "ENST00000592199",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "KNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "vep_rs": "TKNWIFIWLTLSTLRNPDNQIVQTSKEMRTSNHCPTGT",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "21:46916425",
+   "allele": "-",
+   "feature": "ENST00000342220",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "QDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+   "vep_rs": "GPQDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates",
+   "second_expected_divergence": "downstream_start_past_own_codon"
+  },
+  {
+   "location": "21:46916425",
+   "allele": "-",
+   "feature": "ENST00000355480",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "QDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+   "vep_rs": "GPQDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates",
+   "second_expected_divergence": "downstream_start_past_own_codon"
+  },
+  {
+   "location": "21:46916425",
+   "allele": "-",
+   "feature": "ENST00000359759",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "QDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+   "vep_rs": "GPQDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates",
+   "second_expected_divergence": "downstream_start_past_own_codon"
+  },
+  {
+   "location": "21:46916425",
+   "allele": "-",
+   "feature": "ENST00000400337",
+   "feature_type": "Transcript",
+   "record_indices": [
+    1
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "QDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+   "vep_rs": "GPQDLQGPQALQGLLFTTAMCLLSPAAPGLQDCQGIRALQDPRAPKEKWAPPDHQGSFRLTFFSWRLK",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates",
+   "second_expected_divergence": "downstream_start_past_own_codon"
+  },
+  {
+   "location": "21:46925058-46925059",
+   "allele": "-",
+   "feature": "ENST00000342220",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "HPGPARPTWTSGTPRHRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRAGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "vep_rs": "GEHPGPARPTWTSGTPRHRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRAGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "21:46925058-46925059",
+   "allele": "-",
+   "feature": "ENST00000355480",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "HPGPARPTWTSGTPRHRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "vep_rs": "GEHPGPARPTWTSGTPRHRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "21:46925058-46925059",
+   "allele": "-",
+   "feature": "ENST00000359759",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "HPGPARPTWTSGTPRHRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "vep_rs": "GEHPGPARPTWTSGTPRHRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "21:46925058-46925059",
+   "allele": "-",
+   "feature": "ENST00000400337",
+   "feature_type": "Transcript",
+   "record_indices": [
+    2
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "HPGPARPTWTSGTPRHRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "vep_rs": "GEHPGPARPTWTSGTPRHRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "21:46925109-46925110",
+   "allele": "C",
+   "feature": "ENST00000342220",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "HRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRAGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "vep_rs": "GHRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRAGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "21:46925109-46925110",
+   "allele": "C",
+   "feature": "ENST00000355480",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "HRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "vep_rs": "GHRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "21:46925109-46925110",
+   "allele": "C",
+   "feature": "ENST00000359759",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "HRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "vep_rs": "GHRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "21:46925109-46925110",
+   "allele": "C",
+   "feature": "ENST00000400337",
+   "feature_type": "Transcript",
+   "record_indices": [
+    3
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "HRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "vep_rs": "GHRLRGAPGPSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "21:46925136-46925137",
+   "allele": "TCCCGGCCCCCCAGGCCCCCCAGGGCCCCCTTCATTTCCTGGCCCTCACAGGCAGAGTAAGTCAGTGGGGAGTGGGCCCCGGGCAGAGGCCGCCTCGTGTGGCTTCGTGTTCCCACCTTGGTTTCTCTCCTGCAGCTATCAGCGT",
+   "feature": "ENST00000342220",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "PPGPPGPPSFPGPHRQSKSVGSGPRAEAASCGFVFPPWFLSCSYQRSRPSGPPWAPWAPWNHGRLLRAGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "vep_rs": "PPGPPGPPGPPSFPGPHRQSKSVGSGPRAEAASCGFVFPPWFLSCSYQRSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRAGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "21:46925136-46925137",
+   "allele": "TCCCGGCCCCCCAGGCCCCCCAGGGCCCCCTTCATTTCCTGGCCCTCACAGGCAGAGTAAGTCAGTGGGGAGTGGGCCCCGGGCAGAGGCCGCCTCGTGTGGCTTCGTGTTCCCACCTTGGTTTCTCTCCTGCAGCTATCAGCGT",
+   "feature": "ENST00000355480",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "PPGPPGPPSFPGPHRQSKSVGSGPRAEAASCGFVFPPWFLSCSYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "vep_rs": "PPGPPGPPGPPSFPGPHRQSKSVGSGPRAEAASCGFVFPPWFLSCSYQRSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "21:46925136-46925137",
+   "allele": "TCCCGGCCCCCCAGGCCCCCCAGGGCCCCCTTCATTTCCTGGCCCTCACAGGCAGAGTAAGTCAGTGGGGAGTGGGCCCCGGGCAGAGGCCGCCTCGTGTGGCTTCGTGTTCCCACCTTGGTTTCTCTCCTGCAGCTATCAGCGT",
+   "feature": "ENST00000359759",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "PPGPPGPPSFPGPHRQSKSVGSGPRAEAASCGFVFPPWFLSCSYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "vep_rs": "PPGPPGPPGPPSFPGPHRQSKSVGSGPRAEAASCGFVFPPWFLSCSYQRSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "21:46925136-46925137",
+   "allele": "TCCCGGCCCCCCAGGCCCCCCAGGGCCCCCTTCATTTCCTGGCCCTCACAGGCAGAGTAAGTCAGTGGGGAGTGGGCCCCGGGCAGAGGCCGCCTCGTGTGGCTTCGTGTTCCCACCTTGGTTTCTCTCCTGCAGCTATCAGCGT",
+   "feature": "ENST00000400337",
+   "feature_type": "Transcript",
+   "record_indices": [
+    4
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "PPGPPGPPSFPGPHRQSKSVGSGPRAEAASCGFVFPPWFLSCSYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "vep_rs": "PPGPPGPPGPPSFPGPHRQSKSVGSGPRAEAASCGFVFPPWFLSCSYQRSRPPRPPRAPFISWPSQADYQRSRPSGPPWAPWAPWNHGRLLRGEALGYTPGHAGPGARGSRGLAHLRGRAGGALRPRAERVPEGPAGGPDTTPTRDGQ",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "X:152956807-152956808",
+   "allele": "-",
+   "feature": "ENST00000253122",
+   "feature_type": "Transcript",
+   "record_indices": [
+    6
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "HGAGLGLLLPGQVLYHHAALGHMWPHLEHSRLRGDLPP",
+   "vep_rs": "YHGAGLGLLLPGQVLYHHAALGHMWPHLEHSRLRGDLPP",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "X:152956807-152956808",
+   "allele": "-",
+   "feature": "ENST00000430077",
+   "feature_type": "Transcript",
+   "record_indices": [
+    6
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "HGAGLGLLLPGQVLYHHAALGHMWPHLEHSRLRGDLPP",
+   "vep_rs": "YHGAGLGLLLPGQVLYHHAALGHMWPHLEHSRLRGDLPP",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "X:152959653",
+   "allele": "-",
+   "feature": "ENST00000253122",
+   "feature_type": "Transcript",
+   "record_indices": [
+    7
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "KGRSLWPSVVPSALSSISPW",
+   "vep_rs": "FKGRSLWPSVVPSALSSISPW",
+   "expected_divergence": "downstream_start_past_own_codon"
+  },
+  {
+   "location": "X:152959653",
+   "allele": "-",
+   "feature": "ENST00000430077",
+   "feature_type": "Transcript",
+   "record_indices": [
+    7
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "KGRSLWPSVVPSALSSISPW",
+   "vep_rs": "FKGRSLWPSVVPSALSSISPW",
+   "expected_divergence": "downstream_start_past_own_codon"
+  },
+  {
+   "location": "X:152959653",
+   "allele": "-",
+   "feature": "ENST00000442457",
+   "feature_type": "Transcript",
+   "record_indices": [
+    7
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "KGRSLWPSVVPSALSSISPW",
+   "vep_rs": "FKGRSLWPSVVPSALSSISPW",
+   "expected_divergence": "downstream_start_past_own_codon"
+  },
+  {
+   "location": "X:152960007-152960031",
+   "allele": "-",
+   "feature": "ENST00000253122",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "LAPG",
+   "vep_rs": "DDLAPG",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates",
+   "second_expected_divergence": "downstream_start_past_own_codon"
+  },
+  {
+   "location": "X:152960007-152960031",
+   "allele": "-",
+   "feature": "ENST00000413787",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST00000413787.1:c.448_468del",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "X:152960007-152960031",
+   "allele": "-",
+   "feature": "ENST00000413787",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "4",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "X:152960007-152960031",
+   "allele": "-",
+   "feature": "ENST00000430077",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "LAPG",
+   "vep_rs": "DDLAPG",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates",
+   "second_expected_divergence": "downstream_start_past_own_codon"
+  },
+  {
+   "location": "X:152960073-152960074",
+   "allele": "CCGCTGGTCTGCATGGTAAGGGCTGGGGGAGGTGGGGCAGGGCGGGGGGCGAGGCAGGGCGGGGTAGGGGCCCCATTAACCGCAGCATTCTGGTCCGTAGGGCATCTTCATCTTCAACGTTGTGTACTACGAG",
+   "feature": "ENST00000253122",
+   "feature_type": "Transcript",
+   "record_indices": [
+    9
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "CMVRAGGGGAGRGARQGGVGAPLTAAFWSVGHLHLQRCVLRAAGLQQHLRVPVVG",
+   "vep_rs": "PLVCMVRAGGGGAGRGARQGGVGAPLTAAFWSVGHLHLQRCVLRAAGLHGHLHLQRCVLRAAGLQQHLRVPVVG",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  },
+  {
+   "location": "X:152960073-152960074",
+   "allele": "CCGCTGGTCTGCATGGTAAGGGCTGGGGGAGGTGGGGCAGGGCGGGGGGCGAGGCAGGGCGGGGTAGGGGCCCCATTAACCGCAGCATTCTGGTCCGTAGGGCATCTTCATCTTCAACGTTGTGTACTACGAG",
+   "feature": "ENST00000430077",
+   "feature_type": "Transcript",
+   "record_indices": [
+    9
+   ],
+   "consequence_set": "frameshift_variant",
+   "field": "DownstreamProtein",
+   "vep": "CMVRAGGGGAGRGARQGGVGAPLTAAFWSVGHLHLQRCVLRAAGLQQHLRVPVVG",
+   "vep_rs": "PLVCMVRAGGGGAGRGARQGGVGAPLTAAFWSVGHLHLQRCVLRAAGLHGHLHLQRCVLRAAGLQQHLRVPVVG",
+   "expected_divergence": "plugin_hgvs_shifted_cds_coordinates"
+  }
+ ],
+ "field_divergence_summary": {
+  "plugin_hgvs_shifted_cds_coordinates": 31,
+  "hgvs_shifted_indel_written_span_gate": 4,
+  "downstream_start_past_own_codon": 3
+ }
+}

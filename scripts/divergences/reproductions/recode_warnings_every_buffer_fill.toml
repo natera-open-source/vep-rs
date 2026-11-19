@@ -1,0 +1,38 @@
+entry = "recode_warnings_every_buffer_fill"
+page = "docs/divergences/recode-warnings-and-fields.md#the-warnings-of-a-repeated-input"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the variant identifier input format, which sets no rule against a line given twice or a dbSNP identifier the sources lack (Ensembl VEP documentation, \"Data formats\", \"Variant identifiers\"; \"Variant Recoder\", --input_file); not seen in the measured datasets"
+notes = "One identifier twice, each after an identifier no source holds: with the default buffer size of 1, each fill holds the known variant and the warning of the line before it, and the two fills write one object, keyed by the repeated text. --pretty puts each warning of the object on its own line. variant_recoder reads the Ensembl database and passes the cache and FASTA arguments vep recode reads through unread, and reads the synonyms file."
+
+[input]
+format = "id"
+text = """
+rs_nope1
+rs886039732
+rs_nope2
+rs886039732
+"""
+
+[cache]
+corpus = "tests/golden/116/GRCh38-recoder"
+
+[run]
+tool = "recode"
+args = [
+  "-i", "{input}", "--format", "id", "--fields", "hgvsg", "--pretty",
+  "--json_cache", "{corpus}/json_cache", "--fasta", "{corpus}/reference.fa.gz", "--synonyms", "{corpus}/chr_synonyms.txt",
+]
+
+[compare]
+kind = "stdout"
+pattern = "No variant found with ID"
+sorted = false
+
+[expected]
+ensembl_vep = ["         \"No variant found with ID 'rs_nope2'\""]
+vep_rs = [
+  "         \"No variant found with ID 'rs_nope1'\",",
+  "         \"No variant found with ID 'rs_nope2'\"",
+]

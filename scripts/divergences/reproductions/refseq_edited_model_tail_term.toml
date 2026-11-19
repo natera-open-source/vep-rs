@@ -1,0 +1,43 @@
+entry = "refseq_edited_model_tail_term"
+page = "docs/divergences/refseq-edited-model-tail-term.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 51 of 77,601 cache transcripts · 10 flag sets, 4 corpora"
+notes = "The record of the page's section 1 under --total_length, so one row holds both fields. The reverse-strand model NM_001286463.1 carries three insertion edits of 1, 1 and 13 bases, so its cDNA has 2,002 bases where its seven exons sum to 1,987. 21:46301131 is cDNA 1988, above the unedited total: Ensembl VEP writes intergenic_variant and prints 1,987 as the total; vep-rs writes 3_prime_UTR_variant and prints 2,002. No committed cache holds the model, so the first step copies info.txt and one region file of chromosome 21 from the RefSeq GRCh38 cache under the --perl-cache-dir roots and the second converts them with scripts/data/storable_to_json.pl in the image the run names; both engines read that cut."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "pass --image" >&2; exit 1; }
+[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens_refseq/116_GRCh38 under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens_refseq/116_GRCh38"
+mkdir -p "$cut/21"
+cp "$PERL_CACHE/info.txt" "$cut/info.txt"
+cp "$PERL_CACHE/21/46000001-47000000.gz" "$cut/21/"''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens_refseq/116_GRCh38 /stage/json-cache/homo_sapiens_refseq/116_GRCh38 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+21	46301131	rs2082092473	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "refseq"
+json_cache = "{stage}/json-cache/homo_sapiens_refseq/116_GRCh38"
+perl_cache = "{stage}/perl-cache"
+fasta = "tests/golden/116/GRCh38-input-hgvs/reference.fa.gz"
+
+[run]
+flags = ["--refseq", "--total_length"]
+
+[compare]
+kind = "rows"
+where = { record = "rs2082092473", feature = "NM_001286463.1" }
+columns = ["Location", "Allele", "Feature", "Consequence", "cDNA_position", "IMPACT"]
+
+[expected]
+ensembl_vep = ["21:46301131 | C | NM_001286463.1 | intergenic_variant | 1988/1987 | MODIFIER"]
+vep_rs = ["21:46301131 | C | NM_001286463.1 | 3_prime_UTR_variant | 1988/2002 | MODIFIER"]

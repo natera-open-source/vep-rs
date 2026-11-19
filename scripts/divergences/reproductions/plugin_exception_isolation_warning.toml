@@ -1,0 +1,34 @@
+entry = "plugin_exception_isolation_warning"
+page = "docs/developers/writing-a-plugin.md#plugin-execution-in-the-pipeline"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the PrimateAI plugin's header (PrimateAI.pm:24-71), which describes its score table by the steps that prepare it and sets no rule that a row lacking its score cell breaks; not seen in the measured datasets"
+notes = "PrimateAI over a copy of the corpus table whose row for 21:19268555 C>T lacks its primateDL_score cell: both engines' PrimateAI fails on the first record and scores the second; the warning text is compared."
+prepare = [
+  "zcat \"$CORPUS/data/PrimateAI_scores_v0.2_GRCh38_sorted_synthetic.tsv.bgz\" | awk -F'\\t' '$1 == \"chr21\" && $2 == 19268555 && $4 == \"T\" { sub(/\\t[^\\t]*$/, \"\") } { print }' | bgzip -c > \"$STAGE/PrimateAI_scores.synthetic.tsv.bgz\"",
+  "tabix -s 1 -b 2 -e 2 \"$STAGE/PrimateAI_scores.synthetic.tsv.bgz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	19268555	intergenic_snv	C	T	.	.	.
+21	20204701	intron_snv	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-primateai-fixture/json_cache"
+
+[run]
+flags = ["--plugin", "PrimateAI,{stage}/PrimateAI_scores.synthetic.tsv.bgz"]
+
+[compare]
+kind = "warnings"
+pattern = "went wrong"
+
+[expected]
+ensembl_vep = ["WARNING: Plugin 'PrimateAI' went wrong: ERROR: one or more necessary values (pos, alt or primateDL_score) are missing from the input file"]
+vep_rs = ["WARNING: Plugin 'PrimateAI' went wrong: PrimateAI: one or more necessary values (pos, alt or primateDL_score) are missing from a row of <path>; the plugin annotated nothing on the variants it failed on, the first at 21:19268555; 1 variant affected"]

@@ -1,0 +1,2 @@
+WARNING: 11 : WARNING: Plugin 'Faulty' did not return a hashref, output ignored!
+WARNING: Plugin 'Faulty' went wrong: Faulty on purpose

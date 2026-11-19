@@ -35,9 +35,9 @@ jobs:
       # Linux build links (the install step below says why). The two Linux
       # targets each ship twice: the measured build (the CPU floor the release
       # page states) and a generic build for the multi-platform container image
-      # and for hosts below that floor. Both Linux architectures build on their
-      # own runners, so every Linux binary is smoke-tested on the architecture
-      # it was built for.
+      # and for hosts below that floor. Every target builds on a runner of its
+      # own architecture, so every binary is smoke-tested on the architecture it
+      # was built for.
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
@@ -75,6 +75,9 @@ jobs:
           - target: aarch64-apple-darwin
             name: aarch64-apple-darwin
             os: macos-latest
+          - target: x86_64-apple-darwin
+            name: x86_64-apple-darwin
+            os: macos-15-intel
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -137,7 +140,7 @@ jobs:
           tar --zstd -xf "$RUNNER_TEMP"/pkg-*.tar.zst -C "$RUNNER_TEMP/openssl" lib include
           echo "$(echo "$TARGET" | tr 'a-z-' 'A-Z_')_OPENSSL_DIR=$RUNNER_TEMP/openssl" >> "$GITHUB_ENV"
 
-      # Each Linux build targets the CPU floor its archive name states; the
+      # Each Linux build targets the CPU floor its archive name states; each
       # macOS build takes the target-cpu .cargo/config.toml sets. RUSTFLAGS
       # replaces that file's target rustflags rather than adding to them.
       - name: Set target-cpu for the archive
@@ -179,10 +182,11 @@ jobs:
       # Every Linux binary is held to the floor by its ELF version needs, then
       # run: the three binaries start on the runner, and `vep` annotates the
       # bundled GRCh37 corpus both on the runner and inside a glibc 2.17
-      # container (manylinux2014, CentOS 7), the two outputs equal. The
-      # container carries no OpenSSL 3, so vep-cache-builder, which loads the
-      # host's libssl.so.3, is started on the runner alone. Running the
-      # binaries needs a runner whose CPU meets the archive's floor: the
+      # container (manylinux2014, CentOS 7), the two outputs equal, then the
+      # bundled GRCh37 example against the corpus cache, every record getting a
+      # row. The container carries no OpenSSL 3, so vep-cache-builder, which
+      # loads the host's libssl.so.3, is started on the runner alone. Running
+      # the binaries needs a runner whose CPU meets the archive's floor: the
       # neoverse-v1 row needs SVE, which the arm runners' Neoverse cores have.
       - name: Smoke-test the Linux binaries on the glibc floor
         if: matrix.zig
@@ -205,6 +209,16 @@ jobs:
           diff <(grep -v '^#' "$RUNNER_TEMP/smoke/floor.txt") <(grep -v '^#' "$RUNNER_TEMP/smoke/runner.txt") ||
             { echo "ERROR: [release] the glibc-floor run and the runner's differ" >&2; exit 1; }
           echo "vep annotated $rows rows on glibc $GLIBC_FLOOR, equal to the runner's"
+          example="$PWD/examples/homo_sapiens_GRCh37.vcf"
+          "$dir/vep" "${args[@]}" -i "$example" --json_cache "$corpus/json_cache" \
+            --warning_file "$RUNNER_TEMP/smoke/example_warnings.txt" -o "$RUNNER_TEMP/smoke/example.txt"
+          records="$(grep -vc '^#' "$example")" || records=0
+          annotated="$(grep -v '^#' "$RUNNER_TEMP/smoke/example.txt" | cut -f1 | sort -u | grep -c .)" || annotated=0
+          [ "$records" -gt 0 ] && [ "$annotated" -eq "$records" ] ||
+            { echo "ERROR: [release] the bundled example's $records records got rows for $annotated" >&2; exit 1; }
+          [ ! -s "$RUNNER_TEMP/smoke/example_warnings.txt" ] ||
+            { echo "ERROR: [release] annotating the bundled example warned" >&2; cat "$RUNNER_TEMP/smoke/example_warnings.txt" >&2; exit 1; }
+          echo "vep annotated every record of the bundled example ($records)"
 
       - name: Smoke-test the macOS binaries
         if: "!matrix.zig"

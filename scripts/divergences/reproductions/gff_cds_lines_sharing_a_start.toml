@@ -1,0 +1,74 @@
+entry = "gff_cds_lines_sharing_a_start"
+page = "docs/divergences/gff-cds-lines-sharing-a-start.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the GFF3 specification, \"The Canonical Gene\" (its example gives one mRNA two CDS features, cds00003 and cds00004, whose lines share a start); not seen in the measured datasets"
+notes = "The GRCh38 release-116 GFF3 lines of PWP2 and ENST00000456705 with the transcript's first and last CDS lines each written twice at one start, the later line of each pair naming the protein ENSP00000411750 version 2 and the later of the last pair ending six bases before the earlier, beside the TMPRSS3 transcript ENST00001113783 as written, the control. Ensembl VEP keeps one CDS record per start, the later line of the file (BaseGXF.pm:511), so the translation takes the later first line's identifier and version (:723-734) and ends where the later last line ends (:749-756): `ENSP00000411750.2` on every row and `3_prime_UTR_variant` for the record inside the earlier last line alone. vep-rs reads every CDS line: the coding span is their union, the identifier and version come from the earlier line of the two sharing the lowest start on the forward strand (the later on the reverse), and the record is `missense_variant`; the control transcript's rows agree."
+prepare = [
+  '''cat > "$STAGE/pwp2_cds_shared_start.gff3" <<'GFF'
+##gff-version 3
+21	ensembl_havana	gene	42371840	42396122	.	-	.	ID=gene:ENSG00000160183;Name=TMPRSS3;biotype=protein_coding;description=transmembrane serine protease 3 [Source:HGNC Symbol%3BAcc:HGNC:11877];gene_id=ENSG00000160183;logic_name=ensembl_havana_gene_homo_sapiens;version=19
+21	havana_tagene	mRNA	42393803	42396122	.	-	.	ID=transcript:ENST00001113783;Parent=gene:ENSG00000160183;Name=TMPRSS3-224;biotype=protein_coding;tag=gencode_basic;transcript_id=ENST00001113783;version=1
+21	havana_tagene	exon	42393803	42395084	.	-	.	Parent=transcript:ENST00001113783;Name=ENSE00004748399;constitutive=0;ensembl_end_phase=-1;ensembl_phase=1;exon_id=ENSE00004748399;rank=3;version=1
+21	havana_tagene	CDS	42394915	42395084	.	-	2	ID=CDS:ENSP00000783588;Parent=transcript:ENST00001113783;protein_id=ENSP00000783588;version=1
+21	havana_tagene	CDS	42395324	42395417	.	-	0	ID=CDS:ENSP00000783588;Parent=transcript:ENST00001113783;protein_id=ENSP00000783588;version=1
+21	havana_tagene	exon	42395324	42395468	.	-	.	Parent=transcript:ENST00001113783;Name=ENSE00003591562;constitutive=0;ensembl_end_phase=1;ensembl_phase=-1;exon_id=ENSE00003591562;rank=2;version=1
+21	havana_tagene	exon	42395942	42396122	.	-	.	Parent=transcript:ENST00001113783;Name=ENSE00004778870;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00004778870;rank=1;version=1
+21	ensembl_havana	gene	44107306	44131181	.	+	.	ID=gene:ENSG00000241945;Name=PWP2;biotype=protein_coding;description=PWP2 small subunit processome component [Source:HGNC Symbol%3BAcc:HGNC:9711];gene_id=ENSG00000241945;logic_name=ensembl_havana_gene_homo_sapiens;version=10
+21	havana	mRNA	44107373	44115744	.	+	.	ID=transcript:ENST00000456705;Parent=gene:ENSG00000241945;Name=PWP2-202;biotype=protein_coding;transcript_id=ENST00000456705;transcript_support_level=3;version=1
+21	havana	exon	44107373	44107434	.	+	.	Parent=transcript:ENST00000456705;Name=ENSE00001605720;constitutive=0;ensembl_end_phase=0;ensembl_phase=-1;exon_id=ENSE00001605720;rank=1;version=1
+21	havana	CDS	44107417	44107434	.	+	0	ID=CDS:ENSP00000411749;Parent=transcript:ENST00000456705;protein_id=ENSP00000411749;version=1
+21	havana	CDS	44107417	44107434	.	+	0	ID=CDS:ENSP00000411750;Parent=transcript:ENST00000456705;protein_id=ENSP00000411750;version=2
+21	havana	exon	44108984	44109096	.	+	.	Parent=transcript:ENST00000456705;Name=ENSE00001177844;constitutive=0;ensembl_end_phase=2;ensembl_phase=0;exon_id=ENSE00001177844;rank=2;version=2
+21	havana	CDS	44108984	44109096	.	+	0	ID=CDS:ENSP00000411749;Parent=transcript:ENST00000456705;protein_id=ENSP00000411749;version=1
+21	havana	exon	44113753	44113847	.	+	.	Parent=transcript:ENST00000456705;Name=ENSE00001050676;constitutive=0;ensembl_end_phase=1;ensembl_phase=2;exon_id=ENSE00001050676;rank=3;version=1
+21	havana	CDS	44113753	44113847	.	+	1	ID=CDS:ENSP00000411749;Parent=transcript:ENST00000456705;protein_id=ENSP00000411749;version=1
+21	havana	exon	44114625	44114768	.	+	.	Parent=transcript:ENST00000456705;Name=ENSE00003646685;constitutive=0;ensembl_end_phase=1;ensembl_phase=1;exon_id=ENSE00003646685;rank=4;version=1
+21	havana	CDS	44114625	44114768	.	+	2	ID=CDS:ENSP00000411749;Parent=transcript:ENST00000456705;protein_id=ENSP00000411749;version=1
+21	havana	exon	44115264	44115399	.	+	.	Parent=transcript:ENST00000456705;Name=ENSE00003465236;constitutive=0;ensembl_end_phase=2;ensembl_phase=1;exon_id=ENSE00003465236;rank=5;version=1
+21	havana	CDS	44115264	44115399	.	+	2	ID=CDS:ENSP00000411749;Parent=transcript:ENST00000456705;protein_id=ENSP00000411749;version=1
+21	havana	exon	44115691	44115744	.	+	.	Parent=transcript:ENST00000456705;Name=ENSE00001738496;constitutive=0;ensembl_end_phase=2;ensembl_phase=2;exon_id=ENSE00001738496;rank=6;version=1
+21	havana	CDS	44115691	44115744	.	+	1	ID=CDS:ENSP00000411749;Parent=transcript:ENST00000456705;protein_id=ENSP00000411749;version=1
+21	havana	CDS	44115691	44115738	.	+	1	ID=CDS:ENSP00000411750;Parent=transcript:ENST00000456705;protein_id=ENSP00000411750;version=2
+GFF''',
+  "bgzip -c \"$STAGE/pwp2_cds_shared_start.gff3\" > \"$STAGE/pwp2_cds_shared_start.gff3.gz\" && tabix -p gff \"$STAGE/pwp2_cds_shared_start.gff3.gz\"",
+  "\"$VEP_CACHE_BUILDER\" --species homo_sapiens --assembly GRCh38 --release 116 --gff3 \"$STAGE/pwp2_cds_shared_start.gff3\" --genome-fasta \"$CORPUS/reference.fa.gz\" --output-dir \"$STAGE/json_cache\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	44107424	pwp2_codon3	T	C	.	.	.
+21	44115741	pwp2_codon186	G	A	.	.	.
+21	42395401	tmprss3_codon6	G	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json_cache"
+corpus = "tests/golden/116/GRCh38-gtf-builder"
+gxf = "{stage}/pwp2_cds_shared_start.gff3.gz"
+gxf_kind = "gff"
+fasta = "tests/golden/116/GRCh38-gtf-builder/reference.fa.gz"
+
+[run]
+flags = ["--hgvs", "--protein", "--protein_version", "--symbol"]
+
+[compare]
+kind = "rows"
+where = { record = ["pwp2_codon3", "pwp2_codon186", "tmprss3_codon6"] }
+columns = ["Location", "Allele", "Feature", "Consequence", "ENSP", "HGVSp"]
+
+[expected]
+ensembl_vep = [
+  "21:44107424 | C | ENST00000456705 | missense_variant | ENSP00000411750.2 | ENSP00000411750.2:p.Phe3Ser",
+  "21:44115741 | A | ENST00000456705 | 3_prime_UTR_variant | ENSP00000411750.2 | -",
+  "21:42395401 | A | ENST00001113783 | missense_variant | ENSP00000783588.1 | ENSP00000783588.1:p.Pro6Leu",
+]
+vep_rs = [
+  "21:44107424 | C | ENST00000456705 | missense_variant | ENSP00000411749.1 | ENSP00000411749.1:p.Phe3Ser",
+  "21:44115741 | A | ENST00000456705 | missense_variant | ENSP00000411749.1 | ENSP00000411749.1:p.Arg186His",
+  "21:42395401 | A | ENST00001113783 | missense_variant | ENSP00000783588.1 | ENSP00000783588.1:p.Pro6Leu",
+]

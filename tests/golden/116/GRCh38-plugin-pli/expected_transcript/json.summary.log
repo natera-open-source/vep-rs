@@ -1,0 +1,96 @@
+[VEP run statistics]
+VEP version (API)	 116.2 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh38
+Species	homo_sapiens
+Command line options	vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins [PATH]/plugins --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --json --offline --output_file [PATH]/json.jsonl --plugin pLI,[PATH]/pLI_transcript_values.txt,transcript --quiet --stats_text
+Start time	2026-10-28 23:25:17
+End time	2026-10-28 23:25:17
+Run time	0 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/json.jsonl
+
+[Data version]
+1000genomes	phase3
+COSMIC	102
+ClinVar	202509
+HGMD-PUBLIC	20204
+assembly	GRCh38.p14
+dbSNP	156
+gencode	GENCODE 50
+genebuild	GENCODE50
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.3
+regbuild	1.0
+sift	6.2.1
+
+[General statistics]
+Lines of input read	29
+Variants processed	29
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	29
+Overlapped transcripts	467
+Overlapped regulatory features	-
+
+[Variant classes]
+insertion	4
+deletion	7
+SNV	18
+
+[Consequences (most severe)]
+splice_donor_variant	1
+stop_gained	1
+frameshift_variant	6
+stop_lost	1
+inframe_insertion	2
+inframe_deletion	1
+missense_variant	15
+synonymous_variant	1
+intergenic_variant	1
+
+[Consequences (all)]
+splice_donor_variant	7
+stop_gained	21
+frameshift_variant	55
+stop_lost	1
+inframe_insertion	58
+inframe_deletion	14
+missense_variant	259
+splice_donor_5th_base_variant	7
+splice_region_variant	20
+synonymous_variant	40
+coding_sequence_variant	7
+3_prime_UTR_variant	81
+non_coding_transcript_exon_variant	30
+intron_variant	36
+NMD_transcript_variant	113
+non_coding_transcript_variant	3
+upstream_gene_variant	20
+downstream_gene_variant	57
+intergenic_variant	1
+
+[Coding consequences]
+stop_gained	21
+frameshift_variant	55
+stop_lost	1
+inframe_insertion	58
+inframe_deletion	14
+missense_variant	259
+synonymous_variant	40
+coding_sequence_variant	7
+
+[Variants by chromosome]
+21	29
+
+[Position in protein]
+00-10%	0
+10-20%	7
+20-30%	17
+30-40%	88
+40-50%	102
+50-60%	76
+60-70%	46
+70-80%	46
+80-90%	29
+90-100%	23

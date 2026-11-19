@@ -23,7 +23,10 @@
 
 use super::is_mature_mirna_sv;
 use smallvec::SmallVec;
-use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
+use std::sync::Arc;
+use vep_core::consequence::{
+    Consequence, ConsequenceList, Impact, ProteinIdDisplay, TranscriptConsequence,
+};
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
 use vep_core::variant::InputVariant;
@@ -34,7 +37,7 @@ use vep_core::variant::InputVariant;
 /// transcript coordinates and consequences follow from where it falls.
 pub fn calculate(
     variant: &InputVariant,
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
@@ -216,7 +219,24 @@ pub fn calculate(
                 // `intron.end - bp`}, so requiring both to be at least 2 is that same
                 // interval with no strand case; an intron of 4 bp or less is never
                 // `intronic`.
-                if dist_to_donor >= 2 && dist_to_acceptor >= 2 {
+                // A breakend inside a frameshift intron takes its region's term, not
+                // the intronic one: the coding or UTR term of `frameshift_intron_span`
+                // or the non-coding term below on a transcript without a translation.
+                if let Some(span) = super::frameshift_intron_span(transcript, bp, bp) {
+                    // `within_cds` and the UTR predicates need a translation
+                    // (`Utils/VariationEffect.pm:656`, `:698`, `:715`).
+                    if is_coding {
+                        if span.coding {
+                            consequences.push(Consequence::CodingSequenceVariant);
+                        }
+                        if span.five_prime_utr {
+                            consequences.push(Consequence::FivePrimeUtrVariant);
+                        }
+                        if span.three_prime_utr {
+                            consequences.push(Consequence::ThreePrimeUtrVariant);
+                        }
+                    }
+                } else if dist_to_donor >= 2 && dist_to_acceptor >= 2 {
                     consequences.push(Consequence::IntronVariant);
                 }
                 if super::overlaps_polypyrimidine_tract(transcript, bp, bp) {
@@ -249,14 +269,20 @@ pub fn calculate(
     let local_within_transcript = bp <= transcript.end && local_end >= transcript.start;
     if transcript.facts().is_nmd
         && local_within_transcript
-        && !consequences.is_empty()
+        && (overlaps_transcript || !consequences.is_empty())
         && !consequences.contains(&Consequence::NmdTranscriptVariant)
     {
         consequences.push(Consequence::NmdTranscriptVariant);
     }
 
     if consequences.is_empty() {
-        return None;
+        if !overlaps_transcript {
+            return None;
+        }
+        // A breakend inside the transcript that no predicate claims (the first or
+        // last two bases of an intron) keeps its row under Ensembl VEP's default
+        // term, `intergenic_variant` (`BaseVariationFeatureOverlapAllele.pm:285`).
+        consequences.push(Consequence::IntergenicVariant);
     }
 
     let impact = consequences
@@ -282,7 +308,7 @@ pub fn calculate(
         ..TranscriptConsequence::for_transcript(transcript)
     };
     if !is_coding {
-        tc.protein_id = None;
+        tc.protein_id_display = ProteinIdDisplay::Hidden;
     }
     Some(tc)
 }
@@ -309,7 +335,7 @@ pub fn calculate(
 /// `INTRON`), which is why the row is built through `calculate_consequences`.
 pub fn calculate_paired_mate(
     variant: &InputVariant,
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     config: &crate::consequences::EffectsConfig,
 ) -> Option<TranscriptConsequence> {
     let mate = mate_breakpoint(variant)?;
@@ -459,6 +485,31 @@ mod tests {
     use vep_core::consequence::FeatureType;
     use vep_core::variant::VariantClass;
 
+    /// [`super::calculate`] on a transcript the test owns: the row shares a copy of
+    /// it, as the index shares its handle.
+    fn calculate(
+        variant: &InputVariant,
+        transcript: &Transcript,
+        upstream_distance: u64,
+        downstream_distance: u64,
+    ) -> Option<TranscriptConsequence> {
+        super::calculate(
+            variant,
+            &Arc::new(transcript.clone()),
+            upstream_distance,
+            downstream_distance,
+        )
+    }
+
+    /// [`super::calculate_paired_mate`] on a transcript the test owns.
+    fn calculate_paired_mate(
+        variant: &InputVariant,
+        transcript: &Transcript,
+        config: &EffectsConfig,
+    ) -> Option<TranscriptConsequence> {
+        super::calculate_paired_mate(variant, &Arc::new(transcript.clone()), config)
+    }
+
     /// Build a BND variant at a given position.
     fn make_bnd(pos: u64) -> InputVariant {
         let mut v = InputVariant::new("21".into(), pos, pos, b"N".to_vec(), b"-".to_vec());
@@ -475,6 +526,52 @@ mod tests {
         v.is_single_breakend = true;
         v.mate_id = None;
         v
+    }
+
+    /// A breakend inside a frameshift intron takes the region's term. Ensembl VEP
+    /// 116.2 writes `coding_sequence_variant` for a single breakend inside a 9-base
+    /// coding intron of a forward-strand transcript, `5_prime_UTR_variant` and
+    /// `3_prime_UTR_variant` inside a 7-base and a 13-base UTR intron, and
+    /// `feature_truncation` beside the term for a bracket breakend whose mate lies in
+    /// the transcript, on the intron's first base as on its inner ones.
+    #[test]
+    fn a_breakend_inside_a_frameshift_intron_takes_its_region_term() {
+        let tx = crate::sv::deletion::frameshift_intron_test_transcript();
+        for (pos, region) in [
+            (25_000_023, Consequence::FivePrimeUtrVariant),
+            (25_002_101, Consequence::CodingSequenceVariant),
+            (25_002_105, Consequence::CodingSequenceVariant),
+            (25_002_109, Consequence::CodingSequenceVariant),
+            (25_005_007, Consequence::ThreePrimeUtrVariant),
+        ] {
+            let single = calculate(&make_native_single_breakend(pos), &tx, 5000, 5000)
+                .expect("the breakend lies inside the transcript");
+            assert_eq!(single.consequences.to_vec(), vec![region], "{pos}");
+            let paired = calculate(&make_bnd(pos), &tx, 5000, 5000)
+                .expect("the breakend lies inside the transcript");
+            assert_eq!(
+                paired.consequences.to_vec(),
+                vec![Consequence::FeatureTruncation, region],
+                "{pos}"
+            );
+        }
+        // Without a translation `within_cds` and the UTR predicates are 0
+        // (`Utils/VariationEffect.pm:656`, `:698`, `:715`), so the breakend takes the
+        // context term alone, whatever coding range the coordinate mapper carries.
+        let mut untranslated = tx.clone();
+        untranslated.biotype = "lncRNA".into();
+        untranslated.coding_region_start = None;
+        untranslated.coding_region_end = None;
+        untranslated.translation = None;
+        for pos in [25_000_023, 25_002_105, 25_005_007] {
+            let single = calculate(&make_native_single_breakend(pos), &untranslated, 5000, 5000)
+                .expect("the breakend lies inside the transcript");
+            assert_eq!(
+                single.consequences.to_vec(),
+                vec![Consequence::NonCodingTranscriptVariant],
+                "{pos}"
+            );
+        }
     }
 
     // ---- Test transcript layout (from make_test_transcript) ----
@@ -621,8 +718,8 @@ mod tests {
         let tx = make_test_transcript();
         let v = make_bnd(25_001_000); // Middle of intron 1
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        // Ensembl VEP adds feature_truncation for all breakpoints within the
-        // transcript body, including introns.
+        // Ensembl VEP adds feature_truncation when the allele's own breakend lies in
+        // the transcript body, in an intron as in an exon.
         assert!(tc.consequences.contains(&Consequence::FeatureTruncation));
         assert!(tc.consequences.contains(&Consequence::IntronVariant));
         assert_eq!(tc.impact, Impact::HIGH);
@@ -854,8 +951,8 @@ mod tests {
 
         let v = make_bnd(25_001_000); // Intron 1
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        // Ensembl VEP adds feature_truncation for all BND positions within the
-        // transcript body, including introns of non-coding transcripts.
+        // Ensembl VEP adds feature_truncation when the allele's own breakend lies in
+        // the transcript body, in an intron of a non-coding transcript as elsewhere.
         assert!(tc.consequences.contains(&Consequence::FeatureTruncation));
         assert!(tc.consequences.contains(&Consequence::IntronVariant));
         assert!(tc
@@ -960,10 +1057,10 @@ mod tests {
         let tx = make_test_transcript();
         let v = make_bnd(25_000_100);
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
-        assert_eq!(&*tc.transcript_id, "ENST00000000001");
-        assert_eq!(&*tc.gene_id, "ENSG00000000001");
-        assert_eq!(tc.gene_symbol.as_deref(), Some("TEST1"));
-        assert_eq!(tc.biotype.as_deref(), Some("protein_coding"));
+        assert_eq!(tc.transcript_id(), "ENST00000000001");
+        assert_eq!(tc.gene_id(), "ENSG00000000001");
+        assert_eq!(tc.gene_symbol(), Some("TEST1"));
+        assert_eq!(tc.biotype(), Some("protein_coding"));
         assert!(tc.canonical);
         assert_eq!(tc.feature_type, FeatureType::Transcript);
     }
@@ -978,12 +1075,13 @@ mod tests {
         assert_eq!(tc.strand, -1);
         assert_eq!((tc.feature_start, tc.feature_end), (tx.start, tx.end));
         assert_eq!(tc.id_rank, 7);
-        assert_eq!(tc.protein_id.as_deref(), Some("ENSP00000000001"));
+        assert_eq!(tc.protein_id().as_deref(), Some("ENSP00000000001"));
 
         tx.coding_region_start = None;
         let tc = calculate(&v, &tx, 5000, 5000).unwrap();
         assert_eq!(
-            tc.protein_id, None,
+            tc.protein_id(),
+            None,
             "has_cds() reads coding_region_start, so a transcript without one reports no protein id however it names one"
         );
     }
@@ -1224,7 +1322,6 @@ mod tests {
         };
 
         let exons = vec![Exon {
-            stable_id: Some("ENSE_MIRNA_001".into()),
             start: 1000,
             end: 1100,
             rank: 1,
@@ -1241,6 +1338,7 @@ mod tests {
         }];
 
         let vefc = TranscriptVEFC {
+            spliced_seq: None,
             codon_table: 1,
             five_prime_utr: None,
             three_prime_utr: None,
@@ -1273,6 +1371,7 @@ mod tests {
             source: "Ensembl".into(),
             gene_symbol: Some("MIR21".into()),
             gene_symbol_source: Some("HGNC".into()),
+            gene_symbol_id: None,
             hgnc_id: None,
             gene_phenotype: None,
             canonical: false,
@@ -1288,6 +1387,7 @@ mod tests {
             uniparc: None,
             uniprot_isoform: None,
             exons,
+            exon_ids: None,
             introns: vec![],
             cdna_coding_start: None,
             cdna_coding_end: None,
@@ -1306,6 +1406,8 @@ mod tests {
                 value: "50-70".into(),
             }],
             vefc: Some(vefc),
+            source_cache: None,
+            bam_edit_status: None,
             derived: Default::default(),
             id_rank: 0,
         }
@@ -1542,5 +1644,36 @@ mod tests {
         assert!(tc.consequences.contains(&Consequence::FeatureTruncation));
         assert!(tc.consequences.contains(&Consequence::IntronVariant));
         assert!(tc.consequences.contains(&Consequence::NmdTranscriptVariant));
+    }
+
+    /// A breakend on the first or last two bases of an intron keeps its transcript
+    /// row. Ensembl VEP 116.2 writes `intergenic_variant` for a single breakend and
+    /// for a mate-less `<BND>` located at `21:44117964` or `21:44117965`, the first two
+    /// bases of a 799-base intron of a forward-strand coding transcript, and
+    /// `intron_variant` from its third base on.
+    #[test]
+    fn a_breakend_on_the_splice_bases_of_an_intron_takes_the_default_term() {
+        // Intron 1 of the test transcript is 25_000_300-25_001_999.
+        let tx = make_test_transcript();
+        for pos in [25_000_300, 25_000_301, 25_001_998, 25_001_999] {
+            let tc = calculate(&make_native_single_breakend(pos), &tx, 5000, 5000)
+                .expect("the breakend lies inside the transcript");
+            assert_eq!(
+                tc.consequences.to_vec(),
+                vec![Consequence::IntergenicVariant],
+                "{pos}"
+            );
+        }
+        let tc = calculate(&make_native_single_breakend(25_000_302), &tx, 5000, 5000).unwrap();
+        assert_eq!(tc.consequences.to_vec(), vec![Consequence::IntronVariant]);
+        // A nonsense-mediated-decay transcript's own term stands in the default's place
+        // (`within_nmd_transcript`, `Utils/VariationEffect.pm:477-482`).
+        let mut nmd = make_test_transcript();
+        nmd.biotype = "nonsense_mediated_decay".into();
+        let tc = calculate(&make_native_single_breakend(25_000_300), &nmd, 5000, 5000).unwrap();
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![Consequence::NmdTranscriptVariant]
+        );
     }
 }

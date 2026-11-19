@@ -1,6 +1,6 @@
 # Defect F: a breakpoint record without a mate gives its reference allele a row
 
-**The defect in one sentence.** For a breakpoint record that names no mate, Ensembl VEP gives the reference allele a consequence row of its own.
+**The defect in one sentence.** For a breakpoint record that names no mate, Ensembl VEP gives the reference allele a consequence row of its own, where vep-rs holds the record as one single breakend and writes each row once.
 
 Such a record (`<BND>` with no `CHR2`, or with `CHR2` but neither `END2` nor `END`) is held by Ensembl VEP as the allele string `N/<BND>`, which parses to no breakend. The overlap object therefore builds one allele per slash-separated part of the string, the reference base included.
 
@@ -47,7 +47,7 @@ Ensembl VEP 116.2, four rows for two transcripts, and vep-rs, two rows, one tabl
 | Feature | `ENST00000334068` | `ENST00000334068` | `ENST00000334068` |
 | Feature_type | `Transcript` | `Transcript` | `Transcript` |
 | Consequence | `upstream_gene_variant` | `upstream_gene_variant` | `upstream_gene_variant` |
-| Extra | **`ALLELE_NUM=1;IMPACT=MODIFIER;DISTANCE=4569;STRAND=1`** | **`ALLELE_NUM=2;IMPACT=MODIFIER;DISTANCE=4569;STRAND=1`** |  |
+| Extra | **`ALLELE_NUM=1;IMPACT=MODIFIER;DISTANCE=4569;STRAND=1`** | `ALLELE_NUM=2;IMPACT=MODIFIER;DISTANCE=4569;STRAND=1` | `ALLELE_NUM=2;IMPACT=MODIFIER;DISTANCE=4569;STRAND=1` |
 
 Record `bare_bnd` on ENST00000390690, Ensembl VEP's two rows against vep-rs's one:
 
@@ -60,7 +60,7 @@ Record `bare_bnd` on ENST00000390690, Ensembl VEP's two rows against vep-rs's on
 | Feature | `ENST00000390690` | `ENST00000390690` | `ENST00000390690` |
 | Feature_type | `Transcript` | `Transcript` | `Transcript` |
 | Consequence | `coding_sequence_variant` | `coding_sequence_variant` | `coding_sequence_variant` |
-| Extra | **`ALLELE_NUM=1;IMPACT=MODIFIER;STRAND=-1`** | **`ALLELE_NUM=2;IMPACT=MODIFIER;STRAND=-1`** |  |
+| Extra | **`ALLELE_NUM=1;IMPACT=MODIFIER;STRAND=-1`** | `ALLELE_NUM=2;IMPACT=MODIFIER;STRAND=-1` | `ALLELE_NUM=2;IMPACT=MODIFIER;STRAND=-1` |
 
 The same doubling appears for a `<BND>` with `SVLEN` and no `CHR2` (over its span), for `CHR2` with `POS2` alone, for `CHR2` with an `END2` that is not a coordinate, for a `<BND>` without `SVTYPE`, and for a `<BND>` with `MATEID`. A native single breakend (`.N`, `N.`) is held without the reference base and writes each row once, and a bracket record's own breakend and mate are two different alleles, written once each.
 
@@ -81,7 +81,7 @@ printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\
 docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.2 \
   vep -i /work/bare.vcf -o /work/bare.perl.txt --offline --cache --dir_cache /cache --cache_version 116 \
   --assembly GRCh38 --species homo_sapiens --allele_number --no_stats
-vep -i bare.vcf -o bare.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --no_stats
+vep -i bare.vcf -o bare.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --allele_number --no_stats
 ```
 
 ### 13.7 How the comparator treats this class

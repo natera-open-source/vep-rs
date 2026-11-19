@@ -1,0 +1,226 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh37",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 3,
+ "included_records": {
+  "plugin-dosage": [
+   "app_exon",
+   "bach1_exon",
+   "bach1_upstream_in_gene",
+   "intergenic",
+   "krtap20_4_deletion",
+   "krtap20_4_snv",
+   "linc01664_exon",
+   "sod1_exon2",
+   "sod1_intron",
+   "sod1_upstream"
+  ]
+ },
+ "max_span": 1000000,
+ "covers": [
+  "DosageSensitivity"
+ ],
+ "suites": {
+  "plugin-dosage": {
+   "reference": "cand37_dosage.vep.txt",
+   "input": "cand37_dosage.vcf",
+   "rows": 58,
+   "combinations": 10
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 4
+  },
+  "intergenic_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 3
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  },
+  "missense_variant": {
+   "observed_rows": 13,
+   "exemplar_records": 3
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 2
+  },
+  "synonymous_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 2
+  },
+  "transcript_ablation": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 13,
+   "exemplar_records": 4
+  }
+ },
+ "variant_classes": {
+  "deletion": 2,
+  "snv": 56
+ },
+ "records": [
+  {
+   "suite": "plugin-dosage",
+   "vcf": "21\t24000000\tintergenic\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "plugin-dosage",
+   "vcf": "21\t27484317\tapp_exon\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "plugin-dosage",
+   "vcf": "21\t30670000\tbach1_upstream_in_gene\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "plugin-dosage",
+   "vcf": "21\t30693621\tbach1_exon\tC\tT\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "plugin-dosage",
+   "vcf": "21\t31992919\tkrtap20_4_deletion\tTTCAAACTGAGAAAAATAATTCCCTGATCCACAACTGAAACATCCACTTCTGAACACCATGTCCTACTACAGCCATCTTTCTGGTGGCCTGGGCTGCGGCTTGGCTGTGGCTGTGACTATGGGAAGGACTGTGGCTGTGGCTGAGTATGGCAGGTGCAGACATGGCTGCCACTCATCTTACTCTGCCAGGTAATGACACCATGGATTCCACTGAGGAACACCTAGAGCAGTTCAGTCTACTGCACTCCTCCAGCTTGATTT\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "transcript_ablation"
+   ]
+  },
+  {
+   "suite": "plugin-dosage",
+   "vcf": "21\t31993019\tkrtap20_4_snv\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "plugin-dosage",
+   "vcf": "21\t33029935\tsod1_upstream\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "plugin-dosage",
+   "vcf": "21\t33036113\tsod1_exon2\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "plugin-dosage",
+   "vcf": "21\t33037500\tsod1_intron\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "plugin-dosage",
+   "vcf": "22\t17605600\tlinc01664_exon\tA\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "file",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/data",
+    "--plugin",
+    "DosageSensitivity,file={corpus}/data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_file",
+   "covers": [
+    "DosageSensitivity"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "file-cover",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/data",
+    "--plugin",
+    "DosageSensitivity,file={corpus}/data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz,cover=1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_file-cover",
+   "covers": [
+    "DosageSensitivity"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

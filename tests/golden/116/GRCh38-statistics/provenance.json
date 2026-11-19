@@ -1,0 +1,213 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "variants.vcf: 339 chromosome 21 records from ClinVar GRCh38 (ID the ClinVar VariationID), gnomAD v4.1 and the multi-allelic records of the other corpora, plus hand-built shapes, so the statistics report shows every sequence variant class and a symbolic duplication, coding rows in every protein decile with rows at the last codon, two records on a contig spelled chr21 and one on a chromosome (Z) that Ensembl VEP skips; the coding SNVs sit in genes with short proteins and few isoforms so the prediction matrices the cache keeps stay few; variants.blank.vcf is the same file with one empty line after the hundredth record, the input of the blank-line-input run",
+ "sha256": {
+  "default.txt": "105b7e3cf5de188926ab71a6f4b428cad62a556445c375c9c1df40fd795ecbcc",
+  "tab.txt": "7d988eec553ba4db100e218f62c9684f337b45fb0172a7a6192e6f57f4e7e980",
+  "vcf.vcf": "03fd4abb4ab168f582f25ae43952124e8ab19714bd8860a324a4941a7986569e",
+  "json.jsonl": "d772cfafc4af959cce5750396f0b63464d729c45713791818d94cc973115b2b4",
+  "default.summary.log": "7745b5c145ba6764f71c83de5a6c575a283a4b69e992769d1c1586e3fd07d51e",
+  "tab.summary.log": "733fbbb3dfb7da91edb92ad0a6d434a492180b4a0774dcd0525de03c6bc4653a",
+  "vcf.summary.log": "e2bd5378e78b25fdba11b165005e67e2b32003bdb26226b13b323ae3eff600d1",
+  "json.summary.log": "f5cca86d6dd4ca5acb57beff3cc473a1d0497e8d475bcc4be223cff4f413fe40"
+ },
+ "variants_vcf_sha256": "d9c089aae2b6186bc23e32575143c57159b944c5c79934f50377d6065daa3bbf",
+ "generator": "scripts/golden/build_golden_corpus.py select over Ensembl VEP's default output for the candidate records (--k 2000, every record named with --include) and flag-set; scripts/concordance/generate_reference_output.sh --corpus for expected/; each flag set's expected_<set>/ from the vep command recorded under its flag_sets entry, one container run per format, the statistics report kept as <format>.summary.log; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --drop-except <the transcripts whose rows carry SIFT or PolyPhen under --sift b --polyphen b> --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}' over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh38 cache; scripts/golden/build_golden_corpus.py classify for the default run and for each flag set",
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "binary_md5": "d9bdfc6daadc3906ceaba234a88d471e",
+  "arch": "aarch64",
+  "flags_passed": []
+ },
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 862
+  },
+  "shards": 27,
+  "spans_by_chromosome": {
+   "21": 339,
+   "Z": 1
+  },
+  "transcripts_with_prediction_matrices": 51
+ },
+ "variation_slice": {
+  "source": "homo_sapiens/116_GRCh38/21/all_vars.gz of the Ensembl VEP release-116 indexed cache",
+  "window": "records whose start lies within one base of an input record's span",
+  "windows": 296,
+  "records_kept": 1991,
+  "records_excluded": 388,
+  "excludes": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "sha256": {
+   "all_vars.gz": "cfa447b4baa1ef1f3c6d497570af66d21b2f1724fdbda4cfed727bd17fd9af95",
+   "all_vars.gz.csi": "85f72788e405c85ca8146ec21fe8865fb00a347eb057e5a3ffcc5f76e387f56f"
+  }
+ },
+ "flag_sets": {
+  "stats-text": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite [--tab|--vcf|--json]",
+   "flags": [
+    "--stats_text"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_stats-text",
+   "summary_log": "<format>.summary.log, written by Ensembl VEP as <out>_summary.txt",
+   "sha256": {
+    "default.txt": "8a1088818075eba43b2b179604c3d062261c7d88fd9a5500a0f86ae9064fa0c5",
+    "tab.txt": "f9587183f42f105a0869d87ce4c2bd35d75fb99a3e93aeb304b155dfe8b2fb67",
+    "vcf.vcf": "132a56eb4ad7d87296e2fdf15748f689abacebbf4c969152dfa15c1c340caf50",
+    "json.jsonl": "5513e049d1cbe37b298ae92e8ccbc991057172cb79c375ea7cf7b421b9a0cc6c",
+    "default.summary.log": "025e2e41853c31ebe4f71060b63193d89f52562631e2eab68c37dbd133c8915f",
+    "tab.summary.log": "10775dc0374d8e762db651f401f89223385466e0799d7c2afa11fda6d1a24804",
+    "vcf.summary.log": "d624cda8b6838f3a61695fd53c79d15405c0511cb82ae7769bb0579b618a510f",
+    "json.summary.log": "3298d8e65d8a62230abca50e82a3780722130fc09269c9d9e41f4557dc001abc"
+   }
+  },
+  "predictions": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --sift b --polyphen b [--tab|--vcf|--json]",
+   "flags": [
+    "--stats_text",
+    "--sift",
+    "b",
+    "--polyphen",
+    "b"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_predictions",
+   "summary_log": "<format>.summary.log, written by Ensembl VEP as <out>_summary.txt",
+   "sha256": {
+    "default.txt": "65548a0c61f5b4152cdd657e5fe7720d5af39b12688c76f3fc9e52f1f2a63264",
+    "tab.txt": "1c126a76376b0038441ffaaf9b41aa6dfb63e86bfa295ba54f14b37431882a56",
+    "vcf.vcf": "e8a69be6da20691881f606334e4add42c62847de7f0308c632be2c4015322e36",
+    "json.jsonl": "e5badbe29777735a5d17031a7646e27c65b75a77c0964d6fa41b51a4cabae71e",
+    "default.summary.log": "a889f373b1fb04cd4200a7eeb6497282b4375c980336547cc096ae5e0e00f719",
+    "tab.summary.log": "52f9fe059eebd2f41af75853c99c3e44b72a14959ad1e0ea9d445f8507e45721",
+    "vcf.summary.log": "85defe1265c3e408a716dc43295491c92378f9c8f58088943cc6a38381a66dea",
+    "json.summary.log": "9dd43b0176c0d83fefc87301dd7c07db7b5f4c9e0a98de6ed3dc58f0090ff098"
+   }
+  },
+  "stats-file-named": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --stats_file <out>.stats.html [--tab|--vcf|--json]",
+   "flags": [
+    "--stats_text",
+    "--stats_file",
+    "{out}.stats.html"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_stats-file-named",
+   "summary_log": "<format>.summary.log, written by Ensembl VEP as <out>.stats.txt",
+   "sha256": {
+    "default.txt": "a5ea6683d3fd33b88493cbd90ca6efa22188c2f63f4e21d201c982cdba6ebb10",
+    "tab.txt": "9d0f739a62757b36a09368fdb4fccbea9873e7043bc5614718dcfe54518db29b",
+    "vcf.vcf": "9801b3f8014e8f40cc0fd4fe5470c3f7812b580bda76d268f49af939acef1a44",
+    "json.jsonl": "407220f857bbc8bd5b0b04be08aff4dfae3f6a0b6b6c335433412c3796c4f534",
+    "default.summary.log": "4c643432dde49b59c8231d6b36f9bdafacdfb6e08201f656265dee82795cc0aa",
+    "tab.summary.log": "68d97cd6becf0e755627003c7f73f740c8bed5782f4fa0789f9fadc03b7d0b13",
+    "vcf.summary.log": "0577b99ee38b8a7bb81a72613af7156c4a1c1005ccaba91a766f70db11a34350",
+    "json.summary.log": "441b583d13569650f4d3cb75c6891dc5998daf6886b1ba830e8086526261f3d7"
+   }
+  },
+  "no-stats": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --stats_text --quiet --force_overwrite [--tab|--vcf|--json]",
+   "flags": [
+    "--no_stats",
+    "--stats_text"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_no-stats",
+   "summary_log": "none: --no_stats writes no report",
+   "sha256": {
+    "default.txt": "e46208974e43909f8a2780debe06d1f4aed05fc5c8911744a134bec09bdadbe7",
+    "tab.txt": "6e3a7bc3bb6b476e2b37d941629bd0195ffe45dc2b2f167595a28d67cd87b162",
+    "vcf.vcf": "599330d0b58e358f562144c9be7cf263e3b3cff7bc7fc9002e5be46eeb262f86",
+    "json.jsonl": "4fc965813f3d9fcad3d77543b702edb20a801724b3d26d924eb2d3e3b7dc8b0d"
+   }
+  },
+  "quiet-writes-stats": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite [--tab|--vcf|--json]",
+   "flags": [
+    "--quiet",
+    "--stats_text"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_quiet-writes-stats",
+   "summary_log": "<format>.summary.log, written by Ensembl VEP as <out>_summary.txt",
+   "sha256": {
+    "default.txt": "e42e6b37dd35c2bf9f444e524c732257ced430dc53e77c44f787a07c3c7e4e35",
+    "tab.txt": "262399d67e5de7a0b04b581fcbde4d4bb1cf4679352819bda6f59573b84c08ae",
+    "vcf.vcf": "619371e88899dfef1072be442e3d3f48c144a0e90cfe054734c04629bb14de96",
+    "json.jsonl": "2d301d64e02fe2199ea5bbde40c10b8d251450b495657ccb6afe2e2e803ad1d0",
+    "default.summary.log": "163b1d78572c777dad9c6367a2cc48498560303255a47f0ed084344091e2a9fb",
+    "tab.summary.log": "4ee1a043e75b778814b4d4a5f28d2fe51ea72291bd5f096ccd8bf013ee606676",
+    "vcf.summary.log": "ed2e9a4fb23851c05153c418b16d7ca55d0f2c39cea23465c99315339025abf7",
+    "json.summary.log": "74f836f2e69615d5d617fd1d1c655fa46e775ca2f5fbf0f9473c2273e9fe9983"
+   }
+  },
+  "stdout-summary": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "vep_command": "vep -i variants.vcf -o STDOUT --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite [--tab|--vcf|--json]",
+   "flags": [
+    "-o",
+    "STDOUT",
+    "--stats_text"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_stdout-summary",
+   "summary_log": "<format>.summary.log, written by Ensembl VEP as STDOUT_summary.txt",
+   "sha256": {
+    "default.txt": "3637d1e40af2e8563030a6773172b1c71e3563eab1f929ec6152d430f07e3ac8",
+    "tab.txt": "aebf22a54d12a0b9cf250cb406965d666b3869765bd82b778327f5fd561524f8",
+    "vcf.vcf": "1c8946e64538cebc8c2df273bfbceb42ccb3cac0f38d982fc586ddf28669d4e2",
+    "json.jsonl": "e98a225f026727f344b839e9cd44ae49d0848acafec0fead3cc4a290a7a0cc73",
+    "default.summary.log": "4025706b8dd554fbcb7c0137f80dc3886bcb1248fc1675c565a38bccb8007712",
+    "tab.summary.log": "ef666bee3fe50d5672ee07f0e16dd879b8071c7352c416db9c4e8dfa686dde9b",
+    "vcf.summary.log": "f9e66b624110280797cf57ddd6ba4d8ec1ee1d319cbb611f61631b603ac9371b",
+    "json.summary.log": "c418a49e60a72fd9f0cac795725a39ba42b231eea3f0ed3dff2c26730ce4ccc8"
+   }
+  }
+ }
+}

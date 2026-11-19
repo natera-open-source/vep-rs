@@ -1,0 +1,58 @@
+entry = "hgvs_clipped_reference_against_whole_alternate"
+page = "docs/divergences/hgvs-clipped-reference-against-whole-alternate.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 86.7 per million · 23 flag sets, 53 corpora"
+notes = "Six records whose span runs over the first base of ENST00000290239 (34915350): one changed base inside, every base inside unchanged, a multi-allelic record's alleles still carrying a shared outside base, a multi-allelic record's shorter alternate repeating the base inside, a multi-allelic record's deletion reaching over the first base behind a shared outside base, and one deleting the two bases inside behind it. The deletion reaching over the first base can be written at no other window, so vep-rs writes no HGVSc for it: the HGVS nomenclature describes a deletion extending beyond the transcribed region by genomic coordinates alone. The deletion of the two bases inside lies wholly inside the transcript and keeps its notation."
+
+[input]
+format = "vcf"
+text = """
+21	34915345	fwd5_inside_change	TGCTGGGAGCC	TGCTGGGCGCC	.	.	.
+21	34915340	fwd5_single	AGGCATGCTGGGAGCC	CGGCATGCTGGGAGCC	.	.	.
+21	34915348	fwd5_straddle_ins_multi	TGG	TGGA,TGGC	.	.	.
+21	34915346	fwd5_short_alt_multi	GCTGG	GGG,GA	.	.	.
+21	34915347	fwd5_straddle_del_anchor_multi	CTGGG	CT,CTGGGC	.	.	.
+21	34915347	fwd5_two_del_anchor_multi	CTGGG	CTG,CTGGGC	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37-hgvs/json_cache"
+fasta = "tests/golden/116/GRCh37-hgvs/reference.fa.gz"
+
+[run]
+flags = ["--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = ["fwd5_inside_change", "fwd5_single", "fwd5_straddle_ins_multi", "fwd5_short_alt_multi", "fwd5_straddle_del_anchor_multi", "fwd5_two_del_anchor_multi"], feature = "ENST00000290239" }
+columns = ["Uploaded_variation", "Allele", "Consequence", "cDNA_position", "HGVSc"]
+
+[expected]
+ensembl_vep = [
+  "fwd5_inside_change | TGCTGGGCGCC | 5_prime_UTR_variant | ?-6 | ENST00000290239.6:c.-49_-47delinsTGCTGGGC",
+  "fwd5_single | CGGCATGCTGGGAGCC | 5_prime_UTR_variant | ?-6 | ENST00000290239.6:c.-49-1_-49insCGGCATGCTG",
+  "fwd5_straddle_ins_multi | GGA | 5_prime_UTR_variant | ?-1 | ENST00000290239.6:c.-49_-48insGA",
+  "fwd5_straddle_ins_multi | GGC | 5_prime_UTR_variant | ?-1 | ENST00000290239.6:c.-49_-48insGC",
+  "fwd5_short_alt_multi | GG | 5_prime_UTR_variant | ?-1 | ENST00000290239.6:c.-49dup",
+  "fwd5_short_alt_multi | A | 5_prime_UTR_variant | ?-1 | ENST00000290239.6:c.-49G>A",
+  "fwd5_straddle_del_anchor_multi | T | 5_prime_UTR_variant | ?-2 | ENST00000290239.6:c.-49_-48delinsT",
+  "fwd5_straddle_del_anchor_multi | TGGGC | 5_prime_UTR_variant | ?-2 | ENST00000290239.6:c.-49_-48delinsTGGGC",
+  "fwd5_two_del_anchor_multi | TG | 5_prime_UTR_variant | ?-2 | ENST00000290239.6:c.-49G>T",
+  "fwd5_two_del_anchor_multi | TGGGC | 5_prime_UTR_variant | ?-2 | ENST00000290239.6:c.-49_-48delinsTGGGC",
+]
+vep_rs = [
+  "fwd5_inside_change | TGCTGGGCGCC | 5_prime_UTR_variant | ?-6 | ENST00000290239.6:c.-47A>C",
+  "fwd5_single | CGGCATGCTGGGAGCC | 5_prime_UTR_variant | ?-6 | -",
+  "fwd5_straddle_ins_multi | GGA | 5_prime_UTR_variant | ?-1 | ENST00000290239.6:c.-49_-48insA",
+  "fwd5_straddle_ins_multi | GGC | 5_prime_UTR_variant | ?-1 | ENST00000290239.6:c.-49_-48insC",
+  "fwd5_short_alt_multi | GG | 5_prime_UTR_variant | ?-1 | -",
+  "fwd5_short_alt_multi | A | 5_prime_UTR_variant | ?-1 | ENST00000290239.6:c.-49G>A",
+  "fwd5_straddle_del_anchor_multi | T | 5_prime_UTR_variant | ?-2 | -",
+  "fwd5_straddle_del_anchor_multi | TGGGC | 5_prime_UTR_variant | ?-2 | ENST00000290239.6:c.-48_-47insC",
+  "fwd5_two_del_anchor_multi | TG | 5_prime_UTR_variant | ?-2 | ENST00000290239.6:c.-49_-48del",
+  "fwd5_two_del_anchor_multi | TGGGC | 5_prime_UTR_variant | ?-2 | ENST00000290239.6:c.-48_-47insC",
+]

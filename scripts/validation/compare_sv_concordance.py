@@ -44,7 +44,7 @@ import json
 import re
 import sys
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -69,12 +69,15 @@ from compare_vep_outputs import (  # noqa: E402  (sibling script, one definition
     CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET,
     DEFAULT_REFERENCE_RELEASE,
     DOT_BREAKEND_PAIR_BUCKET,
+    ExclusionRule,
     FASTA_NAMED_SLICE_INTERGENIC_BUCKET,
     GVCF_VARIANT_SITE_DROPPED_BUCKET,
     MISSING_ALT_ANNOTATED_BUCKET,
     NON_INTEGER_END_BUCKET,
     NON_NUMERIC_POS_NUMIFIED_BUCKET,
+    PairRow,
     REFERENCE_116_2_ONE_SIDED_RULES,
+    REFERENCE_REGISTRIES,
     REFERENCE_RELEASES,
     REFERENCE_SKIPPED_RECORD_BUCKET,
     STAR_ALONE_SVTYPE_ANNOTATED_BUCKET,
@@ -93,9 +96,11 @@ from compare_vep_outputs import (  # noqa: E402  (sibling script, one definition
     is_gvcf_variant_site,
     is_own_breakend_allele,
     is_structural_allele,
+    pair_row,
     perl_fields,
     perl_split,
     perl_true,
+    read_record_references,
     reference_mate_chromosome,
     sequence_location,
 )
@@ -1110,11 +1115,86 @@ def filter_giant_breakend_mate_divergences(
     return excluded
 
 
+def pair_rows_by_tuple(
+    paths: Iterable[Path],
+    wanted: Collection[AnnotTuple],
+    engine: str = "vep-rs",
+    input_by_output: Mapping[Path, Path] | None = None,
+) -> dict[AnnotTuple, list[PairRow]]:
+    """The rows of the outputs ``paths`` behind each tuple of ``wanted``, for the registry's
+    row-aware pair rules: every row `parse_vep_output` reads into the tuple, as `pair_row`
+    reads its first nine columns, each distinct row once. A tuple one of whose rows has
+    fewer than nine columns, and so no position column, is left out. No output is read
+    when ``wanted`` is empty.
+
+    ``input_by_output`` names the input VCF an output was written from. A row of such an
+    output whose first column spells no alleles is given the reference bases its allele
+    stands in for, read by position from the records of that input
+    (``compare_vep_outputs.read_record_references``, which opens the input only where a row
+    asks). The rows of each output are read against its own input before the rows of all
+    outputs are pooled, so a row that two outputs carry stands once for each distinct
+    reading, whatever the order of ``paths``."""
+    found: dict[AnnotTuple, list[PairRow]] = {}
+    short: set[AnnotTuple] = set()
+    if not wanted:
+        return found
+    for path in paths:
+        if not path.exists():
+            continue
+        of_output: dict[AnnotTuple, list[PairRow]] = {}
+        with open(path) as fh:
+            for line in fh:
+                line = line.rstrip("\n")
+                if not line or line.startswith("#"):
+                    continue
+                cols = line.split("\t")
+                if len(cols) < 7:
+                    continue
+                t = (
+                    normalize_location(cols[1]),
+                    normalize_allele(cols[2], engine),
+                    cols[4],
+                    cols[5],
+                    normalize_consequence_set(cols[6]),
+                )
+                if t not in wanted:
+                    continue
+                if len(cols) < 9:
+                    short.add(t)
+                    continue
+                row = pair_row(cols[:9])
+                if row not in of_output.setdefault(t, []):
+                    of_output[t].append(row)
+        input_path = input_by_output.get(path) if input_by_output else None
+        if input_path is not None:
+            read_record_references(input_path, [row for t, rows in of_output.items() if t not in short for row in rows])
+        for t, rows in of_output.items():
+            pooled = found.setdefault(t, [])
+            for row in rows:
+                if row not in pooled:
+                    pooled.append(row)
+    return {t: rows for t, rows in found.items() if t not in short}
+
+
 def filter_registry_swap_pairs(
     perl_tuples: set[AnnotTuple],
     rust_tuples: set[AnnotTuple],
+    row_pair_rules: Sequence[ExclusionRule] = (),
+    perl_paths: Iterable[Path] = (),
+    rust_paths: Iterable[Path] = (),
+    scored_engine: str = "vep-rs",
+    input_by_output: Mapping[Path, Path] | None = None,
 ) -> tuple[set[AnnotTuple], set[AnnotTuple], dict[str, int]]:
     """Apply the SNP/indel comparator's excluding rules to this comparator's pairs.
+
+    ``row_pair_rules`` are the row-aware pair rules of the reference release's registry
+    (``REFERENCE_REGISTRIES``). A pair none of `EXCLUDING_RULES` takes is put to them in
+    their order, the first match taking it, on the rows of ``perl_paths`` and
+    ``rust_paths`` that carry its two tuples (`pair_rows_by_tuple`); the rows of one tuple
+    stand or fall together. Without such a rule no output is read. ``input_by_output``
+    names the input VCF each output was written from: a row whose first column spells no
+    alleles is given its record's reference bases by position from that input before the
+    rules are asked, and without it such a row carries none.
 
     A pair is a (Location, Allele, Feature, Feature_type) present on both sides with
     different consequence sets; each side contributes exactly one tuple per key. The
@@ -1139,7 +1219,8 @@ def filter_registry_swap_pairs(
         rust_by_key[t[:4]].append(t)
     excluded_rust: set[AnnotTuple] = set()
     excluded_perl: set[AnnotTuple] = set()
-    by_bucket: dict[str, int] = {rule.bucket: 0 for rule in EXCLUDING_RULES}
+    by_bucket: dict[str, int] = {rule.bucket: 0 for rule in (*EXCLUDING_RULES, *row_pair_rules)}
+    untaken: list[tuple[AnnotTuple, AnnotTuple]] = []
     for key, perl_side in perl_by_key.items():
         rust_side = rust_by_key.get(key)
         if not rust_side or len(perl_side) != 1 or len(rust_side) != 1:
@@ -1151,6 +1232,22 @@ def filter_registry_swap_pairs(
                 excluded_rust.add(rt)
                 by_bucket[rule.bucket] += 1
                 break
+        else:
+            untaken.append((pt, rt))
+    if row_pair_rules and untaken:
+        perl_rows = pair_rows_by_tuple(perl_paths, {pt for pt, _ in untaken}, input_by_output=input_by_output)
+        rust_rows = pair_rows_by_tuple(rust_paths, {rt for _, rt in untaken}, scored_engine, input_by_output)
+        for pt, rt in untaken:
+            if pt not in perl_rows or rt not in rust_rows:
+                continue
+            rows = (perl_rows[pt], rust_rows[rt])
+            rule = next((r for r in row_pair_rules if r.matches(pt[4], rt[4], pt[1], rows)), None)
+            if rule is None:
+                continue
+            by_bucket[rule.bucket] += 1
+            if rule.excludes:
+                excluded_perl.add(pt)
+                excluded_rust.add(rt)
     return excluded_rust, excluded_perl, by_bucket
 
 
@@ -1551,6 +1648,13 @@ _SO_TERMS = {
 _VCF44_SYMBOLIC = re.compile(r"^<?(DEL|INS|DUP|INV|CNV|CN=?[0-9]+)")
 
 
+def perl_record_type(sv_type: str, svtype: str | None) -> str:
+    """The type string Ensembl VEP keeps for a record (Parser/VCF.pm:469-475): INFO/SVTYPE
+    when Perl reads it as true and the ALT string does not open with a VCF 4.4 form, else
+    the ALT string (`/`-joined when a list)."""
+    return svtype if perl_true(svtype) and not _VCF44_SYMBOLIC.match(sv_type) else sv_type
+
+
 def perl_so_abbrev(sv_type: str) -> str | None:
     """The Sequence Ontology abbreviation `get_SO_term` derives for a type string, or None
     when the reference has no term for it (the type is then `vep_skip`)."""
@@ -1724,10 +1828,7 @@ def perl_skip_route(v: VcfVariant, max_sv_size: int = _MAX_SV_SIZE) -> str | Non
         return None
     alts = perl_split(v.alt, ",")
     svtype = _info_written(v.info, "SVTYPE")
-    sv_type = "/".join(alts)
-    if perl_true(svtype) and not _VCF44_SYMBOLIC.match(sv_type):
-        sv_type = svtype
-    abbrev = perl_so_abbrev(sv_type)
+    abbrev = perl_so_abbrev(perl_record_type("/".join(alts), svtype))
     if abbrev is None:
         if is_gvcf_variant_site(alts, svtype):
             return "gvcf_variant_site"
@@ -1786,9 +1887,7 @@ def vep_rs_unsupported_alt_allele(alt: str, svtype: str | None) -> str:
             return term
     if svtype is not None and svtype.upper() in _VEP_RS_SVTYPE_TERMS:
         return _VEP_RS_SVTYPE_TERMS[svtype.upper()]
-    if perl_true(svtype) and not _VCF44_SYMBOLIC.match(alt):
-        return svtype
-    return alt
+    return perl_record_type(alt, svtype)
 
 
 def record_alleles(v: VcfVariant) -> set[str]:
@@ -1805,10 +1904,8 @@ def record_alleles(v: VcfVariant) -> set[str]:
     info = _info_fields(v.info)
     alts = perl_split(v.alt, ",")
     svtype = info.get("SVTYPE")
-    sv_type = "/".join(alts)
-    whole = perl_so_abbrev(svtype if svtype and not _VCF44_SYMBOLIC.match(sv_type) else sv_type)
-    # The type string Ensembl VEP keeps for the record (Parser/VCF.pm:469-475).
-    record_type = svtype if perl_true(svtype) and not _VCF44_SYMBOLIC.match(sv_type) else sv_type
+    record_type = perl_record_type("/".join(alts), svtype)
+    whole = perl_so_abbrev(record_type)
     # Under a type the table lacks, vep-rs keeps each symbolic ALT's own class, INFO/SVTYPE
     # naming the class of a mixed list (a symbolic ALT beside a sequence allele).
     mixed = any(alt.startswith("<") for alt in alts) and any(
@@ -1823,7 +1920,7 @@ def record_alleles(v: VcfVariant) -> set[str]:
                 raw = re.sub(r":.+", "", alt[1:-1])
                 alleles.update({raw, f"<{raw}>", alt})
             if whole is None:
-                own = f"<{svtype}>" if mixed and svtype else alt
+                own = f"<{svtype}>" if mixed and perl_true(svtype) else alt
                 written = vep_rs_unsupported_alt_allele(own, svtype)
                 alleles.add(written)
                 if written in (own, svtype):
@@ -1858,12 +1955,14 @@ def record_alleles(v: VcfVariant) -> set[str]:
 def record_location(v: VcfVariant) -> tuple[str, int, int]:
     """The (chromosome, start, end) both engines write for a structural record: the base
     after POS, and the end `get_end` derives (SVLEN first, else END, else the start; a
-    breakend's END discarded)."""
+    breakend's END discarded). A breakend is a record whose type string (`perl_record_type`)
+    has the term `chromosome_breakpoint`: a `<BND>` with no SVTYPE is one, a bracket ALT
+    under `SVTYPE=DEL` is not."""
     chrom = v.location.split(":", 1)[0]
     start = v.pos + 1
     svlen, end_field = _info_written(v.info, "SVLEN"), _info_written(v.info, "END")
-    alt = "/".join(perl_split(v.alt, ","))
-    is_bnd = bool(re.search(r"[\[\]]|^\.\w|\w\.$", alt)) or _info_written(v.info, "SVTYPE") == "BND"
+    record_type = perl_record_type("/".join(perl_split(v.alt, ",")), _info_written(v.info, "SVTYPE"))
+    is_bnd = perl_so_abbrev(record_type) == "BND"
     end = perl_structural_end(v.pos, svlen, end_field, is_bnd)
     return chrom, start, int(end) if end is not None else start
 
@@ -1916,9 +2015,11 @@ def skipped_record_rows(
     perl_tuples: set[AnnotTuple],
     rust_tuples: set[AnnotTuple],
     max_sv_size: int = _MAX_SV_SIZE,
-) -> tuple[set[AnnotTuple], int, list[str]]:
-    """The records the 116 reference dropped as `vep_skip`, their vep-rs rows, and every
-    disagreement between the records and the outputs.
+    scored_engine: str = "vep-rs",
+) -> tuple[set[AnnotTuple], int, list[str], set[AnnotTuple]]:
+    """The records the 116 reference dropped as `vep_skip`, their vep-rs rows, every
+    disagreement between the records and the outputs, and the skip-route residue of a
+    scored engine other than vep-rs.
 
     THE SHAPE. 116.2 writes at least one row for every record it keeps and no row in any
     format for a record it marks `vep_skip`; vep-rs annotates all of them. A record is
@@ -1947,6 +2048,11 @@ def skipped_record_rows(
     route 116.2 shares with 115.2 (`start > end+1`) is reported; two records at one start
     whose alleles and Locations coincide, one skipped and one kept.
 
+    That residue is a problem for vep-rs alone, whose rows the reference's drop rules
+    account for. Under any other ``scored_engine`` the engine's structural rows at such
+    Locations are its own disagreements with the reference, returned as the fourth member
+    for the report to count; they stay in both figures and stop nothing.
+
     The SNP/indel comparator opens the input only to recognise gVCF variant sites and
     judges this class by the output-only rule (`ReferenceRecordScope`): a Location with
     vep-rs structural rows and no reference row.
@@ -1955,7 +2061,7 @@ def skipped_record_rows(
     `GVCF_VARIANT_SITE_DROPPED_BUCKET`: its record is confirmed, so it explains its Location
     in the residue check, and is neither counted nor set aside here.
 
-    Returns (excluded_rust, records, problems).
+    Returns (excluded_rust, records, problems, scored_engine_residue).
     """
     def located(tuples: set[AnnotTuple]) -> dict[tuple[str, int], list[tuple[AnnotTuple, int]]]:
         out: dict[tuple[str, int], list[tuple[AnnotTuple, int]]] = defaultdict(list)
@@ -2025,12 +2131,16 @@ def skipped_record_rows(
     )[1]
     explained = confirmed_starts | {(s[0], s[1]) for t in paired if (s := _location_span(t[0])) is not None}
     perl_locations = {t[0] for t in perl_tuples}
+    residue: set[AnnotTuple] = set()
     for t in rust_tuples:
         span = _location_span(t[0])
         if (t[0] not in perl_locations and is_structural_allele(t[1]) and t[1] != _CNV_TR_RUST_ALLELE
                 and span is not None and (span[0], span[1]) not in explained):
-            problems.append(f"{t[0]} {t[1]}: the reference wrote nothing at this Location and no input record on a skip route starts there")
-    return excluded, confirmed, sorted(set(problems))
+            if scored_engine == "vep-rs":
+                problems.append(f"{t[0]} {t[1]}: the reference wrote nothing at this Location and no input record on a skip route starts there")
+            else:
+                residue.add(t)
+    return excluded, confirmed, sorted(set(problems)), residue
 
 
 def filter_reference_skipped_records(
@@ -2043,7 +2153,7 @@ def filter_reference_skipped_records(
     `skipped_record_rows` itself, to stop on them): the vep-rs tuples of every record the
     reference dropped as `vep_skip` or refused in `validate_vf`, the gVCF variant site
     excepted, and the number of such records."""
-    excluded, records, _problems = skipped_record_rows(input_variants, perl_tuples, rust_tuples, max_sv_size)
+    excluded, records, _problems, _residue = skipped_record_rows(input_variants, perl_tuples, rust_tuples, max_sv_size)
     return excluded, records
 
 
@@ -2300,6 +2410,23 @@ def filter_cnv_tr_empty_expansion(
     return excluded
 
 
+def _two_allele_cnv_tr_rn(v: VcfVariant) -> tuple[str, str | None, str | None, list[int]] | None:
+    """The RUS, RUC and RB values of a two-ALT `<CNV:TR>,<CNV:TR>` record with RUS, with RUC or
+    RB, and with a two-part RN neither part of which is `.`, and the two RN counts as Perl
+    numifies them; None for a record of any other shape. The shape both readers of the
+    dropped allele (`cnv_tr_rn_zero_dropped_direction`, `cnv_tr_rn_zero_dropped_literal`)
+    judge."""
+    if perl_split(v.alt.upper(), ",") != ["<CNV:TR>", "<CNV:TR>"]:
+        return None
+    rus, ruc, rb, rn = (_info_written(v.info, key) for key in ("RUS", "RUC", "RB", "RN"))
+    if not perl_true(rus) or not (perl_true(ruc) or perl_true(rb)) or not perl_true(rn):
+        return None
+    counts_rn = perl_split(rn, ",")
+    if len(counts_rn) != 2 or "." in counts_rn:
+        return None
+    return rus, ruc, rb, [int(perl_numeric_value(count)) for count in counts_rn]
+
+
 def cnv_tr_rn_zero_dropped_direction(v: VcfVariant) -> str | None:
     """The direction, ``"gain"`` or ``"loss"``, of the allele Ensembl VEP drops from a two-ALT
     `<CNV:TR>,<CNV:TR>` record of which one allele's RN is a count `for (1 .. $records)`
@@ -2317,21 +2444,17 @@ def cnv_tr_rn_zero_dropped_direction(v: VcfVariant) -> str | None:
     current run); an unchanged real allele is read as a gain by vep-rs and is the dropped
     allele when the empty part leads, while with the empty part trailing the reference writes
     nothing for the record (`cnv_tr_expansion_is_empty`)."""
-    if perl_split(v.alt.upper(), ",") != ["<CNV:TR>", "<CNV:TR>"]:
+    shape = _two_allele_cnv_tr_rn(v)
+    if shape is None:
         return None
-    rus, ruc, rb, rn = (_info_written(v.info, key) for key in ("RUS", "RUC", "RB", "RN"))
-    if not perl_true(rus) or not (perl_true(ruc) or perl_true(rb)) or not perl_true(rn):
-        return None
-    counts_rn = perl_split(rn, ",")
-    if len(counts_rn) != 2 or "." in counts_rn:
-        return None
-    empty = [i for i, count in enumerate(counts_rn) if int(perl_numeric_value(count)) <= 0]
+    rus, ruc, rb, counts_rn = shape
+    empty = [i for i, count in enumerate(counts_rn) if count <= 0]
     if len(empty) != 1:
         return None
-    sequences = int(perl_numeric_value(counts_rn[1 - empty[0]]))
+    sequences = counts_rn[1 - empty[0]]
     units = [1 if unit == "." else len(unit) for unit in rus.split(",")[:sequences]]
     by_ruc = perl_true(ruc)
-    counts = (ruc if by_ruc else rb or "").split(",")
+    counts = (ruc if by_ruc else rb).split(",")
     if len(units) < sequences or len(counts) < sequences or (0 in units and not by_ruc):
         return None
     bases = sum(_repeat_bases(unit_len, count, by_ruc) for unit_len, count in zip(units, counts))
@@ -2344,8 +2467,40 @@ def cnv_tr_rn_zero_dropped_direction(v: VcfVariant) -> str | None:
     return "loss" if bases > run else None
 
 
+def cnv_tr_rn_zero_dropped_literal(v: VcfVariant, max_sv_size: int = _MAX_SV_SIZE) -> str | None:
+    """The real allele behind a leading `RN=0` as the parser expands it: the allele's repeat
+    sequences, each unit repeated by its count (`$seq x $num`, Parser/VCF.pm:414, 419) with
+    `.` read as `N` (`:413`), joined and upper-cased (Parser.pm:554); None for a record of
+    another shape, a trailing `RN=0` included, and for a record the parser leaves symbolic:
+    one with a repeat sequence of more bases, its unit length times its count as written,
+    than `--max_sv_size` (`:403`, 5000 when the cap reads false, so -1 expands nothing;
+    `:417-418`, `:428`)."""
+    shape = _two_allele_cnv_tr_rn(v)
+    if shape is None:
+        return None
+    rus, ruc, rb, (empty, sequences) = shape
+    if empty > 0 or sequences <= 0:
+        return None
+    units = ["N" if unit == "." else unit for unit in rus.split(",")[:sequences]]
+    by_ruc = perl_true(ruc)
+    counts = (ruc if by_ruc else rb).split(",")[:sequences]
+    if len(units) < sequences or len(counts) < sequences or ("" in units and not by_ruc):
+        return None
+    cap = max_sv_size or 5000
+    repeats: list[str] = []
+    for unit, count in zip(units, counts):
+        copies = perl_numeric_value(count) if by_ruc else perl_numeric_value(count) / len(unit)
+        if len(unit) * copies > cap:
+            return None
+        repeats.append(unit * max(int(copies), 0))
+    return "".join(repeats).upper()
+
+
 def filter_cnv_tr_rn_zero_allele_dropped(
-    perl_tuples: set[AnnotTuple], rust_tuples: set[AnnotTuple], input_variants: list[VcfVariant]
+    perl_tuples: set[AnnotTuple],
+    rust_tuples: set[AnnotTuple],
+    input_variants: list[VcfVariant],
+    max_sv_size: int = _MAX_SV_SIZE,
 ) -> set[AnnotTuple]:
     """vep-rs's tuples of the allele the reference dropped from a two-ALT `<CNV:TR>` record
     of which one allele has `RN=0`, when the reference expanded the record: a row at or
@@ -2359,40 +2514,15 @@ def filter_cnv_tr_rn_zero_allele_dropped(
     (Parser.pm:554), untrimmed because vep-rs reads the record's allele string as
     multi-allelic; behind a trailing `RN=0` both engines lose the empty allele to `split`
     and such a run writes what the reference writes. When the reference ran without a
-    FASTA, both alleles are symbolic rows on both sides and nothing is set aside."""
-
-    def dropped_literal(v: VcfVariant) -> str | None:
-        """The real allele behind a leading `RN=0` as the parser expands it; None for a
-        record of another shape, a trailing `RN=0` included."""
-        if perl_split(v.alt.upper(), ",") != ["<CNV:TR>", "<CNV:TR>"]:
-            return None
-        rus, ruc, rb, rn = (_info_written(v.info, key) for key in ("RUS", "RUC", "RB", "RN"))
-        if not perl_true(rus) or not (perl_true(ruc) or perl_true(rb)) or not perl_true(rn):
-            return None
-        counts_rn = perl_split(rn, ",")
-        if len(counts_rn) != 2 or "." in counts_rn:
-            return None
-        empty, sequences = (int(perl_numeric_value(count)) for count in counts_rn)
-        if empty > 0 or sequences <= 0:
-            return None
-        units = ["N" if unit == "." else unit for unit in rus.split(",")[:sequences]]
-        by_ruc = perl_true(ruc)
-        counts = (ruc if by_ruc else rb).split(",")[:sequences]
-        if len(units) < sequences or len(counts) < sequences or ("" in units and not by_ruc):
-            return None
-        repeats: list[str] = []
-        for unit, count in zip(units, counts):
-            # `_repeat_bases` is the unit's length times its copies; a unit of no bases adds none.
-            if unit:
-                repeats.append(unit * (_repeat_bases(len(unit), count, by_ruc) // len(unit)))
-        return "".join(repeats).upper()
-
+    FASTA, both alleles are symbolic rows on both sides and nothing is set aside.
+    ``max_sv_size`` is the cap the reference ran with, which bounds the repeat sequences it
+    expands (`cnv_tr_rn_zero_dropped_literal`)."""
     excluded: set[AnnotTuple] = set()
     rust_only = rust_tuples - perl_tuples
     expanded = [s for t in perl_tuples if t[1] != _CNV_TR_RUST_ALLELE and (s := _location_span(t[0])) is not None]
     for v in input_variants:
         dropped = cnv_tr_rn_zero_dropped_direction(v)
-        literal = dropped_literal(v)
+        literal = cnv_tr_rn_zero_dropped_literal(v, max_sv_size)
         if dropped is None and literal is None:
             continue
         chrom, start, end = record_location(v)
@@ -2415,9 +2545,10 @@ def check_skip_routes(
     perl_tuples: set[AnnotTuple],
     rust_tuples: set[AnnotTuple],
     max_sv_size: int = _MAX_SV_SIZE,
+    scored_engine: str = "vep-rs",
 ) -> list[str]:
     """The problems of `skipped_record_rows`; empty when the records and the outputs agree."""
-    return skipped_record_rows(input_variants, perl_tuples, rust_tuples, max_sv_size)[2]
+    return skipped_record_rows(input_variants, perl_tuples, rust_tuples, max_sv_size, scored_engine)[2]
 
 
 def _breakpoint_position(loc: str) -> int | None:
@@ -2657,6 +2788,9 @@ class MaskResult:
     star_alone_perl: set[AnnotTuple] = field(default_factory=set)
     numified_pos_perl: set[AnnotTuple] = field(default_factory=set)
     rn_zero_rust: set[AnnotTuple] = field(default_factory=set)
+    # Counted, never set aside: a scored engine other than vep-rs owns its rows at a
+    # Location the reference wrote nothing for, so they stay in both figures.
+    scored_engine_skip_residue: set[AnnotTuple] = field(default_factory=set)
 
     def all_rust(self) -> set[AnnotTuple]:
         return (
@@ -2687,6 +2821,8 @@ def apply_masks(
     input_variants: list[VcfVariant] | None = None,
     max_sv_size: int = _MAX_SV_SIZE,
     perl_paths: Iterable[Path] = (),
+    rust_paths: Iterable[Path] = (),
+    input_by_output: Mapping[Path, Path] | None = None,
 ) -> MaskResult:
     """Run the masks of `MASKS_BY_RELEASE[reference_release]` on one pair of tuple sets.
 
@@ -2696,8 +2832,14 @@ def apply_masks(
     reference that kept a `vep_skip` record (a run under --dont_skip) is scored as what it
     is, and the 116.2 classes are applied instead; the skipped-record class reads the
     input records (``input_variants``) and records its disagreements with the outputs in
-    ``skipped_problems`` for the caller to stop on; the bare-breakpoint class reads the
-    reference's raw outputs (``perl_paths``), the one place its duplicate rows survive.
+    ``skipped_problems`` for the caller to stop on, except the rows of a ``scored_engine``
+    other than vep-rs at Locations the reference wrote nothing for, which it counts in
+    ``scored_engine_skip_residue``; the bare-breakpoint class reads the reference's raw
+    outputs (``perl_paths``), the one place its duplicate rows survive; the registry's
+    row-aware pair rules read the rows of a pair in both engines' outputs (``perl_paths``,
+    ``rust_paths``) and, for a row whose first column spells no alleles, its record's
+    reference bases by position from the input VCF the output was written from
+    (``input_by_output``).
     """
     if reference_release not in MASKS_BY_RELEASE:
         raise ValueError(f"unknown reference release {reference_release!r}; one of {REFERENCE_RELEASES}")
@@ -2718,7 +2860,15 @@ def apply_masks(
     if "filter_giant_breakend_mate_divergences" in masks:
         r.mate_rust = filter_giant_breakend_mate_divergences(perl_tuples, rust_tuples, transcript_spans)
     if "filter_registry_swap_pairs" in masks:
-        r.swap_rust, r.swap_perl, r.swap_by_bucket = filter_registry_swap_pairs(perl_tuples, rust_tuples)
+        r.swap_rust, r.swap_perl, r.swap_by_bucket = filter_registry_swap_pairs(
+            perl_tuples,
+            rust_tuples,
+            REFERENCE_REGISTRIES[reference_release].row_pair_rules,
+            perl_paths,
+            rust_paths,
+            scored_engine,
+            input_by_output,
+        )
     if "filter_non_ref_batch_divergences" in masks:
         r.non_ref_rust, r.non_ref_perl = filter_non_ref_batch_divergences(perl_tuples, rust_tuples)
     if "filter_breakend_mate_local_read_pairs" in masks:
@@ -2728,8 +2878,8 @@ def apply_masks(
     if "filter_reference_skipped_records" in masks:
         if input_variants is None:
             raise ValueError("the skipped-record mask reads the input records; pass input_variants")
-        r.skipped_rust, r.skipped_records, r.skipped_problems = skipped_record_rows(
-            input_variants, perl_tuples, rust_tuples, max_sv_size
+        r.skipped_rust, r.skipped_records, r.skipped_problems, r.scored_engine_skip_residue = skipped_record_rows(
+            input_variants, perl_tuples, rust_tuples, max_sv_size, scored_engine
         )
     if "filter_bnd_own_rows_lost" in masks:
         r.bnd_own_rust = filter_bnd_own_rows_lost(
@@ -2758,7 +2908,9 @@ def apply_masks(
     if "filter_non_numeric_pos_numified" in masks:
         r.numified_pos_perl = filter_non_numeric_pos_numified(perl_tuples, rust_tuples, input_variants or [])
     if "filter_cnv_tr_rn_zero_allele_dropped" in masks:
-        r.rn_zero_rust = filter_cnv_tr_rn_zero_allele_dropped(perl_tuples, rust_tuples, input_variants or [])
+        r.rn_zero_rust = filter_cnv_tr_rn_zero_allele_dropped(
+            perl_tuples, rust_tuples, input_variants or [], max_sv_size
+        )
     if reference_release == "116.2":
         r.fasta_intergenic_records = count_fasta_named_slice_intergenic(perl_tuples, rust_tuples)
         r.mate_overflow_records, r.mate_overflow_perl_tuples = count_bnd_mate_over_32_bit(
@@ -2834,6 +2986,12 @@ def release_report_block(
         "excluded_star_alone_svtype_perl": len(overall.star_alone_perl),
         "excluded_non_numeric_pos_perl": len(overall.numified_pos_perl),
         "excluded_cnv_tr_rn_zero_rust": len(overall.rn_zero_rust),
+        # Counted, not set aside, and zero by construction for vep-rs, whose residue stops
+        # the comparison instead.
+        "scored_engine_skip_route_residue_rows": len(overall.scored_engine_skip_residue),
+        "scored_engine_skip_route_residue_by_file": {
+            k: len(v.scored_engine_skip_residue) for k, v in sorted(per_file.items()) if v.scored_engine_skip_residue
+        },
         "breakend_masks_check_ran": cache_supplied,
         "divergence_classes": {
             rule.bucket: {
@@ -3106,7 +3264,9 @@ def write_markdown_report(
             f"`{CNV_TR_EMPTY_EXPANSION_BUCKET}` {len(release_masks.cnvtr_empty_rust):,} vep-rs rows set aside; "
             f"`{STAR_ALONE_SVTYPE_ANNOTATED_BUCKET}` {len(release_masks.star_alone_perl):,} reference rows set aside; "
             f"`{NON_NUMERIC_POS_NUMIFIED_BUCKET}` {len(release_masks.numified_pos_perl):,} reference rows set aside; "
-            f"`{CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET}` {len(release_masks.rn_zero_rust):,} vep-rs rows set aside"
+            f"`{CNV_TR_RN_ZERO_ALLELE_DROPPED_BUCKET}` {len(release_masks.rn_zero_rust):,} vep-rs rows set aside; "
+            f"`scored_engine_skip_route_residue` {len(release_masks.scored_engine_skip_residue):,} scored-engine rows "
+            "at Locations the reference wrote nothing for counted, none set aside"
         )
     total_excluded = excluded_count + excluded_perl_count
     if adjusted_overall is not None and total_excluded > 0:
@@ -3254,7 +3414,7 @@ def main() -> None:
         "--scored-engine",
         default="vep-rs",
         help=(
-            "Which engine produced --rust-dir. Two things read it. (1) The cross-chromosome "
+            "Which engine produced --rust-dir. Three things read it. (1) The cross-chromosome "
             "filter's scored-engine sanity assertion: vep-rs naming a transcript the cache "
             "does not hold for the variant's chromosome is a vep-rs bug and raises, while a "
             "third-party engine building its own transcript set from a different annotation "
@@ -3264,8 +3424,12 @@ def main() -> None:
             "<INS:ME:ALU>, <CN0>, ...) are mapped to the SO class strings Perl VEP and "
             "vep-rs write in the Allele column (deletion, tandem_duplication, "
             "Alu_insertion, deletion, ...), without which every symbolic-allele tuple on "
-            "that arm is a guaranteed miss. The Perl side is never mapped. Pass the "
-            "engine's name, e.g. fastvep, to score a non-vep-rs output."
+            "that arm is a guaranteed miss. The Perl side is never mapped. (3) The 116.2 "
+            "skipped-record cross-check: a vep-rs structural row at a Location the reference "
+            "wrote nothing for that no skip-route record explains stops the comparison, "
+            "while another engine's is its own disagreement, counted (reported as "
+            "scored_engine_skip_route_residue_rows) and scored. Pass the engine's name, "
+            "e.g. fastvep, to score a non-vep-rs output."
         ),
     )
     parser.add_argument(
@@ -3379,6 +3543,9 @@ def main() -> None:
     ] = {}
     all_location_types: dict[str, str] = {}
     perl_paths_by_file: dict[str, Path] = {}
+    rust_paths_by_file: dict[str, Path] = {}
+    # The input VCF each output was written from, for the rows the row-aware pair rules read.
+    input_by_output: dict[Path, Path] = {}
 
     for vcf_path in vcf_files:
         basename = vcf_basename(vcf_path)
@@ -3396,6 +3563,8 @@ def main() -> None:
         perl_tuples, perl_locs = parse_vep_output(perl_path)
         rust_tuples, rust_locs = parse_vep_output(rust_path, engine=args.scored_engine)
         perl_paths_by_file[basename] = perl_path
+        rust_paths_by_file[basename] = rust_path
+        input_by_output[perl_path] = input_by_output[rust_path] = vcf_path
 
         if not perl_path.exists():
             print(f"    WARNING: Perl output missing: {perl_path}")
@@ -3499,12 +3668,15 @@ def main() -> None:
         all_input_variants,
         args.reference_max_sv_size,
         perl_paths_by_file.values(),
+        rust_paths_by_file.values(),
+        input_by_output,
     )
     if masks.skipped_problems:
         # The skipped-record class against the input records: a disagreement is a
         # reference run under other flags, a record dropped on a route the registry does
         # not know, or two records the outputs cannot tell apart, and the comparison
-        # stops rather than scoring over it.
+        # stops rather than scoring over it. The rows of another scored engine at a
+        # Location the reference wrote nothing for are counted in the report instead.
         for line in masks.skipped_problems:
             print(f"ERROR: [compare_sv_concordance] skipped-record cross-check: {line}", file=sys.stderr)
         sys.exit(1)
@@ -3577,6 +3749,8 @@ def main() -> None:
             variants_f,
             args.reference_max_sv_size,
             [perl_paths_by_file[basename]],
+            [rust_paths_by_file[basename]],
+            input_by_output,
         )
         masks_by_file[basename] = masks_f
         cnvtr_rust_by_file[basename] = len(masks_f.cnvtr_rust)
@@ -3765,7 +3939,8 @@ def main() -> None:
             f"{len(masks.missing_alt_perl)} missing-ALT row(s), "
             f"{len(masks.non_integer_end_perl) + len(masks.non_integer_end_rust)} non-integer-coordinate row(s), "
             f"{len(masks.cnvtr_empty_rust)} empty-expansion row(s), {len(masks.star_alone_perl)} star-alone row(s), "
-            f"{len(masks.numified_pos_perl)} numified-POS row(s) and {len(masks.rn_zero_rust)} dropped-allele row(s) set aside"
+            f"{len(masks.numified_pos_perl)} numified-POS row(s) and {len(masks.rn_zero_rust)} dropped-allele row(s) set aside; "
+            f"{len(masks.scored_engine_skip_residue)} scored-engine row(s) at Locations the reference wrote nothing for counted"
         )
     print(f"Reports written to: {output_dir}/")
     print(f"  {json_path.name}")

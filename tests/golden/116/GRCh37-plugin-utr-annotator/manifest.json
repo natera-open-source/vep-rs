@@ -1,0 +1,302 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh37",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "max_span": 1000000,
+ "cache_cost_flank": 5000,
+ "flags": [
+  "--plugin",
+  "UTRAnnotator,file={corpus}/data/uORF_5UTR_GRCh37_PUBLIC.chr21.txt",
+  "--dir_plugins",
+  "{corpus}/data"
+ ],
+ "fasta": "reference.fa.gz",
+ "covers": [
+  "UTRAnnotator"
+ ],
+ "masks": [
+  "order_only"
+ ],
+ "flag_sets": [
+  {
+   "name": "max-overlap-80",
+   "flags": [
+    "--plugin",
+    "UTRAnnotator,file={corpus}/data/uORF_5UTR_GRCh37_PUBLIC.chr21.txt,max_overlap=80",
+    "--dir_plugins",
+    "{corpus}/data"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_max-overlap-80",
+   "covers": [
+    "UTRAnnotator"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "suites": {
+  "utr": {
+   "reference": "default.txt",
+   "input": "variants.vcf",
+   "rows": 69,
+   "combinations": 8
+  }
+ },
+ "combinations": {
+  "5_prime_UTR_variant": {
+   "observed_rows": 39,
+   "exemplar_records": 23
+  },
+  "5_prime_UTR_variant,splice_region_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 2
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 5
+  },
+  "intron_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 5
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 5
+  },
+  "non_coding_transcript_exon_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  }
+ },
+ "variant_classes": {
+  "deletion": 17,
+  "insertion": 12,
+  "mnv_or_complex": 8,
+  "snv": 32
+ },
+ "records": [
+  {
+   "suite": "utr",
+   "vcf": "21\t10985063\tustop_lost_snv_rev_ENST00000298232_306\tT\tG\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t10985091\tustop_gained_snv_rev_ENST00000298232_278\tG\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t10985093\tuframeshift_ins_rev_ENST00000298232_276\tA\tAG\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t10985093\tuframeshift_del_rev_ENST00000298232_275\tAT\tA\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t10985097\tuaug_lost_snv_rev_ENST00000298232_272\tA\tG\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t14982504\tuaug_gained_snv_fwd_ENST00000299443_6\tC\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t14982509\tuaug_gained_ins_junction_fwd_ENST00000299443_12\tT\tTG\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t15052362\tuframeshift_oorf_ins_rev_ENST00000596508_1097\tC\tCA\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t15052365\tuaug_lost_oorf_snv_rev_ENST00000596508_1094\tC\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t15053128\tustop_gained_mnv_rev_ENST00000596508_330\tGC\tCA\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t15053450\tuaug_gained_ins_junction_rev_ENST00000596508_9\tA\tAC\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t15053450\tuaug_gained_snv_rev_ENST00000596508_9\tA\tC\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t18814016\tuaug_lost_snv_fwd_ENST00000440664_129\tT\tC\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t18814018\tustop_gained_snv_fwd_ENST00000440664_131\tG\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t18814018\tuframeshift_del_fwd_ENST00000440664_132\tGA\tG\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t18814019\tuframeshift_ins_fwd_ENST00000440664_133\tA\tAC\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t18814027\tustop_gained_mnv_fwd_ENST00000440664_140\tAC\tTG\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t18814065\tustop_lost_snv_fwd_ENST00000440664_178\tA\tC\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t18981462\twhole_utr_exon_del_rev_ENST00000339775_146\tTTTTTTTCC\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t22582859\twhole_utr_exon_del_fwd_ENST00000535285_132\tGAGTTATTTGAAGAGTACCACG\tG\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,splice_region_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t33651329\tustop_lost_snv_ev_rev_ENST00000290130_51\tC\tG\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t33651348\tustop_gained_snv_ev_rev_ENST00000290130_32\tC\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t33651353\tuframeshift_del_ev_rev_ENST00000290130_26\tCG\tC\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t33651357\tuaug_lost_snv_ev_rev_ENST00000290130_23\tA\tG\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "utr",
+   "vcf": "21\t34398438\tustop_gained_mnv_ev_fwd_ENST00000333337_195\tCT\tTG\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

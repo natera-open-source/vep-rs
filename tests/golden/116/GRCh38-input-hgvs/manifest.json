@@ -923,8 +923,25 @@
  "multi_allelic_per_suite": 4,
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
- "divergences": [],
+ "divergences": [
+  {
+   "location": "21:30430756-30430757",
+   "allele": "AAATT",
+   "feature": "ENST00000334068",
+   "feature_type": "Transcript",
+   "record_indices": [
+    21
+   ],
+   "vep_consequence_set": "coding_sequence_variant,inframe_insertion",
+   "vep_rs_consequence_sets": [
+    "inframe_insertion,stop_retained_variant"
+   ],
+   "expected_divergence": "stop_codon_overlap_insertion_range"
+  }
+ ],
  "vep_rs_only_tuples": [],
- "divergence_summary": {},
+ "divergence_summary": {
+  "stop_codon_overlap_insertion_range": 1
+ },
  "vep_rs_only_summary": {}
 }

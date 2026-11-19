@@ -1,6 +1,6 @@
 # SPDI notation resolved from the cache and the FASTA
 
-A difference in which inputs resolve, on an input format no measured dataset uses; nothing is set aside.
+A difference in which SPDI inputs resolve, on an input format no measured dataset uses; nothing is set aside. Ensembl VEP annotates a version-less accession and a span past the end of the chromosome, and carries a deletion of length 0 as a feature with no allele; vep-rs skips each of the three with a warning.
 
 Ensembl VEP reads SPDI notation (`--format spdi`) only with a database connection (`Parser/SPDI.pm` line 96, `Cannot use SPDI format in offline mode`). Each line goes to its variation database adaptor (`VariationFeatureAdaptor.pm` lines 2477-2611). The adaptor resolves the sequence name through the core database's slice adaptor (line 2533) and places the variant at the 0-based position plus one (line 2524). It then checks the deleted bases against the genome or reads them from it (lines 2545-2596).
 

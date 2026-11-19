@@ -1,0 +1,31 @@
+entry = "bigwig_min_max_record_listed_twice"
+page = "docs/divergences/bigwig-min-max-record-listed-twice.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the type and summary_stats options of --custom, overlap and a percentage-separated list among min, mean, max, count and sum (Ensembl VEP documentation, \"Custom annotations\", Options); not seen in the measured datasets"
+notes = "custom/scores.bw of the GRCh38-custom corpus holds one-base intervals at the 1-based positions 21:5028997 and 21:5028999 with the values 0.001 and 0.002. The record spans both, three bases, so the source's min and max path reads it by the per-record walk, which Ensembl VEP runs twice."
+
+[input]
+format = "vcf"
+text = """
+21	5028997	mnv	TCA	AGT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+
+[run]
+flags = ["--custom", "file={corpus}/custom/scores.bw,short_name=cons,format=bigwig,type=overlap,summary_stats=min%max"]
+format = "default"
+
+[compare]
+kind = "field"
+field = "cons"
+where = { record = "mnv" }
+
+[expected]
+ensembl_vep = ["0.00100000004749745,0.0020000000949949,0.00100000004749745,0.0020000000949949"]
+vep_rs = ["0.00100000004749745,0.0020000000949949"]

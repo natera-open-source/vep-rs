@@ -1,0 +1,48 @@
+entry = "gwas_shared_site_previous_record_reference"
+page = "docs/divergences/gwas-shared-site-previous-record-reference.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the Ensembl VEP documentation, \"Data formats\", Default Ensembl VEP input, whose strand column is + (forward) or - (reverse) and which sets no rule against two lines at one site; not seen in the measured datasets"
+notes = "Given alone, the forward record carries GWAS_study=GCST005275 on its four rows in both engines and the reverse record none; given forward then reverse, Ensembl VEP writes the fields on all eight rows."
+# Ensembl VEP's plugin builds its processed catalog under --dir, which must be writable: a directory of the stage.
+prepare = [
+  "mkdir -p \"$STAGE/vepdir\"",
+]
+
+# Two Ensembl-format records naming the same substitution, A>G at 21:34300618, where the corpus catalog slice has
+# rs2834439-G of study GCST005275: the reverse-strand record first lends its reference T to the cached catalog row.
+[input]
+format = "ensembl"
+text = """
+21	34300618	34300618	T/C	-	rev
+21	34300618	34300618	A/G	+	fwd
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-gwas/json_cache"
+
+[run]
+flags = ["--dir", "{stage}/vepdir", "--plugin", "GWAS,file={corpus}/plugin_data/gwas_catalog_slice.tsv"]
+
+[compare]
+kind = "field"
+field = "GWAS_study"
+with_key = true
+where = { record = "fwd" }
+
+[expected]
+ensembl_vep = [
+  "ENST00000362077=-",
+  "ENST00000427022=-",
+  "ENST00000715812=-",
+  "ENST00000715813=-",
+]
+vep_rs = [
+  "ENST00000362077=GCST005275",
+  "ENST00000427022=GCST005275",
+  "ENST00000715812=GCST005275",
+  "ENST00000715813=GCST005275",
+]

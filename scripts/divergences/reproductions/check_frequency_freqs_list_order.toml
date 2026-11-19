@@ -1,0 +1,31 @@
+entry = "check_frequency_freqs_list_order"
+page = "docs/divergences/check-frequency-freqs-order.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 405.6 per million · 5 flag sets, 64 corpora"
+notes = "The record's two alternate alleles are those of the known rs1555870136 (T/A/G, AF G:1). Ensembl VEP keeps the frequencies it judged in a hash keyed by allele (BaseCacheVariation.pm:404-440) and writes FREQS from that hash's keys (OutputFactory.pm:1152-1153): G before A under the fixed seed of this run, and either order under Perl's own seed. vep-rs writes the alleles in the record's order."
+
+[input]
+format = "vcf"
+text = """
+21	7759128	two_alts	T	A,G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-colocated/json_cache"
+
+[run]
+flags = ["--check_frequency", "--freq_pop", "AF", "--freq_freq", "0.01", "--freq_gt_lt", "gt", "--freq_filter", "exclude"]
+format = "default"
+
+[compare]
+kind = "field"
+field = "FREQS"
+where = { record = "two_alts" }
+
+[expected]
+ensembl_vep = ["AF:G:1,AF:A:NA"]
+vep_rs = ["AF:A:NA,AF:G:1"]

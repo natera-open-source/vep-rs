@@ -11,7 +11,11 @@
   "default.txt": "0ac965621abd6ac0a4a1b3c9e2e60876f3fbdd4985a4447bce102d5f7ed1ab18",
   "tab.txt": "172b72007538587cabe57247c32d3e9aef5639baa6b65e41548eb0a5f2485a0b",
   "vcf.vcf": "2caa80764efe1430ab5ef7a2df5d4942f4b78b26e6eb27123bf1b101b659ed23",
-  "json.jsonl": "73b837f0b4901f8afbe6a3efc3db18c8e7fbca0de9ef795d98c4615ea99706ee"
+  "json.jsonl": "73b837f0b4901f8afbe6a3efc3db18c8e7fbca0de9ef795d98c4615ea99706ee",
+  "default.summary.log": "bfaa66ad4b5b59ab7d20ed8d4f739af664eadfba54b9decf91b96d33adacef72",
+  "tab.summary.log": "0d540d2d28c0f10787047e84940b8667652a27cf106ac6aa4e8b0099f8724d28",
+  "vcf.summary.log": "2a3701637ee2268bb9de50d5b522954c72d312a1a35186dbae0120574e564d81",
+  "json.summary.log": "4282cb762446c7cdcbef8c9ec62d1658231e84d7bf23021ba9479da083455b0a"
  },
  "variants_vcf_sha256": "b94f329ac4ddf081393f5f178a1871176dbd148672a87694e92688017ed58afb",
  "divergences_classified_against": {
@@ -34,5 +38,9 @@
   "spans_by_chromosome": {
    "21": 16
   }
+ },
+ "summary_log": {
+  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --polyphen b --humdiv [--tab|--vcf|--json]",
+  "annotation_rows": "equal to the expected outputs' rows; the two runs differ only in the header lines that name a time, the cache path or the command line"
  }
 }

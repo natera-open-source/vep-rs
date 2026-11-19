@@ -1,0 +1,61 @@
+entry = "hgvsp_stop_codon_protein_comparison"
+page = "docs/divergences/hgvsp-stop-codon-protein-comparison.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 999,950 per million · 23 flag sets, 109 corpora"
+notes = "Five records written for the entry, on GRCh37, each a change in the stop codon of one transcript that keeps every residue of the reference protein: three bases inserted after 1:90470803, a copy of 1:90470804 to 1:90470806, which the 3' shift carries three bases on, to between the second and third base of the stop codon of the forward-strand ENST00000361911, and which leave a stop at residue 71; one base inserted between 1:17345377 and 1:17345378, after the first base of the stop codon of the reverse-strand ENST00000375499, with the next stop codon 22 residues on in the 3' UTR; 1:2238202 deleted, the first base of the stop codon of the forward-strand ENST00000378536, with the next stop codon 47 residues on; 1:26142208 substituted, the second base of the stop codon of the forward-strand ENST00000374315, whose peptide reads the stop codon at residue 428 as a residue, with the next stop codon 35 residues on; and 7:151292535 to 7:151292537 deleted, the stop codon of the reverse-strand ENST00000488258, with the next stop codon 11 residues on. Both engines write the same consequence terms, CDS and protein positions and HGVSc on every row. Ensembl VEP writes the stop replaced by a stop, as a deletion-insertion, on the three-base insertion, the stop replaced by one residue and a stop on the one-base insertion, the stop unchanged on the one-base deletion, an extension with an unknown count on the substitution and the stop deleted before the count on the deletion of the stop codon; vep-rs writes the stop unchanged on the three-base insertion and, on the other four, an extension named at the stop with its first new residue and the count of residues added."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the cut of the cache is converted in the Ensembl VEP image: give --image" >&2; exit 1; }
+[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosomes 1 and 7 under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
+mkdir -p "$cut/1" "$cut/7"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
+cp "$PERL_CACHE/1/2000001-3000000.gz" "$PERL_CACHE/1/17000001-18000000.gz" "$PERL_CACHE/1/26000001-27000000.gz" "$PERL_CACHE/1/90000001-91000000.gz" "$cut/1/"
+cp "$PERL_CACHE/7/151000001-152000000.gz" "$cut/7/"''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens/116_GRCh37 /stage/json-cache 1,7 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+1	2238201	stop_codon_first_base_deletion_1_2238201	GT	G	.	.	.
+1	17345377	stop_codon_one_base_insertion_1_17345377	T	TA	.	.	.
+1	26142208	stop_codon_second_base_substitution_1_26142208	A	C	.	.	.
+1	90470803	stop_codon_three_base_insertion_1_90470803	G	GGTA	.	.	.
+7	151292534	stop_codon_deletion_7_151292534	TCTA	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = [
+  "--hgvs",
+  "--fasta", "{grch37_fasta}/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa",
+]
+
+[compare]
+kind = "rows"
+where = { record = ["stop_codon_first_base_deletion_1_2238201", "stop_codon_one_base_insertion_1_17345377", "stop_codon_second_base_substitution_1_26142208", "stop_codon_three_base_insertion_1_90470803", "stop_codon_deletion_7_151292534"], feature = ["ENST00000361911", "ENST00000374315", "ENST00000375499", "ENST00000378536", "ENST00000488258"] }
+columns = ["Uploaded_variation", "Feature", "Consequence", "CDS_position", "Protein_position", "HGVSc", "HGVSp"]
+
+[expected]
+ensembl_vep = [
+  "stop_codon_deletion_7_151292534 | ENST00000488258 | stop_lost,NMD_transcript_variant | 688-690 | 230 | ENST00000488258.1:c.688_690del | ENSP00000420783.1:p.Ter230delextTer11",
+  "stop_codon_first_base_deletion_1_2238201 | ENST00000378536 | stop_lost | 2185 | 729 | ENST00000378536.4:c.2185del | ENSP00000367797.4:p.Ter729%3D",
+  "stop_codon_one_base_insertion_1_17345377 | ENST00000375499 | stop_lost | 841-842 | 281 | ENST00000375499.3:c.841dup | ENSP00000364649.3:p.Ter281delinsLeuTer",
+  "stop_codon_second_base_substitution_1_26142208 | ENST00000374315 | stop_lost | 1670 | 557 | ENST00000374315.1:c.1670A>C | ENSP00000363434.1:p.Ter557SerextTer?",
+  "stop_codon_three_base_insertion_1_90470803 | ENST00000361911 | inframe_insertion,stop_retained_variant | 209-210 | 70 | ENST00000361911.5:c.210_212dup | ENSP00000355318.5:p.Ter71delinsTer",
+]
+vep_rs = [
+  "stop_codon_deletion_7_151292534 | ENST00000488258 | stop_lost,NMD_transcript_variant | 688-690 | 230 | ENST00000488258.1:c.688_690del | ENSP00000420783.1:p.Ter230LysextTer11",
+  "stop_codon_first_base_deletion_1_2238201 | ENST00000378536 | stop_lost | 2185 | 729 | ENST00000378536.4:c.2185del | ENSP00000367797.4:p.Ter729ArgextTer47",
+  "stop_codon_one_base_insertion_1_17345377 | ENST00000375499 | stop_lost | 841-842 | 281 | ENST00000375499.3:c.841dup | ENSP00000364649.3:p.Ter281LeuextTer22",
+  "stop_codon_second_base_substitution_1_26142208 | ENST00000374315 | stop_lost | 1670 | 557 | ENST00000374315.1:c.1670A>C | ENSP00000363434.1:p.Ter557SerextTer35",
+  "stop_codon_three_base_insertion_1_90470803 | ENST00000361911 | inframe_insertion,stop_retained_variant | 209-210 | 70 | ENST00000361911.5:c.210_212dup | ENSP00000355318.5:p.Ter71%3D",
+]

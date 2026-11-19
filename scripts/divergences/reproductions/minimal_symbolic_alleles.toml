@@ -1,0 +1,36 @@
+entry = "minimal_symbolic_alleles"
+page = "docs/divergences/minimal-symbolic-alleles.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 1.7 per million · 9 flag sets, 8 corpora"
+notes = "Ensembl VEP trims <DEL>/<DUP> as two sequences to EL/UP over a span two bases later at the start and one earlier at the end, and marks the record MINIMISED; vep-rs annotates the record's own span."
+
+[input]
+format = "vcf"
+text = """
+21	10542400	del_dup	N	<DEL>,<DUP>	.	.	SVTYPE=DEL;END=10542450
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-vcf-minimal/json_cache"
+
+[run]
+flags = ["--minimal", "--allele_number", "--uploaded_allele", "--variant_class"]
+
+[compare]
+kind = "rows"
+where = { record = "del_dup", feature = "ENST00000427445" }
+columns = ["Location", "Allele", "ALLELE_NUM", "cDNA_position", "MINIMISED", "OverlapBP"]
+
+[expected]
+ensembl_vep = [
+  "21:10542403-10542449 | copy_number_variation | 1 | 426-? | 1 | 47",
+  "21:10542403-10542449 | copy_number_variation | 2 | 426-? | 1 | 47",
+]
+vep_rs = [
+  "21:10542401-10542450 | copy_number_variation | 1 | 424-? | - | 50",
+  "21:10542401-10542450 | copy_number_variation | 2 | 424-? | - | 50",
+]

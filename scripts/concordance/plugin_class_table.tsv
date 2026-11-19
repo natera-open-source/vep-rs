@@ -1,0 +1,46 @@
+#class	plugin	field names	met or not met	commit	genome build	note
+alphamissense_sibling_allele_rows	AlphaMissense	am_class,am_pathogenicity	met	-	-	-
+revel_sibling_allele_rows	REVEL	REVEL	met	-	-	-
+splicevault_sibling_allele_rows	SpliceVault	SpliceVault_*	met	-	-	-
+gnomadmt_info_value_second_equals	gnomADMt	gnomAD_*	met	-	-	-
+loftee_anc_allele_multiallelic_record	LoFTEE	LoF,LoF_filter	met	-	-	-
+loftee_first_alt_donor_filter	LoFTEE	LoF,LoF_filter	met	-	-	-
+nearest_exon_jb_stretch_priming	NearestExonJB	NearestExonJB	met	-	-	-
+nearest_exon_jb_shifted_span	NearestExonJB	NearestExonJB	met	-	-	-
+nearest_exon_jb_id_less_exon_fold	NearestExonJB	NearestExonJB	met	-	-	-
+downstream_reverse_strand_rotation	Downstream	DownstreamProtein,ProteinLengthChange	met	-	-	-
+spliceai_chopped_multiallelic	SpliceAI	SpliceAI_pred,SpliceAI_pred_*,SpliceAI_cutoff	met	-	-	-
+spliceai_multi_entry_cell	SpliceAI	SpliceAI_pred,SpliceAI_pred_*,SpliceAI_cutoff	met	-	-	sets nothing aside without --spliceai-table; a row that writes no SYMBOL needs --json-cache
+plugin_contig_mitochondrial_spelling	AlphaMissense;gnomADc	am_class,am_pathogenicity;gnomAD_*_cov	met	-	AlphaMissense: GRCh37, GRCh38; gnomADc: GRCh38	gnomADc on GRCh38 alone: the GRCh37 coverage file lists no mitochondrial contig; on GRCh37 the class arises for AlphaMissense alone: dbNSFP and gnomADMt read a table as their modules name the contig (dbNSFP.pm:313; gnomADMt.pm:256-261), and every other plugin within the record's own pair of mitochondrial names
+gwas_haplotype_cross_product	GWAS	GWAS_*	met	-	-	also a field the candidate alone fills under another study; needs --gwas-catalog
+splicevault_json_later_rows	SpliceVault	splicevault (JSON object)	not met	-	-	-
+utrannotator_gained_start_window	UTRAnnotator	5UTR_consequence,5UTR_annotation	met	-	-	a two-base Location under an identifier needs the run's input (--input)
+maxentscan_overlapping_windows	MaxEntScan	MaxEntScan_*	met	-	-	sets nothing aside without --json-cache
+alphamissense_two_digit_transcript_version	AlphaMissense	am_class,am_pathogenicity	not met	-	-	-
+loeuf_zero_minimum	LOEUF	LOEUF	met	-	-	-
+utrannotator_consequence_precedence	UTRAnnotator	5UTR_consequence,5UTR_annotation	met	-	-	sets nothing aside without --utrannotator-sweep
+loftee_gerp_zoom_level_summary	LoFTEE	LoF_info,LoF_filter,LoF	met	-	-	-
+splice_family_swap	Downstream	DownstreamProtein,ProteinLengthChange	met	-	-	-
+gwas_interaction_first_snp_allele_whitespace	GWAS	GWAS_*	met	-	-	-
+hgvs_shifted_indel_written_span_gate	HGVSIntronOffset	HGVS_IntronStartOffset,HGVS_IntronEndOffset	met	-	-	-
+hgvs_shifted_deletion_clamped_span	HGVSIntronOffset	HGVS_IntronStartOffset	met	-	-	-
+nearest_exon_jb_item_order	NearestExonJB	NearestExonJB	met	-	-	-
+utrannotator_annotation_pair_order	UTRAnnotator	5UTR_annotation	met	-	-	default and tab formats and the VCF spelling, no JSON object
+hgvs_intron_offset_abutting_insertion	HGVSIntronOffset	HGVS_IntronStartOffset,HGVS_IntronEndOffset	met	-	-	-
+downstream_utr_frame_past_coding_end	Downstream	DownstreamProtein	met	-	-	sets nothing aside without --json-cache
+downstream_start_past_own_codon	Downstream	DownstreamProtein	met	-	-	sets nothing aside without --json-cache
+plugin_hgvs_shifted_cds_coordinates	Downstream;NMD	DownstreamProtein,ProteinLengthChange;NMD	met	-	-	sets nothing aside without --json-cache; takes a DownstreamProtein the start rule changes too only beside downstream_start_past_own_codon; on a later allele's row the printed pair is the span moved by the row's offset or by the last earlier allele's, and a Downstream value on such a row without an offset is read at the printed pair with the allele as written
+plugin_value_follows_stop_codon_term_pair	Downstream;NMD;LoFTEE	DownstreamProtein,ProteinLengthChange;NMD;LoF,LoF_info,LoF_filter,LoF_flags	met	-	-	a field that one side alone writes beside a stop codon term pair of stop_retained_without_stop_codon_test, stop_codon_overlap_insertion_range or stop_retained_three_base_stop_codon_test
+hgvs_clipped_reference_against_whole_alternate	HGVSIntronOffset	HGVS_IntronStartOffset,HGVS_IntronEndOffset	met	-	-	the two fields, each the intron part of its own side's notation's coordinate it is read from: the reference alone writes them beside an ins or dup the class takes against a candidate without an HGVSc, or beside a del, delins or substitution on the row of an allele shorter than its span, the candidate alone beside an ins inside the span where the reference prints no HGVSc at a reverse-strand transcript's first base, that row's HGVSc staying a difference, or both beside two ins notations the class takes as a pair; and the end offset alone, the reference's -1 against the candidate's 0, where the reference prints an ins from one base before a forward-strand transcript's first base beside the pair 0 and -1 and the candidate the duplication of the bases the allele adds beside the pair 0 and 0, that row's HGVS_OFFSET staying a difference and its HGVSc read by the class's own coordinate test
+plugin_value_follows_splice_term_past_the_record_span	Downstream;NMD;LoFTEE	DownstreamProtein,ProteinLengthChange;NMD;LoF,LoF_info,LoF_filter,LoF_flags	met	-	-	a field that one side alone writes beside a Consequence pair of splice_term_past_the_record_span
+utrannotator_lost_start_after_insertion	UTRAnnotator	5UTR_consequence,5UTR_annotation	met	-	-	read from the row's cDNA positions, and at a start codon one or two bases before the insertion from the row's Allele and STRAND; a row whose record states a reference allele that is not empty is refused
+utrannotator_structural_allele_text	UTRAnnotator	5UTR_consequence,5UTR_annotation	met	-	-	a row whose Allele is a structural class word, the reference's term one of the plugin's five and the engine's row filling neither field; a default or tab row of a symbolic deletion inside one exon of the 5' UTR on which the engine writes the effect of the stated span; and a default or tab row of a plain symbolic insertion on which the engine writes the frameshift its stated length decides with the keys read from the reference UTR; on the last two where the reference's two fields differ or are empty
+revel_other_reference_amino_acid_rows	REVEL	REVEL	met	-	-	sets nothing aside without --revel-table; a run that set no_match needs --revel-no-match
+plugin_value_on_reference_skipped_record	DosageSensitivity;UTRAnnotator	pHaplo,pTriplo;Existing_InFrame_oORFs,Existing_OutOfFrame_oORFs,Existing_uORFs	met	-	-	a field the engine alone writes on a row of a record the reference dropped, the rows of reference_skipped_record; decided from the rows of the value's Location and the reference's first column, so a tuple-file engine has none
+blosum62_hgvs_shift_shared_across_alleles	Blosum62	BLOSUM62	met	-	-	a BLOSUM62 the reference alone writes on a later allele's row of hgvs_shift_shared_across_alleles, the matrix cell of the amino-acid pair it reads at the span the first allele's notation moved; sets nothing aside without --json-cache
+hgvs_added_bases_left_at_the_span_end	HGVSIntronOffset	HGVS_IntronStartOffset,HGVS_IntronEndOffset	met	-	-	the start offset 1 the reference writes beside an ins one base past a reverse-strand transcript's last base against the 0 beside the candidate's duplication of the last bases, and both fields beside that ins against a candidate that writes nothing where the added bases have no placement inside the transcript
+hgvs_insertion_left_where_the_shift_stops	HGVSIntronOffset	HGVS_IntronStartOffset,HGVS_IntronEndOffset	met	-	-	the two fields beside the ins or dup the reference writes where its shift stops on its bound, against the two beside the candidate's notation at the most 3' placement, or against none where that placement lies past the transcript's last base
+hgvs_added_bases_written_outside_the_transcript	HGVSIntronOffset	HGVS_IntronStartOffset,HGVS_IntronEndOffset	met	-	-	the two fields the candidate writes beside the dup or ins it prints on an insertion's row outside the transcript, against the pair or the empty fields of a reference that prints no HGVSc there
+utrannotator_gained_start_remade_in_place	UTRAnnotator	5UTR_consequence,5UTR_annotation	met	-	-	read from the row's cDNA positions, Allele and STRAND; a row whose reference writes another term than the gained start needs --utrannotator-sweep
+utrannotator_frameshift_at_stop_boundary	UTRAnnotator	5UTR_annotation	met	-	-	read from the two 5UTR_annotation values and the row's HGVSc and HGVS_OFFSET; a row whose HGVSc states no insertion point in the 5' UTR is refused
+utrannotator_lost_stop_written_before_stop_codon	UTRAnnotator	5UTR_consequence,5UTR_annotation	met	-	-	read from the two 5UTR_annotation values, the row's cDNA positions and its Allele's length; a row whose record states a reference allele that is not empty is refused

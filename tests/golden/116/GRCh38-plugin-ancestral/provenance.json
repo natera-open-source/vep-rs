@@ -1,0 +1,37 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin AncestralAllele,{corpus}/ancestral/homo_sapiens_ancestor_21.slice.fa.gz --dir_plugins {corpus} [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side: the plugin reads its own FASTA, the reference genome is not passed",
+ "input": "variants.vcf: the 92 chromosome 21 sequence variants of the GRCh38 corpus with their INFO columns dropped, three of its symbolic structural variants (a duplication, a deletion, an inversion), and ten hand-built records chosen on the ancestral sequence's own text: a low-confidence (lower-case) call, a failed call (N), an insertion in the extant species (-), a site without alignment coverage (.), a deletion spanning a change of case, a two-base substitution, a chr-prefixed name, a multi-allelic SNV, a deletion and insertion sharing their anchor base, and an intergenic site; every record's reference allele read from the GRCh38 primary assembly",
+ "plugin_data": "ancestral/homo_sapiens_ancestor_21.slice.fa.gz: chromosome 21 of Ensembl's homo_sapiens_ancestor_GRCh38 archive (release 116 ftp path, md5 d29338514407ac418643404d8e8471f5) under its own record name, the 200 bases either side of every record kept and every other base rewritten to `.` (no coverage), cut after the last window, bgzipped with its .fai and .gzi; ancestral/homo_sapiens_ancestor_X_only.slice.fa.gz: one 1,000-base record of `.` named as chromosome X, so a chromosome 21 record reaches no record and reads `?`",
+ "generator": "the records assembled by hand, then scripts/golden/build_golden_corpus.py select --k 500 --max-span 0 --multi-allelic-per-suite 50 over the Ensembl VEP default output of the same records (every record named with --include, 87 names); scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice of the converted Ensembl VEP cache; the expected outputs from the release_116.2 image with the harness's corpus invocation (--fork 1 --buffer_size 5000, headers kept), the plugin and corpus directory passed as the manifest flags with {corpus} the read-only mount of the corpus; scripts/golden/build_golden_corpus.py classify --field AA for the manifest's run and for the flag set",
+ "expected_outputs": "expected/: the default run; expected_fasta-without-the-chromosome/: the flag set that points the plugin at the chromosome X slice",
+ "sha256": {
+  "default.txt": "7f436d4fe10c810ea979499ebe4a77b239501e9806ffa568c343dc2c5853b8fe",
+  "tab.txt": "6214e43a3d86d3b9b327e085ff85bb8016f3e09cb326d16adcbdfb6f1edb29bd",
+  "vcf.vcf": "9a5c7231c425641d74eceb373d5af3f8ee145904e6c7d3190690a331e383462a",
+  "json.jsonl": "90f4a25a9cabee6721c27c096bccb4949762f68e727e498ebc562298a35c6716"
+ },
+ "variants_vcf_sha256": "2eac45144ba19d45b927c0793f52d99cdda6a5eb97a33218173db9b1b9474b49",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 1653
+  },
+  "shards": 29
+ },
+ "flag_sets": {
+  "fasta-without-the-chromosome": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin AncestralAllele,{corpus}/ancestral/homo_sapiens_ancestor_X_only.slice.fa.gz --dir_plugins {corpus} [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "b3f892cf47dc33e368baba1c290b815ac2e2cd9b44eb2ed2d2d24951a3fb898e",
+    "tab.txt": "eace700c5a5d8a3fa259df90a73dd354ce47983a9741c9a91f01862570ff0dee",
+    "vcf.vcf": "5e2b5173467f4c93fff08a1975cf9effb6d584ea81cd99e84749311ccfd25bd8",
+    "json.jsonl": "4229dbe8b58c91c458f25c1dbf1fce4e7ce50a66e509db4012d0f8bcb7bb768c"
+   }
+  }
+ }
+}

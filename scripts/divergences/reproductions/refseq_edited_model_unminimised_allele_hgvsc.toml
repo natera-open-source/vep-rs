@@ -1,0 +1,40 @@
+entry = "refseq_edited_model_unminimised_allele_hgvsc"
+page = "docs/divergences/refseq-edited-model-unminimised-allele-hgvsc.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 136 of 77,601 cache transcripts · 1 flag set, 4 corpora"
+notes = "Two records on GRCh38 chromosome 21 that change the one base 21:38575677 and keep a base they share with the reference: the first is written from 21:38575676 and keeps that base before the changed one, the second is written from 21:38575677 and keeps the base after it. The reverse-strand model NM_004449.4 carries _rna_edit attributes and prints BAM_EDIT=OK; the changed base is its coding base 24, and the model spells both bases of each record as the genome does. Ensembl VEP clips the kept base from the two alleles as it builds the HGVSc and then, on a model with an _rna_edit attribute, writes the row's whole alleles in their place, so its notation is a substitution naming two bases a side at c.24; vep-rs spells the alleles the clip leaves, one base a side."
+
+[input]
+format = "vcf"
+text = """
+21	38575676	kept_base_before	CT	CC	.	.	.
+21	38575677	kept_base_after	TG	CG	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "refseq"
+json_cache = "tests/golden/116/GRCh38-refseq/cache_root/homo_sapiens_refseq/116_GRCh38"
+corpus = "tests/golden/116/GRCh38-refseq"
+fasta = "tests/golden/116/GRCh38-refseq/reference.fa.gz"
+
+[run]
+flags = ["--refseq", "--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = ["kept_base_before", "kept_base_after"], feature = "NM_004449.4" }
+columns = ["Uploaded_variation", "Feature", "CDS_position", "BAM_EDIT", "HGVSc"]
+
+[expected]
+ensembl_vep = [
+  "kept_base_after | NM_004449.4 | 23-24 | OK | NM_004449.4:c.24CA>CG",
+  "kept_base_before | NM_004449.4 | 24-25 | OK | NM_004449.4:c.24AG>GG",
+]
+vep_rs = [
+  "kept_base_after | NM_004449.4 | 23-24 | OK | NM_004449.4:c.24A>G",
+  "kept_base_before | NM_004449.4 | 24-25 | OK | NM_004449.4:c.24A>G",
+]

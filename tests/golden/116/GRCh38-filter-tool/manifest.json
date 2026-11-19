@@ -1,0 +1,216 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "covers": [
+  "filter-vep",
+  "filter-vep-ontology"
+ ],
+ "tool": "filter_vep",
+ "inputs": {
+  "annotated.vcf": "the --vcf output of Ensembl VEP 116.2 on the GRCh38-writers corpus's variants.vcf with --symbol --biotype --canonical --numbers --af --max_af, the time token of its ##VEP line replaced by [TIME]",
+  "annotated.tab.gz": "the --tab output of Ensembl VEP 116.2 on the same input with the same flags, its time line replaced by [TIME], gzipped",
+  "annotated.txt.gz": "the default-format output of Ensembl VEP 116.2 on the same input with the same flags, its time line replaced by [TIME], gzipped"
+ },
+ "tool_cases": [
+  {
+   "name": "vcf",
+   "input": "annotated.vcf",
+   "args": [    "--filter", "Consequence is missense_variant and IMPACT is MODERATE"
+   ],
+   "expected": "expected/filter/vcf.vcf"
+  },
+  {
+   "name": "only-matched",
+   "input": "annotated.vcf",
+   "args": [    "--only_matched", "--filter", "Consequence is missense_variant and IMPACT is MODERATE"
+   ],
+   "expected": "expected/filter/only-matched.vcf"
+  },
+  {
+   "name": "soft-filter",
+   "input": "annotated.vcf",
+   "args": [    "--soft_filter", "--filter", "Consequence is missense_variant and IMPACT is MODERATE"
+   ],
+   "expected": "expected/filter/soft-filter.vcf"
+  },
+  {
+   "name": "count",
+   "input": "annotated.vcf",
+   "args": [    "--count", "--filter", "Consequence is missense_variant and IMPACT is MODERATE"
+   ],
+   "expected": "expected/filter/count.txt"
+  },
+  {
+   "name": "list-vcf",
+   "input": "annotated.vcf",
+   "args": [    "--list"
+   ],
+   "expected": "expected/filter/list-vcf.txt"
+  },
+  {
+   "name": "ontology",
+   "input": "annotated.vcf",
+   "args": [    "--ontology", "--filter", "Consequence is coding_sequence_variant"
+   ],
+   "perl_args": [
+    "--version", "116"
+   ],
+   "perl_mode": "database",
+   "expected": "expected/filter/ontology.vcf"
+  },
+  {
+   "name": "in-list",
+   "input": "annotated.vcf",
+   "args": [    "--filter", "Consequence in missense_variant,synonymous_variant,stop_gained"
+   ],
+   "expected": "expected/filter/in-list.vcf"
+  },
+  {
+   "name": "not-and-numeric",
+   "input": "annotated.vcf",
+   "args": [    "--filter", "not Consequence match intron and DISTANCE > 1000"
+   ],
+   "expected": "expected/filter/not-and-numeric.vcf"
+  },
+  {
+   "name": "parens-or",
+   "input": "annotated.vcf",
+   "args": [    "--filter", "Feature is ENST00000427445 or (IMPACT is HIGH and BIOTYPE is protein_coding)"
+   ],
+   "expected": "expected/filter/parens-or.vcf"
+  },
+  {
+   "name": "start-limit",
+   "input": "annotated.vcf",
+   "args": [    "--start", "3", "--limit", "4", "--filter", "Consequence match variant"
+   ],
+   "expected": "expected/filter/start-limit.vcf"
+  },
+  {
+   "name": "test-count",
+   "input": "annotated.vcf",
+   "args": [    "--test", "10", "--count", "--filter", "IMPACT is MODIFIER"
+   ],
+   "expected": "expected/filter/test-count.txt"
+  },
+  {
+   "name": "synonym-case",
+   "input": "annotated.vcf",
+   "args": [    "--filter", "symbol is TPTE and biotype is protein_coding"
+   ],
+   "expected": "expected/filter/synonym-case.vcf"
+  },
+  {
+   "name": "info-key",
+   "input": "annotated.vcf",
+   "args": [    "--filter", "DP > 50 and dp < 80"
+   ],
+   "expected": "expected/filter/info-key.vcf"
+  },
+  {
+   "name": "field-value",
+   "input": "annotated.vcf",
+   "args": [    "--filter", "CDS_position lt #cDNA_position"
+   ],
+   "expected": "expected/filter/field-value.vcf"
+  },
+  {
+   "name": "max-af",
+   "input": "annotated.vcf",
+   "args": [    "--filter", "MAX_AF > 0.01"
+   ],
+   "expected": "expected/filter/max-af.vcf"
+  },
+  {
+   "name": "allele-dash",
+   "input": "annotated.vcf",
+   "args": [    "--filter", "Allele is - and Consequence match frameshift"
+   ],
+   "expected": "expected/filter/allele-dash.vcf"
+  },
+  {
+   "name": "canonical-nex",
+   "input": "annotated.vcf",
+   "args": [    "--filter", "CANONICAL is YES and Existing_variation nex"
+   ],
+   "expected": "expected/filter/canonical-nex.vcf"
+  },
+  {
+   "name": "regex",
+   "input": "annotated.vcf",
+   "args": [    "--filter", "HGVSc match c\\.[0-9]+[ACGT]>[ACGT] and HGVSp nre Ter"
+   ],
+   "expected": "expected/filter/regex.vcf"
+  },
+  {
+   "name": "two-filters",
+   "input": "annotated.vcf",
+   "args": [    "--filter", "BIOTYPE is protein_coding", "--filter", "not IMPACT is MODIFIER"
+   ],
+   "expected": "expected/filter/two-filters.vcf"
+  },
+  {
+   "name": "tab",
+   "input": "annotated.tab.gz",
+   "args": [    "--filter", "SYMBOL match ^BRCA"
+   ],
+   "expected": "expected/filter/tab.tab"
+  },
+  {
+   "name": "tab-symbol",
+   "input": "annotated.tab.gz",
+   "args": [    "--filter", "SYMBOL is TPTE and IMPACT is MODERATE"
+   ],
+   "expected": "expected/filter/tab-symbol.tab"
+  },
+  {
+   "name": "tab-count",
+   "input": "annotated.tab.gz",
+   "args": [    "--count", "--filter", "Consequence match variant"
+   ],
+   "expected": "expected/filter/tab-count.txt"
+  },
+  {
+   "name": "list-tab",
+   "input": "annotated.tab.gz",
+   "args": [    "--list"
+   ],
+   "expected": "expected/filter/list-tab.txt"
+  },
+  {
+   "name": "tab-start-limit",
+   "input": "annotated.tab.gz",
+   "args": [    "--start", "2", "--limit", "2", "--filter", "Consequence match variant"
+   ],
+   "expected": "expected/filter/tab-start-limit.tab"
+  },
+  {
+   "name": "tab-numeric",
+   "input": "annotated.tab.gz",
+   "args": [    "--filter", "DISTANCE > 2000 or Protein_position > 100"
+   ],
+   "expected": "expected/filter/tab-numeric.tab"
+  },
+  {
+   "name": "default-extra",
+   "input": "annotated.txt.gz",
+   "args": [    "--filter", "IMPACT is MODERATE and STRAND is -1"
+   ],
+   "expected": "expected/filter/default-extra.txt"
+  },
+  {
+   "name": "default-extra-count",
+   "input": "annotated.txt.gz",
+   "args": [    "--count", "--filter", "canonical is YES or EXON exists"
+   ],
+   "expected": "expected/filter/default-extra-count.txt"
+  },
+  {
+   "name": "list-default",
+   "input": "annotated.txt.gz",
+   "args": [    "--list"
+   ],
+   "expected": "expected/filter/list-default.txt"
+  }
+ ]
+}

@@ -1,0 +1,42 @@
+entry = "loftee_first_alt_donor_filter"
+page = "docs/plugins/loftee.md#1-the-gc-to-gt-donor-filter-judged-by-a-records-first-alternate-allele"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 224.1 per million · 4 flag sets, 56 corpora"
+notes = "Ensembl VEP's LoF plugin is the LOFTEE repository's grch38 branch, outside the VEP_plugins checkout: the run needs --extra-dir loftee=<LOFTEE checkout>."
+
+# The corpus's GC-donor record with a second alternate allele.
+[input]
+format = "vcf"
+text = """
+21	46126243	497375	C	T,A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-loftee/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-loftee/reference.fa.gz"
+
+[run]
+flags = [
+  "--dir_plugins", "{loftee}",
+  "--plugin", "LoF,loftee_path:{loftee},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_bigwig:{corpus}/plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw",
+]
+
+# The A allele makes the donor GA, not GT; Ensembl VEP filters it by the first alternate's T.
+[compare]
+kind = "rows"
+where = { record = "497375", feature = "ENST00001028357" }
+columns = ["Location", "Allele", "Feature", "Consequence", "LoF", "LoF_filter"]
+
+[expected]
+ensembl_vep = [
+  "21:46126243 | T | ENST00001028357 | splice_donor_variant | LC | GC_TO_GT_DONOR",
+  "21:46126243 | A | ENST00001028357 | splice_donor_variant | LC | GC_TO_GT_DONOR",
+]
+vep_rs = [
+  "21:46126243 | T | ENST00001028357 | splice_donor_variant | LC | GC_TO_GT_DONOR",
+  "21:46126243 | A | ENST00001028357 | splice_donor_variant | HC | -",
+]

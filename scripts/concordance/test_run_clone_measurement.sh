@@ -16,6 +16,13 @@
 #                  recorded and skipped.
 #   GROUND-TRUTH   a suite with no Perl ground truth that leaves a dangling
 #                  symlink, which a copy of the output tree reports as an error.
+#   IMAGE-DIGEST   a Perl image whose pulled digest is not the pinned one, which
+#                  must stop the run before any cell is timed under that
+#                  engine_version.
+#   CELL-LIST      a cell id the suite table does not carry, which would match
+#                  nothing, time nothing and exit 0, or a repeated one; --cells
+#                  (a comma-separated list) and --suites refuse both before any
+#                  cell runs.
 #   WARMUP-OUTPUT  a timed run that starts with the discarded warmup's output
 #                  still on disk, whose pages the timed run then reclaims while
 #                  writing its own.
@@ -26,6 +33,19 @@
 #                  both loops run the wrapper, an empty value appends nothing, and
 #                  a host without python3 or a binary that is not a readable file
 #                  is refused before any cell.
+#   FASTVEP-EXTRA-ARGS  --fastvep-extra-args that miss one of the fastVEP `annotate`
+#                  runs (the SNP/indel warmup or timed run, an input of the SV loop),
+#                  a word the rule does not admit reaching the binary, the words
+#                  under another engine, a run without them that writes a wrapper or
+#                  a record, a --sa-dir directory run over cells of two assemblies,
+#                  or a path holding `=` handed to `env`, which reads it as an
+#                  assignment: the wrapper's output directory with words, the
+#                  binary's own path without them; or a binary named without a
+#                  slash tested in the working directory while the cells start
+#                  the file PATH resolves.
+#   REFUSED-RUN    a run refused for its cell list or its --sa-dir cells after the
+#                  output directory is made, which resets the wall_times.csv an
+#                  earlier run left there and removes its record, wrapper and log.
 #
 # Run: bash scripts/concordance/test_run_clone_measurement.sh
 
@@ -405,7 +425,7 @@ if [[ -f "$HARNESS" ]]; then
         PERL_CACHE_DIR="$TMP/cache_chr21only"
         mkdir -p "$PERL_CACHE_DIR/homo_sapiens/116_GRCh37/21"
         : >"$PERL_CACHE_DIR/homo_sapiens/116_GRCh37/info.txt"
-        if assert_perl_cache_complete GRCh37 >/dev/null 2>&1; then
+        if assert_perl_cache_complete homo_sapiens GRCh37 >/dev/null 2>&1; then
             bad "a chr21-only GRCh37 cache PASSED the completeness guard"
         else
             ok "a chr21-only GRCh37 cache fails the guard"
@@ -417,7 +437,7 @@ if [[ -f "$HARNESS" ]]; then
         for c in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT; do
             mkdir -p "$PERL_CACHE_DIR/homo_sapiens/116_GRCh37/$c"
         done
-        if assert_perl_cache_complete GRCh37 >/dev/null 2>&1; then
+        if assert_perl_cache_complete homo_sapiens GRCh37 >/dev/null 2>&1; then
             ok "a cache with all 25 primary contigs and no scaffolds passes"
         else
             bad "a 25-primary-contig cache FAILED the guard; it must not require scaffolds"
@@ -426,7 +446,7 @@ if [[ -f "$HARNESS" ]]; then
         # One contig short is the interesting near-miss: 24 of 25 is what an incomplete
         # cache extraction looks like, and it must not pass.
         rmdir "$PERL_CACHE_DIR/homo_sapiens/116_GRCh37/MT"
-        if assert_perl_cache_complete GRCh37 >/dev/null 2>&1; then
+        if assert_perl_cache_complete homo_sapiens GRCh37 >/dev/null 2>&1; then
             bad "a cache missing only MT PASSED the guard"
         else
             ok "a cache missing a single primary contig fails the guard"
@@ -435,10 +455,31 @@ if [[ -f "$HARNESS" ]]; then
         # A missing slice must fail loudly rather than pass by absence: a check that measured
         # nothing reports clean.
         PERL_CACHE_DIR="$TMP/cache_absent"
-        if assert_perl_cache_complete GRCh37 >/dev/null 2>&1; then
+        if assert_perl_cache_complete homo_sapiens GRCh37 >/dev/null 2>&1; then
             bad "an ABSENT cache slice PASSED the guard"
         else
             ok "an absent cache slice fails the guard rather than passing by omission"
+        fi
+
+        # Another species' slice lives under its own directory; its primary set is not known,
+        # so presence of a chromosome directory is what the guard asserts there.
+        PERL_CACHE_DIR="$TMP/cache_yeast"
+        mkdir -p "$PERL_CACHE_DIR/saccharomyces_cerevisiae/116_R64-1-1"
+        if assert_perl_cache_complete saccharomyces_cerevisiae R64-1-1 >/dev/null 2>&1; then
+            bad "an EMPTY yeast slice PASSED the guard"
+        else
+            ok "a slice of another species with no chromosome directory fails the guard"
+        fi
+        mkdir -p "$PERL_CACHE_DIR/saccharomyces_cerevisiae/116_R64-1-1/I"
+        if assert_perl_cache_complete saccharomyces_cerevisiae R64-1-1 >/dev/null 2>&1; then
+            ok "a slice of another species holding a chromosome directory passes under <species>/<version>_<assembly>"
+        else
+            bad "a yeast slice with a chromosome directory FAILED the guard"
+        fi
+        if assert_perl_cache_complete homo_sapiens R64-1-1 >/dev/null 2>&1; then
+            bad "the yeast slice PASSED the guard under homo_sapiens"
+        else
+            ok "the slice is looked up under the species given, not under homo_sapiens"
         fi
     else
         bad "assert_perl_cache_complete not found in run_clone_measurement.sh"
@@ -455,17 +496,9 @@ if [[ -f "$HARNESS" ]]; then
     # output-volume assert has to run after it and before the scratch delete, or the
     # evidence is gone before anything looks at it. Assert the ORDER, not the presence.
     #
-    # WHY ORDER AND NOT TEXT. A scanner that tracks `case` arms by comparing each stripped
-    # line to `perl)` and then matches `*assert_perl_cache_complete*` is satisfied by a
-    # COMMENT, and gives three false verdicts:
-    #   * false PASS -- delete both real guard calls, leave a comment naming the guard in
-    #     each perl) arm, put syntactically-matching calls in the vep-rs) arms (never
-    #     entered when ENGINE=perl).
-    #   * false PASS -- move the guard AFTER the timing loop, which is the exact defect
-    #     the comment above says this assertion prevents.
-    #   * false FAIL -- append a trailing comment to a `perl)` label, or reindent it. Both
-    #     are no-ops `bash -n` accepts with both guards still executing.
-    # One that `break`s on the first hit in any arm never verifies the second one.
+    # A scanner that tracks `case` arms by text is satisfied by a comment naming the guard,
+    # passes with the guard moved after the timing loop, and fails on a reindented `perl)`
+    # label, so the order is read from the line numbers of the anchored calls.
     #
     # NO awk: a literal \t is read differently by BSD and busybox awk. `grep -n` plus
     # `cut` are POSIX and present in busybox, and neither needs a character class.
@@ -694,7 +727,8 @@ if [[ -f "$HARNESS" ]]; then
         ok "compare_vep_fields.py runs only while SKIP_FIELDS is not true" ||
         bad "expected compare_vep_fields.py once under the SKIP_FIELDS guard, found $_fields_skip_guarded"
     _skip_line=$(grep -n -e 'if \[\[ "\$SKIP_FIELDS" != "true" \]\]' "$HARNESS" | head -1 | cut -d: -f1)
-    _f1_line=$(grep -n -e 'compare_vep_outputs\.py' "$HARNESS" | grep -v '^[0-9]*:[[:space:]]*#' | head -1 | cut -d: -f1)
+    # The F1 compare runs the resolved tuple comparator command, `"${OUTPUTS_COMPARE[@]}"`.
+    _f1_line=$(grep -n -e '"\${OUTPUTS_COMPARE\[@\]}"' "$HARNESS" | head -1 | cut -d: -f1)
     [[ -n "$_skip_line" && -n "$_f1_line" && "$_f1_line" -lt "$_skip_line" ]] &&
         ok "the F1 compare is outside the SKIP_FIELDS guard (line $_f1_line before $_skip_line)" ||
         bad "the F1 compare must not depend on SKIP_FIELDS (F1 at ${_f1_line:-?}, guard at ${_skip_line:-?})"
@@ -774,6 +808,120 @@ EOF
         bad "VEP_FIELDS_COMPARATOR=inert: expected a warning and the python3 stub, got argv '$(_fields_invoked)' output '$_out'"
 fi
 
+# VEP_OUTPUTS_COMPARATOR selects the tuple comparator and nothing else: the script-level
+# resolution block (OUTPUTS_COMPARE) is extracted and run with the same stubs. Unset or empty,
+# the command is the tree's own release build of tools/vep-outputs-compare; `python` is the
+# only value that runs the Python; an executable file is the command on its own, a bare name
+# resolving through PATH; a comparator that is not an executable file, the unbuilt default
+# included, stops the run with one line naming both remedies and never runs the Python; a run
+# that scores no F1 (--walltime-only, the Perl engine) asks for none; the block stands before
+# the first engine run and both F1 call sites run the resolved command.
+if [[ -f "$HARNESS" ]]; then
+    _outputs_block=$(awk '
+        !p && /^OUTPUTS_COMPARE=\(\)$/ { p = 1 }
+        p { print }
+        p && /^fi$/ { exit }
+    ' "$HARNESS")
+    [[ "$_outputs_block" == *VEP_OUTPUTS_COMPARATOR* && "$_outputs_block" == *$'\nfi' ]] &&
+        ok "the OUTPUTS_COMPARE resolution block is extracted whole" ||
+        bad "could not extract the OUTPUTS_COMPARE resolution block from the harness"
+    _tool_rel="tools/vep-outputs-compare/target/release/vep-outputs-compare"
+    _built="$_fdir/repo/$_tool_rel"
+    _unbuilt="$_fdir/repo-unbuilt/$_tool_rel"
+    mkdir -p "$(dirname "$_built")"
+    cp "$_fdir/bin/comparator" "$_built"
+    # $1 is the repository root, $2 the VEP_OUTPUTS_COMPARATOR value ("" for unset, "empty"
+    # for the empty string), $3 the engine and $4 the WALLTIME_ONLY value; prints the block's
+    # stderr, then the resolved command one word per line, then `rc=<exit status>`.
+    _run_outputs_block() {
+        (
+            PATH="$_fdir/bin:$PATH"
+            REPO_DIR="$1"
+            ENGINE="${3:-vep-rs}"
+            WALLTIME_ONLY="${4:-false}"
+            case "$2" in
+            "") unset VEP_OUTPUTS_COMPARATOR ;;
+            empty) export VEP_OUTPUTS_COMPARATOR="" ;;
+            *) export VEP_OUTPUTS_COMPARATOR="$2" ;;
+            esac
+            eval "$_outputs_block"
+            [[ ${#OUTPUTS_COMPARE[@]} -eq 0 ]] || printf '%s\n' "${OUTPUTS_COMPARE[@]}"
+        ) 2>&1
+        echo "rc=$?"
+    }
+    for _unset in "" empty; do
+        _out=$(_run_outputs_block "$_fdir/repo" "$_unset")
+        [[ "$_out" == "$_built"$'\n'"rc=0" ]] &&
+            ok "VEP_OUTPUTS_COMPARATOR ${_unset:-unset}: the tree's release build of the Rust tool is the command" ||
+            bad "VEP_OUTPUTS_COMPARATOR ${_unset:-unset}: expected $_built alone, got '$_out'"
+    done
+    _out=$(_run_outputs_block "$_fdir/repo" python)
+    [[ "$_out" == "python3"$'\n'"$_fdir/repo/scripts/concordance/compare_vep_outputs.py"$'\n'"rc=0" ]] &&
+        ok "VEP_OUTPUTS_COMPARATOR=python: the Python comparator is the command" ||
+        bad "VEP_OUTPUTS_COMPARATOR=python: expected python3 and the script path, got '$_out'"
+    _out=$(_run_outputs_block "$_fdir/repo-unbuilt" python)
+    [[ "$_out" == "python3"$'\n'"$_fdir/repo-unbuilt/scripts/concordance/compare_vep_outputs.py"$'\n'"rc=0" ]] &&
+        ok "VEP_OUTPUTS_COMPARATOR=python: the Python runs in a tree whose Rust tool is not built" ||
+        bad "VEP_OUTPUTS_COMPARATOR=python in an unbuilt tree: expected the Python command, got '$_out'"
+    _out=$(_run_outputs_block "$_fdir/repo-unbuilt" "$_fdir/bin/comparator")
+    [[ "$_out" == "$_fdir/bin/comparator"$'\n'"rc=0" ]] &&
+        ok "VEP_OUTPUTS_COMPARATOR executable: the binary is the command, run as given" ||
+        bad "VEP_OUTPUTS_COMPARATOR executable: expected the comparator stub alone, got '$_out'"
+    _out=$(_run_outputs_block "$_fdir/repo-unbuilt" comparator)
+    [[ "$_out" == "$_fdir/bin/comparator"$'\n'"rc=0" ]] &&
+        ok "VEP_OUTPUTS_COMPARATOR=comparator (a bare name on PATH): the binary is the command, resolved through PATH" ||
+        bad "VEP_OUTPUTS_COMPARATOR=comparator: expected the comparator stub through PATH, got '$_out'"
+    # The one line a comparator that cannot run is refused with: the value it was asked for,
+    # then both remedies.
+    _refusal() {
+        printf '%s' "ERROR: [run_clone_measurement] the tuple comparator $1 is not an executable: build the tool with 'cargo build --release --locked --manifest-path $2/tools/vep-outputs-compare/Cargo.toml' or name a built one in VEP_OUTPUTS_COMPARATOR, or set VEP_OUTPUTS_COMPARATOR=python to score with the Python reference implementation"
+    }
+    _out=$(_run_outputs_block "$_fdir/repo-unbuilt" "")
+    [[ "$_out" == "$(_refusal "$_unbuilt" "$_fdir/repo-unbuilt")"$'\n'"rc=1" ]] &&
+        ok "VEP_OUTPUTS_COMPARATOR unset, the tool not built: one line names both remedies, exit 1, the Python does not run" ||
+        bad "unbuilt default: expected the refusal alone and rc=1, got '$_out'"
+    for _bad_value in "$_fdir/not_executable" "$_fdir" inert; do
+        _out=$(_run_outputs_block "$_fdir/repo" "$_bad_value")
+        [[ "$_out" == "$(_refusal "$_bad_value" "$_fdir/repo")"$'\n'"rc=1" ]] &&
+            ok "VEP_OUTPUTS_COMPARATOR=${_bad_value##*/} (not an executable file): refused with both remedies, exit 1, the Python does not run" ||
+            bad "VEP_OUTPUTS_COMPARATOR=$_bad_value: expected the refusal alone and rc=1, got '$_out'"
+    done
+    _out=$(_run_outputs_block "$_fdir/repo-unbuilt" "" vep-rs true)
+    [[ "$_out" == "rc=0" ]] &&
+        ok "--walltime-only: no comparator is asked for, so an unbuilt tool does not stop the run" ||
+        bad "--walltime-only with an unbuilt tool: expected no command and rc=0, got '$_out'"
+    _out=$(_run_outputs_block "$_fdir/repo-unbuilt" "" perl false)
+    [[ "$_out" == "rc=0" ]] &&
+        ok "the Perl engine scores no F1: no comparator is asked for" ||
+        bad "the Perl engine with an unbuilt tool: expected no command and rc=0, got '$_out'"
+    _out=$(_run_outputs_block "$_fdir/repo-unbuilt" "" fastvep false)
+    [[ "$_out" == "$(_refusal "$_unbuilt" "$_fdir/repo-unbuilt")"$'\n'"rc=1" ]] &&
+        ok "the fastVEP engine scores F1: an unbuilt tool stops it as it stops vep-rs" ||
+        bad "the fastVEP engine with an unbuilt tool: expected the refusal and rc=1, got '$_out'"
+    _block_line=$(grep -n -e '^OUTPUTS_COMPARE=()$' "$HARNESS" | head -1 | cut -d: -f1)
+    _cells_line=$(grep -n -e '^for entry in "\${SUITES\[@\]}"; do$' "$HARNESS" | head -1 | cut -d: -f1)
+    [[ -n "$_block_line" && -n "$_cells_line" && "$_block_line" -lt "$_cells_line" ]] &&
+        ok "the comparator is resolved before the loop that runs the cells (line $_block_line before $_cells_line)" ||
+        bad "the resolution block must stand before the cell loop (block at ${_block_line:-?}, loop at ${_cells_line:-?})"
+    _outputs_calls=$(grep -c -e '^[[:space:]]*"\${OUTPUTS_COMPARE\[@\]}" \\$' "$HARNESS") || _outputs_calls=0
+    _python_runs=$(grep -c -e 'python3 "\$REPO_DIR/scripts/concordance/compare_vep_outputs\.py"' "$HARNESS") || _python_runs=0
+    [[ "$_outputs_calls" -eq 2 && "$_python_runs" -eq 1 ]] &&
+        ok "both F1 call sites (vep-rs, fastvep) run the resolved command and the Python is run from the one line that selects it" ||
+        bad "expected 2 OUTPUTS_COMPARE call sites and 1 line that runs the Python, found $_outputs_calls and $_python_runs"
+    # The whole harness, not the block: a vep-rs run that would score F1 in a tree without
+    # the tool stops on the refusal before it makes its output directory or runs the engine.
+    _od="$TMP/outputs_default"
+    mkdir -p "$_od/tree/scripts/concordance" "$_od/bin" "$_od/data"
+    cp "$HARNESS" "$_od/tree/scripts/concordance/"
+    printf '#!/bin/bash\n: >"%s"\n' "$_od/engine.ran" >"$_od/bin/vep"
+    chmod +x "$_od/bin/vep"
+    (unset VEP_OUTPUTS_COMPARATOR; bash "$_od/tree/scripts/concordance/run_clone_measurement.sh" --engine vep-rs --vep-binary "$_od/bin/vep" --data-dir "$_od/data" --output-dir "$_od/out" --suites s01) >"$_od/log" 2>&1
+    rc=$?
+    [[ "$rc" -eq 1 && "$(grep -c '^ERROR' "$_od/log")" -eq 1 && "$(tail -1 "$_od/log")" == "$(_refusal "$_od/tree/$_tool_rel" "$_od/tree")" && ! -e "$_od/engine.ran" ]] &&
+        ok "a harness run without the tool: exit 1 on the one refusal line, the engine never started" ||
+        bad "harness without the tool: expected rc=1, the refusal as the one ERROR and last line and no engine run, got rc=$rc '$(tail -2 "$_od/log")'"
+fi
+
 echo "CONTAINER-PROBE: the container start-up probe times bare image starts, Perl only, after the suites"
 
 # Every timed Perl invocation pays one container start; --container-probe N measures that
@@ -841,6 +989,150 @@ STUB
             bad "the per-start timing block is missing"
     else
         echo "  skip functional probe run: /usr/bin/time -v is not GNU time here"
+    fi
+fi
+
+echo
+echo "IMAGE-DIGEST: the Perl image must carry the pinned digest before any cell runs"
+
+# The engine_version every Perl row carries is the image tag, and a tag can move. The harness
+# pulls the image when absent and refuses one whose RepoDigests lack the expected digest, so a
+# moved tag cannot be timed under the pinned version. Run against a stub docker whose inspect
+# answers with a configurable digest; an empty data tree is enough, because the check precedes
+# every cell.
+HARNESS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run_clone_measurement.sh"
+if [[ -f "$HARNESS" ]]; then
+    PINNED_DIGEST="sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+    OTHER_DIGEST="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    _dd="$TMP/digest"; mkdir -p "$_dd/bin" "$_dd/data"
+    cat >"$_dd/bin/docker" <<'STUB'
+#!/usr/bin/env bash
+echo "docker $*" >>"$DIGEST_CALLS"
+case "$1" in
+image) echo "ensemblorg/ensembl-vep@$STUB_DIGEST"; exit 0 ;;
+pull) exit 0 ;;
+*) exit 0 ;;
+esac
+STUB
+    chmod +x "$_dd/bin/docker"
+    run_perl_harness() { # run_perl_harness <stub digest> <out dir> [harness args...]
+        local d="$1" o="$2"; shift 2
+        : >"$_dd/calls"
+        DIGEST_CALLS="$_dd/calls" STUB_DIGEST="$d" PATH="$_dd/bin:$PATH" \
+            bash "$HARNESS" --engine perl --data-dir "$_dd/data" --output-dir "$o" --suites s01 "$@" >"$o.log" 2>&1
+    }
+    grep -q '^PERL_IMAGE="ensemblorg/ensembl-vep:release_116.2"$' "$HARNESS" &&
+        ok "the default Perl image is the release_116.2 tag" ||
+        bad "the default Perl image is not ensemblorg/ensembl-vep:release_116.2"
+    grep -q "^PERL_IMAGE_DIGEST=\"\${VEP_PERL_IMAGE_DIGEST:-$PINNED_DIGEST}\"$" "$HARNESS" &&
+        ok "the expected digest is one constant, overridable by VEP_PERL_IMAGE_DIGEST" ||
+        bad "PERL_IMAGE_DIGEST is not the pinned manifest-list digest with the env override"
+    run_perl_harness "$OTHER_DIGEST" "$_dd/out1"; rc=$?
+    if [[ "$rc" -ne 0 ]] && grep -q "^ERROR: \[perl-image\] digest mismatch: ensemblorg/ensembl-vep@$OTHER_DIGEST (expected $PINNED_DIGEST)$" "$_dd/out1.log"; then
+        ok "a pulled image with another digest stops the run with the digest found and the digest expected"
+    else
+        bad "a mismatched digest did not stop the run (rc=$rc): $(head -3 "$_dd/out1.log" | tr '\n' ' ')"
+    fi
+    if ! grep -q "run_clone_measurement engine=perl" "$_dd/out1.log" && ! grep -q "^docker run" "$_dd/calls"; then
+        ok "the mismatch is caught before the first suite and before any docker run"
+    else
+        bad "the harness went on past the digest mismatch"
+    fi
+    run_perl_harness "$PINNED_DIGEST" "$_dd/out2"; rc=$?
+    if grep -q "run_clone_measurement engine=perl" "$_dd/out2.log" && ! grep -q "digest mismatch" "$_dd/out2.log"; then
+        ok "the pinned digest passes the check and the suites start"
+    else
+        bad "the pinned digest did not pass the check: $(head -3 "$_dd/out2.log" | tr '\n' ' ')"
+    fi
+    grep -q '^docker image inspect --format {{join .RepoDigests ","}} ensemblorg/ensembl-vep:release_116.2$' "$_dd/calls" &&
+        ok "the check reads every repo digest of the pinned tag" ||
+        bad "the check did not inspect the pinned tag's RepoDigests"
+    run_perl_harness "$OTHER_DIGEST" "$_dd/out3" --perl-image-digest "$OTHER_DIGEST"; rc=$?
+    if grep -q "run_clone_measurement engine=perl" "$_dd/out3.log" && ! grep -q "digest mismatch" "$_dd/out3.log"; then
+        ok "--perl-image-digest names the digest another image must carry"
+    else
+        bad "--perl-image-digest did not override the expected digest: $(head -3 "$_dd/out3.log" | tr '\n' ' ')"
+    fi
+    run_perl_harness "$PINNED_DIGEST" "$_dd/out4" --perl-image-digest 5c57abdc; rc=$?
+    if [[ "$rc" -ne 0 ]] && grep -q -- "--perl-image-digest must be sha256:<64 hex>" "$_dd/out4.log"; then
+        ok "a digest that is not sha256:<64 hex> is refused, so the check cannot be switched off"
+    else
+        bad "a malformed --perl-image-digest was accepted (rc=$rc)"
+    fi
+fi
+
+echo
+echo "CELL-LIST: --cells takes a comma-separated cell list; an unknown or repeated cell id is refused before any cell runs"
+
+# --cells takes a comma-separated cell list (s01,s02,s07,s08,s09,s10), the comma form of --suites;
+# the same stub docker and empty data tree as IMAGE-DIGEST, since the filter is applied before
+# any cell's inputs are read.
+if [[ -f "$HARNESS" ]]; then
+    _cd="$TMP/cells"; mkdir -p "$_cd/data"
+    run_cells_harness() { # run_cells_harness <out name> [harness args...]
+        local o="$1"; shift
+        : >"$_dd/calls"
+        DIGEST_CALLS="$_dd/calls" STUB_DIGEST="$PINNED_DIGEST" PATH="$_dd/bin:$PATH" \
+            bash "$HARNESS" --engine perl --data-dir "$_cd/data" --output-dir "$_cd/$o" "$@" >"$_cd/$o.log" 2>&1
+    }
+    run_cells_harness out1 --cells s07,s08,s09,s10
+    if grep -q "run_clone_measurement engine=perl suites=s07 s08 s09 s10 walltime_only" "$_cd/out1.log" &&
+        grep -q "suite s01 skipped (suites=s07 s08 s09 s10)" "$_cd/out1.log" && grep -q "suite s06 skipped" "$_cd/out1.log" &&
+        grep -q "suite s07 (SV_GRCh37 homo_sapiens GRCh37 sv) starting" "$_cd/out1.log" && ! grep -q "suite s07 skipped" "$_cd/out1.log"; then
+        ok "--cells s07,s08,s09,s10 selects those four cells and skips s01 to s06"
+    else
+        bad "--cells did not select the named cells: $(grep -E 'suites=|skipped|starting' "$_cd/out1.log" | head -4 | tr '\n' ' ')"
+    fi
+    run_cells_harness out2 --cells s07,s99; rc=$?
+    if [[ "$rc" -ne 0 ]] && grep -q "^ERROR: \[run_clone_measurement\] unknown cell 's99' in --suites/--cells; the cells are: s01 s02 s03 s04 s05 s06 s07 s08 s09 s10 s05m s06m" "$_cd/out2.log" &&
+        ! grep -q "suite s07 (SV_GRCh37 homo_sapiens GRCh37 sv) starting" "$_cd/out2.log" && ! grep -q "^docker run" "$_dd/calls"; then
+        ok "an unknown cell id stops the run before any cell starts and names the cells the table carries"
+    else
+        bad "an unknown cell id was not refused (rc=$rc): $(head -3 "$_cd/out2.log" | tr '\n' ' ')"
+    fi
+    run_cells_harness out3 --suites "s01 s0x"; rc=$?
+    if [[ "$rc" -ne 0 ]] && grep -q "unknown cell 's0x'" "$_cd/out3.log"; then
+        ok "--suites with an unknown id is refused the same way (the id would have matched nothing and exited 0)"
+    else
+        bad "--suites with an unknown id was accepted (rc=$rc)"
+    fi
+    grep -q 'SUITES_FILTER="${2//,/ }"' "$HARNESS" && ! grep -qE '^cells[a-z_]*\(\) \{' "$HARNESS" &&
+        ok "--cells is an inline rewrite of the comma list into the --suites filter, with no column-0 function of its own" ||
+        bad "--cells is not the inline comma-to-space rewrite, or it has a column-0 function of its own"
+    run_cells_harness out4 --cells ""; rc=$?
+    if [[ "$rc" -ne 0 ]] && grep -q "^ERROR: \[run_clone_measurement\] empty cell list in --suites/--cells" "$_cd/out4.log" &&
+        ! grep -q "skipped" "$_cd/out4.log"; then
+        ok "an empty cell list is refused (it would have skipped every cell and exited 0)"
+    else
+        bad "an empty cell list was accepted (rc=$rc): $(head -3 "$_cd/out4.log" | tr '\n' ' ')"
+    fi
+    # A glob-shaped id is validated as text: a file named like a cell in the working directory must not satisfy it.
+    mkdir -p "$_cd/cwd" && : >"$_cd/cwd/s01"
+    DIGEST_CALLS="$_dd/calls" STUB_DIGEST="$PINNED_DIGEST" PATH="$_dd/bin:$PATH" \
+        bash -c 'cd "$1" && bash "$2" --engine perl --data-dir "$3" --output-dir "$4" --suites "s0*"' _ "$_cd/cwd" "$HARNESS" "$_cd/data" "$_cd/out5" >"$_cd/out5.log" 2>&1; rc=$?
+    if [[ "$rc" -ne 0 ]] && grep -q "unknown cell 's0\*'" "$_cd/out5.log"; then
+        ok "a glob-shaped cell id is refused as text, not expanded against the working directory"
+    else
+        bad "a glob-shaped cell id was accepted (rc=$rc): $(head -3 "$_cd/out5.log" | tr '\n' ' ')"
+    fi
+    # The validation loop splits on any whitespace while should_run matches between single spaces:
+    # a tab-separated list must run its cells, not validate and then skip every one with exit 0.
+    run_cells_harness out6 --suites $'s07\ts08'
+    if grep -q "run_clone_measurement engine=perl suites=s07 s08 walltime_only" "$_cd/out6.log" &&
+        grep -q "suite s01 skipped (suites=s07 s08)" "$_cd/out6.log" &&
+        grep -q "suite s07 (SV_GRCh37 homo_sapiens GRCh37 sv) starting" "$_cd/out6.log" && ! grep -q "suite s07 skipped" "$_cd/out6.log"; then
+        ok "a tab-separated --suites list is normalised to one space per gap, so its cells run"
+    else
+        bad "a tab-separated --suites list validated but did not run its cells: $(grep -E 'suites=|skipped|starting' "$_cd/out6.log" | head -3 | tr '\n' ' ')"
+    fi
+    # A repeated id would pass the known-id check, and should_run's substring match would run
+    # its cell once under a list that names it twice.
+    run_cells_harness out7 --cells s07,s07,s08; rc=$?
+    if [[ "$rc" -ne 0 ]] && grep -q "^ERROR: \[run_clone_measurement\] repeated cell 's07' in --suites/--cells" "$_cd/out7.log" &&
+        ! grep -q "suite s07 (SV_GRCh37 homo_sapiens GRCh37 sv) starting" "$_cd/out7.log" && ! grep -q "^docker run" "$_dd/calls"; then
+        ok "a repeated cell id is refused before any cell starts, naming the id"
+    else
+        bad "a repeated cell id was accepted (rc=$rc): $(head -3 "$_cd/out7.log" | tr '\n' ' ')"
     fi
 fi
 
@@ -944,7 +1236,7 @@ EOF
         unset PERL_CACHE_VERSION
         export STUB_DOCKER_LOG="$TMP/docker_args.txt"
         PATH="$STUBBIN:$PATH" bash -c "$perl_child" _ "ensemblorg/ensembl-vep:release_116.2" "$TMP/cache" "$TMP/ref.fa" \
-            GRCh37 "$TMP/sv_in" "$TMP/sv_scratch" "0:0" 5000 4 116
+            GRCh37 "$TMP/sv_in" "$TMP/sv_scratch" "0:0" 5000 4 116 homo_sapiens
     ) >"$TMP/perl_child.out" 2>"$TMP/perl_child.err"
     rc_child=$?
     [[ "$rc_child" -eq 0 ]] &&
@@ -958,9 +1250,17 @@ EOF
         [[ "$_cv" == "116" ]] &&
             ok "vep received --cache_version 116, the value passed as the tenth argument" ||
             bad "vep received --cache_version '$_cv'; expected 116"
+        _sp=$(grep -A 1 -x -- '--species' "$TMP/docker_args.txt" | tail -1)
+        [[ "$_sp" == "homo_sapiens" ]] &&
+            ok "vep received --species homo_sapiens, the value passed as the eleventh argument" ||
+            bad "vep received --species '$_sp'; expected homo_sapiens"
     else
         bad "the stub docker was never invoked"
     fi
+    _species_literal=$(grep -c -- '--species homo_sapiens' "$HARNESS") || _species_literal=0
+    [[ "$_species_literal" -eq 0 ]] &&
+        ok "no command line of the harness passes a literal --species homo_sapiens; the suite row's species travels as an argument" ||
+        bad "$_species_literal command line(s) pass a literal --species homo_sapiens"
 fi
 
 echo
@@ -1275,7 +1575,7 @@ PY
     # the provenance write and no interpreter.
     _np="$_ea/nopython/bin"
     mkdir -p "$_np"
-    for _t in bash dirname date mkdir; do ln -sf "$(type -P "$_t")" "$_np/$_t"; done
+    for _t in bash dirname date mkdir tr; do ln -sf "$(type -P "$_t")" "$_np/$_t"; done
     PATH="$_np" "$_np/bash" "$HARNESS" --engine vep-rs --vep-binary "$_ea/bin/vep" --data-dir "$_ea/data" --output-dir "$_ea/nopython/out" --suites s01 --walltime-only >"$_ea/nopython.log" 2>&1; rc=$?
     _n_err=$(grep -c '^ERROR: \[run_clone_measurement\] python3 is not on PATH' "$_ea/nopython.log") || _n_err=0
     if [[ "$rc" -eq 1 && "$_n_err" -eq 1 ]] && ! grep -q -e 'command not found' -e ' starting$' "$_ea/nopython.log"; then
@@ -1289,6 +1589,367 @@ PY
     else
         bad "extra arguments under --engine perl were not refused before the run (rc=$rc): $(head -2 "$_ea/perl.log" | tr '\n' ' ')"
     fi
+fi
+
+echo
+echo "FASTVEP-EXTRA-ARGS: --fastvep-extra-args reaches every fastVEP annotate run through the wrapper and is recorded in provenance.json; a run without the words writes neither; --sa-dir takes cells of one assembly"
+
+# The words travel through <output-dir>/fastvep-wrapper.sh, which FASTVEP_BINARY is pointed at, so
+# the SNP/indel call and the SV loop's `bash -c` subshell carry them with neither command line
+# edited. The stub binary records its thread count and argument vector and writes one data line,
+# enough for the SV output gate; a run is --walltime-only on one SNP/indel cell and one SV cell
+# with two inputs, six invocations in all.
+if [[ -f "$HARNESS" ]]; then
+    grep -q '^FASTVEP_EXTRA_ARGS=""$' "$HARNESS" &&
+        ok "--fastvep-extra-args defaults to nothing (FASTVEP_EXTRA_ARGS empty)" ||
+        bad "FASTVEP_EXTRA_ARGS does not default to empty"
+    grep -A 2 -e '^[[:space:]]*--fastvep-extra-args)$' "$HARNESS" | grep -q 'FASTVEP_EXTRA_ARGS="$2"' &&
+        ok "--fastvep-extra-args is parsed into FASTVEP_EXTRA_ARGS" ||
+        bad "--fastvep-extra-args is not parsed"
+    _fextra_in_cmds=$(grep -cE 'FASTVEP_(EXTRA|WRAPPER|ARGV)' <(sed -n '/^measure_p1() {/,/^}/p; /^measure_sv() {/,/^}/p' "$HARNESS")) || _fextra_in_cmds=0
+    [[ "$_fextra_in_cmds" -eq 0 ]] &&
+        ok "neither measure_p1 nor measure_sv names the fastVEP extra arguments (they travel through FASTVEP_BINARY)" ||
+        bad "measure_p1 or measure_sv names the fastVEP extra arguments on $_fextra_in_cmds line(s); the pass-through must not touch the command lines"
+    _help=$(bash "$HARNESS" --help 2>&1)
+    grep -q -e '^  --fastvep-extra-args "<flags>"$' <<<"$_help" &&
+        ok "the usage text lists --fastvep-extra-args" ||
+        bad "the usage text does not list --fastvep-extra-args"
+
+    _fa="$TMP/fastvep_extra_args"
+    _fa_sv="$_fa/data/ground_truth/perl/sv_per_vcf/canonical_inputs/grch37"
+    mkdir -p "$_fa/bin" "$_fa/data/vcf/grch37/all_variants_canonical" "$_fa/data/vcf/grch38/all_variants_canonical" "$_fa_sv"
+    : >"$_fa/data/vcf/grch37/all_variants_canonical/clinvar_grch37.canonical.vcf.gz"
+    : >"$_fa/data/vcf/grch38/all_variants_canonical/clinvar_grch38.canonical.vcf.gz"
+    printf '##fileformat=VCFv4.2\n#CHROM\tPOS\n21\t1\n' >"$_fa_sv/01_a.vcf"
+    printf '##fileformat=VCFv4.2\n#CHROM\tPOS\n21\t2\n' >"$_fa_sv/02_b.vcf"
+    cat >"$_fa/bin/fastvep" <<'STUB'
+#!/usr/bin/env bash
+# stub engine: one line per invocation, the thread count then the argument vector joined by spaces; one data line at -o
+out=""; prev=""
+for a in "$@"; do [[ "$prev" == -o ]] && out="$a"; prev="$a"; done
+printf 'RAYON_NUM_THREADS=%s %s\n' "${RAYON_NUM_THREADS:-unset}" "$*" >>"$STUB_ARGV"
+printf '#Uploaded_variation\tLocation\nv\t21:1\n' >"$out"
+STUB
+    chmod +x "$_fa/bin/fastvep"
+    mkdir -p "$_fa/eq=bin"
+    cp "$_fa/bin/fastvep" "$_fa/eq=bin/fastvep"
+    # For the runs that name the binary without a slash: an executable copy of the stub in one
+    # directory, a file of the same name that is not executable in another, and a directory
+    # without one. Each is the working directory of one run or a PATH entry of another.
+    mkdir -p "$_fa/bare-exec" "$_fa/bare-inert" "$_fa/bare-none"
+    cp "$_fa/bin/fastvep" "$_fa/bare-exec/fastvep-bare"
+    : >"$_fa/bare-inert/fastvep-bare"
+    run_fastvep_extra() { # run_fastvep_extra <out name> [harness args...]; the cells are s01 and s07 unless --suites or --cells follows
+        local o="$1"; shift
+        : >"$_fa/$o.argv"
+        STUB_ARGV="$_fa/$o.argv" bash "$HARNESS" --engine fastvep --fastvep-binary "$_fa/bin/fastvep" --data-dir "$_fa/data" \
+            --output-dir "$_fa/$o" --suites "s01 s07" --walltime-only "$@" >"$_fa/$o.log" 2>&1
+    }
+    # The wrapper, the log and the record a run left in its output directory, by name.
+    fastvep_extra_files() {
+        local f
+        for f in fastvep-wrapper.argv fastvep-wrapper.sh provenance.json; do
+            [[ ! -e "$_fa/$1/$f" ]] || printf '%s ' "$f"
+        done
+    }
+    _fwords="--exclude-readthrough --exclude-artifact"
+    if /usr/bin/time -v true >/dev/null 2>&1; then
+        run_fastvep_extra with --fastvep-extra-args "$_fwords"; rc=$?
+        _n_inv=$(grep -c . "$_fa/with.argv") || _n_inv=0
+        _n_tail=$(grep -c -e "^RAYON_NUM_THREADS=16 annotate --gff3 .* --output-format tab $_fwords\$" "$_fa/with.argv") || _n_tail=0
+        _n_p1=$(grep -c -e " -o $_fa/with/s01/rust/raw.txt --output-format tab $_fwords\$" "$_fa/with.argv") || _n_p1=0
+        _n_sv=$(grep -c -e " -i $_fa_sv/0[12]_[ab].vcf -o $_fa/with/s07/rust/0[12]_[ab].txt --output-format tab $_fwords\$" "$_fa/with.argv") || _n_sv=0
+        if [[ "$rc" -eq 0 && "$_n_inv" -eq 6 && "$_n_tail" -eq 6 ]]; then
+            ok "all six fastVEP annotate runs end with the words after the harness's own arguments, at the harness's thread count"
+        else
+            bad "rc=$rc; $_n_inv invocation(s), $_n_tail of them ending with the words (expected 6 and 6): $(head -2 "$_fa/with.argv" | cut -c1-200 | tr '\n' '|') $(tail -3 "$_fa/with.log" | tr '\n' '|')"
+        fi
+        [[ "$_n_p1" -eq 2 && "$_n_sv" -eq 4 ]] &&
+            ok "the SNP/indel cell's warmup and timed runs (2) and each input of the SV loop on both passes (4) ran through the wrapper" ||
+            bad "$_n_p1 SNP/indel and $_n_sv SV invocations carried the words (expected 2 and 4)"
+        _bad_rows=$(awk -F, 'NR>1 && ($1!="fastvep" || $10!="0" || ($8!="warmup" && $8!="timed"))' "$_fa/with/wall_times.csv" 2>/dev/null | wc -l | tr -d ' ')
+        _rows=$(awk -F, 'NR>1' "$_fa/with/wall_times.csv" 2>/dev/null | wc -l | tr -d ' ')
+        [[ "$_rows" -eq 4 && "$_bad_rows" -eq 0 ]] &&
+            ok "both cells record their warmup and timed rows with exit 0 through the fastVEP wrapper" ||
+            bad "wall_times.csv has $_rows rows, $_bad_rows of them failed (expected 4 and 0)"
+        [[ -x "$_fa/with/fastvep-wrapper.sh" ]] && grep -q "^exec $_fa/bin/fastvep \"\$@\" $_fwords\$" "$_fa/with/fastvep-wrapper.sh" &&
+            ok "the fastVEP wrapper execs the real binary with the harness's arguments first and the words after" ||
+            bad "fastvep-wrapper.sh is missing or does not exec the real binary with the words appended: $(tail -1 "$_fa/with/fastvep-wrapper.sh" 2>/dev/null)"
+        if python3 - "$_fa/with/provenance.json" "$_fa/bin/fastvep" "$_fa/with/fastvep-wrapper.sh" <<'PY'
+import json, sys
+p, binary, wrapper = sys.argv[1:]
+d = json.load(open(p))
+words = ["--exclude-readthrough", "--exclude-artifact"]
+assert sorted(d) == ["engine", "fastvep_binary", "fastvep_executed_argv", "fastvep_extra_args", "fastvep_extra_argv", "fastvep_wrapper"], sorted(d)
+assert d["engine"] == "fastvep" and d["fastvep_binary"] == binary, d
+assert d["fastvep_extra_args"] == " ".join(words) and d["fastvep_extra_argv"] == words, d
+assert d["fastvep_wrapper"] == wrapper, d["fastvep_wrapper"]
+assert len(d["fastvep_executed_argv"]) == 6, len(d["fastvep_executed_argv"])
+for argv in d["fastvep_executed_argv"]:
+    assert argv[0] == binary and argv[1] == "annotate" and argv[-4:] == ["--output-format", "tab"] + words, argv
+assert sum(1 for a in d["fastvep_executed_argv"] if "/s07/rust/" in a[a.index("-o") + 1]) == 4, "SV invocations"
+PY
+        then
+            ok "provenance.json names the engine, the real binary, the words joined and split, the wrapper and the six executed argument vectors, under fastVEP's own keys alone"
+        else
+            bad "provenance.json does not carry the expected record: $(tr -d '\n' <"$_fa/with/provenance.json" 2>/dev/null | cut -c1-300)"
+        fi
+        run_fastvep_extra absent; rc=$?
+        _n_inv=$(grep -c . "$_fa/absent.argv") || _n_inv=0
+        _n_plain=$(grep -c -e '^RAYON_NUM_THREADS=16 annotate --gff3 .* --output-format tab$' "$_fa/absent.argv") || _n_plain=0
+        if [[ "$rc" -eq 0 && "$_n_inv" -eq 6 && "$_n_plain" -eq 6 && -z "$(fastvep_extra_files absent)" ]]; then
+            ok "without the parameter the six runs end with the harness's own --output-format tab, and no wrapper, log or record is written"
+        else
+            bad "parameter absent: rc=$rc, $_n_inv invocations, $_n_plain ending with --output-format tab, left behind: $(fastvep_extra_files absent)"
+        fi
+        run_fastvep_extra empty --fastvep-extra-args ""; rc=$?
+        run_fastvep_extra blank --fastvep-extra-args $' \n\t '; rc2=$?
+        _n_plain=$(cat "$_fa/empty.argv" "$_fa/blank.argv" | grep -c -e ' --output-format tab$') || _n_plain=0
+        if [[ "$rc" -eq 0 && "$rc2" -eq 0 && "$_n_plain" -eq 12 && -z "$(fastvep_extra_files empty)$(fastvep_extra_files blank)" ]]; then
+            ok "an empty value and a value of whitespace alone append nothing and write no wrapper, log or record"
+        else
+            bad "empty value: rc=$rc/$rc2, $_n_plain of 12 invocations ending with --output-format tab, left behind: $(fastvep_extra_files empty)$(fastvep_extra_files blank)"
+        fi
+        _files_absent=$(cd "$_fa/absent" && find . | sort)
+        [[ -n "$_files_absent" && "$_files_absent" == "$(cd "$_fa/empty" && find . | sort)" && "$_files_absent" == "$(cd "$_fa/blank" && find . | sort)" ]] &&
+            ok "the empty and the whitespace value leave exactly the files a run without the parameter leaves" ||
+            bad "the output directories of the absent, empty and whitespace runs hold different file lists"
+        # "Split on whitespace" includes a newline, and the record's string is the words joined
+        # by single spaces however the value separated them.
+        run_fastvep_extra lines --fastvep-extra-args $'--exclude-readthrough\n   --exclude-artifact'; rc=$?
+        _n_tail=$(grep -c -e " --output-format tab $_fwords\$" "$_fa/lines.argv") || _n_tail=0
+        if [[ "$rc" -eq 0 && "$_n_tail" -eq 6 ]] && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["fastvep_extra_args"] == sys.argv[2] and d["fastvep_extra_argv"] == sys.argv[2].split(), d' "$_fa/lines/provenance.json" "$_fwords" 2>/dev/null; then
+            ok "a newline and repeated spaces inside the value separate words like one space: all six runs carry both, and the record joins them by single spaces"
+        else
+            bad "newline-separated value: rc=$rc, $_n_tail of 6 invocations carry both words: $(head -1 "$_fa/lines.argv" 2>/dev/null | cut -c1-200)"
+        fi
+        run_fastvep_extra values --fastvep-extra-args "--buffer-size 8 --distance=5000 -q a/b:c,d"; rc=$?
+        _n_tail=$(grep -c -e ' --output-format tab --buffer-size 8 --distance=5000 -q a/b:c,d$' "$_fa/values.argv") || _n_tail=0
+        [[ "$rc" -eq 0 && "$_n_tail" -eq 6 ]] &&
+            ok "an option, a value after it, the --name=value form, a short option and a path-shaped value are admitted and passed in the order given" ||
+            bad "option and value words: rc=$rc, $_n_tail of 6 invocations end with them in order: $(tail -2 "$_fa/values.log" | tr '\n' '|' | cut -c1-200)"
+        # A --sa-dir directory over cells of one assembly is two more words (or one, in the
+        # --name=value form), passed to every run and recorded like any other.
+        _sa_words="$_fwords --sa-dir /data/sa/grch37"
+        run_fastvep_extra sadir --fastvep-extra-args "$_sa_words"; rc=$?
+        _n_tail=$(grep -c -e " --output-format tab $_sa_words\$" "$_fa/sadir.argv") || _n_tail=0
+        if [[ "$rc" -eq 0 && "$_n_tail" -eq 6 ]] && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["fastvep_extra_args"] == sys.argv[2] and d["fastvep_extra_argv"][-2:] == ["--sa-dir", "/data/sa/grch37"] and len(d["fastvep_executed_argv"]) == 6, d' "$_fa/sadir/provenance.json" "$_sa_words" 2>/dev/null; then
+            ok "--sa-dir and its directory over two cells of one assembly reach all six runs and the record"
+        else
+            bad "--sa-dir over cells of one assembly: rc=$rc, $_n_tail of 6 invocations end with the words: $(tail -2 "$_fa/sadir.log" | tr '\n' '|' | cut -c1-240)"
+        fi
+        run_fastvep_extra sadireq --fastvep-extra-args "--sa-dir=/data/sa/grch37"; rc=$?
+        _n_tail=$(grep -c -e ' --output-format tab --sa-dir=/data/sa/grch37$' "$_fa/sadireq.argv") || _n_tail=0
+        [[ "$rc" -eq 0 && "$_n_tail" -eq 6 ]] &&
+            ok "the --sa-dir=<directory> form over cells of one assembly is admitted the same way" ||
+            bad "--sa-dir=<directory> over cells of one assembly: rc=$rc, $_n_tail of 6 invocations end with it: $(tail -2 "$_fa/sadireq.log" | tr '\n' '|' | cut -c1-240)"
+        # The one-assembly rule binds only words that carry --sa-dir: the same cells of two
+        # assemblies run under words without it.
+        run_fastvep_extra twoasm --suites "s01 s02" --fastvep-extra-args "$_fwords"; rc=$?
+        _n_37=$(grep -c -e "/vcf/grch37/.* --output-format tab $_fwords\$" "$_fa/twoasm.argv") || _n_37=0
+        _n_38=$(grep -c -e "/vcf/grch38/.* --output-format tab $_fwords\$" "$_fa/twoasm.argv") || _n_38=0
+        [[ "$rc" -eq 0 && "$_n_37" -eq 2 && "$_n_38" -eq 2 ]] &&
+            ok "words without --sa-dir run cells of two assemblies, as a run without the parameter does" ||
+            bad "words without --sa-dir over two assemblies: rc=$rc, $_n_37 GRCh37 and $_n_38 GRCh38 invocations (expected 2 and 2): $(tail -2 "$_fa/twoasm.log" | tr '\n' '|' | cut -c1-240)"
+        # A run without the words into the directory of a run with them leaves no wrapper, log
+        # or record behind to describe a wall_times.csv they did not produce.
+        run_fastvep_extra rerun --fastvep-extra-args "$_fwords"; rc1=$?
+        _left_before=$(fastvep_extra_files rerun)
+        run_fastvep_extra rerun; rc2=$?
+        if [[ "$rc1" -eq 0 && "$rc2" -eq 0 && "$_left_before" == "fastvep-wrapper.argv fastvep-wrapper.sh provenance.json " && -z "$(fastvep_extra_files rerun)" ]]; then
+            ok "a re-run without the words removes the earlier run's wrapper, log and record from the output directory"
+        else
+            bad "re-run into the same output directory: rc=$rc1/$rc2, before '$_left_before', left behind '$(fastvep_extra_files rerun)'"
+        fi
+        # The refusal of an output directory whose path holds `=` binds a run with words alone:
+        # without them no wrapper is written there, and the same directory runs.
+        run_fastvep_extra eqplain --output-dir "$_fa/eq=plain/out" --suites s01; rc=$?
+        _n_inv=$(grep -c -e " -o $_fa/eq=plain/out/s01/rust/raw.txt --output-format tab\$" "$_fa/eqplain.argv") || _n_inv=0
+        _bad_rows=$(awk -F, 'NR>1 && $10!="0"' "$_fa/eq=plain/out/wall_times.csv" 2>/dev/null | wc -l | tr -d ' ')
+        [[ "$rc" -eq 0 && "$_n_inv" -eq 2 && "$_bad_rows" -eq 0 ]] &&
+            ok "without the words an output directory whose path holds = runs its cell, both rows exit 0" ||
+            bad "no words, = in the output directory: rc=$rc, $_n_inv of 2 invocations, $_bad_rows failed row(s): $(tail -2 "$_fa/eqplain.log" | tr '\n' '|' | cut -c1-240)"
+        # With words the wrapper is the operand `env` reads and it execs the binary, so a binary
+        # whose own path holds `=` runs.
+        run_fastvep_extra eqbinwords --fastvep-binary "$_fa/eq=bin/fastvep" --suites s01 --fastvep-extra-args "$_fwords"; rc=$?
+        _n_tail=$(grep -c -e " --output-format tab $_fwords\$" "$_fa/eqbinwords.argv") || _n_tail=0
+        _bad_rows=$(awk -F, 'NR>1 && $10!="0"' "$_fa/eqbinwords/wall_times.csv" 2>/dev/null | wc -l | tr -d ' ')
+        [[ "$rc" -eq 0 && "$_n_tail" -eq 2 && "$_bad_rows" -eq 0 ]] &&
+            ok "with the words a fastVEP binary whose path holds = runs through the wrapper, both rows exit 0" ||
+            bad "words, = in the binary's path: rc=$rc, $_n_tail of 2 invocations, $_bad_rows failed row(s): $(tail -2 "$_fa/eqbinwords.log" | tr '\n' '|' | cut -c1-240)"
+        run_fastvep_extra handover --fastvep-extra-args "$_fwords"; rc1=$?
+        STUB_ARGV="$_fa/handover-veprs.argv" bash "$HARNESS" --engine vep-rs --vep-binary "$_fa/bin/fastvep" --data-dir "$_fa/data" --output-dir "$_fa/handover" --suites s01 --walltime-only >"$_fa/handover-veprs.log" 2>&1; rc2=$?
+        if [[ "$rc1" -eq 0 && "$rc2" -eq 0 && "$(fastvep_extra_files handover)" == "provenance.json " ]] && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["engine"] == "vep-rs" and not [k for k in d if k.startswith("fastvep")], d' "$_fa/handover/provenance.json" 2>/dev/null; then
+            ok "a vep-rs run into the directory of a fastVEP run with the words leaves the vep-rs record alone, no fastVEP wrapper or log"
+        else
+            bad "vep-rs run into a fastVEP output directory: rc=$rc1/$rc2, left behind '$(fastvep_extra_files handover)'"
+        fi
+        # The cells start a binary named without a slash through PATH, so the file PATH resolves
+        # is the one tested: a file of that name in the working directory that is not executable
+        # does not refuse the run.
+        : >"$_fa/bare.argv"
+        (cd "$_fa/bare-inert" && STUB_ARGV="$_fa/bare.argv" PATH="$_fa/bare-exec:$PATH" bash "$HARNESS" --engine fastvep --fastvep-binary fastvep-bare \
+            --data-dir "$_fa/data" --output-dir "$_fa/bare" --suites s01 --walltime-only >"$_fa/bare.log" 2>&1); rc=$?
+        _n_inv=$(grep -c -e " -o $_fa/bare/s01/rust/raw.txt --output-format tab\$" "$_fa/bare.argv") || _n_inv=0
+        _bad_rows=$(awk -F, 'NR>1 && $10!="0"' "$_fa/bare/wall_times.csv" 2>/dev/null | wc -l | tr -d ' ')
+        [[ "$rc" -eq 0 && "$_n_inv" -eq 2 && "$_bad_rows" -eq 0 ]] &&
+            ok "a slash-less --fastvep-binary is tested and started where PATH resolves it, whatever file of that name the working directory holds" ||
+            bad "slash-less --fastvep-binary on PATH, a file of that name in the working directory: rc=$rc, $_n_inv of 2 invocations, $_bad_rows failed row(s): $(tail -2 "$_fa/bare.log" | tr '\n' '|' | cut -c1-240)"
+    else
+        echo "  skip functional fastVEP extra-args runs: /usr/bin/time -v is not GNU time here"
+    fi
+    # Each refusal comes before the output directory is made and before the run's opening line.
+    for _eng in vep-rs perl; do
+        bash "$HARNESS" --engine "$_eng" --vep-binary "$_fa/bin/fastvep" --data-dir "$_fa/data" --output-dir "$_fa/refused-$_eng" --suites s01 --walltime-only --fastvep-extra-args "$_fwords" >"$_fa/refused-$_eng.log" 2>&1; rc=$?
+        if [[ "$rc" -ne 0 && ! -e "$_fa/refused-$_eng" ]] && grep -q "^ERROR: --fastvep-extra-args applies to --engine fastvep only (got engine '$_eng')" "$_fa/refused-$_eng.log" && ! grep -q "run_clone_measurement engine=" "$_fa/refused-$_eng.log"; then
+            ok "the words under --engine $_eng are refused by name before the run"
+        else
+            bad "the words under --engine $_eng were not refused before the run (rc=$rc): $(head -2 "$_fa/refused-$_eng.log" | tr '\n' ' ' | cut -c1-200)"
+        fi
+    done
+    # value<TAB>the word of it the rule refuses: a shell metacharacter in an option and after a
+    # value's first character, a letter outside ASCII (which the rule's ranges match under a
+    # collating locale unless they are read in the C locale), a command substitution, a third
+    # dash, a dash before a digit, a glob, and a quoted word after an admitted one. The harness
+    # reads /dev/null, so no run can consume the rows the loop has yet to read.
+    #
+    # The rows run under a collating locale the host holds, the first that matches a letter
+    # outside ASCII to [a-z], so the row with such a letter fails on a match made outside the C
+    # locale whatever locale this file runs under. A host that holds none runs them under C.
+    _word_locale=C
+    while IFS= read -r _loc; do
+        if LC_ALL="$_loc" bash -c '[[ é =~ ^[a-z]$ ]]' </dev/null 2>/dev/null; then
+            _word_locale="$_loc"
+            break
+        fi
+    done < <(echo en_US.UTF-8; locale -a 2>/dev/null)
+    [[ "$_word_locale" != C ]] || echo "  skip the word rows' run under a collating locale: this host holds none that matches a letter outside ASCII to [a-z]"
+    _wi=0
+    while IFS=$'\t' read -r _value _word; do
+        _wi=$((_wi + 1))
+        : >"$_fa/word-$_wi.argv"
+        LC_ALL="$_word_locale" STUB_ARGV="$_fa/word-$_wi.argv" bash "$HARNESS" --engine fastvep --fastvep-binary "$_fa/bin/fastvep" --data-dir "$_fa/data" --output-dir "$_fa/word-$_wi" --suites s01 --walltime-only --fastvep-extra-args "$_value" </dev/null >"$_fa/word-$_wi.log" 2>&1; rc=$?
+        if [[ "$rc" -eq 1 && ! -e "$_fa/word-$_wi" && ! -s "$_fa/word-$_wi.argv" ]] && grep -qF -e "ERROR: [run_clone_measurement] --fastvep-extra-args word '$_word' is neither an option" "$_fa/word-$_wi.log" && ! grep -q "run_clone_measurement engine=" "$_fa/word-$_wi.log"; then
+            ok "the word $_word is refused by name before any cell runs and before anything is written"
+        else
+            bad "the value '$_value' was not refused on the word '$_word' before the run (rc=$rc): $(head -2 "$_fa/word-$_wi.log" | tr '\n' ' ' | cut -c1-200)"
+        fi
+    done <<'WORDS'
+--a;b	--a;b
+a;b	a;b
+café	café
+$(id)	$(id)
+---x	---x
+-1	-1
+a*	a*
+--exclude-readthrough "--exclude-artifact"	"--exclude-artifact"
+WORDS
+    # On a host without a collating locale the rows above cannot tell a match made in the C locale
+    # from one made in the caller's, so the match is read from the harness's source as well.
+    grep -q -e '^[[:space:]]*(LC_ALL=C && \[\[ "\$word" =~ \$FASTVEP_EXTRA_OPTION || "\$word" =~ \$FASTVEP_EXTRA_VALUE \]\]) || {$' "$HARNESS" &&
+        ok "the word rule is matched under LC_ALL=C, set inside the match's own subshell" ||
+        bad "the word rule is not matched under LC_ALL=C; under a collating locale its ranges admit letters and digits outside ASCII"
+    # With words the SNP/indel cells run the wrapper as the command operand of `env`, which reads
+    # an operand holding `=` as an assignment and runs the next word instead; an output directory
+    # whose path holds one is refused by name before it is made.
+    : >"$_fa/eqdir.argv"
+    STUB_ARGV="$_fa/eqdir.argv" bash "$HARNESS" --engine fastvep --fastvep-binary "$_fa/bin/fastvep" --data-dir "$_fa/data" --output-dir "$_fa/eq=refused/out" --suites s01 --walltime-only --fastvep-extra-args "$_fwords" >"$_fa/eqdir.log" 2>&1; rc=$?
+    _n_err=$(grep -c '^ERROR: ' "$_fa/eqdir.log") || _n_err=0
+    if [[ "$rc" -eq 1 && "$_n_err" -eq 1 && ! -e "$_fa/eq=refused" && ! -s "$_fa/eqdir.argv" ]] && grep -qF -e "ERROR: [run_clone_measurement] --output-dir '$_fa/eq=refused/out' holds '=': with --fastvep-extra-args" "$_fa/eqdir.log" && ! grep -q "run_clone_measurement engine=" "$_fa/eqdir.log"; then
+        ok "with the words an output directory whose path holds = is refused by name with one ERROR line, before it is made"
+    else
+        bad "words and = in the output directory: rc=$rc, $_n_err ERROR line(s), directory made=$([[ -e "$_fa/eq=refused" ]] && echo yes || echo no): $(head -2 "$_fa/eqdir.log" | tr '\n' '|' | cut -c1-240)"
+    fi
+    # Without words the operand `env` reads is the binary's own path, so a binary whose path
+    # holds `=` is refused by name the same way, before the output directory is made.
+    : >"$_fa/eqbin.argv"
+    STUB_ARGV="$_fa/eqbin.argv" bash "$HARNESS" --engine fastvep --fastvep-binary "$_fa/eq=bin/fastvep" --data-dir "$_fa/data" --output-dir "$_fa/eqbin" --suites s01 --walltime-only >"$_fa/eqbin.log" 2>&1; rc=$?
+    _n_err=$(grep -c '^ERROR: ' "$_fa/eqbin.log") || _n_err=0
+    if [[ "$rc" -eq 1 && "$_n_err" -eq 1 && ! -e "$_fa/eqbin" && ! -s "$_fa/eqbin.argv" ]] && grep -qF -e "ERROR: [run_clone_measurement] --fastvep-binary '$_fa/eq=bin/fastvep' holds '=': " "$_fa/eqbin.log" && ! grep -q "run_clone_measurement engine=" "$_fa/eqbin.log"; then
+        ok "without the words a fastVEP binary whose path holds = is refused by name with one ERROR line, before the output directory is made"
+    else
+        bad "no words and = in the binary's path: rc=$rc, $_n_err ERROR line(s), directory made=$([[ -e "$_fa/eqbin" ]] && echo yes || echo no), $(grep -c . "$_fa/eqbin.argv") invocation(s): $(head -2 "$_fa/eqbin.log" | tr '\n' '|' | cut -c1-240)"
+    fi
+    # A name without a slash that PATH resolves to no executable is refused by name before the
+    # output directory is made. The working directory holds an executable of that name in both
+    # runs, which the cells would never start.
+    refused_bare_binary() { # refused_bare_binary <PATH entry under $_fa> <label>
+        local on_path="$1" label="$2" n_err
+        : >"$_fa/$on_path.argv"
+        (cd "$_fa/bare-exec" && STUB_ARGV="$_fa/$on_path.argv" PATH="$_fa/$on_path:$PATH" bash "$HARNESS" --engine fastvep --fastvep-binary fastvep-bare \
+            --data-dir "$_fa/data" --output-dir "$_fa/$on_path-out" --suites s01 --walltime-only >"$_fa/$on_path.log" 2>&1); rc=$?
+        n_err=$(grep -c '^ERROR: ' "$_fa/$on_path.log") || n_err=0
+        if [[ "$rc" -eq 1 && "$n_err" -eq 1 && ! -e "$_fa/$on_path-out" && ! -s "$_fa/$on_path.argv" ]] && grep -qF -e "ERROR: [run_clone_measurement] --fastvep-binary 'fastvep-bare' names no executable on PATH: " "$_fa/$on_path.log" && ! grep -q "run_clone_measurement engine=" "$_fa/$on_path.log"; then
+            ok "a slash-less --fastvep-binary $label is refused by name with one ERROR line, before the output directory is made, an executable of that name in the working directory notwithstanding"
+        else
+            bad "slash-less --fastvep-binary $label: rc=$rc, $n_err ERROR line(s), directory made=$([[ -e "$_fa/$on_path-out" ]] && echo yes || echo no), $(grep -c . "$_fa/$on_path.argv") invocation(s): $(head -2 "$_fa/$on_path.log" | tr '\n' '|' | cut -c1-240)"
+        fi
+    }
+    refused_bare_binary bare-none "that PATH does not resolve"
+    refused_bare_binary bare-inert "whose only PATH match is not executable"
+    # A --sa-dir directory holds one assembly's databases, so cells of two assemblies under it
+    # stop the run with one ERROR line before any cell starts: a list of two cells, the comma
+    # form with the --name=value word, and the default selection of every cell.
+    refused_sa_dir() { # refused_sa_dir <out name> <label> <words> [cell selection...]
+        local o="$1" label="$2" words="$3" n_err
+        shift 3
+        : >"$_fa/$o.argv"
+        STUB_ARGV="$_fa/$o.argv" bash "$HARNESS" --engine fastvep --fastvep-binary "$_fa/bin/fastvep" --data-dir "$_fa/data" --output-dir "$_fa/$o" --walltime-only "$@" --fastvep-extra-args "$words" >"$_fa/$o.log" 2>&1; rc=$?
+        n_err=$(grep -c '^ERROR: ' "$_fa/$o.log") || n_err=0
+        if [[ "$rc" -eq 1 && "$n_err" -eq 1 && ! -s "$_fa/$o.argv" ]] && grep -q -e "^ERROR: \[run_clone_measurement\] --fastvep-extra-args carries --sa-dir, a directory of one assembly's databases, and the selected cells are of 2 assemblies: GRCh37 GRCh38; " "$_fa/$o.log" && ! grep -q ' starting$' "$_fa/$o.log"; then
+            ok "--sa-dir over $label is refused with one ERROR line naming both assemblies, before any cell starts"
+        else
+            bad "--sa-dir over $label was not refused before any cell (rc=$rc, $n_err ERROR line(s), $(grep -c . "$_fa/$o.argv") invocation(s)): $(tail -2 "$_fa/$o.log" | tr '\n' '|' | cut -c1-300)"
+        fi
+    }
+    refused_sa_dir sa-list "a list of one GRCh37 and one GRCh38 cell" "$_fwords --sa-dir /data/sa/grch38" --suites "s01 s02"
+    refused_sa_dir sa-cells "the comma form naming both SV cells, in the --sa-dir=<directory> form" "--sa-dir=/data/sa/grch38" --cells s07,s08
+    refused_sa_dir sa-all "the default selection of every cell" "--sa-dir /data/sa/grch38"
+    # The record of a run with the words is written through python3, so a host without it is
+    # refused at startup by the harness's own line. The PATH holds the tools the harness runs
+    # before that check (tr normalises the cell list) and no interpreter.
+    _fnp="$_fa/nopython/bin"
+    mkdir -p "$_fnp"
+    for _t in bash dirname date mkdir tr; do ln -sf "$(type -P "$_t")" "$_fnp/$_t"; done
+    PATH="$_fnp" "$_fnp/bash" "$HARNESS" --engine fastvep --fastvep-binary "$_fa/bin/fastvep" --data-dir "$_fa/data" --output-dir "$_fa/nopython/out" --suites s01 --walltime-only --fastvep-extra-args "$_fwords" >"$_fa/nopython.log" 2>&1; rc=$?
+    _n_err=$(grep -c '^ERROR: \[run_clone_measurement\] python3 is not on PATH: a fastVEP run with --fastvep-extra-args' "$_fa/nopython.log") || _n_err=0
+    if [[ "$rc" -eq 1 && "$_n_err" -eq 1 && ! -e "$_fa/nopython/out" ]] && ! grep -q -e 'command not found' -e ' starting$' "$_fa/nopython.log"; then
+        ok "without python3 a fastVEP run with the words stops before any cell with one line naming the interpreter"
+    else
+        bad "without python3: rc=$rc, $_n_err interpreter line(s): $(head -3 "$_fa/nopython.log" | tr '\n' '|')"
+    fi
+fi
+
+echo
+echo "REFUSED-RUN: a run refused on its arguments leaves the output directory as it found it"
+
+# Each run below is refused for its cell selection, the last refusal the harness makes, twice:
+# into a directory that holds an earlier run's wall_times.csv, record, wrapper and log, and
+# into one that does not exist. The stub binary and the data tree are FASTVEP-EXTRA-ARGS's.
+if [[ -f "$HARNESS" ]]; then
+    _rr="$TMP/refused_run"
+    mkdir -p "$_rr"
+    refused_run_leaves() { # refused_run_leaves <out name> <label> <error text> [harness args...]
+        local o="$1" label="$2" error="$3" f before rc_kept rc_absent
+        shift 3
+        mkdir -p "$_rr/$o"
+        printf 'engine,run_id,host_id,replicate,suite_id,suite_name,assembly,run_kind,wall_seconds,exit_code\nfastvep,manual,local,local,s01,ClinVar_GRCh37,GRCh37,timed,1.5,0\n' >"$_rr/$o/wall_times.csv"
+        for f in provenance.json fastvep-wrapper.sh fastvep-wrapper.argv; do
+            echo "an earlier run's $f" >"$_rr/$o/$f"
+        done
+        before=$(cd "$_rr/$o" && cksum ./* 2>&1)
+        bash "$HARNESS" --engine fastvep --fastvep-binary "$_fa/bin/fastvep" --data-dir "$_fa/data" --output-dir "$_rr/$o" --walltime-only "$@" >"$_rr/$o.log" 2>&1; rc_kept=$?
+        bash "$HARNESS" --engine fastvep --fastvep-binary "$_fa/bin/fastvep" --data-dir "$_fa/data" --output-dir "$_rr/$o-absent" --walltime-only "$@" >"$_rr/$o-absent.log" 2>&1; rc_absent=$?
+        if [[ "$rc_kept" -eq 1 && "$rc_absent" -eq 1 && "$(cd "$_rr/$o" && cksum ./* 2>&1)" == "$before" && ! -e "$_rr/$o-absent" ]] && grep -qF -e "ERROR: [run_clone_measurement] $error" "$_rr/$o.log"; then
+            ok "$label is refused with the output directory untouched: an earlier run's wall_times.csv, record, wrapper and log keep their bytes, and a directory that does not exist is not made"
+        else
+            bad "$label: rc=$rc_kept/$rc_absent, the earlier run's files $([[ "$(cd "$_rr/$o" && cksum ./* 2>&1)" == "$before" ]] && echo kept || echo changed) (it holds $(cd "$_rr/$o" && echo ./*)), missing directory made=$([[ -e "$_rr/$o-absent" ]] && echo yes || echo no): $(head -2 "$_rr/$o.log" | tr '\n' '|' | cut -c1-200)"
+        fi
+    }
+    refused_run_leaves sa-dir "--sa-dir over cells of two assemblies" "--fastvep-extra-args carries --sa-dir, a directory of one assembly's databases" --suites "s01 s02" --fastvep-extra-args "--sa-dir /data/sa/grch38"
+    refused_run_leaves unknown "an unknown cell id" "unknown cell 's99' in --suites/--cells" --cells s07,s99
+    refused_run_leaves empty "an empty cell list" "empty cell list in --suites/--cells" --cells ""
+    refused_run_leaves repeated "a repeated cell id" "repeated cell 's07' in --suites/--cells" --cells s07,s07,s08
 fi
 
 echo

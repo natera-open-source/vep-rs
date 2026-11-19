@@ -1,0 +1,41 @@
+entry = "check_svs_refused_offline"
+page = "docs/divergences/check-svs-offline.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 2 of 392 flag sets · 2 flag sets, 1 corpus"
+notes = "Ensembl VEP builds its structural-variant source from a database connection alone (AnnotationSourceAdaptor.pm:202-206, `this has no cache equivalent`) and declares `check_svs` and `offline` a pair that cannot be combined (Config.pm:628). The prepare step runs both of its offline runs and fails unless each reads as recorded. Without `--safe` the check of flag pairs (Config.pm:959-964) ends the run with exit status 2, `ERROR: Can't use --check_svs and --offline together` and no output. Under `--safe` the check is skipped (Config.pm:961): the run exits 0 with nothing on standard error and declares the field in its header, `## SV : IDs of overlapping structural variants`. The entry's own run is that `--safe` run on both engines: Ensembl VEP writes the record's row with no `SV`, and vep-rs, which takes the flag with Ensembl's structural-variant VCF and reads it offline, writes the six names Ensembl VEP writes for the record with a database connection, as the `check-svs` flag set of the GRCh38-checksvs corpus records them."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the refusal and the --safe run are read from runs of Ensembl VEP: pass --image" >&2; exit 1; }
+printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t5047000\tsnv_5047000\tT\tA\t.\t.\t.\n' > record.vcf
+ensembl() { docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$STAGE:/stage" -v "$PERL_CACHE:/cache/homo_sapiens/116_GRCh38:ro" -w /stage "$IMAGE" vep -i record.vcf -o "$1.txt" --offline --cache --dir_cache /cache --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --force_overwrite --no_stats --quiet --fork 1 --check_svs "${@:2}" > "$1.out" 2> "$1.err" && echo 0 > "$1.exit" || echo $? > "$1.exit"; }
+ensembl refused
+[ "$(cat refused.exit)" = 2 ] && [ ! -e refused.txt ] && grep -qxF "ERROR: Can't use --check_svs and --offline together" refused.err || { echo "the offline refusal reads otherwise: exit $(cat refused.exit)" >&2; cat refused.err >&2; exit 1; }
+ensembl safe --safe
+[ "$(cat safe.exit)" = 0 ] && [ ! -s safe.err ] && grep -qxF "## SV : IDs of overlapping structural variants" safe.txt || { echo "the --safe run reads otherwise: exit $(cat safe.exit)" >&2; cat safe.err >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+path = "{stage}/record.vcf"
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-checksvs/json_cache"
+chromosomes = ["21"]
+
+[run]
+flags = ["--safe"]
+ensembl_vep_flags = ["--check_svs"]
+vep_rs_flags = ["--check_svs", "{corpus}/structural_variants.vcf.gz"]
+
+[compare]
+kind = "field"
+field = "SV"
+where = { record = "snv_5047000" }
+
+[expected]
+ensembl_vep = ["-"]
+vep_rs = ["nsv2770691,nsv3109934,nsv3163927,nsv3167562,nsv533679,nsv6146554"]

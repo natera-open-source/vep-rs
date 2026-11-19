@@ -1,0 +1,30 @@
+entry = "bayesdel_reverse_strand_ensembl_input"
+page = "docs/plugins.md#2-bayesdel-a-record-given-on-the-reverse-strand"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the Ensembl VEP documentation, \"Data formats\", Default Ensembl VEP input, whose strand column is + (forward) or - (reverse); not seen in the measured datasets"
+notes = "The reverse-strand spelling of C>T at 21:30396091, which the corpus table scores -1.18855 (21 30396091 C T)."
+
+[input]
+format = "ensembl"
+text = """
+21	30396091	30396091	G/A	-	missense_fwd_minus
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-bayesdel-fixture/json_cache"
+
+[run]
+flags = ["--plugin", "BayesDel,file={corpus}/data/BayesDel_170824_addAF_all_scores_synthetic.txt.gz"]
+
+[compare]
+kind = "field"
+field = "BayesDel"
+where = { record = "missense_fwd_minus", feature = "ENST00000355459" }
+
+[expected]
+ensembl_vep = ["-"]
+vep_rs = ["-1.18855"]

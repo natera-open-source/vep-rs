@@ -1,0 +1,33 @@
+entry = "refseq_edited_model_shifted_insertion_bases"
+page = "docs/divergences/refseq-edited-model-shifted-insertion-bases.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 136 of 77,601 cache transcripts · 1 flag set, 4 corpora"
+notes = "GA inserted after c.203 of the forward-strand model NM_006933.7, whose three _rna_edit substitutions lie far from the site; both engines shift the insertion one base past the G it repeats, and Ensembl VEP keeps the written bases in the HGVSc of a model carrying an _rna_edit attribute while vep-rs rotates them along the shift."
+
+[input]
+format = "vcf"
+text = """
+21	35467700	ins_cds	T	TGA	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+source = "refseq"
+json_cache = "tests/golden/116/GRCh37-refseq/cache_root/homo_sapiens_refseq/116_GRCh37"
+corpus = "tests/golden/116/GRCh37-refseq"
+fasta = "tests/golden/116/GRCh37-refseq/reference.fa.gz"
+
+[run]
+flags = ["--refseq", "--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = "ins_cds", feature = "NM_006933.7" }
+columns = ["Location", "Allele", "Feature", "BAM_EDIT", "HGVSc", "HGVS_OFFSET"]
+
+[expected]
+ensembl_vep = ["21:35467700-35467701 | GA | NM_006933.7 | OK | NM_006933.7:c.204_205insGA | 1"]
+vep_rs = ["21:35467700-35467701 | GA | NM_006933.7 | OK | NM_006933.7:c.204_205insAG | 1"]

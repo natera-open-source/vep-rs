@@ -152,7 +152,8 @@
  },
  "variant_classes": {
   "deletion": 35,
-  "insertion": 111,
+  "insertion": 87,
+  "mnv_or_complex": 24,
   "snv": 73
  },
  "records": [

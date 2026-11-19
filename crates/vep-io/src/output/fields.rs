@@ -15,16 +15,24 @@
 //! the order in which one input record's rows come out.
 
 use std::borrow::Cow;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::sync::Arc;
 
-use vep_core::consequence::{Consequence, FeatureType, OwnSpanPositions, TranscriptConsequence};
+use indexmap::IndexMap;
+
+use vep_core::consequence::{
+    Consequence, FeatureType, OwnSpanPositions, RowKind, TranscriptConsequence,
+};
+use vep_core::custom_annotation::{
+    CustomAnnotations, CustomFieldValue, CustomRecord, CustomStats, CustomValue,
+};
 use vep_core::spdi::VrsAllele;
 use vep_core::sv_routing::{perl_split, perl_true};
 use vep_core::terms::Vocabulary;
 use vep_core::variant::{
     colocated_in_output_order, push_decimal, ColocatedVariant, InputVariant, VariantClass,
 };
-use vep_core::variation::reverse_comp;
+use vep_core::variation::{perl_number_string, reverse_comp};
 
 use super::frequency::{self, FrequencyGroups};
 
@@ -123,10 +131,24 @@ pub struct FieldOptions {
     /// `--shift_length`: the SHIFT_LENGTH field is listed; its value is written
     /// only under `shift_3prime` (OutputFactory.pm:1695).
     pub shift_length: bool,
+    /// `--refseq`: the `REFSEQ_MATCH` and `REFSEQ_OFFSET` columns
+    /// (Constants.pm:97), the transcript's `rseq` match codes and the
+    /// misalignment offset of an edited model at the allele.
+    pub refseq: bool,
+    /// `--merged`: `REFSEQ_MATCH`, `SOURCE` and `REFSEQ_OFFSET` (Constants.pm:98),
+    /// `SOURCE` naming the cache each transcript came from.
+    pub merged: bool,
     /// `--use_transcript_ref`: the `GIVEN_REF` and `USED_REF` columns
     /// (Constants.pm:99), and the reference row's Allele is the allele the row
     /// was analysed against.
     pub use_transcript_ref: bool,
+    /// A BAM-edited cache (`CacheDir.pm:415`): the `BAM_EDIT` column
+    /// (Constants.pm:100), each row's transcript edit status.
+    pub bam_edited: bool,
+    /// The `--custom` sources of the run, in order: each adds its keys after the
+    /// plugin keys and, when any is given, the `SOURCE` column (Constants.pm:101),
+    /// which a plain cache's transcripts leave empty.
+    pub custom_sources: Vec<CustomSourceInfo>,
     /// `--shift_3prime 1`: insertions and deletions were annotated at their most
     /// 3' position on each transcript, so SHIFT_LENGTH has a value and
     /// `shift_genomic` has a shift to print.
@@ -137,6 +159,9 @@ pub struct FieldOptions {
     pub shift_genomic: bool,
     pub var_synonyms: bool,
     pub regulatory: bool,
+    /// `--cell_type`: the `CELL_TYPE` column (Constants.pm:137), a regulatory
+    /// or motif row's [`TranscriptConsequence::cell_type`] list.
+    pub cell_type: bool,
     /// `--transcript_version`: `Feature` carries the transcript's `.<version>`.
     pub transcript_version: bool,
     /// `--gene_version`: `Gene` carries the gene's `.<version>`.
@@ -159,6 +184,47 @@ pub struct FieldOptions {
     pub positions_of_own_span: bool,
     /// `--clin_sig_allele`: which ClinVar entries CLIN_SIG reports.
     pub clin_sig_allele: ClinSigAllele,
+    /// The kinds of row each plugin field prints on, for the fields of the
+    /// loaded plugins that run on fewer kinds than [`RowKind::ALL`] lists:
+    /// Ensembl VEP runs a plugin on a row only when the plugin's `feature_types`
+    /// names the row's kind (`OutputFactory.pm:2223`), so a value a plugin wrote
+    /// for the whole variant prints on the rows of those kinds alone. A field
+    /// absent from the map prints on every row that carries the value, unless a
+    /// shared-library plugin wrote it on the intergenic row
+    /// ([`InputVariant::intergenic_row_plugin_keys`]).
+    pub plugin_row_kinds: Arc<HashMap<String, Vec<RowKind>>>,
+    /// The fields the loaded plugins declare in their headers, set through
+    /// [`FieldOptions::set_plugin_fields`]. Each is a column of the tab, VCF and
+    /// Parquet formats and a key the JSON writer reads on every consequence
+    /// object, whatever the flags ([`field_is_produced`]). One that shares a
+    /// core field's name (dbNSFP's `TSL` and `APPRIS`) carries the plugin's
+    /// value where the plugin wrote one and the core value only under the core
+    /// field's own flag, since Ensembl VEP writes a plugin's keys over the line
+    /// hash after the core fields set theirs (OutputFactory.pm:398, :2231).
+    pub plugin_fields: Arc<HashSet<String>>,
+    /// The members of [`FieldOptions::plugin_fields`] that are core flag fields
+    /// whose flag is off, set beside it: a row the plugin left without such a
+    /// field prints nothing for it, since the core hash never carried the key.
+    /// Kept as a list, usually empty and at most a few names, so the per-cell
+    /// test is a few comparisons rather than a scan of the field groups.
+    pub unflagged_plugin_fields: Arc<[String]>,
+}
+
+impl FieldOptions {
+    /// Records the fields the loaded plugins declare, after the flags are set,
+    /// filling [`FieldOptions::plugin_fields`] and
+    /// [`FieldOptions::unflagged_plugin_fields`] together.
+    pub fn set_plugin_fields(&mut self, names: impl IntoIterator<Item = String>) {
+        let names: HashSet<String> = names.into_iter().collect();
+        let mut unflagged: Vec<String> = names
+            .iter()
+            .filter(|name| !core_field_is_produced(name, self))
+            .cloned()
+            .collect();
+        unflagged.sort();
+        self.unflagged_plugin_fields = unflagged.into();
+        self.plugin_fields = Arc::new(names);
+    }
 }
 
 /// Which ClinVar significance CLIN_SIG reports for a co-located variant that
@@ -214,8 +280,8 @@ const fn vf_group(flag: &'static str, fields: &'static [&'static str]) -> FieldG
     }
 }
 
-/// The flag-driven field groups in VEP's order (`@FLAG_FIELDS`). The `user`
-/// group is unconditional and comes first among the groups that can fire here.
+/// The flag-driven field groups in Ensembl VEP's order (`@FLAG_FIELDS`). The `user`
+/// group is unconditional; the groups before it fire under their own flags.
 const FLAG_FIELD_GROUPS: &[FieldGroup] = &[
     vf_group("individual", &["IND", "ZYG"]),
     vf_group("individual_zyg", &["ZYG"]),
@@ -247,7 +313,11 @@ const FLAG_FIELD_GROUPS: &[FieldGroup] = &[
         &["SWISSPROT", "TREMBL", "UNIPARC", "UNIPROT_ISOFORM"],
     ),
     group("xref_refseq", &["RefSeq"]),
+    group("refseq", &["REFSEQ_MATCH", "REFSEQ_OFFSET"]),
+    group("merged", &["REFSEQ_MATCH", "SOURCE", "REFSEQ_OFFSET"]),
     group("use_transcript_ref", &["GIVEN_REF", "USED_REF"]),
+    group("bam_edited", &["BAM_EDIT"]),
+    group("custom", &["SOURCE"]),
     group("gene_phenotype", &["GENE_PHENO"]),
     vf_group("nearest", &["NEAREST"]),
     vf_group("ambiguity", &["AMBIGUITY"]),
@@ -303,6 +373,7 @@ const FLAG_FIELD_GROUPS: &[FieldGroup] = &[
             "TRANSCRIPTION_FACTORS",
         ],
     ),
+    group("cell_type", &["CELL_TYPE"]),
 ];
 
 impl FieldOptions {
@@ -355,9 +426,14 @@ impl FieldOptions {
             "overlaps" => self.overlaps,
             "nearest" => self.nearest,
             "shift_length" => self.shift_length,
+            "refseq" => self.refseq,
+            "merged" => self.merged,
             "use_transcript_ref" => self.use_transcript_ref,
+            "bam_edited" => self.bam_edited,
+            "custom" => !self.custom_sources.is_empty(),
             "var_synonyms" => self.var_synonyms,
             "regulatory" => self.regulatory,
+            "cell_type" => self.cell_type,
             _ => false,
         }
     }
@@ -390,15 +466,15 @@ impl FieldOptions {
             .any(|g| g.flag != "user" && self.group_active(g.flag))
     }
 
-    /// True when no group beyond `user` and `regulatory` is on: a transcript row
-    /// then carries IMPACT, DISTANCE, STRAND and FLAGS alone, since the
-    /// `regulatory` group's fields are empty on it (BIOTYPE prints on a transcript
-    /// row under its own `biotype` group), and only a regulatory or motif row
-    /// carries more.
+    /// True when no group beyond `user`, `regulatory` and `cell_type` is on: a
+    /// transcript row then carries IMPACT, DISTANCE, STRAND and FLAGS alone,
+    /// since those two groups' fields are empty on it (BIOTYPE prints on a
+    /// transcript row under its own `biotype` group), and only a regulatory or
+    /// motif row carries more.
     pub fn only_regulatory_group_beyond_user(&self) -> bool {
-        FLAG_FIELD_GROUPS
-            .iter()
-            .all(|g| matches!(g.flag, "user" | "regulatory") || !self.group_active(g.flag))
+        FLAG_FIELD_GROUPS.iter().all(|g| {
+            matches!(g.flag, "user" | "regulatory" | "cell_type") || !self.group_active(g.flag)
+        })
     }
 
     /// The frequency groups the configuration reports.
@@ -422,8 +498,9 @@ pub struct ExtraFieldsPlan {
     pub options: FieldOptions,
     /// [`flag_fields`] of `options`.
     pub flag_fields: Vec<&'static str>,
-    /// [`flag_fields`] without [`MOTIF_FIELDS`], which a motif row alone
-    /// carries: the keys a transcript or intergenic row can print.
+    /// [`flag_fields`] without the fields a regulatory or motif row alone
+    /// carries ([`MOTIF_FIELDS`] and `CELL_TYPE`): the keys a transcript or
+    /// intergenic row can print.
     pub transcript_flag_fields: Vec<&'static str>,
     /// [`FieldOptions::any_optional_group`] of `options`.
     pub any_optional_group: bool,
@@ -431,6 +508,10 @@ pub struct ExtraFieldsPlan {
     /// transcript row prints the `user` group alone, as it does with no optional
     /// group, while a regulatory or motif row prints its own fields.
     pub transcript_fast_path: bool,
+    /// [`custom_extra_keys`] of `options`: every key a `--custom` source can
+    /// set on a row, so the per-row key set tests each against the row instead
+    /// of building the names.
+    pub custom_keys: Vec<String>,
 }
 
 /// The fields only a `MotifFeature` row carries.
@@ -442,39 +523,56 @@ pub const MOTIF_FIELDS: [&str; 5] = [
     "TRANSCRIPTION_FACTORS",
 ];
 
+/// The fields only a `RegulatoryFeature` or `MotifFeature` row carries: the
+/// motif fields and `CELL_TYPE`, which `get_cell_types` sets on those rows alone
+/// (OutputFactory.pm:1879, 1927, 2098-2099).
+fn regulatory_row_field(field: &str) -> bool {
+    MOTIF_FIELDS.contains(&field) || field == "CELL_TYPE"
+}
+
 impl ExtraFieldsPlan {
     pub fn new(options: FieldOptions) -> Self {
         let flag_fields = flag_fields(&options);
         let transcript_flag_fields = flag_fields
             .iter()
             .copied()
-            .filter(|field| !MOTIF_FIELDS.contains(field))
+            .filter(|field| !regulatory_row_field(field))
             .collect();
         let any_optional_group = options.any_optional_group();
         let transcript_fast_path = options.only_regulatory_group_beyond_user();
+        let custom_keys = custom_extra_keys(&options.custom_sources);
         Self {
             options,
             flag_fields,
             transcript_flag_fields,
             any_optional_group,
             transcript_fast_path,
+            custom_keys,
         }
     }
 }
 
 /// Groups whose flag adds a column without guarding the value: VEP writes
 /// `OverlapBP` and `OverlapPC` on every structural row that overlaps its
-/// feature and `CHECK_REF` on every failed check, flag or no flag
+/// feature, `CHECK_REF` on every failed check and `BAM_EDIT` on every row of a
+/// transcript that carries an edit status, flag or no flag
 /// (`OutputFactory.pm` `StructuralVariationOverlapAllele_to_output_hash`,
-/// `VariationFeature_to_output_hash`).
-const UNGUARDED_GROUPS: [&str; 2] = ["overlaps", "dont_skip"];
+/// `VariationFeature_to_output_hash`, `:1551-1553`).
+const UNGUARDED_GROUPS: [&str; 3] = ["overlaps", "dont_skip", "bam_edited"];
 
-/// Whether a configuration produces the field: a flag field when one of its
-/// groups is on or unguarded (`UNGUARDED_GROUPS`), every other name always.
-/// VEP sets a guarded flag field's key in the row hash only under its flag, so
-/// a `--fields` list naming an inactive field prints `-` or an empty subfield
-/// for it.
+/// Whether a configuration produces the field: a field a loaded plugin declares
+/// ([`FieldOptions::plugin_fields`]) always, else as [`core_field_is_produced`]
+/// decides.
 pub fn field_is_produced(field: &str, options: &FieldOptions) -> bool {
+    options.plugin_fields.contains(field) || core_field_is_produced(field, options)
+}
+
+/// Whether the configuration's core fields include `field`: a flag field when
+/// one of its groups is on or unguarded (`UNGUARDED_GROUPS`), every other name
+/// always. VEP sets a guarded flag field's key in the row hash only under its
+/// flag, so a `--fields` list naming an inactive field prints `-` or an empty
+/// subfield for it.
+fn core_field_is_produced(field: &str, options: &FieldOptions) -> bool {
     let mut listed = false;
     for group in FLAG_FIELD_GROUPS {
         if group.fields.contains(&field) {
@@ -1007,10 +1105,11 @@ pub type Row<'a> = (&'a InputVariant, Option<&'a TranscriptConsequence>);
 /// `--summary` or `--most_severe` row the record's first allele carries.
 /// The feature rows of a `--minimal` split allele sort by the keys Ensembl
 /// VEP's rejoin stores its variations under ([`InputVariant::rejoin_key_prefix`]
-/// before the stable id, OutputFactory.pm:2316), so an allele whose key prefix
-/// sorts before the letters of a stable id prints every one of its feature rows
-/// first; the rejoin appends a later allele's intergenic alleles to the record's
-/// one intergenic variation (:2323-2338), so the intergenic rows keep ALT order
+/// before the feature's key, OutputFactory.pm:2316), so an allele whose key
+/// prefix sorts before a kind's keys (the letters of a stable id, the digits of
+/// a motif's database id) prints every one of its rows of that kind first; the
+/// rejoin appends a later allele's intergenic alleles to the record's one
+/// intergenic variation (:2323-2338), so the intergenic rows keep ALT order
 /// whatever the prefixes.
 ///
 /// An allele whose chromosome had no transcripts at all (no `most_severe_consequence`
@@ -1062,15 +1161,33 @@ pub fn record_rows_into<'a>(record: &[&'a InputVariant], rows: &mut Vec<Row<'a>>
     });
 }
 
-/// The order of two feature rows: by feature type first ([`FeatureType`]'s
-/// order, the one `VariationFeature.pm:855-864` lists the kinds in), then by
-/// their sort keys ([`rejoin_key`]): the loader's ranks when both rows carry one
-/// that orders as the key does ([`orderable_rank`]), else the keys themselves.
+/// The order of two feature rows: by kind, then by the loader's ranks when both
+/// rows carry one that orders as the sort key ([`rejoin_key`]) does
+/// ([`orderable_rank`]), else by the keys themselves. The kinds follow Ensembl
+/// VEP's overlap list (`VariationFeature.pm:855-864`): the transcript rows, then
+/// the regulatory rows by stable id, then the motif rows, whose stable id
+/// `ENSM` plus the zero-padded database id orders them by that id
+/// (`:750` sorts the keys `:937` stores them under). A structural variant's
+/// regulatory and motif rows come in the order the features were met instead
+/// (`StructuralVariationFeature.pm:495-509` reads the lists
+/// `AnnotationType/RegFeat.pm:135` fills as the features are met): from the
+/// files of `--regulatory_gff`, or a cache baked from them, source by source in
+/// the flag's construction order and then in file order, and from a converted
+/// cache in its listing order, the rank the loader put in
+/// [`TranscriptConsequence::id_rank`]
+/// ([`TranscriptConsequence::structural_feature_order`], the order the pick
+/// family ranks those rows in too). A record a removing per-gene pick
+/// reduced ([`InputVariant::per_gene_pick`]) lists its transcript rows last, as
+/// `pick_VariationFeatureOverlapAllele_per_gene` returns them
+/// (`OutputFactory.pm:838-856`).
 fn transcript_order(a: &Row<'_>, b: &Row<'_>) -> std::cmp::Ordering {
-    let (feature_a, feature_b) = (a.1.expect("feature row"), b.1.expect("feature row"));
-    let type_order = feature_a.feature_type.cmp(&feature_b.feature_type);
-    if !type_order.is_eq() {
-        return type_order;
+    let kind_order = row_kind_rank(a).cmp(&row_kind_rank(b));
+    if !kind_order.is_eq() {
+        return kind_order;
+    }
+    let (tc_a, tc_b) = (a.1.expect("feature row"), b.1.expect("feature row"));
+    if a.0.is_structural && tc_a.feature_type != FeatureType::Transcript {
+        return tc_a.structural_feature_order(tc_b);
     }
     match (orderable_rank(a), orderable_rank(b)) {
         (Some(rank_a), Some(rank_b)) => rank_a.cmp(&rank_b),
@@ -1078,12 +1195,24 @@ fn transcript_order(a: &Row<'_>, b: &Row<'_>) -> std::cmp::Ordering {
     }
 }
 
+/// The place of a feature row's kind in its record's row order
+/// ([`transcript_order`]).
+fn row_kind_rank(row: &Row<'_>) -> u8 {
+    match row.1.expect("feature row").feature_type {
+        FeatureType::Transcript if row.0.per_gene_pick => 3,
+        FeatureType::Transcript => 0,
+        FeatureType::RegulatoryFeature => 1,
+        FeatureType::MotifFeature => 2,
+    }
+}
+
 /// A feature row's [`TranscriptConsequence::id_rank`] when it orders the row as
-/// its [`rejoin_key`] does: the ranks of one chromosome's list order as the ids
-/// do and equal ids share a rank. `None` for a rank of 0, a consequence no
-/// loader ranked; for an allele with a rejoin prefix, which sorts before the
-/// id; and for a breakend, whose consequences include its mate's rows, ranked
-/// on the mate's chromosome.
+/// Ensembl VEP does: the ranks of one chromosome's list order as the loader's
+/// keys do (the id, then `_` and the dbID), the byte order of [`rejoin_key`]
+/// without a prefix, and equal keys share a rank. `None` for a rank of 0, a
+/// consequence no loader ranked; for an allele with a rejoin prefix, which
+/// sorts before the id; and for a breakend, whose consequences include its
+/// mate's rows, ranked on the mate's chromosome.
 fn orderable_rank(row: &Row<'_>) -> Option<u32> {
     let (variant, tc) = (row.0, row.1.expect("feature row"));
     let ranked_with_its_neighbours = tc.id_rank != 0
@@ -1092,8 +1221,13 @@ fn orderable_rank(row: &Row<'_>) -> Option<u32> {
     ranked_with_its_neighbours.then_some(tc.id_rank)
 }
 
-/// The key Ensembl VEP sorts a row's transcript variation by (VariationFeature.pm:666):
-/// the transcript id, behind the allele's rejoin prefix when it has one.
+/// The key Ensembl VEP stores a row's feature variation under and sorts by
+/// (VariationFeature.pm:666, :710, :750): the allele's rejoin prefix when it
+/// has one (OutputFactory.pm:2316), then the feature's own key
+/// ([`TranscriptConsequence::ensembl_vep_key`]): a transcript's stable id with
+/// `_` and its database id, a regulatory feature's stable id, a motif's
+/// database id, so a `--minimal` split allele's prefixed motif rows sort
+/// against the first allele's digit-led keys.
 fn rejoin_key<'a>(row: &Row<'a>) -> impl Iterator<Item = u8> + 'a {
     let (variant, tc) = (row.0, row.1.expect("feature row"));
     variant
@@ -1101,7 +1235,7 @@ fn rejoin_key<'a>(row: &Row<'a>) -> impl Iterator<Item = u8> + 'a {
         .as_deref()
         .unwrap_or("")
         .bytes()
-        .chain(tc.transcript_id.bytes())
+        .chain(tc.ensembl_vep_key())
 }
 
 /// Consequence terms of a feature row in the configured vocabulary, joined by
@@ -1264,7 +1398,9 @@ pub fn write_field_value(
             _ if is_vf_level_field(field) => {
                 write_row_field_value(out, field, variant, None, options, list_sep)
             }
-            _ => {}
+            // The record's hash carries the custom records of the whole input
+            // record and the statistics (OutputFactory.pm:1003-1014).
+            _ => write_custom_field_value(out, field, variant, None, list_sep),
         }
         return;
     }
@@ -1272,6 +1408,11 @@ pub fn write_field_value(
 }
 
 /// [`write_field_value`] of a row against a feature or an allele's intergenic row.
+///
+/// A plugin's keys are written over the line hash after the core fields set
+/// theirs (OutputFactory.pm:398, :2231), so a value a plugin wrote on the row
+/// prints whatever the field's name, and a core field a plugin declares but
+/// left unwritten on the row prints its core value only under its own flag.
 fn write_row_field_value(
     out: &mut Vec<u8>,
     field: &str,
@@ -1280,6 +1421,17 @@ fn write_row_field_value(
     options: &FieldOptions,
     list_sep: &str,
 ) {
+    if let Some(value) = plugin_value(field, variant, tc, options) {
+        if plugin_value_is_a_list(field) {
+            push_joined(out, value.split(PLUGIN_LIST_SEPARATOR), list_sep);
+        } else {
+            out.extend_from_slice(value.as_bytes());
+        }
+        return;
+    }
+    if options.unflagged_plugin_fields.iter().any(|f| f == field) {
+        return;
+    }
     match field {
         "Uploaded_variation" => variant.write_uploaded_variation(out),
         "Location" => match genomic_shift(variant, tc, options) {
@@ -1303,10 +1455,10 @@ fn write_row_field_value(
             };
             out.extend_from_slice(impact.as_str().as_bytes());
         }
-        "SYMBOL" => write_identifier(out, tc.and_then(|x| x.gene_symbol.as_deref())),
+        "SYMBOL" => write_identifier(out, tc.and_then(|x| x.gene_symbol())),
         "Gene" => {
             if let Some(x) = tc {
-                write_versioned_id(out, &x.gene_id, x.gene_version, options.gene_version);
+                write_versioned_id(out, x.gene_id(), x.gene_version(), options.gene_version);
             }
         }
         "Feature_type" => push_opt(out, tc.map(|x| x.feature_type.as_str())),
@@ -1314,8 +1466,8 @@ fn write_row_field_value(
             if let Some(x) = tc {
                 write_versioned_id(
                     out,
-                    &x.transcript_id,
-                    x.transcript_version,
+                    x.transcript_id(),
+                    x.transcript_version(),
                     options.transcript_version,
                 );
             }
@@ -1323,7 +1475,7 @@ fn write_row_field_value(
         "BIOTYPE"
             if !options.biotype
                 && tc.is_none_or(|x| x.feature_type != FeatureType::RegulatoryFeature) => {}
-        "BIOTYPE" => push_opt(out, tc.and_then(|x| x.biotype.as_deref())),
+        "BIOTYPE" => push_opt(out, tc.and_then(|x| x.biotype())),
         "EXON" => push_opt(out, tc.and_then(|x| x.exon.as_deref())),
         "INTRON" => push_opt(out, tc.and_then(|x| x.intron.as_deref())),
         "HGVSc" | "HGVSp" if !options.hgvs => {}
@@ -1424,7 +1576,7 @@ fn write_row_field_value(
             if let Some(x) = tc {
                 push_joined(
                     out,
-                    x.flags
+                    x.flags()
                         .iter()
                         .filter(|f| f.starts_with("cds_"))
                         .map(String::as_str),
@@ -1435,9 +1587,7 @@ fn write_row_field_value(
         "PICK" => {
             // An intergenic allele is flagged like a transcript allele
             // (`VariationFeatureOverlapAllele_to_output_hash`, OutputFactory.pm:1363).
-            let picked = tc.map_or(variant.intergenic_pick, |x| {
-                x.flags.iter().any(|f| f == "PICK")
-            });
+            let picked = tc.map_or(variant.intergenic_pick, |x| x.picked);
             if options.include_pick && picked {
                 out.push(b'1');
             }
@@ -1454,8 +1604,8 @@ fn write_row_field_value(
                 out.push(b'1');
             }
         }
-        "SYMBOL_SOURCE" => write_identifier(out, tc.and_then(|x| x.gene_symbol_source.as_deref())),
-        "HGNC_ID" => write_identifier(out, tc.and_then(|x| x.hgnc_id.as_deref())),
+        "SYMBOL_SOURCE" => write_identifier(out, tc.and_then(|x| x.gene_symbol_source())),
+        "HGNC_ID" => write_identifier(out, tc.and_then(|x| x.hgnc_id())),
         "CANONICAL" => {
             if tc.is_some_and(|x| x.canonical) {
                 out.extend_from_slice(b"YES");
@@ -1465,9 +1615,9 @@ fn write_row_field_value(
         // flag state (OutputFactory.pm:1587-1601): `--mane_select` alone never
         // lists `MANE_Plus_Clinical`.
         "MANE" => {
-            let select = options.mane_select && tc.is_some_and(|x| x.mane_select.is_some());
+            let select = options.mane_select && tc.is_some_and(|x| x.mane_select().is_some());
             let plus_clinical =
-                options.mane_plus_clinical && tc.is_some_and(|x| x.mane_plus_clinical.is_some());
+                options.mane_plus_clinical && tc.is_some_and(|x| x.mane_plus_clinical().is_some());
             let sets = [
                 select.then_some("MANE_Select"),
                 plus_clinical.then_some("MANE_Plus_Clinical"),
@@ -1476,46 +1626,38 @@ fn write_row_field_value(
         }
         "MANE_SELECT" => push_opt(
             out,
-            tc.and_then(|x| x.mane_select.as_deref())
-                .filter(|v| perl_true(v)),
+            tc.and_then(|x| x.mane_select()).filter(|v| perl_true(v)),
         ),
         "MANE_PLUS_CLINICAL" => push_opt(
             out,
-            tc.and_then(|x| x.mane_plus_clinical.as_deref())
+            tc.and_then(|x| x.mane_plus_clinical())
                 .filter(|v| perl_true(v)),
         ),
-        "TSL" => {
-            if let Some(t) = tc.and_then(|x| x.tsl) {
-                push_decimal(out, u64::from(t));
-            }
-        }
+        // The level's digit run as the attribute spelt it (`$hash->{TSL} = $1`,
+        // OutputFactory.pm:1611): `007` prints `007`.
+        "TSL" => push_opt(out, tc.and_then(|x| x.tsl())),
         "GENCODE_PRIMARY" => {
-            if tc.is_some_and(|x| x.gencode_primary) {
+            if tc.is_some_and(|x| x.gencode_primary()) {
                 out.push(b'1');
             }
         }
         // `s/principal/P/; s/alternative/A/` (OutputFactory.pm:1616-1622): one
         // substitution each, the rest of the value kept, so `principalM` is `PM`.
         "APPRIS" => {
-            if let Some(v) = tc
-                .and_then(|x| x.appris.as_deref())
-                .filter(|v| perl_true(v))
-            {
+            if let Some(v) = tc.and_then(|x| x.appris()).filter(|v| perl_true(v)) {
                 let graded = v
                     .replacen("principal", "P", 1)
                     .replacen("alternative", "A", 1);
                 out.extend_from_slice(graded.as_bytes());
             }
         }
-        "CCDS" => write_identifier(out, tc.and_then(|x| x.ccds.as_deref())),
-        "ENSP" => write_identifier(out, tc.and_then(|x| x.protein_id.as_deref())),
-        "SWISSPROT" => {
-            write_identifier_list(out, tc.and_then(|x| x.swissprot.as_deref()), list_sep)
-        }
-        "TREMBL" => write_identifier_list(out, tc.and_then(|x| x.trembl.as_deref()), list_sep),
-        "UNIPARC" => write_identifier_list(out, tc.and_then(|x| x.uniparc.as_deref()), list_sep),
+        "CCDS" => write_identifier(out, tc.and_then(|x| x.ccds())),
+        "ENSP" => write_identifier(out, tc.and_then(|x| x.protein_id()).as_deref()),
+        "SWISSPROT" => write_identifier_list(out, tc.and_then(|x| x.swissprot()), list_sep),
+        "TREMBL" => write_identifier_list(out, tc.and_then(|x| x.trembl()), list_sep),
+        "UNIPARC" => write_identifier_list(out, tc.and_then(|x| x.uniparc()), list_sep),
         "UNIPROT_ISOFORM" => {
-            write_identifier_list(out, tc.and_then(|x| x.uniprot_isoform.as_deref()), list_sep)
+            write_identifier_list(out, tc.and_then(|x| x.uniprot_isoform()), list_sep)
         }
         "HGVSg" => push_opt(out, variant.hgvsg.as_deref()),
         "NEAREST" => {
@@ -1534,9 +1676,9 @@ fn write_row_field_value(
                 out.extend_from_slice(b"failed");
             }
         }
-        "RefSeq" => write_identifier_list(out, tc.and_then(|x| x.refseq.as_deref()), list_sep),
+        "RefSeq" => write_identifier_list(out, tc.and_then(|x| x.refseq()), list_sep),
         "GENE_PHENO" => {
-            if tc.is_some_and(|x| x.gene_phenotype) {
+            if tc.is_some_and(|x| x.gene_phenotype()) {
                 out.push(b'1');
             }
         }
@@ -1573,11 +1715,14 @@ fn write_row_field_value(
         }
         // Set on every sequence variant's transcript row, 0 included, when both
         // flags are on (`TranscriptVariationAllele_to_output_hash`,
-        // OutputFactory.pm:1690-1696); an intergenic row carries none, and a
-        // structural record's rows none (`TranscriptStructuralVariationAllele_to_output_hash`,
-        // :2118-2125, sets no such key).
+        // OutputFactory.pm:1690-1696), the one output hash that sets the key: an
+        // intergenic row carries none, a regulatory or motif row none
+        // (`RegulatoryFeatureVariationAllele_to_output_hash`, :1867-1884, and
+        // `MotifFeatureVariationAllele_to_output_hash`, :1900-1943, build from
+        // the shared hash alone), and a structural record's rows none
+        // (`TranscriptStructuralVariationAllele_to_output_hash`, :2118-2125).
         "SHIFT_LENGTH" if options.shift_3prime && !variant.is_structural => {
-            if let Some(x) = tc {
+            if let Some(x) = tc.filter(|x| x.feature_type == FeatureType::Transcript) {
                 push_decimal(out, x.shift_length);
             }
         }
@@ -1588,6 +1733,33 @@ fn write_row_field_value(
         "GIVEN_REF" => {
             if tc.is_some_and(|x| x.used_ref.is_some()) {
                 out.extend_from_slice(String::from_utf8_lossy(&variant.ref_allele).as_bytes());
+            }
+        }
+        "BAM_EDIT" => push_opt(
+            out,
+            tc.and_then(|x| x.bam_edit_status)
+                .map(|status| status.column_text()),
+        ),
+        // The transcript's `rseq` codes as a list (OutputFactory.pm:1545-1549),
+        // joined as the format joins one.
+        "REFSEQ_MATCH" => {
+            if let Some(codes) = tc.and_then(|x| x.refseq_match()) {
+                push_joined(out, codes.iter().map(|code| &**code), list_sep);
+            }
+        }
+        // Set from the transcript alone, flag or no flag (`:1583`), so the one
+        // arm serves the `merged` group and Ensembl VEP's `custom` group
+        // (Constants.pm:101) alike; a `--custom` source named `SOURCE` writes
+        // its record names under the same key (`:1301`), which `:1583` leaves
+        // standing when the transcript names no source cache.
+        "SOURCE" => match tc.and_then(|x| x.source_cache()) {
+            Some(source) => out.extend_from_slice(source.column_text().as_bytes()),
+            None => write_custom_field_value(out, field, variant, tc, list_sep),
+        },
+        // Set only when non-zero (`:1769`), which `refseq_offset` already is.
+        "REFSEQ_OFFSET" => {
+            if let Some(offset) = tc.and_then(|x| x.refseq_offset) {
+                push_signed(out, offset);
             }
         }
         "CLIN_SIG"
@@ -1607,7 +1779,24 @@ fn write_row_field_value(
         "FREQS" => push_joined(out, variant.freqs.iter().map(String::as_str), list_sep),
         "SIFT" => push_opt(out, tc.and_then(|x| x.sift.as_deref())),
         "PolyPhen" => push_opt(out, tc.and_then(|x| x.polyphen.as_deref())),
-        "HIGH_INF_POS" | "MOTIF_SCORE_CHANGE" => {}
+        // `Y` or `N` (OutputFactory.pm:1936) and `%.3f` (`:1939`), each only for a
+        // motif whose matrix carries counts.
+        "HIGH_INF_POS" => {
+            if let Some(informative) = tc
+                .and_then(|x| x.motif.as_deref())
+                .and_then(|m| m.high_inf_pos)
+            {
+                out.push(if informative { b'Y' } else { b'N' });
+            }
+        }
+        "MOTIF_SCORE_CHANGE" => {
+            if let Some(delta) = tc
+                .and_then(|x| x.motif.as_deref())
+                .and_then(|m| m.score_change)
+            {
+                out.extend_from_slice(format!("{delta:.3}").as_bytes());
+            }
+        }
         "MOTIF_NAME" => push_opt(out, tc.and_then(|x| x.motif.as_deref()).map(|m| &*m.name)),
         "MOTIF_POS" => {
             if let Some(pos) = tc.and_then(|x| x.motif.as_deref()).and_then(|m| m.pos) {
@@ -1617,6 +1806,21 @@ fn write_row_field_value(
         "TRANSCRIPTION_FACTORS" => {
             if let Some(motif) = tc.and_then(|x| x.motif.as_deref()) {
                 push_joined(out, motif.factors.iter().map(AsRef::as_ref), list_sep);
+            }
+        }
+        // `<name>:<activity>` per requested epigenome the regulatory feature has
+        // an activity for (OutputFactory.pm:1959-1969), joined as the format
+        // joins a list; the names already carry `_` for their spaces.
+        "CELL_TYPE" => {
+            if let Some(cell_types) = tc.and_then(|x| x.cell_type.as_deref()) {
+                for (i, entry) in cell_types.iter().enumerate() {
+                    if i > 0 {
+                        out.extend_from_slice(list_sep.as_bytes());
+                    }
+                    out.extend_from_slice(entry.name.as_bytes());
+                    out.push(b':');
+                    out.extend_from_slice(entry.activity.as_str().as_bytes());
+                }
             }
         }
         "MAX_AF" => {
@@ -1636,13 +1840,361 @@ fn write_row_field_value(
                     frequency::frequency_field(column, variant, &options.frequency_groups());
                 push_joined(out, values.iter().map(String::as_str), list_sep);
             }
-            None => push_opt(
-                out,
-                tc.and_then(|x| x.plugin_data.get(field))
-                    .or_else(|| variant.plugin_data.get(field))
-                    .map(String::as_str),
-            ),
+            None => write_custom_field_value(out, field, variant, tc, list_sep),
         },
+    }
+}
+
+/// What the output headers print for one `--custom` source
+/// (`header_info->{custom_info}`, `AnnotationSource/File.pm:170`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CustomSourceInfo {
+    /// The file as the specification gave it.
+    pub file: String,
+    /// The source's key, `short_name`.
+    pub short_name: String,
+    /// The record fields the specification names, in its order.
+    pub fields: Vec<String>,
+    /// The source's records carry `FILTER` beside the named fields: a VCF
+    /// source with `fields`, unless `--custom_suppress_filter` leaves the
+    /// column out (`File/VCF.pm:219-223`). The header lists `FILTER` only when
+    /// `fields` names it.
+    pub filter_field: bool,
+    /// The statistics the specification asks for, in its order.
+    pub summary_stats: Vec<String>,
+    /// `reciprocal=1`: `PC` is the share of the variant the record covers.
+    pub reciprocal: bool,
+    /// The `Description` of each `##INFO` key of a VCF source, by key.
+    pub field_descriptions: IndexMap<String, String>,
+}
+
+/// A key a `--custom` source adds to the output and the description its header
+/// line prints.
+pub type CustomHeader = (String, String);
+
+/// The header lines of the `--custom` sources (`OutputFactory.pm`
+/// `get_custom_headers`, :2435-2503): per source its key with the file, then
+/// one line per field (`<Description>. <field> field from <file>`, the
+/// description the source's own `##INFO` line or the field's name with its
+/// first letter upper-cased; `PC` the overlap share's definition) and one per
+/// statistic (`<stat> data from <file>`). A file with a directory prints as
+/// `[PATH]/<basename>`. A key an earlier source listed takes `,<file>` onto its
+/// description in place of a second line.
+pub fn custom_headers(sources: &[CustomSourceInfo]) -> Vec<CustomHeader> {
+    let mut headers: Vec<CustomHeader> = Vec::new();
+    for source in sources {
+        let file = match source.file.rsplit_once('/') {
+            Some((_, basename)) => format!("[PATH]/{basename}"),
+            None => source.file.clone(),
+        };
+        let mut add = |key: String, description: String| match headers
+            .iter_mut()
+            .find(|(name, _)| *name == key)
+        {
+            Some((_, listed)) => {
+                listed.push(',');
+                listed.push_str(&file);
+            }
+            None => headers.push((key, description)),
+        };
+        add(source.short_name.clone(), file.clone());
+        for field in &source.fields {
+            let description = if field == "PC" {
+                format!("{} from {file}", overlap_definition(source.reciprocal))
+            } else {
+                let base = source
+                    .field_descriptions
+                    .get(field)
+                    .cloned()
+                    .unwrap_or_else(|| ucfirst(field));
+                format!("{base}. {field} field from {file}")
+            };
+            add(format!("{}_{field}", source.short_name), description);
+        }
+        for stat in &source.summary_stats {
+            add(
+                format!("{}_{stat}", source.short_name),
+                format!("{stat} data from {file}"),
+            );
+        }
+    }
+    headers
+}
+
+/// The share `PC` reports (`File.pm:552-568`): the annotation record's share
+/// covered by the variant, or the variant's share covered by the record under
+/// `reciprocal=1`. Ensembl VEP's own two texts (`AnnotationSourceAdaptor.pm:395-397`)
+/// name the opposite share, and the comparator maps them onto these.
+fn overlap_definition(reciprocal: bool) -> &'static str {
+    if reciprocal {
+        "Percentage of the input variant covered by the annotation record"
+    } else {
+        "Percentage of the annotation record covered by the input variant"
+    }
+}
+
+/// Perl's `ucfirst`: the first character upper-cased.
+fn ucfirst(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
+/// The keys of [`custom_headers`], in order: the columns the tab, VCF and
+/// Parquet formats add after the plugin columns.
+pub fn custom_field_names(sources: &[CustomSourceInfo]) -> Vec<String> {
+    custom_headers(sources)
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect()
+}
+
+/// Every key a row of the default format can carry from the `--custom`
+/// sources: the header keys and, per source whose records carry `FILTER`
+/// unlisted, `<short_name>_FILTER`.
+pub fn custom_extra_keys(sources: &[CustomSourceInfo]) -> Vec<String> {
+    let mut keys = custom_field_names(sources);
+    for source in sources.iter().filter(|source| source.filter_field) {
+        let filter = format!("{}_FILTER", source.short_name);
+        if !keys.contains(&filter) {
+            keys.push(filter);
+        }
+    }
+    keys
+}
+
+/// What a custom key asks of a source's entries on a row: the record names,
+/// a field of the records, or a statistic.
+#[derive(Clone, Copy)]
+enum CustomKey<'a> {
+    Names,
+    Field(&'a str),
+    Stat(&'a str),
+}
+
+/// A custom key resolved against one short name that opens it, and what the
+/// rest of the name asks of that name's entries.
+#[derive(Clone, Copy)]
+struct ResolvedCustomKey<'a> {
+    short_name: &'a str,
+    key: CustomKey<'a>,
+}
+
+/// One item of the list a custom key prints: a record's name under the short
+/// name, or a record's value of the field under `<short_name>_<field>`.
+enum CustomListItem<'a> {
+    Name(&'a str),
+    Value(&'a CustomFieldValue),
+}
+
+/// Whether `record` prints on the row: a record of the whole input record
+/// prints on every row (`OutputFactory.pm:1003-1014`); an `exact` VCF record,
+/// which names the allele it matched, prints on the rows of that allele
+/// (:1416-1426) and so never on a reference allele's row nor on a `--summary`
+/// or `--most_severe` row, which is the record's hash alone.
+fn custom_record_prints(
+    record: &CustomRecord,
+    variant: &InputVariant,
+    tc: Option<&TranscriptConsequence>,
+) -> bool {
+    match &record.allele {
+        None => true,
+        Some(allele) => {
+            let summary_row = tc.is_none() && variant.summary_terms.is_some();
+            !summary_row
+                && !variant.reference_allele_row
+                && allele.as_slice() == variant.alt_allele()
+        }
+    }
+}
+
+/// The row's entries under `short_name`, in source order: one per source of
+/// that name (`###CHR###` opens one per chromosome).
+fn custom_entries<'a>(
+    short_name: &'a str,
+    variant: &'a InputVariant,
+) -> impl Iterator<Item = &'a CustomAnnotations> {
+    variant
+        .custom_annotations
+        .iter()
+        .filter(move |entry| &*entry.short_name == short_name)
+}
+
+/// The statistics a short name's entries print: the last entry whose source
+/// matched a record carries them (one source per chromosome under `###CHR###`
+/// leaves every other entry unmatched), else the last entry's.
+pub(crate) fn custom_stats<'a>(
+    entries: impl Iterator<Item = &'a CustomAnnotations>,
+) -> Option<&'a CustomStats> {
+    let mut last = None;
+    let mut last_matched = None;
+    for entry in entries {
+        last = Some(entry);
+        if entry.matched {
+            last_matched = Some(entry);
+        }
+    }
+    last_matched.or(last).and_then(|entry| entry.stats.as_ref())
+}
+
+/// Resolves `field` against the row's `--custom` entries: one reading per
+/// distinct short name that is `field` or opens it before an `_`, in entry
+/// order, since `_add_custom_annotations_to_hash` keys the hash by the whole
+/// string (OutputFactory.pm:1300-1303), so `A_B` is `A_B`'s names and `A`'s
+/// field `B` alike when both sources annotate the row; none when no source's
+/// name opens the field. A statistic named like a record field wins the key
+/// (the statistics are set last, :1310-1312).
+fn resolve_custom_keys<'a>(
+    field: &'a str,
+    variant: &'a InputVariant,
+) -> impl Iterator<Item = ResolvedCustomKey<'a>> + 'a {
+    let entries = &variant.custom_annotations;
+    entries.iter().enumerate().filter_map(move |(i, entry)| {
+        if entries[..i]
+            .iter()
+            .any(|earlier| earlier.short_name == entry.short_name)
+        {
+            return None;
+        }
+        let short_name: &str = &entry.short_name;
+        let rest = field.strip_prefix(short_name)?;
+        let key = match rest.strip_prefix('_') {
+            None if rest.is_empty() => CustomKey::Names,
+            None => return None,
+            Some(name) => {
+                let is_stat = custom_entries(short_name, variant).any(|entry| {
+                    matches!(&entry.stats, Some(CustomStats::Values(values)) if values.contains_key(name))
+                });
+                if is_stat {
+                    CustomKey::Stat(name)
+                } else {
+                    CustomKey::Field(name)
+                }
+            }
+        };
+        Some(ResolvedCustomKey { short_name, key })
+    })
+}
+
+/// The statistic `name` the row prints under `short_name`: the value the
+/// name's entries carry ([`custom_stats`]) when one of them holds a record,
+/// since `_add_custom_annotations_to_hash` sets a source's statistics with its
+/// records (OutputFactory.pm:1297-1312); `None` when no entry holds a record or
+/// the statistics lack the name.
+fn custom_stat_value<'a>(
+    short_name: &'a str,
+    variant: &'a InputVariant,
+    name: &str,
+) -> Option<&'a CustomValue> {
+    if custom_entries(short_name, variant).all(|entry| entry.records.is_empty()) {
+        return None;
+    }
+    match custom_stats(custom_entries(short_name, variant))? {
+        CustomStats::Values(values) => values.get(name),
+        CustomStats::Undefined => None,
+    }
+}
+
+/// The statistic the row prints under `field`, when a reading of it names a
+/// statistic of a source with records.
+fn resolved_stat<'a>(field: &'a str, variant: &'a InputVariant) -> Option<&'a CustomValue> {
+    resolve_custom_keys(field, variant).find_map(|key| match key.key {
+        CustomKey::Stat(name) => custom_stat_value(key.short_name, variant, name),
+        _ => None,
+    })
+}
+
+/// The items of the list the row prints under `field`, one per printing record
+/// that carries what the key's reading asks of it (a record without the field,
+/// and every record under a statistic reading, adds none): the records of the
+/// whole input record first, which `VariationFeature_to_output_hash` seeds the
+/// row's hash with (OutputFactory.pm:1003-1014), then the row's allele records,
+/// which `VariationFeatureOverlapAllele_to_output_hash` pushes after them
+/// (:1416-1426); within each, the entries' own order.
+fn custom_list_items<'a>(
+    field: &'a str,
+    variant: &'a InputVariant,
+    tc: Option<&'a TranscriptConsequence>,
+) -> impl Iterator<Item = CustomListItem<'a>> + 'a {
+    let items = move |whole_record: bool| {
+        resolve_custom_keys(field, variant).flat_map(move |key| {
+            custom_entries(key.short_name, variant)
+                .flat_map(|entry| entry.records.iter())
+                .filter(move |record| {
+                    record.allele.is_none() == whole_record
+                        && custom_record_prints(record, variant, tc)
+                })
+                .filter_map(move |record| match key.key {
+                    CustomKey::Names => Some(CustomListItem::Name(record.name.as_str())),
+                    CustomKey::Field(name) => record.fields.get(name).map(CustomListItem::Value),
+                    CustomKey::Stat(_) => None,
+                })
+        })
+    };
+    items(true).chain(items(false))
+}
+
+/// Whether the row's hash holds the custom key `field` (`OutputFactory.pm:1297-1312`):
+/// a statistic of a source with records, or a name list or field list with at
+/// least one printing record.
+pub fn custom_key_present(
+    field: &str,
+    variant: &InputVariant,
+    tc: Option<&TranscriptConsequence>,
+) -> bool {
+    if variant.custom_annotations.is_empty() {
+        return false;
+    }
+    resolved_stat(field, variant).is_some()
+        || custom_list_items(field, variant, tc).next().is_some()
+}
+
+/// Appends the custom key `field`'s value for the row, nothing when the row
+/// does not carry it: the statistic as a scalar, else the printing records'
+/// names or their values of the field, `list_sep`-joined, a `FILTER` list
+/// `;`-joined inside (`Utils.pm:185-198` `convert_arrayref`).
+fn write_custom_field_value(
+    out: &mut Vec<u8>,
+    field: &str,
+    variant: &InputVariant,
+    tc: Option<&TranscriptConsequence>,
+    list_sep: &str,
+) {
+    if variant.custom_annotations.is_empty() {
+        return;
+    }
+    if let Some(value) = resolved_stat(field, variant) {
+        write_custom_value(out, value);
+        return;
+    }
+    for (i, item) in custom_list_items(field, variant, tc).enumerate() {
+        if i > 0 {
+            out.extend_from_slice(list_sep.as_bytes());
+        }
+        match item {
+            CustomListItem::Name(name) => out.extend_from_slice(name.as_bytes()),
+            CustomListItem::Value(CustomFieldValue::Text(text)) => {
+                out.extend_from_slice(text.as_bytes())
+            }
+            CustomListItem::Value(CustomFieldValue::List(items)) => {
+                push_joined(out, items.iter().map(String::as_str), ";")
+            }
+            CustomListItem::Value(CustomFieldValue::Undefined) => {}
+        }
+    }
+}
+
+/// Appends a score or statistic as the text formats print it: a text as the
+/// file carried it, a number as Perl prints one, nothing when undefined.
+fn write_custom_value(out: &mut Vec<u8>, value: &CustomValue) {
+    match value {
+        CustomValue::Text(text) => out.extend_from_slice(text.as_bytes()),
+        CustomValue::Number(number) => {
+            out.extend_from_slice(perl_number_string(*number).as_bytes())
+        }
+        CustomValue::Undefined => {}
     }
 }
 
@@ -1734,8 +2286,11 @@ pub fn colocated_field(field: &str) -> bool {
 ///
 /// `SOMATIC` and `PHENO` list one `0` or `1` per variant and are dropped when
 /// every value is `0` (:1129-1138); `PUBMED` lists every id of every variant,
-/// duplicates kept (:1126); `VAR_SYNONYMS` joins the variants' synonym strings
-/// with `--` (:1090, 1141); `CLINVAR_SOMATIC_CLASSIFICATION` is the last
+/// duplicates kept (:1126), each variant's ids split as
+/// [`ColocatedVariant::pubmed_ids`] splits them and the list dropped when no id
+/// is true (:1136-1138); `VAR_SYNONYMS` joins the variants' synonym strings
+/// with `--` (:1090, 1141), each as [`ColocatedVariant::synonyms`] reads it,
+/// so neither list prints an id the cache cut; `CLINVAR_SOMATIC_CLASSIFICATION` is the last
 /// variant's `clinical_impact` string (:1093-1095). `CLIN_SIG` under
 /// [`ClinSigAllele::PerAllele`] is the row's allele's own entries, `;`-joined
 /// across variants and `,`-joined within one, when any variant carries entries
@@ -1760,14 +2315,17 @@ fn colocated_column(
         "CLIN_SIG" => clin_sig_column(variant, &allele, &ordered, options, list_sep),
         "SOMATIC" => zero_one_list(ordered.iter().map(|cv| cv.somatic), list_sep),
         "PHENO" => zero_one_list(ordered.iter().map(|cv| cv.phenotype), list_sep),
-        "PUBMED" if options.pubmed => ordered
-            .iter()
-            .flat_map(|cv| cv.pubmed.iter().map(String::as_str))
-            .collect::<Vec<_>>()
-            .join(list_sep),
+        "PUBMED" if options.pubmed => {
+            let ids: Vec<&str> = ordered
+                .iter()
+                .filter_map(|cv| cv.pubmed_ids())
+                .flatten()
+                .collect();
+            join_unless_all_false(&ids, list_sep)
+        }
         "VAR_SYNONYMS" if options.var_synonyms => ordered
             .iter()
-            .filter_map(|cv| cv.var_synonyms.as_deref().filter(|s| perl_true(s)))
+            .filter_map(|cv| cv.synonyms().filter(|s| perl_true(s)))
             .collect::<Vec<_>>()
             .join("--"),
         "CLINVAR_SOMATIC_CLASSIFICATION" if options.clinvar_somatic_classification => ordered
@@ -1787,6 +2345,18 @@ fn colocated_on_row<'v>(variant: &'v InputVariant, allele: &str) -> Vec<&'v Colo
     let mut ordered = colocated_in_output_order(&variant.colocated_variants);
     ordered.retain(|cv| cv.applies_to_allele(allele));
     ordered
+}
+
+/// The elements joined by `list_sep`, or nothing when Perl reads every one of
+/// them as false (empty or `0`): `add_colocated_variant_info` deletes a list
+/// with no true element (OutputFactory.pm:1136-1138), so a list of `0` and
+/// empty elements alone prints no field.
+fn join_unless_all_false(elements: &[&str], list_sep: &str) -> String {
+    if elements.iter().any(|element| perl_true(element)) {
+        elements.join(list_sep)
+    } else {
+        String::new()
+    }
 }
 
 /// `0` or `1` per value joined by `list_sep`, or nothing when every value is
@@ -1872,11 +2442,11 @@ fn clin_sig_column(
             allele_entries_seen = true;
         }
         if !allele_entries_seen {
-            terms.extend(cv.clin_sig.iter().map(String::as_str));
+            terms.extend(cv.clin_sig_terms().into_iter().flatten());
         }
     }
     if by_allele.is_empty() {
-        terms.join(list_sep)
+        join_unless_all_false(&terms, list_sep)
     } else {
         by_allele.join(";")
     }
@@ -1902,11 +2472,18 @@ fn sv_overlap(variant: &InputVariant, tc: Option<&TranscriptConsequence>) -> Opt
 /// empty list, which is a value (`OutputFactory.pm:1017`), and under
 /// `--clinvar_somatic_classification` it sets `CLINVAR_SOMATIC_CLASSIFICATION`
 /// to every defined `clinical_impact` of the row's variants in turn (:1093),
-/// the empty cell of a region file included, and on a motif row it sets
+/// the empty cell of a region file included, on a motif row it sets
 /// `TRANSCRIPTION_FACTORS` to the binding matrix's factor list, empty when the
-/// matrix names none (:1920-1925); the default and tab writers print every key
-/// set (`VEP_output.pm:117`, `Tab.pm:128`). Every other empty value stands for
-/// an absent key. A `--summary` or `--most_severe` row is the
+/// matrix names none (:1920-1925), and under `--cell_type` it sets `CELL_TYPE`
+/// on every regulatory and motif row to the requested epigenomes the feature
+/// has an activity for, empty on a motif row and on a regulatory feature whose
+/// map lacks every requested one (:1879, 1927, 1959-1969); the default and tab
+/// writers print every key set (`VEP_output.pm:117`, `Tab.pm:128`), and the
+/// JSON writer keeps an empty string where it drops an undefined value
+/// (`OutputFactory/JSON.pm:327`). A plugin field's empty value is a value where
+/// [`empty_plugin_value_is_a_string`] says so and stands for Ensembl VEP's
+/// undefined value elsewhere; every other empty value stands for an absent
+/// key. A `--summary` or `--most_severe` row is the
 /// record's hash alone (`summary_only`, OutputFactory.pm:426-458) and carries
 /// the variant-level fields and nothing else, as [`write_field_value`] writes
 /// it, so only a variant-level field's empty value is written on it; `tc` is
@@ -1919,10 +2496,11 @@ pub fn empty_value_is_written(
 ) -> bool {
     let summary_row = tc.is_none() && variant.summary_terms.is_some();
     if summary_row && !is_vf_level_field(field) {
-        return false;
+        return custom_key_present(field, variant, tc);
     }
     match field {
         "TRANSCRIPTION_FACTORS" => tc.is_some_and(|row| row.motif.is_some()),
+        "CELL_TYPE" => tc.is_some_and(|row| row.cell_type.is_some()),
         "NEAREST" => variant.nearest.as_ref().is_some_and(Vec::is_empty),
         "CLINVAR_SOMATIC_CLASSIFICATION" => {
             options.clinvar_somatic_classification
@@ -1931,8 +2509,73 @@ pub fn empty_value_is_written(
                     .filter_map(|cv| cv.clinvar.as_deref())
                     .any(|clinvar| clinvar.clinical_impact.is_some())
         }
-        _ => false,
+        // A custom key the row carries prints its value however empty: an
+        // undefined `PC` or an INFO key with an empty value writes `KEY=` and
+        // an empty tab cell (`VEP_output.pm:117`, `Tab.pm:128`).
+        _ => {
+            (empty_plugin_value_is_a_string(field, variant, tc)
+                && empty_plugin_value_is_written(field, variant, tc, options))
+                || custom_key_present(field, variant, tc)
+        }
     }
+}
+
+/// Whether `field` is a plugin field the row carries with the empty value
+/// ([`plugin_value`], so a value a plugin wrote for the whole variant counts on
+/// the rows of the kinds the plugin runs on alone). Ensembl VEP's default
+/// format writes every key of a plugin's result, an undefined or empty value as
+/// `KEY=` (`VEP_output.pm:107-119`), where the tab format writes `-` for an
+/// undefined value (`Tab.pm:128`) and the JSON format drops its key
+/// (`OutputFactory/JSON.pm:327`), so the default writer alone reads this unless
+/// the empty value is a string ([`empty_plugin_value_is_a_string`]).
+pub fn empty_plugin_value_is_written(
+    field: &str,
+    variant: &InputVariant,
+    tc: Option<&TranscriptConsequence>,
+    options: &FieldOptions,
+) -> bool {
+    plugin_value(field, variant, tc, options).is_some_and(str::is_empty)
+}
+
+/// Whether the empty value of the plugin field `field` on the row `tc` is
+/// Ensembl VEP's empty string rather than its undefined value, which the tab
+/// format writes as an empty cell and the JSON format as `""` (`Tab.pm:128`,
+/// `OutputFactory/JSON.pm:327`). The GWAS plugin's eight fields are strings
+/// whatever the catalog row carries (GWAS.pm:396-404 and :506-512 at
+/// VEP_plugins release/116 default each to the empty string), and the
+/// Downstream plugin's `DownstreamProtein` is the translation cut at its first
+/// stop, empty when the stop is the first codon (Downstream.pm:139-147); the
+/// AncestralAllele plugin's `AA` is the sequence the FASTA index returns for
+/// the record's span, empty for a span wholly past the record's end
+/// (AncestralAllele.pm:136-137, :151). A plugin reading a table names the
+/// fields of a row's empty cells on the row itself
+/// ([`TranscriptConsequence::plugin_empty_strings`]), or on the variant for a
+/// value it wrote for the whole record ([`InputVariant::plugin_empty_strings`]),
+/// which prints on the intergenic row as on every other.
+pub fn empty_plugin_value_is_a_string(
+    field: &str,
+    variant: &InputVariant,
+    tc: Option<&TranscriptConsequence>,
+) -> bool {
+    field.starts_with("GWAS_")
+        || matches!(field, "DownstreamProtein" | "AA")
+        || tc.is_some_and(|row| row.plugin_empty_strings.iter().any(|key| key == field))
+        || variant.plugin_empty_strings.iter().any(|key| key == field)
+}
+
+/// The separator between the elements of a plugin's list value: the SpliceVault
+/// events column's own `|`, which `SpliceVault.pm:216` splits the column on, so
+/// no element holds one. The text formats join the list as `convert_arrayref`
+/// joins one (Utils.pm:185-197), with `,` in the default and tab formats
+/// (`VEP_output.pm:117`, `Tab.pm:128`) and `&` in the VCF (`VCF.pm:391`); the
+/// JSON writer reads its elements.
+pub const PLUGIN_LIST_SEPARATOR: char = '|';
+
+/// Whether the plugin field `field` carries a list ([`PLUGIN_LIST_SEPARATOR`]):
+/// `SpliceVault_top_events`, the `[ split(/\|/, $top_events) ]` of
+/// `SpliceVault.pm:216`.
+pub fn plugin_value_is_a_list(field: &str) -> bool {
+    field == "SpliceVault_top_events"
 }
 
 /// Whether a `-` value is a value of the field rather than an absent key, for
@@ -1945,18 +2588,25 @@ pub fn dash_is_a_value(field: &str) -> bool {
 
 /// The keys of a row's `Extra` column in VEP's order: the active flag fields
 /// first, then every other key the row carries (the structural variant overlap
-/// fields and plugin keys), alphabetically.
+/// fields, `BAM_EDIT` on a transcript carrying an edit status, and plugin keys),
+/// alphabetically. The custom keys join through [`extra_keys_with`] alone, since
+/// the JSON format, which reads this, writes them at the record level.
 pub fn extra_keys<'a>(
     variant: &'a InputVariant,
     tc: Option<&'a TranscriptConsequence>,
     options: &FieldOptions,
 ) -> Vec<&'a str> {
-    extra_keys_with(&flag_fields(options), variant, tc, options)
+    extra_keys_with(&flag_fields(options), &[], variant, tc, options)
 }
 
-/// [`extra_keys`] given the configuration's [`flag_fields`] already computed.
+/// [`extra_keys`] given the configuration's [`flag_fields`] and its
+/// [`custom_extra_keys`] already computed: the custom keys the row carries
+/// ([`custom_key_present`]) sort among the other keys (`VEP_output.pm:121-130`).
+/// A plugin key named as one of the thirteen columns prints in that column
+/// alone (`VEP_output.pm:106-109`; [`plugin_names_a_fixed_column`]).
 pub fn extra_keys_with<'a>(
     flagged: &[&'static str],
+    custom_keys: &'a [String],
     variant: &'a InputVariant,
     tc: Option<&'a TranscriptConsequence>,
     options: &FieldOptions,
@@ -1967,20 +2617,92 @@ pub fn extra_keys_with<'a>(
         extra.insert("OverlapBP");
         extra.insert("OverlapPC");
     }
+    if !options.bam_edited && tc.is_some_and(|x| x.bam_edit_status.is_some()) {
+        extra.insert("BAM_EDIT");
+    }
+    let is_extra = |k: &str| !flagged.contains(&k) && !DEFAULT_OUTPUT_COLS.contains(&k);
+    let kind = RowKind::of_row(tc.map(|x| x.feature_type));
     for k in variant.plugin_data.keys() {
-        if !flagged.contains(&k.as_str()) {
+        if is_extra(k) && variant_plugin_value_prints_on(k, variant, kind, options) {
             extra.insert(k.as_str());
         }
     }
     if let Some(tc) = tc {
         for k in tc.plugin_data.keys() {
-            if !flagged.contains(&k.as_str()) {
+            if is_extra(k) {
+                extra.insert(k.as_str());
+            }
+        }
+    }
+    if !variant.custom_annotations.is_empty() {
+        for k in custom_keys {
+            if !flagged.contains(&k.as_str()) && custom_key_present(k, variant, tc) {
                 extra.insert(k.as_str());
             }
         }
     }
     keys.extend(extra);
     keys
+}
+
+/// Whether a plugin wrote a key named as one of the thirteen columns on the row
+/// or its variant, so the row's columns come from the field table, which prints
+/// the plugin's value (`VEP_output.pm:103-104` reads the line hash after
+/// `run_plugins` filled it), rather than from a writer's own reads of the
+/// annotation.
+pub fn plugin_names_a_fixed_column(
+    variant: &InputVariant,
+    tc: Option<&TranscriptConsequence>,
+) -> bool {
+    let names_one = |data: &IndexMap<String, String>| {
+        !data.is_empty() && DEFAULT_OUTPUT_COLS.iter().any(|c| data.contains_key(*c))
+    };
+    names_one(&variant.plugin_data) || tc.is_some_and(|x| names_one(&x.plugin_data))
+}
+
+/// A plugin field's value on a row: the value the plugin wrote on the row, else
+/// the value it wrote for the whole variant where that value prints on the row's
+/// kind ([`variant_plugin_value_prints_on`]). A `--summary` or `--most_severe`
+/// row is the record's hash alone (`summary_only`, OutputFactory.pm:426-458),
+/// which no plugin runs on, so it carries none.
+pub(crate) fn plugin_value<'a>(
+    field: &str,
+    variant: &'a InputVariant,
+    tc: Option<&'a TranscriptConsequence>,
+    options: &FieldOptions,
+) -> Option<&'a str> {
+    if let Some(row_value) = tc.and_then(|x| x.plugin_data.get(field)) {
+        return Some(row_value.as_str());
+    }
+    if tc.is_none() && variant.summary_terms.is_some() {
+        return None;
+    }
+    let variant_value = variant.plugin_data.get(field)?;
+    let kind = RowKind::of_row(tc.map(|x| x.feature_type));
+    variant_plugin_value_prints_on(field, variant, kind, options).then_some(variant_value.as_str())
+}
+
+/// Whether a value a plugin wrote for the whole variant prints on a row of
+/// `kind`: on the rows of the kinds the plugin runs on
+/// ([`FieldOptions::plugin_row_kinds`]), and for a field a shared-library
+/// plugin wrote on the intergenic row ([`InputVariant::intergenic_row_plugin_keys`]),
+/// on that row alone.
+fn variant_plugin_value_prints_on(
+    field: &str,
+    variant: &InputVariant,
+    kind: RowKind,
+    options: &FieldOptions,
+) -> bool {
+    let plugin_runs_on_kind = options
+        .plugin_row_kinds
+        .get(field)
+        .is_none_or(|kinds| kinds.contains(&kind));
+    plugin_runs_on_kind
+        && (kind == RowKind::Intergenic
+            || !variant
+                .intergenic_row_plugin_keys
+                .iter()
+                .any(|key| key == field))
 }
 
 /// A field a loaded plugin adds to the output: its name and the description the
@@ -1996,13 +2718,18 @@ pub fn plugin_field_names(plugin_headers: &[PluginHeader]) -> Vec<String> {
 }
 
 /// The description a header prints for a column: the field table's, else the
-/// plugin's own, else `?` for a name nothing produces (`OutputFactory/Tab.pm`
-/// `description_headers`).
-fn column_description<'a>(column: &str, plugin_headers: &'a [PluginHeader]) -> &'a str {
+/// plugin's or custom source's own, else `?` for a name nothing produces
+/// (`OutputFactory/Tab.pm` `description_headers`).
+fn column_description<'a>(
+    column: &str,
+    plugin_headers: &'a [PluginHeader],
+    custom_headers: &'a [CustomHeader],
+) -> &'a str {
     field_description(column)
         .or_else(|| {
             plugin_headers
                 .iter()
+                .chain(custom_headers)
                 .find(|(name, _)| name == column)
                 .map(|(_, description)| description.as_str())
         })
@@ -2011,8 +2738,8 @@ fn column_description<'a>(column: &str, plugin_headers: &'a [PluginHeader]) -> &
 
 /// The header lines of the default format, in VEP's order, ending with the
 /// column line: the flag fields' keys, then one `## <KEY> : <description>` line
-/// per plugin field (`OutputFactory/VEP_output.pm` `description_headers`).
-/// `--no_headers` callers write none of them.
+/// per plugin field and per custom key (`OutputFactory/VEP_output.pm`
+/// `description_headers`, :167). `--no_headers` callers write none of them.
 pub fn default_format_header(
     options: &FieldOptions,
     plugin_headers: &[PluginHeader],
@@ -2037,7 +2764,10 @@ pub fn default_format_header(
             field_description(key).unwrap_or("?")
         ));
     }
-    for (name, description) in plugin_headers {
+    for (name, description) in plugin_headers
+        .iter()
+        .chain(&custom_headers(&options.custom_sources))
+    {
         lines.push(format!("## {name} : {description}"));
     }
     lines.push(format!("## VEP command-line: {}", command_line));
@@ -2045,9 +2775,9 @@ pub fn default_format_header(
     lines
 }
 
-/// The header lines of the tab format: every column, flag and plugin fields
-/// included, gets a description line, and the column line names them all.
-/// `selected_fields` is the `--fields` list, which replaces the columns.
+/// The header lines of the tab format: every column, flag, plugin and custom
+/// fields included, gets a description line, and the column line names them
+/// all. `selected_fields` is the `--fields` list, which replaces the columns.
 pub fn tab_header(
     options: &FieldOptions,
     plugin_headers: &[PluginHeader],
@@ -2061,13 +2791,14 @@ pub fn tab_header(
         &plugin_field_names(plugin_headers),
         selected_fields,
     );
+    let custom_headers = custom_headers(&options.custom_sources);
     let mut lines = common_header_prefix(cache_dir, cache_info);
     lines.push("## Column descriptions:".to_string());
     for col in &cols {
         lines.push(format!(
             "## {} : {}",
             col,
-            column_description(col, plugin_headers)
+            column_description(col, plugin_headers, &custom_headers)
         ));
     }
     lines.push(format!("## VEP command-line: {}", command_line));
@@ -2076,8 +2807,9 @@ pub fn tab_header(
 }
 
 /// The tab format's columns: the thirteen defaults, the flag fields, then plugin
-/// fields; or, under `--fields`, that list in its own order and nothing else
-/// (`OutputFactory/Tab.pm` `fields`, where the flag's value pre-empts the list).
+/// fields, then the custom keys; or, under `--fields`, that list in its own
+/// order and nothing else (`OutputFactory/Tab.pm` `fields`, :192-196, where the
+/// flag's value pre-empts the list).
 pub fn tab_columns(
     options: &FieldOptions,
     plugin_fields: &[String],
@@ -2088,7 +2820,10 @@ pub fn tab_columns(
     }
     let mut cols: Vec<String> = DEFAULT_OUTPUT_COLS.iter().map(|s| s.to_string()).collect();
     cols.extend(flag_fields(options).into_iter().map(String::from));
-    for p in plugin_fields {
+    for p in plugin_fields
+        .iter()
+        .chain(&custom_field_names(&options.custom_sources))
+    {
         if !cols.iter().any(|c| c == p) {
             cols.push(p.clone());
         }
@@ -2156,6 +2891,12 @@ fn timestamp() -> String {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
+    utc_timestamp(secs)
+}
+
+/// `secs` since the Unix epoch as `YYYY-MM-DD HH:MM:SS` in UTC, the form of the
+/// `## Output produced at` header line and of the run statistics' time rows.
+pub fn utc_timestamp(secs: u64) -> String {
     // Civil date from days since the epoch (proleptic Gregorian), UTC.
     let days = (secs / 86_400) as i64;
     let rem = secs % 86_400;
@@ -2181,14 +2922,30 @@ pub(crate) mod fixtures {
     use super::*;
     use std::sync::Arc;
 
-    use vep_core::consequence::Impact;
+    use vep_core::consequence::{Impact, SourceCache};
     use vep_core::spdi::{SiblingSpdi, VrsAllele};
+    use vep_core::transcript::Transcript;
     use vep_core::variant::{MatchedAllele, SampleZygosity, Zygosity, ZygosityList};
     use vep_core::variation::ClinVarDetail;
 
+    /// Edits the transcript a test row reads, in place: the row's own copy
+    /// where the transcript is shared, an empty transcript where the row has
+    /// none.
+    pub(crate) fn edit_transcript(
+        tc: &mut TranscriptConsequence,
+        edit: impl FnOnce(&mut Transcript),
+    ) {
+        let transcript = tc
+            .transcript
+            .get_or_insert_with(|| Arc::new(Transcript::default()));
+        edit(Arc::make_mut(transcript));
+    }
+
     /// Every column name the formats can ask for: the fixed thirteen, every
-    /// flag field of every group, the overlap pair, a plugin key held on the
-    /// consequence and one held on the variant, and a name nothing produces.
+    /// flag field of every group, the overlap pair, a plugin key and the plugin
+    /// list key held on the consequence and a plugin key held on the variant,
+    /// the keys of the custom source [`all_options`] carries, and a name nothing
+    /// produces.
     pub(crate) fn every_column() -> Vec<&'static str> {
         let mut columns: Vec<&'static str> = DEFAULT_OUTPUT_COLS.to_vec();
         for group in FLAG_FIELD_GROUPS {
@@ -2198,7 +2955,15 @@ pub(crate) mod fixtures {
                 }
             }
         }
-        for c in ["ZPlugin", "VPlugin", "Unknown"] {
+        for c in [
+            "ZPlugin",
+            "SpliceVault_top_events",
+            "VPlugin",
+            "ClinVar",
+            "ClinVar_CLNSIG",
+            "ClinVar_CLNREVSTAT",
+            "Unknown",
+        ] {
             if !columns.contains(&c) {
                 columns.push(c);
             }
@@ -2206,19 +2971,62 @@ pub(crate) mod fixtures {
         columns
     }
 
+    /// An empty transcript carrying `id` as its stable id.
+    pub(crate) fn with_stable_id(id: &str) -> Transcript {
+        Transcript {
+            stable_id: Arc::from(id),
+            ..Transcript::default()
+        }
+    }
+
+    /// An empty transcript whose attributes carry `codes` as `rseq` match codes.
+    pub(crate) fn with_rseq_codes(codes: &[&str]) -> Transcript {
+        Transcript {
+            attributes: codes
+                .iter()
+                .map(|code| vep_core::transcript::Attribute {
+                    code: Arc::from(*code),
+                    value: String::new(),
+                })
+                .collect(),
+            ..Transcript::default()
+        }
+    }
+
     /// A consequence with a value in every transcript-side field: both id
     /// versions, positions with totals and an own span, an upstream term beside
-    /// the coding ones so `DISTANCE` prints, `=` twice in HGVSp, a `PICK` flag
-    /// between two `cds_` ones, accession lists with a trailing comma, a domain
-    /// without a label, one without an identifier and one with neither, and a
-    /// plugin key.
+    /// the coding ones so `DISTANCE` prints, `=` twice in HGVSp, a picked row
+    /// with two `cds_` flags, accession lists with a trailing comma, a domain
+    /// without a label, one without an identifier and one with neither, a
+    /// plugin key, and the plugin list key with a `,` inside an element.
     pub(crate) fn populated_consequence() -> TranscriptConsequence {
         let mut tc = TranscriptConsequence {
-            transcript_id: Arc::from("ENST00000300"),
-            gene_id: Arc::from("ENSG00000100"),
-            gene_symbol: Some(Arc::from("SOD1")),
-            gene_symbol_source: Some(Arc::from("HGNC")),
-            hgnc_id: Some(Arc::from("HGNC:11179")),
+            transcript: Some(Arc::new(Transcript {
+                stable_id: Arc::from("ENST00000300"),
+                gene_stable_id: Arc::from("ENSG00000100"),
+                gene_symbol: Some(Arc::from("SOD1")),
+                gene_symbol_source: Some(Arc::from("HGNC")),
+                hgnc_id: Some(Arc::from("HGNC:11179")),
+                biotype: Arc::from("protein_coding"),
+                protein_id: Some(Arc::from("ENSP00000300")),
+                flags: Arc::from(["cds_start_NF".to_string(), "cds_end_NF".to_string()]),
+                tsl: Some("1".to_string()),
+                mane_select: Some("NM_000454.5".to_string()),
+                mane_plus_clinical: Some("NM_000454.4".to_string()),
+                appris: Some("principal1".to_string()),
+                ccds: Some("CCDS33536.1".to_string()),
+                gencode_primary: true,
+                swissprot: Some("P00441,Q9".to_string()),
+                trembl: Some("A0A0,".to_string()),
+                uniparc: Some("UPI000012A3C5".to_string()),
+                uniprot_isoform: Some("P00441-1".to_string()),
+                refseq: Some("NM_000454.5,NM_000454.4".to_string()),
+                version: Some(4),
+                gene_version: Some(12),
+                gene_phenotype: Some(1),
+                source_cache: Some(SourceCache::RefSeq),
+                ..with_rseq_codes(&["rseq_mrna_match", "rseq_5p_mismatch"])
+            })),
             consequences: [
                 Consequence::MissenseVariant,
                 Consequence::SpliceRegionVariant,
@@ -2227,8 +3035,8 @@ pub(crate) mod fixtures {
             .into_iter()
             .collect(),
             impact: Impact::MODERATE,
-            biotype: Some(Arc::from("protein_coding")),
             canonical: true,
+            picked: true,
             cdna_position: Some("428".to_string()),
             cds_position: Some("301".to_string()),
             protein_position: Some("101".to_string()),
@@ -2242,7 +3050,6 @@ pub(crate) mod fixtures {
             })),
             amino_acids: Some("A/V".to_string()),
             codons: Some("gCc/gTc".to_string()),
-            protein_id: Some(Arc::from("ENSP00000300")),
             distance: Some(2_500),
             strand: -1,
             exon: Some("3/5".to_string()),
@@ -2261,26 +3068,9 @@ pub(crate) mod fixtures {
                 ("Low_complexity_(Seg)".to_string(), "0".to_string()),
                 (String::new(), "0".to_string()),
             ],
-            flags: Arc::from([
-                "cds_start_NF".to_string(),
-                "PICK".to_string(),
-                "cds_end_NF".to_string(),
-            ]),
-            tsl: Some(1),
-            mane_select: Some("NM_000454.5".to_string()),
-            mane_plus_clinical: Some("NM_000454.4".to_string()),
-            appris: Some("principal1".to_string()),
-            ccds: Some("CCDS33536.1".to_string()),
-            gencode_primary: true,
-            swissprot: Some("P00441,Q9".to_string()),
-            trembl: Some("A0A0,".to_string()),
-            uniparc: Some("UPI000012A3C5".to_string()),
-            uniprot_isoform: Some("P00441-1".to_string()),
-            refseq: Some("NM_000454.5,NM_000454.4".to_string()),
-            transcript_version: Some(4),
-            gene_version: Some(12),
-            gene_phenotype: true,
             mirna: vec!["miRNA_stem".to_string(), "miRNA_loop".to_string()],
+            bam_edit_status: Some(vep_core::transcript::BamEditStatus::Ok),
+            refseq_offset: Some(-3),
             feature_start: 1_000,
             feature_end: 2_000,
             id_rank: 3,
@@ -2288,6 +3078,11 @@ pub(crate) mod fixtures {
         };
         tc.plugin_data
             .insert("ZPlugin".to_string(), "a=b;c".to_string());
+        // A made-up SpliceVault_top_events cell: two events, the second with a comma inside its percent.
+        tc.plugin_data.insert(
+            "SpliceVault_top_events".to_string(),
+            "Top1:CD:-35:31%:Frameshift|Top2:CA:+112:1,5%:inFrame".to_string(),
+        );
         tc
     }
 
@@ -2314,10 +3109,10 @@ pub(crate) mod fixtures {
             id: id.to_string(),
             allele_string: Some("A/G/T".to_string()),
             strand: 1,
-            clin_sig: vec!["pathogenic".to_string(), "likely_pathogenic".to_string()],
+            clin_sig: Some("pathogenic,likely_pathogenic".to_string()),
             somatic: id.starts_with("COS"),
             phenotype: true,
-            pubmed: vec!["123".to_string(), "456".to_string()],
+            pubmed: Some("123,456".to_string()),
             matched_alleles: matched
                 .iter()
                 .enumerate()
@@ -2392,6 +3187,7 @@ pub(crate) mod fixtures {
         v.most_severe_consequence = Some(Consequence::MissenseVariant);
         v.plugin_data
             .insert("VPlugin".to_string(), "x;y".to_string());
+        v.custom_annotations = vec![clinvar_annotations(b"G")];
         v.colocated_variants = vec![
             known(
                 "rs1",
@@ -2422,8 +3218,9 @@ pub(crate) mod fixtures {
         v
     }
 
-    /// Every field group on, every version and total shown, the display
-    /// vocabulary off; every field listed so a new option fails here first.
+    /// Every field group on but `af_gnomad` (the same fields as `af_gnomade`), every
+    /// version and total shown, the display vocabulary off; every field listed so a
+    /// new option fails here first.
     pub(crate) fn all_options() -> FieldOptions {
         FieldOptions {
             individual: true,
@@ -2473,11 +3270,16 @@ pub(crate) mod fixtures {
             overlaps: true,
             nearest: true,
             shift_length: true,
+            refseq: true,
+            merged: true,
             use_transcript_ref: true,
+            bam_edited: true,
+            custom_sources: vec![clinvar_source()],
             shift_3prime: true,
             shift_genomic: true,
             var_synonyms: true,
             regulatory: true,
+            cell_type: true,
             transcript_version: true,
             gene_version: true,
             ambiguity: true,
@@ -2486,6 +3288,104 @@ pub(crate) mod fixtures {
             total_length: true,
             positions_of_own_span: false,
             clin_sig_allele: ClinSigAllele::PerAllele,
+            plugin_row_kinds: Arc::default(),
+            plugin_fields: Arc::default(),
+            unflagged_plugin_fields: Arc::default(),
+        }
+    }
+
+    /// A ClinVar-shaped VCF source under a directory, asking for two INFO
+    /// fields, one of which the file's header describes.
+    pub(crate) fn clinvar_source() -> CustomSourceInfo {
+        CustomSourceInfo {
+            file: "/data/custom.vcf.gz".to_string(),
+            short_name: "ClinVar".to_string(),
+            fields: vec!["CLNSIG".to_string(), "CLNREVSTAT".to_string()],
+            filter_field: true,
+            summary_stats: Vec::new(),
+            reciprocal: false,
+            field_descriptions: IndexMap::from([(
+                "CLNSIG".to_string(),
+                "Clinical significance".to_string(),
+            )]),
+        }
+    }
+
+    /// A bigWig source asking for `PC` and two statistics under `reciprocal=1`.
+    pub(crate) fn conservation_source() -> CustomSourceInfo {
+        CustomSourceInfo {
+            file: "/data/cons.bw".to_string(),
+            short_name: "cons".to_string(),
+            fields: vec!["PC".to_string()],
+            filter_field: false,
+            summary_stats: vec!["min".to_string(), "count".to_string()],
+            reciprocal: true,
+            field_descriptions: IndexMap::new(),
+        }
+    }
+
+    /// One `exact` ClinVar record on allele `allele` and one record of the whole
+    /// input record, both carrying `CLNSIG`; the first also carries a split
+    /// `FILTER`, the second `CLNREVSTAT`.
+    pub(crate) fn clinvar_annotations(allele: &[u8]) -> CustomAnnotations {
+        CustomAnnotations {
+            short_name: Arc::from("ClinVar"),
+            records: vec![
+                CustomRecord {
+                    name: "rs1".to_string(),
+                    allele: Some(allele.to_vec()),
+                    fields: IndexMap::from([
+                        (
+                            "CLNSIG".to_string(),
+                            CustomFieldValue::Text("Pathogenic".to_string()),
+                        ),
+                        (
+                            "FILTER".to_string(),
+                            CustomFieldValue::List(vec!["q10".to_string(), "s50".to_string()]),
+                        ),
+                    ]),
+                    score: None,
+                },
+                CustomRecord {
+                    name: "21:100-100".to_string(),
+                    allele: None,
+                    fields: IndexMap::from([
+                        (
+                            "CLNSIG".to_string(),
+                            CustomFieldValue::Text("Benign".to_string()),
+                        ),
+                        (
+                            "CLNREVSTAT".to_string(),
+                            CustomFieldValue::Text("criteria_provided".to_string()),
+                        ),
+                    ]),
+                    score: None,
+                },
+            ],
+            matched: true,
+            stats: None,
+        }
+    }
+
+    /// A conservation source's entry: one record with a score of 0, which `min`
+    /// keeps, and a `count` of 1.
+    pub(crate) fn conservation_annotations() -> CustomAnnotations {
+        CustomAnnotations {
+            short_name: Arc::from("cons"),
+            records: vec![CustomRecord {
+                name: "0".to_string(),
+                allele: None,
+                fields: IndexMap::from([(
+                    "PC".to_string(),
+                    CustomFieldValue::Text("100.000".to_string()),
+                )]),
+                score: Some(CustomValue::Text("0".to_string())),
+            }],
+            matched: true,
+            stats: Some(CustomStats::Values(IndexMap::from([
+                ("min".to_string(), CustomValue::Text("0".to_string())),
+                ("count".to_string(), CustomValue::Number(1.0)),
+            ]))),
         }
     }
 }
@@ -2494,6 +3394,8 @@ mod tests {
     use super::fixtures::*;
     use super::*;
     use std::sync::Arc;
+    use vep_core::consequence::SourceCache;
+    use vep_core::transcript::Transcript;
     use vep_core::variant::{MatchedAllele, SampleZygosity, Zygosity, ZygosityList};
     use vep_core::variation::ClinVarDetail;
 
@@ -2593,13 +3495,97 @@ mod tests {
                 _ if is_vf_level_field(field) => {
                     string_row_field_value(field, variant, None, options, list_sep)
                 }
-                _ => String::new(),
+                _ => string_custom_value(field, variant, None, list_sep).unwrap_or_default(),
             };
         }
         string_row_field_value(field, variant, tc, options, list_sep)
     }
 
-    /// [`string_field_value`] of a row against a feature or an allele's intergenic row.
+    /// A custom key's value as `_add_custom_annotations_to_hash` builds the hash
+    /// (OutputFactory.pm:1297-1312) over the records the row prints, under every
+    /// short name that opens the key: a statistic of a source with records, else
+    /// the names under the short name or a field's values under
+    /// `<short_name>_<field>`, the whole input record's records before the row's
+    /// allele records; `None` when the hash lacks the key.
+    fn string_custom_value(
+        field: &str,
+        variant: &InputVariant,
+        tc: Option<&TranscriptConsequence>,
+        list_sep: &str,
+    ) -> Option<String> {
+        let summary_row = tc.is_none() && variant.summary_terms.is_some();
+        let prints = |record: &&CustomRecord| match &record.allele {
+            None => true,
+            Some(allele) => {
+                !summary_row
+                    && !variant.reference_allele_row
+                    && allele.as_slice() == variant.alt_allele()
+            }
+        };
+        let text = |value: &CustomValue| match value {
+            CustomValue::Text(text) => text.clone(),
+            CustomValue::Number(number) => perl_number_string(*number),
+            CustomValue::Undefined => String::new(),
+        };
+        let mut short_names: Vec<&str> = Vec::new();
+        for entry in &variant.custom_annotations {
+            let short_name: &str = &entry.short_name;
+            let opens = field
+                .strip_prefix(short_name)
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('_'));
+            if opens && !short_names.contains(&short_name) {
+                short_names.push(short_name);
+            }
+        }
+        let rest_of = |short_name: &str| {
+            field
+                .strip_prefix(short_name)
+                .and_then(|rest| rest.strip_prefix('_'))
+        };
+        for short_name in &short_names {
+            let Some(name) = rest_of(short_name) else {
+                continue;
+            };
+            if custom_entries(short_name, variant).all(|entry| entry.records.is_empty()) {
+                continue;
+            }
+            if let Some(CustomStats::Values(values)) =
+                custom_stats(custom_entries(short_name, variant))
+            {
+                if let Some(value) = values.get(name) {
+                    return Some(text(value));
+                }
+            }
+        }
+        let mut values: Vec<String> = Vec::new();
+        for whole_record in [true, false] {
+            for short_name in &short_names {
+                let records = custom_entries(short_name, variant)
+                    .flat_map(|entry| entry.records.iter())
+                    .filter(|record| record.allele.is_none() == whole_record)
+                    .filter(prints);
+                for record in records {
+                    match rest_of(short_name) {
+                        None => values.push(record.name.clone()),
+                        Some(name) => {
+                            if let Some(value) = record.fields.get(name) {
+                                values.push(match value {
+                                    CustomFieldValue::Text(text) => text.clone(),
+                                    CustomFieldValue::List(items) => items.join(";"),
+                                    CustomFieldValue::Undefined => String::new(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        (!values.is_empty()).then(|| values.join(list_sep))
+    }
+
+    /// [`string_field_value`] of a row against a feature or an allele's intergenic
+    /// row: a plugin's value first (a list value joined by `list_sep`), nothing
+    /// for a plugin-declared core field whose flag is off, else the table.
     fn string_row_field_value(
         field: &str,
         variant: &InputVariant,
@@ -2607,6 +3593,19 @@ mod tests {
         options: &FieldOptions,
         list_sep: &str,
     ) -> String {
+        if let Some(value) = plugin_value(field, variant, tc, options) {
+            return if plugin_value_is_a_list(field) {
+                value
+                    .split(PLUGIN_LIST_SEPARATOR)
+                    .collect::<Vec<_>>()
+                    .join(list_sep)
+            } else {
+                value.to_string()
+            };
+        }
+        if options.unflagged_plugin_fields.iter().any(|f| f == field) {
+            return String::new();
+        }
         match field {
             "Uploaded_variation" => variant.uploaded_variation(),
             "Location" => match genomic_shift(variant, tc, options) {
@@ -2640,16 +3639,16 @@ mod tests {
                     .impact()
                     .to_string(),
             },
-            "SYMBOL" => string_identifier(tc.and_then(|x| x.gene_symbol.as_deref())),
+            "SYMBOL" => string_identifier(tc.and_then(|x| x.gene_symbol())),
             "Gene" => tc
-                .map(|x| string_versioned_id(&x.gene_id, x.gene_version, options.gene_version))
+                .map(|x| string_versioned_id(x.gene_id(), x.gene_version(), options.gene_version))
                 .unwrap_or_default(),
             "Feature_type" => tc.map(|x| x.feature_type.to_string()).unwrap_or_default(),
             "Feature" => tc
                 .map(|x| {
                     string_versioned_id(
-                        &x.transcript_id,
-                        x.transcript_version,
+                        x.transcript_id(),
+                        x.transcript_version(),
                         options.transcript_version,
                     )
                 })
@@ -2662,10 +3661,7 @@ mod tests {
             {
                 String::new()
             }
-            "BIOTYPE" => tc
-                .and_then(|x| x.biotype.as_deref())
-                .unwrap_or("")
-                .to_string(),
+            "BIOTYPE" => tc.and_then(|x| x.biotype()).unwrap_or("").to_string(),
             "EXON" => tc.and_then(|x| x.exon.clone()).unwrap_or_default(),
             "INTRON" => tc.and_then(|x| x.intron.clone()).unwrap_or_default(),
             "HGVSc" if !options.hgvs => String::new(),
@@ -2762,7 +3758,7 @@ mod tests {
             "STRAND" => tc.map(|x| x.strand.to_string()).unwrap_or_default(),
             "FLAGS" => tc
                 .map(|x| {
-                    x.flags
+                    x.flags()
                         .iter()
                         .filter(|f| f.starts_with("cds_"))
                         .cloned()
@@ -2773,9 +3769,7 @@ mod tests {
             "PICK" => {
                 // An intergenic allele is flagged like a transcript allele
                 // (`VariationFeatureOverlapAllele_to_output_hash`, OutputFactory.pm:1363).
-                let picked = tc.map_or(variant.intergenic_pick, |x| {
-                    x.flags.iter().any(|f| f == "PICK")
-                });
+                let picked = tc.map_or(variant.intergenic_pick, |x| x.picked);
                 if options.include_pick && picked {
                     "1".to_string()
                 } else {
@@ -2794,8 +3788,8 @@ mod tests {
                     String::new()
                 }
             }
-            "SYMBOL_SOURCE" => string_identifier(tc.and_then(|x| x.gene_symbol_source.as_deref())),
-            "HGNC_ID" => string_identifier(tc.and_then(|x| x.hgnc_id.as_deref())),
+            "SYMBOL_SOURCE" => string_identifier(tc.and_then(|x| x.gene_symbol_source())),
+            "HGNC_ID" => string_identifier(tc.and_then(|x| x.hgnc_id())),
             "CANONICAL" => {
                 if tc.map(|x| x.canonical).unwrap_or(false) {
                     "YES".to_string()
@@ -2808,30 +3802,29 @@ mod tests {
             // lists `MANE_Plus_Clinical`.
             "MANE" => {
                 let mut sets = Vec::new();
-                if options.mane_select && tc.is_some_and(|x| x.mane_select.is_some()) {
+                if options.mane_select && tc.is_some_and(|x| x.mane_select().is_some()) {
                     sets.push("MANE_Select");
                 }
-                if options.mane_plus_clinical && tc.is_some_and(|x| x.mane_plus_clinical.is_some())
+                if options.mane_plus_clinical
+                    && tc.is_some_and(|x| x.mane_plus_clinical().is_some())
                 {
                     sets.push("MANE_Plus_Clinical");
                 }
                 sets.join(list_sep)
             }
             "MANE_SELECT" => tc
-                .and_then(|x| x.mane_select.as_deref())
+                .and_then(|x| x.mane_select())
                 .filter(|v| perl_true(v))
                 .unwrap_or("")
                 .to_string(),
             "MANE_PLUS_CLINICAL" => tc
-                .and_then(|x| x.mane_plus_clinical.as_deref())
+                .and_then(|x| x.mane_plus_clinical())
                 .filter(|v| perl_true(v))
                 .unwrap_or("")
                 .to_string(),
-            "TSL" => tc
-                .and_then(|x| x.tsl.map(|t| t.to_string()))
-                .unwrap_or_default(),
+            "TSL" => tc.and_then(|x| x.tsl()).unwrap_or("").to_string(),
             "GENCODE_PRIMARY" => {
-                if tc.is_some_and(|x| x.gencode_primary) {
+                if tc.is_some_and(|x| x.gencode_primary()) {
                     "1".to_string()
                 } else {
                     String::new()
@@ -2840,22 +3833,20 @@ mod tests {
             // `s/principal/P/; s/alternative/A/` (OutputFactory.pm:1616-1622): one
             // substitution each, the rest of the value kept, so `principalM` is `PM`.
             "APPRIS" => tc
-                .and_then(|x| x.appris.as_deref())
+                .and_then(|x| x.appris())
                 .filter(|v| perl_true(v))
                 .map(|v| {
                     v.replacen("principal", "P", 1)
                         .replacen("alternative", "A", 1)
                 })
                 .unwrap_or_default(),
-            "CCDS" => string_identifier(tc.and_then(|x| x.ccds.as_deref())),
-            "ENSP" => string_identifier(tc.and_then(|x| x.protein_id.as_deref())),
-            "SWISSPROT" => {
-                string_identifier_list(tc.and_then(|x| x.swissprot.as_deref()), list_sep)
-            }
-            "TREMBL" => string_identifier_list(tc.and_then(|x| x.trembl.as_deref()), list_sep),
-            "UNIPARC" => string_identifier_list(tc.and_then(|x| x.uniparc.as_deref()), list_sep),
+            "CCDS" => string_identifier(tc.and_then(|x| x.ccds())),
+            "ENSP" => string_identifier(tc.and_then(|x| x.protein_id()).as_deref()),
+            "SWISSPROT" => string_identifier_list(tc.and_then(|x| x.swissprot()), list_sep),
+            "TREMBL" => string_identifier_list(tc.and_then(|x| x.trembl()), list_sep),
+            "UNIPARC" => string_identifier_list(tc.and_then(|x| x.uniparc()), list_sep),
             "UNIPROT_ISOFORM" => {
-                string_identifier_list(tc.and_then(|x| x.uniprot_isoform.as_deref()), list_sep)
+                string_identifier_list(tc.and_then(|x| x.uniprot_isoform()), list_sep)
             }
             "HGVSg" => variant.hgvsg.clone().unwrap_or_default(),
             "NEAREST" => variant
@@ -2876,9 +3867,9 @@ mod tests {
                     String::new()
                 }
             }
-            "RefSeq" => string_identifier_list(tc.and_then(|x| x.refseq.as_deref()), list_sep),
+            "RefSeq" => string_identifier_list(tc.and_then(|x| x.refseq()), list_sep),
             "GENE_PHENO" => {
-                if tc.is_some_and(|x| x.gene_phenotype) {
+                if tc.is_some_and(|x| x.gene_phenotype()) {
                     "1".to_string()
                 } else {
                     String::new()
@@ -2907,12 +3898,13 @@ mod tests {
                 .unwrap_or_default(),
             // Set on every sequence variant's transcript row, 0 included, when both
             // flags are on (`TranscriptVariationAllele_to_output_hash`,
-            // OutputFactory.pm:1690-1696); an intergenic row carries none, and a
-            // structural record's rows none (`TranscriptStructuralVariationAllele_to_output_hash`,
-            // :2118-2125, sets no such key).
-            "SHIFT_LENGTH" if options.shift_3prime && !variant.is_structural => {
-                tc.map(|x| x.shift_length.to_string()).unwrap_or_default()
-            }
+            // OutputFactory.pm:1690-1696), the one output hash that sets the key:
+            // an intergenic, regulatory or motif row carries none (:1867-1884,
+            // :1900-1943), and a structural record's rows none (:2118-2125).
+            "SHIFT_LENGTH" if options.shift_3prime && !variant.is_structural => tc
+                .filter(|x| x.feature_type == FeatureType::Transcript)
+                .map(|x| x.shift_length.to_string())
+                .unwrap_or_default(),
             "SHIFT_LENGTH" => String::new(),
             // Both are the reference allele's object's (OutputFactory.pm:1774-1779),
             // so a row without a transcript carries neither.
@@ -2927,6 +3919,22 @@ mod tests {
                     String::new()
                 }
             }
+            "BAM_EDIT" => tc
+                .and_then(|x| x.bam_edit_status)
+                .map(|status| status.column_text().to_string())
+                .unwrap_or_default(),
+            "REFSEQ_MATCH" => tc
+                .and_then(|x| x.refseq_match())
+                .map(|codes| codes.join(list_sep))
+                .unwrap_or_default(),
+            "SOURCE" => match tc.and_then(|x| x.source_cache()) {
+                Some(source) => source.column_text().to_string(),
+                None => string_custom_value(field, variant, tc, list_sep).unwrap_or_default(),
+            },
+            "REFSEQ_OFFSET" => tc
+                .and_then(|x| x.refseq_offset)
+                .map(|offset| offset.to_string())
+                .unwrap_or_default(),
             "CLIN_SIG"
             | "SOMATIC"
             | "PHENO"
@@ -2939,7 +3947,16 @@ mod tests {
             "FREQS" => variant.freqs.join(list_sep),
             "SIFT" => tc.and_then(|x| x.sift.clone()).unwrap_or_default(),
             "PolyPhen" => tc.and_then(|x| x.polyphen.clone()).unwrap_or_default(),
-            "HIGH_INF_POS" | "MOTIF_SCORE_CHANGE" => String::new(),
+            "HIGH_INF_POS" => tc
+                .and_then(|x| x.motif.as_deref())
+                .and_then(|m| m.high_inf_pos)
+                .map(|informative| if informative { "Y" } else { "N" }.to_string())
+                .unwrap_or_default(),
+            "MOTIF_SCORE_CHANGE" => tc
+                .and_then(|x| x.motif.as_deref())
+                .and_then(|m| m.score_change)
+                .map(|delta| format!("{delta:.3}"))
+                .unwrap_or_default(),
             "MOTIF_NAME" => tc
                 .and_then(|x| x.motif.as_deref())
                 .map(|m| m.name.to_string())
@@ -2953,6 +3970,16 @@ mod tests {
                 .and_then(|x| x.motif.as_deref())
                 .map(|m| m.factors.join(list_sep))
                 .unwrap_or_default(),
+            "CELL_TYPE" => tc
+                .and_then(|x| x.cell_type.as_deref())
+                .map(|entries| {
+                    entries
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(list_sep)
+                })
+                .unwrap_or_default(),
             "MAX_AF" => frequency::max_af(variant, &options.frequency_groups())
                 .map(|(max, _)| max)
                 .unwrap_or_default(),
@@ -2964,11 +3991,7 @@ mod tests {
                     frequency::frequency_field(column, variant, &options.frequency_groups())
                         .join(list_sep)
                 }
-                None => tc
-                    .and_then(|x| x.plugin_data.get(field))
-                    .or_else(|| variant.plugin_data.get(field))
-                    .cloned()
-                    .unwrap_or_default(),
+                None => string_custom_value(field, variant, tc, list_sep).unwrap_or_default(),
             },
         }
     }
@@ -3041,17 +4064,166 @@ mod tests {
         }
     }
 
+    /// The two motif scores print as Ensembl VEP writes them
+    /// (`OutputFactory.pm:1935-1939`): `HIGH_INF_POS` as `Y` or `N`,
+    /// `MOTIF_SCORE_CHANGE` as the delta with three decimals, a small negative
+    /// delta as `-0.000`, in the default Extra column (between `MOTIF_POS` and
+    /// `TRANSCRIPTION_FACTORS`), the tab row and the VCF entry alike; a motif
+    /// whose matrix carries no counts has neither key, so the default format
+    /// omits them, the tab row prints `-` and the VCF entry an empty subfield.
+    #[test]
+    fn motif_fields_render_in_every_format() {
+        use crate::output::tab::{render_tab_record, TabOutputFormatter};
+        use crate::output::vcf_output::VcfOutputFormatter;
+        use crate::output::OutputFormatter;
+        let options = FieldOptions {
+            regulatory: true,
+            ..Default::default()
+        };
+        let motif_row =
+            |high_inf_pos: Option<bool>, score_change: Option<f64>| TranscriptConsequence {
+                feature_id: Some(Arc::from("ENSM00000574814")),
+                consequences: std::iter::once(Consequence::TfBindingSiteVariant).collect(),
+                feature_type: FeatureType::MotifFeature,
+                strand: 1,
+                motif: Some(Box::new(vep_core::consequence::MotifFields {
+                    name: Arc::from("ENSPFM0290"),
+                    pos: Some(7),
+                    high_inf_pos,
+                    score_change,
+                    factors: Arc::from([Arc::from("HNF4A"), Arc::from("NR2F1"), Arc::from("RXRA")]),
+                })),
+                ..TranscriptConsequence::default()
+            };
+        let mut variant = InputVariant::new(
+            "21".into(),
+            5_090_724,
+            5_090_724,
+            b"A".to_vec(),
+            b"T".to_vec(),
+        );
+        variant.raw_input = Some("21\t5090724\t.\tA\tT\t.\t.\t.".into());
+        let scored = motif_row(Some(true), Some(-0.0894));
+        let faint = motif_row(Some(false), Some(-0.0004));
+        let uncounted = motif_row(None, None);
+        for sep in [",", "&"] {
+            assert_eq!(
+                field_value("HIGH_INF_POS", &variant, Some(&scored), &options, sep),
+                "Y"
+            );
+            assert_eq!(
+                field_value("MOTIF_SCORE_CHANGE", &variant, Some(&scored), &options, sep),
+                "-0.089"
+            );
+            assert_eq!(
+                field_value("HIGH_INF_POS", &variant, Some(&faint), &options, sep),
+                "N"
+            );
+            assert_eq!(
+                field_value("MOTIF_SCORE_CHANGE", &variant, Some(&faint), &options, sep),
+                "-0.000"
+            );
+            for field in ["HIGH_INF_POS", "MOTIF_SCORE_CHANGE"] {
+                assert_eq!(
+                    field_value(field, &variant, Some(&uncounted), &options, sep),
+                    ""
+                );
+                assert!(!empty_value_is_written(
+                    field,
+                    &variant,
+                    Some(&uncounted),
+                    &options
+                ));
+            }
+        }
+        // The default format: the keys in the regulatory group's order, the
+        // uncounted matrix's two keys absent.
+        let extra = |tc: &TranscriptConsequence| -> Vec<String> {
+            extra_keys(&variant, Some(tc), &options)
+                .into_iter()
+                .filter_map(|key| {
+                    let value = field_value(key, &variant, Some(tc), &options, ",");
+                    (!value.is_empty()).then(|| format!("{key}={value}"))
+                })
+                .collect()
+        };
+        assert_eq!(
+            extra(&scored),
+            [
+                "IMPACT=MODIFIER",
+                "STRAND=1",
+                "MOTIF_NAME=ENSPFM0290",
+                "MOTIF_POS=7",
+                "HIGH_INF_POS=Y",
+                "MOTIF_SCORE_CHANGE=-0.089",
+                "TRANSCRIPTION_FACTORS=HNF4A,NR2F1,RXRA"
+            ]
+        );
+        assert_eq!(
+            extra(&uncounted),
+            [
+                "IMPACT=MODIFIER",
+                "STRAND=1",
+                "MOTIF_NAME=ENSPFM0290",
+                "MOTIF_POS=7",
+                "TRANSCRIPTION_FACTORS=HNF4A,NR2F1,RXRA"
+            ]
+        );
+        // The tab format.
+        let tab = TabOutputFormatter::new(options.clone(), Vec::new(), None, Vec::new(), true);
+        let columns = tab.columns().to_vec();
+        let motif_cells = |tc: &TranscriptConsequence| -> Vec<String> {
+            let mut v = variant.clone();
+            v.transcript_consequences = vec![tc.clone()];
+            let mut out = Vec::new();
+            render_tab_record(&mut out, &[&v], &tab, &mut Vec::new());
+            let line = String::from_utf8(out).unwrap();
+            columns
+                .iter()
+                .zip(line.trim_end().split('\t'))
+                .filter(|(column, _)| MOTIF_FIELDS.contains(&column.as_str()))
+                .map(|(_, value)| value.to_owned())
+                .collect()
+        };
+        assert_eq!(
+            motif_cells(&scored),
+            ["ENSPFM0290", "7", "Y", "-0.089", "HNF4A,NR2F1,RXRA"]
+        );
+        assert_eq!(
+            motif_cells(&uncounted),
+            ["ENSPFM0290", "7", "-", "-", "HNF4A,NR2F1,RXRA"]
+        );
+        // The VCF format: the subfields in the CSQ order, factors joined by `&`.
+        let vcf = VcfOutputFormatter::new("CSQ".to_string(), options.clone(), Vec::new(), None);
+        let csq = |tc: &TranscriptConsequence| -> String {
+            let mut v = variant.clone();
+            v.transcript_consequences = vec![tc.clone()];
+            let lines = vcf.format_variant(&v).unwrap();
+            lines[0].split('\t').nth(7).unwrap().to_string()
+        };
+        assert!(
+            csq(&scored).ends_with("|ENSPFM0290|7|Y|-0.089|HNF4A&NR2F1&RXRA"),
+            "{}",
+            csq(&scored)
+        );
+        assert!(
+            csq(&uncounted).ends_with("|ENSPFM0290|7|||HNF4A&NR2F1&RXRA"),
+            "{}",
+            csq(&uncounted)
+        );
+    }
+
     /// The byte writer agrees with the string table on every column, with both
     /// list separators, with and without HGVS escaping, under the whole-variant
     /// ClinVar rule, with the own-span positions, in the display vocabulary, on
     /// a bare row, an empty consequence and the default options, on a motif
     /// row with factors and a matrix position and one with neither, on a
     /// regulatory row, and on the motif and regulatory rows of a structural
-    /// record; and between the populated sequence row, the structural row and
-    /// the motif rows every column but the two motif scores and the name
-    /// nothing produces prints a value. A regulatory row prints its BIOTYPE
-    /// without `--biotype` and no STRAND; a structural record's motif row prints
-    /// no STRAND either.
+    /// record; and between the populated sequence row, the structural row, the
+    /// motif rows and the regulatory row every column but the name nothing
+    /// produces prints a value. A regulatory row prints its BIOTYPE without
+    /// `--biotype`, its CELL_TYPE list and no STRAND; a structural record's
+    /// motif row prints no STRAND either.
     #[test]
     fn write_field_value_matches_the_string_table_on_every_column() {
         let variant = populated_variant();
@@ -3059,21 +4231,27 @@ mod tests {
         let structural = structural_variant();
         let options = all_options();
         let regulatory = TranscriptConsequence {
-            transcript_id: Arc::from("ENSR00000001"),
+            feature_id: Some(Arc::from("ENSR00000001")),
             consequences: std::iter::once(Consequence::RegulatoryRegionVariant).collect(),
             feature_type: FeatureType::RegulatoryFeature,
-            biotype: Some(Arc::from("promoter")),
+            feature_biotype: Some(Arc::from("promoter")),
             strand: 0,
+            cell_type: Some(Box::new([vep_core::consequence::CellTypeActivity {
+                name: Arc::from("HUVEC"),
+                activity: vep_core::consequence::Activity::Repressed,
+            }])),
             ..TranscriptConsequence::default()
         };
         let motif = TranscriptConsequence {
-            transcript_id: Arc::from("ENSM00000001"),
+            feature_id: Some(Arc::from("ENSM00000001")),
             consequences: std::iter::once(Consequence::TfBindingSiteVariant).collect(),
             feature_type: FeatureType::MotifFeature,
             strand: -1,
             motif: Some(Box::new(vep_core::consequence::MotifFields {
                 name: Arc::from("ENSPFM0001"),
                 pos: Some(7),
+                high_inf_pos: Some(true),
+                score_change: Some(-0.0894),
                 factors: Arc::from([Arc::from("CTCF"), Arc::from("ZNF143")]),
             })),
             ..TranscriptConsequence::default()
@@ -3082,6 +4260,8 @@ mod tests {
             motif: Some(Box::new(vep_core::consequence::MotifFields {
                 name: Arc::from("ENSPFM0002"),
                 pos: None,
+                high_inf_pos: None,
+                score_change: None,
                 factors: Arc::from([]),
             })),
             ..motif.clone()
@@ -3099,12 +4279,17 @@ mod tests {
                 &options,
                 sep,
             ));
-            assert_writer_matches(&variant, Some(&regulatory), &options, sep);
+            populated.extend(assert_writer_matches(
+                &variant,
+                Some(&regulatory),
+                &options,
+                sep,
+            ));
             assert_writer_matches(&structural, Some(&regulatory), &options, sep);
             assert_writer_matches(&structural, Some(&motif), &options, sep);
         }
         for column in every_column() {
-            let never = matches!(column, "HIGH_INF_POS" | "MOTIF_SCORE_CHANGE" | "Unknown");
+            let never = column == "Unknown";
             assert_eq!(populated.contains(&column), !never, "{column}");
         }
         for options in [
@@ -3162,6 +4347,17 @@ mod tests {
             assert_writer_matches(&bare, Some(&empty), &options, ",");
             assert_writer_matches(&bare, None, &options, ",");
             assert_writer_matches(&variant, Some(&empty), &options, ",");
+        }
+        // A plugin declaring core-named fields, writing one of them on the row.
+        let mut plugin_tsl = tc.clone();
+        plugin_tsl
+            .plugin_data
+            .insert("TSL".to_string(), "5".to_string());
+        for options in [all_options(), FieldOptions::default()].map(declaring_tsl_and_appris) {
+            let populated = assert_writer_matches(&variant, Some(&plugin_tsl), &options, ",");
+            assert!(populated.contains(&"TSL"));
+            assert_eq!(populated.contains(&"APPRIS"), options.appris);
+            assert_writer_matches(&variant, Some(&tc), &options, ",");
         }
         // The empty `TRANSCRIPTION_FACTORS` of a matrix that lists no factor is
         // a value; a row without a matrix has no such key.
@@ -3356,7 +4552,7 @@ mod tests {
 
     fn ranked(id: &str, rank: u32) -> TranscriptConsequence {
         TranscriptConsequence {
-            transcript_id: Arc::from(id),
+            transcript: Some(Arc::new(with_stable_id(id))),
             id_rank: rank,
             ..TranscriptConsequence::default()
         }
@@ -3400,8 +4596,8 @@ mod tests {
                     transcript_order(a, b),
                     rejoin_key(a).cmp(rejoin_key(b)),
                     "{} against {}",
-                    a.1.unwrap().transcript_id,
-                    b.1.unwrap().transcript_id
+                    a.1.unwrap().transcript_id(),
+                    b.1.unwrap().transcript_id()
                 );
             }
         }
@@ -3434,7 +4630,7 @@ mod tests {
         record_rows_into(&[&a, &b], &mut rows);
         let distances: Vec<Option<u64>> = rows
             .iter()
-            .filter(|(v, t)| v.allele_index == 0 && &*t.unwrap().transcript_id == "ENST00000200")
+            .filter(|(v, t)| v.allele_index == 0 && t.unwrap().transcript_id() == "ENST00000200")
             .map(|(_, t)| t.unwrap().distance)
             .collect();
         assert_eq!(distances, vec![Some(1), Some(2)]);
@@ -3476,7 +4672,7 @@ mod tests {
         record_rows_into(&[&breakend], &mut rows);
         let ids: Vec<&str> = rows
             .iter()
-            .map(|(_, t)| &*t.unwrap().transcript_id)
+            .map(|(_, t)| t.unwrap().transcript_id())
             .collect();
         assert_eq!(ids, vec!["ENST00000020", "ENST00000030", "ENST00000900"]);
 
@@ -3496,7 +4692,7 @@ mod tests {
             .iter()
             .map(|(v, t)| {
                 (
-                    &*t.unwrap().transcript_id,
+                    t.unwrap().transcript_id(),
                     v.allele_index,
                     v.reference_allele_row,
                 )
@@ -3929,6 +5125,47 @@ mod tests {
         );
     }
 
+    /// Under `--regulatory --shift_3prime 1 --shift_length` a RegulatoryFeature or
+    /// MotifFeature row of a sequence variant carries no SHIFT_LENGTH where the
+    /// record's transcript rows carry theirs: Ensembl VEP 116.2 sets the key in
+    /// `TranscriptVariationAllele_to_output_hash` alone (OutputFactory.pm:1695), and
+    /// the regulatory and motif output hashes (:1867-1884, :1900-1943) never set it.
+    #[test]
+    fn shift_length_is_absent_on_regulatory_and_motif_rows() {
+        let options = FieldOptions {
+            regulatory: true,
+            shift_length: true,
+            shift_3prime: true,
+            ..Default::default()
+        };
+        let deletion = InputVariant::new("21".into(), 1_000, 1_001, b"AT".to_vec(), b"A".to_vec());
+        let transcript = TranscriptConsequence {
+            shift_length: 7,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("SHIFT_LENGTH", &deletion, Some(&transcript), &options, ","),
+            "7"
+        );
+        let regulatory = TranscriptConsequence {
+            feature_type: FeatureType::RegulatoryFeature,
+            shift_length: 7,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("SHIFT_LENGTH", &deletion, Some(&regulatory), &options, ","),
+            ""
+        );
+        let motif = TranscriptConsequence {
+            feature_type: FeatureType::MotifFeature,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("SHIFT_LENGTH", &deletion, Some(&motif), &options, ","),
+            ""
+        );
+    }
+
     /// Without `--shift_3prime 1` the SHIFT_LENGTH column is listed under
     /// `--shift_length` but no row sets it (the flag field follows the parameter,
     /// OutputFactory.pm:2516-2528; the value needs both, :1695), and without
@@ -3963,7 +5200,7 @@ mod tests {
     #[test]
     fn insertion_pair_carries_no_overlap_fields() {
         let tc = TranscriptConsequence {
-            transcript_id: std::sync::Arc::from("ENST1"),
+            transcript: Some(Arc::new(with_stable_id("ENST1"))),
             feature_start: 1_000,
             feature_end: 2_000,
             ..Default::default()
@@ -3985,6 +5222,385 @@ mod tests {
         assert_eq!(sv_overlap(&pair, Some(&tc)), None);
         assert!(!extra_keys(&pair, Some(&tc), &FieldOptions::default()).contains(&"OverlapBP"));
         assert_eq!(pair.location(), "21:1500-1501");
+    }
+
+    /// A structural variant's regulatory and motif rows come from
+    /// `StructuralVariationOverlapAllele_to_output_hash` (OutputFactory.pm:2069-2102):
+    /// `Feature_type`, `Feature`, `OverlapBP` and `OverlapPC` (never on a
+    /// breakpoint) and nothing the sequence path adds, so no `BIOTYPE`, `STRAND`
+    /// or motif field prints on them under the flags that print those on a
+    /// sequence variant's rows.
+    #[test]
+    fn structural_regulatory_rows_carry_overlap_columns_and_nothing_else() {
+        let options = FieldOptions {
+            regulatory: true,
+            biotype: true,
+            ..Default::default()
+        };
+        let feature = |kind: FeatureType, id: &str| TranscriptConsequence {
+            feature_id: Some(Arc::from(id)),
+            feature_biotype: (kind == FeatureType::RegulatoryFeature).then(|| "enhancer".into()),
+            feature_type: kind,
+            strand: -1,
+            feature_start: 1_000,
+            feature_end: 1_019,
+            consequences: smallvec::smallvec![Consequence::RegulatoryRegionVariant],
+            ..Default::default()
+        };
+        let regulatory = feature(FeatureType::RegulatoryFeature, "ENSR21_1");
+        let motif = feature(FeatureType::MotifFeature, "ENSM00000000001");
+        let mut deletion =
+            InputVariant::new("21".into(), 990, 1_009, b"N".to_vec(), b"<DEL>".to_vec());
+        deletion.is_structural = true;
+        deletion.variant_class = VariantClass::StructuralDeletion;
+        deletion.sv_end = Some(1_009);
+        for row in [&regulatory, &motif] {
+            assert_eq!(
+                field_value("Feature_type", &deletion, Some(row), &options, ","),
+                row.feature_type.as_str()
+            );
+            assert_eq!(
+                field_value("Feature", &deletion, Some(row), &options, ","),
+                row.transcript_id()
+            );
+            assert_eq!(
+                field_value("OverlapBP", &deletion, Some(row), &options, ","),
+                "10"
+            );
+            assert_eq!(
+                field_value("OverlapPC", &deletion, Some(row), &options, ","),
+                "50.00"
+            );
+            assert_eq!(
+                field_value("STRAND", &deletion, Some(row), &options, ","),
+                ""
+            );
+            assert_eq!(
+                field_value("MOTIF_NAME", &deletion, Some(row), &options, ","),
+                ""
+            );
+            assert_eq!(
+                field_value("TRANSCRIPTION_FACTORS", &deletion, Some(row), &options, ","),
+                ""
+            );
+            assert!(
+                extra_keys(&deletion, Some(row), &options).ends_with(&["OverlapBP", "OverlapPC"])
+            );
+        }
+        // The annotator leaves a structural row's biotype unset; the sequence
+        // path's regulatory row prints it.
+        let mut sequence =
+            InputVariant::new("21".into(), 1_005, 1_005, b"A".to_vec(), b"G".to_vec());
+        sequence.variant_class = VariantClass::Snv;
+        assert_eq!(
+            field_value("BIOTYPE", &sequence, Some(&regulatory), &options, ","),
+            "enhancer"
+        );
+        assert_eq!(
+            field_value("STRAND", &sequence, Some(&motif), &options, ","),
+            "-1"
+        );
+        assert_eq!(
+            field_value("OverlapBP", &sequence, Some(&regulatory), &options, ","),
+            ""
+        );
+
+        let mut breakpoint = InputVariant::new(
+            "21".into(),
+            1_005,
+            1_005,
+            b"N".to_vec(),
+            b"N[22:500[".to_vec(),
+        );
+        breakpoint.is_structural = true;
+        breakpoint.variant_class = VariantClass::Translocation;
+        breakpoint.sv_end = Some(1_005);
+        assert_eq!(
+            field_value("OverlapBP", &breakpoint, Some(&regulatory), &options, ","),
+            ""
+        );
+        assert_eq!(
+            field_value("OverlapPC", &breakpoint, Some(&motif), &options, ","),
+            ""
+        );
+        assert!(!extra_keys(&breakpoint, Some(&motif), &options).contains(&"OverlapBP"));
+    }
+
+    /// A value a plugin wrote for the whole variant prints on the rows of the
+    /// kinds the plugin runs on (`OutputFactory.pm:2223`): a transcript-only
+    /// plugin's value stays off the regulatory, motif and intergenic rows, a
+    /// plugin that names every kind prints on all of them, and a value written
+    /// on the row itself prints whatever the plugin declares.
+    #[test]
+    fn plugin_values_print_on_the_rows_their_kinds_name() {
+        let options = FieldOptions {
+            regulatory: true,
+            plugin_row_kinds: Arc::new(HashMap::from([(
+                "VPlugin".to_string(),
+                vec![RowKind::Transcript],
+            )])),
+            ..Default::default()
+        };
+        let mut variant =
+            InputVariant::new("21".into(), 1_005, 1_005, b"A".to_vec(), b"G".to_vec());
+        variant.variant_class = VariantClass::Snv;
+        variant
+            .plugin_data
+            .insert("VPlugin".to_string(), "v".to_string());
+        variant
+            .plugin_data
+            .insert("WPlugin".to_string(), "w".to_string());
+        let row = |kind: FeatureType| TranscriptConsequence {
+            feature_id: Some(Arc::from("F1")),
+            feature_type: kind,
+            consequences: smallvec::smallvec![Consequence::RegulatoryRegionVariant],
+            ..Default::default()
+        };
+        let transcript = row(FeatureType::Transcript);
+        let regulatory = row(FeatureType::RegulatoryFeature);
+        let motif = row(FeatureType::MotifFeature);
+        assert_eq!(
+            field_value("VPlugin", &variant, Some(&transcript), &options, ","),
+            "v"
+        );
+        assert!(extra_keys(&variant, Some(&transcript), &options).contains(&"VPlugin"));
+        for other in [Some(&regulatory), Some(&motif), None] {
+            assert_eq!(field_value("VPlugin", &variant, other, &options, ","), "");
+            assert!(!extra_keys(&variant, other, &options).contains(&"VPlugin"));
+            // A plugin outside the map ran on every kind.
+            assert_eq!(field_value("WPlugin", &variant, other, &options, ","), "w");
+            assert!(extra_keys(&variant, other, &options).contains(&"WPlugin"));
+        }
+        // A key the intergenic row's plugin wrote without declaring it stays on
+        // that row, whatever the map says.
+        variant
+            .plugin_data
+            .insert("UPlugin".to_string(), "u".to_string());
+        variant
+            .intergenic_row_plugin_keys
+            .push("UPlugin".to_string());
+        assert_eq!(field_value("UPlugin", &variant, None, &options, ","), "u");
+        assert!(extra_keys(&variant, None, &options).contains(&"UPlugin"));
+        for row in [&transcript, &regulatory, &motif] {
+            assert_eq!(
+                field_value("UPlugin", &variant, Some(row), &options, ","),
+                ""
+            );
+            assert!(!extra_keys(&variant, Some(row), &options).contains(&"UPlugin"));
+        }
+        let mut written = regulatory.clone();
+        written
+            .plugin_data
+            .insert("VPlugin".to_string(), "row".to_string());
+        assert_eq!(
+            field_value("VPlugin", &variant, Some(&written), &options, ","),
+            "row"
+        );
+        assert!(extra_keys(&variant, Some(&written), &options).contains(&"VPlugin"));
+    }
+
+    /// A `--summary` or `--most_severe` row is the record's hash alone
+    /// (`summary_only`, OutputFactory.pm:426-458), which no plugin runs on, so a
+    /// value a plugin wrote for the whole variant is no value on it, the empty
+    /// string the default writer prints as `KEY=` on every other row included.
+    #[test]
+    fn summary_row_carries_no_plugin_value() {
+        let options = FieldOptions::default();
+        let mut summary = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        summary.most_severe_consequence = Some(Consequence::MissenseVariant);
+        summary.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        summary
+            .plugin_data
+            .insert("GWAS_pmid".to_string(), String::new());
+        // A made-up CADD_PHRED value.
+        summary
+            .plugin_data
+            .insert("CADD_PHRED".to_string(), "23.1".to_string());
+        assert_eq!(field_value("CADD_PHRED", &summary, None, &options, ","), "");
+        assert_eq!(field_value("GWAS_pmid", &summary, None, &options, ","), "");
+        assert!(!empty_plugin_value_is_written(
+            "GWAS_pmid",
+            &summary,
+            None,
+            &options
+        ));
+        assert!(!empty_value_is_written(
+            "GWAS_pmid",
+            &summary,
+            None,
+            &options
+        ));
+        // The record's intergenic row carries both values.
+        let mut intergenic = summary.clone();
+        intergenic.summary_terms = None;
+        intergenic.intergenic_overlap = true;
+        assert_eq!(
+            field_value("CADD_PHRED", &intergenic, None, &options, ","),
+            "23.1"
+        );
+        assert!(empty_plugin_value_is_written(
+            "GWAS_pmid",
+            &intergenic,
+            None,
+            &options
+        ));
+    }
+
+    /// Ensembl VEP lists a record's rows kind by kind, transcripts, then
+    /// regulatory features, then motif features (`VariationFeature.pm:855-864`),
+    /// each kind in the sorted order of the keys its variations are stored under:
+    /// the regulatory feature's stable id (`:918`) and the motif feature's database
+    /// id (`:937`, `:750`). A motif's stable id is `ENSM` and that id zero-padded
+    /// to eleven digits, so the stable-id order is the numeric database-id order,
+    /// a string sort of the bare ids being the one order they differ in across a
+    /// digit-count boundary (`ENSM00001000000` follows `ENSM00000999999`).
+    #[test]
+    fn motif_rows_order_by_dbid() {
+        fn row_ids(variant: &InputVariant) -> Vec<&str> {
+            record_rows(&[variant])
+                .iter()
+                .map(|(_, tc)| tc.unwrap().transcript_id())
+                .collect()
+        }
+        let feature = |kind: FeatureType, id: &str| TranscriptConsequence {
+            feature_id: Some(Arc::from(id)),
+            feature_type: kind,
+            consequences: smallvec::smallvec![Consequence::RegulatoryRegionVariant],
+            ..Default::default()
+        };
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        v.transcript_consequences = vec![
+            feature(FeatureType::MotifFeature, "ENSM00001000000"),
+            feature(FeatureType::RegulatoryFeature, "ENSR21_B"),
+            feature(FeatureType::MotifFeature, "ENSM00000999999"),
+            feature(FeatureType::Transcript, "ENST00000000002"),
+            feature(FeatureType::RegulatoryFeature, "ENSR21_A"),
+            feature(FeatureType::Transcript, "ENST00000000001"),
+        ];
+        assert_eq!(
+            row_ids(&v),
+            [
+                "ENST00000000001",
+                "ENST00000000002",
+                "ENSR21_A",
+                "ENSR21_B",
+                "ENSM00000999999",
+                "ENSM00001000000"
+            ]
+        );
+        // A structural variant's regulatory and motif rows that share a met rank,
+        // here 0 throughout, fall back to the features' start order, whatever
+        // their ids.
+        let mut structural = v.clone();
+        structural.is_structural = true;
+        structural.variant_class = VariantClass::StructuralDeletion;
+        for (tc, start) in structural
+            .transcript_consequences
+            .iter_mut()
+            .zip([900, 500, 700, 100, 300, 200])
+        {
+            tc.feature_start = start;
+            tc.feature_end = start + 10;
+        }
+        assert_eq!(
+            row_ids(&structural),
+            [
+                "ENST00000000001",
+                "ENST00000000002",
+                "ENSR21_A",
+                "ENSR21_B",
+                "ENSM00000999999",
+                "ENSM00001000000"
+            ]
+        );
+        structural.transcript_consequences[1].feature_start = 250; // ENSR21_B before ENSR21_A
+        structural.transcript_consequences[0].feature_start = 50; // ENSM00001000000 first
+        assert_eq!(
+            row_ids(&structural),
+            [
+                "ENST00000000001",
+                "ENST00000000002",
+                "ENSR21_B",
+                "ENSR21_A",
+                "ENSM00001000000",
+                "ENSM00000999999"
+            ]
+        );
+
+        // A record a removing per-gene pick reduced lists its transcript rows last.
+        v.per_gene_pick = true;
+        assert_eq!(
+            row_ids(&v),
+            [
+                "ENSR21_A",
+                "ENSR21_B",
+                "ENSM00000999999",
+                "ENSM00001000000",
+                "ENST00000000001",
+                "ENST00000000002"
+            ]
+        );
+    }
+
+    /// A structural variant's regulatory and motif rows come in the order the
+    /// features were met, the rank the loader put in `id_rank` (a
+    /// `--regulatory_gff` source's files source by source, then file order; a
+    /// converted cache's listing order), whatever their starts and identifiers:
+    /// Ensembl VEP pushes a structural overlap per feature met
+    /// (`AnnotationType/RegFeat.pm:135`) and reads the lists as pushed
+    /// (`StructuralVariationFeature.pm:495-509`). Rows sharing a rank keep the
+    /// start-then-identifier order, and the motif rows follow the regulatory
+    /// rows in either case.
+    #[test]
+    fn structural_gff_rows_follow_the_sources_met_order() {
+        fn row_ids(variant: &InputVariant) -> Vec<&str> {
+            record_rows(&[variant])
+                .iter()
+                .map(|(_, tc)| tc.unwrap().transcript_id())
+                .collect()
+        }
+        let row = |kind: FeatureType, id: &str, id_rank: u32, start: u64| TranscriptConsequence {
+            feature_id: Some(Arc::from(id)),
+            feature_type: kind,
+            feature_start: start,
+            feature_end: start + 10,
+            id_rank,
+            consequences: smallvec::smallvec![Consequence::RegulatoryRegionVariant],
+            ..Default::default()
+        };
+        let mut sv = InputVariant::new("21".into(), 10, 400, b"N".to_vec(), b"<DEL>".to_vec());
+        sv.is_structural = true;
+        sv.variant_class = VariantClass::StructuralDeletion;
+        sv.transcript_consequences = vec![
+            row(FeatureType::MotifFeature, "ENSM00000000002", 5, 20),
+            row(FeatureType::RegulatoryFeature, "ENSR21_B", 2, 100),
+            row(FeatureType::RegulatoryFeature, "ENSR21_A", 1, 100),
+            row(FeatureType::MotifFeature, "ENSM00000000001", 6, 10),
+            row(FeatureType::RegulatoryFeature, "ENSR00000001", 3, 50),
+        ];
+        assert_eq!(
+            row_ids(&sv),
+            [
+                "ENSR21_A",
+                "ENSR21_B",
+                "ENSR00000001",
+                "ENSM00000000002",
+                "ENSM00000000001"
+            ]
+        );
+        for tc in &mut sv.transcript_consequences {
+            tc.id_rank = 0;
+        }
+        assert_eq!(
+            row_ids(&sv),
+            [
+                "ENSR00000001",
+                "ENSR21_A",
+                "ENSR21_B",
+                "ENSM00000000001",
+                "ENSM00000000002"
+            ]
+        );
     }
 
     /// `NEAREST` is a record-level key: its value joins the list with the
@@ -4034,6 +5650,144 @@ mod tests {
         assert!(!empty_value_is_written("VARIANT_CLASS", &v, None, &options));
         assert!(flag_fields(&options).contains(&"NEAREST"));
         assert!(!flag_fields(&FieldOptions::default()).contains(&"NEAREST"));
+    }
+
+    /// A plugin's empty value stands for Ensembl VEP's undefined value, which the
+    /// tab format writes as `-` and the JSON format drops, except the fields
+    /// `empty_plugin_value_is_a_string` names: GWAS's string fields, the
+    /// Downstream plugin's `DownstreamProtein`, the translation cut at a stop in
+    /// its first codon, the AncestralAllele plugin's `AA`, the FASTA index's
+    /// value for a span wholly past the record's end, and a field the row's own
+    /// `plugin_empty_strings` names, a table cell the row has and leaves empty
+    /// (TranscriptAnnotator.pm:245-250), written as the empty value in every
+    /// format; all print `KEY=` in the default format. The row's list binds that
+    /// row alone: the same key on a row whose list lacks it is undefined. The
+    /// variant's own list names a record-level value (BayesDel.pm:151), which
+    /// prints on every row, the intergenic row included.
+    #[test]
+    fn a_plugins_empty_value_is_written_only_where_ensembl_vep_defines_it() {
+        let options = FieldOptions::default();
+        let v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let mut tc = TranscriptConsequence::default();
+        tc.plugin_data
+            .insert("DownstreamProtein".to_string(), String::new());
+        tc.plugin_data
+            .insert("ProteinLengthChange".to_string(), "-7".to_string());
+        tc.plugin_data
+            .insert("GWAS_pmid".to_string(), String::new());
+        tc.plugin_data.insert("Other".to_string(), String::new());
+        tc.plugin_data
+            .insert("scores_SIFT_pred".to_string(), String::new());
+        tc.plugin_empty_strings.push("scores_SIFT_pred".to_string());
+        assert!(empty_plugin_value_is_written(
+            "DownstreamProtein",
+            &v,
+            Some(&tc),
+            &options
+        ));
+        assert!(empty_value_is_written(
+            "DownstreamProtein",
+            &v,
+            Some(&tc),
+            &options
+        ));
+        assert!(!empty_plugin_value_is_written(
+            "ProteinLengthChange",
+            &v,
+            Some(&tc),
+            &options
+        ));
+        assert!(empty_plugin_value_is_a_string("GWAS_pmid", &v, None));
+        assert!(empty_value_is_written("GWAS_pmid", &v, Some(&tc), &options));
+        assert!(empty_plugin_value_is_a_string("AA", &v, None));
+        assert!(!empty_plugin_value_is_a_string("Other", &v, Some(&tc)));
+        assert!(empty_plugin_value_is_written(
+            "Other",
+            &v,
+            Some(&tc),
+            &options
+        ));
+        assert!(!empty_value_is_written("Other", &v, Some(&tc), &options));
+        assert!(empty_plugin_value_is_a_string(
+            "scores_SIFT_pred",
+            &v,
+            Some(&tc)
+        ));
+        assert!(empty_value_is_written(
+            "scores_SIFT_pred",
+            &v,
+            Some(&tc),
+            &options
+        ));
+        assert!(!empty_plugin_value_is_a_string(
+            "scores_SIFT_pred",
+            &v,
+            None
+        ));
+        let mut unmarked = TranscriptConsequence::default();
+        unmarked
+            .plugin_data
+            .insert("scores_SIFT_pred".to_string(), String::new());
+        assert!(!empty_value_is_written(
+            "scores_SIFT_pred",
+            &v,
+            Some(&unmarked),
+            &options
+        ));
+        let bare = TranscriptConsequence::default();
+        assert!(!empty_value_is_written(
+            "DownstreamProtein",
+            &v,
+            Some(&bare),
+            &options
+        ));
+        assert!(!empty_value_is_written(
+            "DownstreamProtein",
+            &v,
+            None,
+            &options
+        ));
+        let mut record_level = v.clone();
+        record_level
+            .plugin_data
+            .insert("BayesDel".to_string(), String::new());
+        assert!(!empty_plugin_value_is_a_string(
+            "BayesDel",
+            &record_level,
+            None
+        ));
+        assert!(!empty_value_is_written(
+            "BayesDel",
+            &record_level,
+            None,
+            &options
+        ));
+        assert!(!empty_value_is_written(
+            "BayesDel",
+            &record_level,
+            Some(&bare),
+            &options
+        ));
+        record_level
+            .plugin_empty_strings
+            .push("BayesDel".to_string());
+        assert!(empty_plugin_value_is_a_string(
+            "BayesDel",
+            &record_level,
+            None
+        ));
+        assert!(empty_value_is_written(
+            "BayesDel",
+            &record_level,
+            None,
+            &options
+        ));
+        assert!(empty_value_is_written(
+            "BayesDel",
+            &record_level,
+            Some(&bare),
+            &options
+        ));
     }
 
     /// A `--summary` row is the record's hash alone (OutputFactory.pm:426-458
@@ -4169,7 +5923,7 @@ mod tests {
         let mut b = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"T".to_vec());
         b.allele_index = 1;
         let tc = |id: &str| TranscriptConsequence {
-            transcript_id: std::sync::Arc::from(id),
+            transcript: Some(Arc::new(with_stable_id(id))),
             ..Default::default()
         };
         a.transcript_consequences = vec![tc("ENST2"), tc("ENST1")];
@@ -4182,7 +5936,7 @@ mod tests {
             .iter()
             .map(|(v, t)| {
                 (
-                    t.map(|t| t.transcript_id.to_string()).unwrap_or_default(),
+                    t.map(|t| t.transcript_id().to_string()).unwrap_or_default(),
                     v.allele_index,
                 )
             })
@@ -4210,7 +5964,7 @@ mod tests {
     #[test]
     fn intergenic_rows_keep_allele_order_under_minimal_rejoin_prefixes() {
         let regulatory = || TranscriptConsequence {
-            transcript_id: Arc::from("ENSR1"),
+            feature_id: Some(Arc::from("ENSR1")),
             feature_type: FeatureType::RegulatoryFeature,
             consequences: smallvec::smallvec![Consequence::RegulatoryRegionVariant],
             ..Default::default()
@@ -4235,7 +5989,7 @@ mod tests {
             .iter()
             .map(|(v, tc)| {
                 (
-                    tc.map_or("", |tc| &*tc.transcript_id),
+                    tc.map_or("", |tc| tc.transcript_id()),
                     v.allele_index,
                     v.reference_allele_row,
                 )
@@ -4254,13 +6008,106 @@ mod tests {
         );
     }
 
+    /// Ensembl VEP 116.2 keys a motif row by the motif's database id
+    /// (VariationFeature.pm:937) and a `--minimal` split allele's rows after the
+    /// first by its allele string, `_` and that key (OutputFactory.pm:2316), then
+    /// sorts the keys as strings (:750): on `TCT TCA,TGT` the first allele's
+    /// digit-led keys `574814`, `574815`, `574816` precede the second allele's
+    /// `C/G_574814`, `C/G_574815`, `C/G_574816`, as every letter sorts after the
+    /// digits, while an insertion's `-/G_` prefix precedes them, `-` sorting
+    /// before the digits; a motif's stable id, which `ENSM` leads, takes no part.
+    /// A transcript row keeps its stable id and database id behind the prefix
+    /// (BaseVariationFeature.pm:310-320), so two prefixed rows of one allele
+    /// order `AT4G12020.10_118783` before `AT4G12020.1_118785`.
+    #[test]
+    fn prefixed_motif_rows_sort_by_their_database_ids() {
+        let motif = |id: &str, db_id: u64, rank: u32| TranscriptConsequence {
+            feature_id: Some(Arc::from(id)),
+            feature_type: FeatureType::MotifFeature,
+            consequences: smallvec::smallvec![Consequence::TfBindingSiteVariant],
+            id_rank: rank,
+            motif_db_id: Some(db_id),
+            ..Default::default()
+        };
+        let motifs = || {
+            vec![
+                motif("ENSM00000574816", 574816, 3),
+                motif("ENSM00000574814", 574814, 1),
+                motif("ENSM00000574815", 574815, 2),
+            ]
+        };
+        let ids = |record: &[&InputVariant]| -> Vec<(usize, String)> {
+            record_rows(record)
+                .iter()
+                .map(|(v, tc)| (v.allele_index, tc.unwrap().transcript_id().to_string()))
+                .collect()
+        };
+        let mut first =
+            InputVariant::new("21".into(), 5090731, 5090731, b"T".to_vec(), b"A".to_vec());
+        first.transcript_consequences = motifs();
+        let mut second =
+            InputVariant::new("21".into(), 5090730, 5090730, b"C".to_vec(), b"G".to_vec());
+        second.allele_index = 1;
+        second.rejoin_key_prefix = Some(Arc::from("C/G_"));
+        second.transcript_consequences = motifs();
+        assert_rank_order_is_key_order(&[&first, &second]);
+        assert_eq!(
+            ids(&[&first, &second]),
+            [
+                (0, "ENSM00000574814".to_string()),
+                (0, "ENSM00000574815".to_string()),
+                (0, "ENSM00000574816".to_string()),
+                (1, "ENSM00000574814".to_string()),
+                (1, "ENSM00000574815".to_string()),
+                (1, "ENSM00000574816".to_string()),
+            ]
+        );
+        let mut insertion =
+            InputVariant::new("21".into(), 5090731, 5090730, b"-".to_vec(), b"G".to_vec());
+        insertion.allele_index = 1;
+        insertion.rejoin_key_prefix = Some(Arc::from("-/G_"));
+        insertion.transcript_consequences = motifs();
+        assert_rank_order_is_key_order(&[&first, &insertion]);
+        assert_eq!(
+            ids(&[&first, &insertion])
+                .iter()
+                .map(|(allele, _)| *allele)
+                .collect::<Vec<_>>(),
+            [1, 1, 1, 0, 0, 0]
+        );
+
+        let transcript = |id: &str, db_id: u64| TranscriptConsequence {
+            transcript: Some(Arc::new(Transcript {
+                db_id: Some(db_id),
+                ..with_stable_id(id)
+            })),
+            ..Default::default()
+        };
+        let mut prefixed =
+            InputVariant::new("4".into(), 7204234, 7204234, b"A".to_vec(), b"T".to_vec());
+        prefixed.rejoin_key_prefix = Some(Arc::from("A/T_"));
+        prefixed.transcript_consequences = vec![
+            transcript("AT4G12020.1", 118785),
+            transcript("AT4G12020.2", 118784),
+            transcript("AT4G12020.10", 118783),
+        ];
+        assert_eq!(
+            ids(&[&prefixed]),
+            [
+                (0, "AT4G12020.10".to_string()),
+                (0, "AT4G12020.1".to_string()),
+                (0, "AT4G12020.2".to_string()),
+            ]
+        );
+    }
+
     /// The reference row of `--process_ref_homs` leads each transcript's rows
     /// (BaseVariationFeatureOverlap.pm:363-373 lists the reference allele first),
     /// then the alternates in allele order.
     #[test]
     fn reference_row_leads_each_transcripts_rows() {
         let tc = |id: &str| TranscriptConsequence {
-            transcript_id: std::sync::Arc::from(id),
+            transcript: Some(Arc::new(with_stable_id(id))),
             ..Default::default()
         };
         let mut alt1 = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
@@ -4272,7 +6119,7 @@ mod tests {
         reference.transcript_consequences = vec![tc("ENST1"), tc("ENST2")];
         let order: Vec<(String, &[u8])> = record_rows(&[&reference, &alt1, &alt2])
             .iter()
-            .map(|(v, tc)| (tc.unwrap().transcript_id.to_string(), v.alt_allele()))
+            .map(|(v, tc)| (tc.unwrap().transcript_id().to_string(), v.alt_allele()))
             .collect();
         assert_eq!(
             order,
@@ -4291,7 +6138,7 @@ mod tests {
     #[test]
     fn record_rows_into_reuses_the_vector_and_matches_record_rows() {
         let tc = |id: &str| TranscriptConsequence {
-            transcript_id: std::sync::Arc::from(id),
+            transcript: Some(Arc::new(with_stable_id(id))),
             ..Default::default()
         };
         let mut a = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
@@ -4310,7 +6157,7 @@ mod tests {
             rows.iter()
                 .map(|(v, t)| {
                     (
-                        t.map(|t| t.transcript_id.to_string()).unwrap_or_default(),
+                        t.map(|t| t.transcript_id().to_string()).unwrap_or_default(),
                         v.allele_index,
                     )
                 })
@@ -4340,15 +6187,16 @@ mod tests {
         assert!(!ExtraFieldsPlan::new(FieldOptions::default()).any_optional_group);
         let v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         assert_eq!(
-            extra_keys_with(&plan.flag_fields, &v, None, &options),
+            extra_keys_with(&plan.flag_fields, &plan.custom_keys, &v, None, &options),
             extra_keys(&v, None, &options)
         );
     }
 
-    /// The transcript fast path is on under `--regulatory` alone and with no
-    /// optional group, and off once any other group is on; a transcript row's
-    /// key list is the flag fields without the five motif fields, which are the
-    /// `regulatory` group's members after `BIOTYPE`.
+    /// The transcript fast path is on under `--regulatory` alone, under
+    /// `--regulatory --cell_type` and with no optional group, and off once any
+    /// other group is on; a transcript row's key list is the flag fields without
+    /// the five motif fields, which are the `regulatory` group's members after
+    /// `BIOTYPE`, and without `CELL_TYPE`.
     #[test]
     fn extra_fields_plan_keeps_the_transcript_fast_path_under_regulatory_alone() {
         let regulatory = FieldOptions {
@@ -4366,6 +6214,16 @@ mod tests {
         );
         assert_eq!(
             plan.transcript_flag_fields,
+            ["IMPACT", "DISTANCE", "STRAND", "FLAGS", "BIOTYPE"]
+        );
+        let cell_type = ExtraFieldsPlan::new(FieldOptions {
+            cell_type: true,
+            ..regulatory
+        });
+        assert!(cell_type.transcript_fast_path && cell_type.any_optional_group);
+        assert_eq!(cell_type.flag_fields.last(), Some(&"CELL_TYPE"));
+        assert_eq!(
+            cell_type.transcript_flag_fields,
             ["IMPACT", "DISTANCE", "STRAND", "FLAGS", "BIOTYPE"]
         );
         assert!(ExtraFieldsPlan::new(FieldOptions::default()).transcript_fast_path);
@@ -4397,10 +6255,11 @@ mod tests {
                 .flag_fields
                 .iter()
                 .copied()
-                .filter(|field| !MOTIF_FIELDS.contains(field))
+                .filter(|field| !MOTIF_FIELDS.contains(field) && *field != "CELL_TYPE")
                 .collect::<Vec<_>>()
         );
         assert!(MOTIF_FIELDS.iter().all(|f| every.flag_fields.contains(f)));
+        assert!(every.flag_fields.contains(&"CELL_TYPE"));
     }
 
     /// `GENCODE_PRIMARY` is the literal `1` on a transcript carrying the
@@ -4412,7 +6271,10 @@ mod tests {
     fn gencode_primary_column_is_1_on_presence() {
         let v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         let primary = TranscriptConsequence {
-            gencode_primary: true,
+            transcript: Some(Arc::new(Transcript {
+                gencode_primary: true,
+                ..Transcript::default()
+            })),
             ..Default::default()
         };
         let other = TranscriptConsequence::default();
@@ -4447,24 +6309,26 @@ mod tests {
     /// with the cache's raw attribute values on the consequence.
     fn ndufv3_consequence() -> TranscriptConsequence {
         TranscriptConsequence {
-            transcript_id: std::sync::Arc::from("ENST00000354250"),
-            gene_id: std::sync::Arc::from("ENSG00000160194"),
-            transcript_version: Some(7),
-            gene_version: Some(20),
-            gene_symbol: Some("NDUFV3".into()),
-            biotype: Some("protein_coding".into()),
+            transcript: Some(Arc::new(Transcript {
+                stable_id: Arc::from("ENST00000354250"),
+                gene_stable_id: Arc::from("ENSG00000160194"),
+                version: Some(7),
+                gene_version: Some(20),
+                gene_symbol: Some("NDUFV3".into()),
+                biotype: "protein_coding".into(),
+                mane_select: Some("NM_021075.4".to_string()),
+                tsl: Some("1".to_string()),
+                appris: Some("principalM".to_string()),
+                ccds: Some("CCDS33572.1".to_string()),
+                protein_id: Some("ENSP00000346196".into()),
+                swissprot: Some("P56181.185".to_string()),
+                trembl: Some("-".to_string()),
+                uniparc: Some("UPI000037848B".to_string()),
+                uniprot_isoform: Some("P56181-2".to_string()),
+                refseq: Some("NM_021075.4".to_string()),
+                ..Transcript::default()
+            })),
             canonical: true,
-            mane_select: Some("NM_021075.4".to_string()),
-            tsl: Some(1),
-            appris: Some("principalM".to_string()),
-            ccds: Some("CCDS33572.1".to_string()),
-            protein_id: Some("ENSP00000346196".into()),
-            swissprot: Some("P56181.185".to_string()),
-            trembl: Some("-".to_string()),
-            uniparc: Some("UPI000037848B".to_string()),
-            uniprot_isoform: Some("P56181-2".to_string()),
-            refseq: Some("NM_021075.4".to_string()),
-            gene_phenotype: false,
             ..Default::default()
         }
     }
@@ -4518,13 +6382,133 @@ mod tests {
             ("alternative2", "A2"),
             ("principal4", "P4"),
         ] {
-            tc.appris = Some(raw.to_string());
+            edit_transcript(&mut tc, |t| t.appris = Some(raw.to_string()));
             assert_eq!(value("APPRIS", &tc, &options), printed, "{raw}");
         }
-        tc.appris = Some(String::new());
+        edit_transcript(&mut tc, |t| t.appris = Some(String::new()));
         assert_eq!(value("APPRIS", &tc, &options), "");
-        tc.appris = None;
+        edit_transcript(&mut tc, |t| t.appris = None);
         assert_eq!(value("APPRIS", &tc, &options), "");
+    }
+
+    /// `options` with the dbNSFP plugin declaring the made-up fixture's `TSL` and `APPRIS`
+    /// columns, two of its header names (dbNSFP.pm:234, :417).
+    fn declaring_tsl_and_appris(mut options: FieldOptions) -> FieldOptions {
+        options.set_plugin_fields(["TSL", "APPRIS"].map(str::to_string));
+        options
+    }
+
+    const FILE_TSL: &str = "5,1,2,3,2,NA";
+    const FILE_APPRIS: &str = "principal1,alternative1,principal1,.,alternative1,alternative1";
+
+    /// Ensembl VEP writes a plugin's keys over the line hash after the core
+    /// fields set theirs (OutputFactory.pm:398, :2231), so for
+    /// `--plugin dbNSFP,<file>,ALL` on `21 33296341 A G` the made-up fixture's
+    /// `TSL=5,1,2,3,2,NA` and `APPRIS=principal1,...` print on ENST00000290200,
+    /// not the cache's `TSL=1;APPRIS=P2`, with `--tsl --appris` on (the
+    /// plugin's value replaces the core one) and off (the core key was never
+    /// set), in the order the Extra column gives the key either way: at the
+    /// flag's place when the flag is on, alphabetical among the plugin keys
+    /// when it is off.
+    #[test]
+    fn a_plugins_value_prints_over_the_core_field_of_its_name() {
+        let mut tc = ndufv3_consequence();
+        tc.plugin_data
+            .insert("TSL".to_string(), FILE_TSL.to_string());
+        tc.plugin_data
+            .insert("APPRIS".to_string(), FILE_APPRIS.to_string());
+        tc.plugin_data
+            .insert("SIFT_score".to_string(), "0.249".to_string());
+        let v = InputVariant::new(
+            "21".into(),
+            33_296_341,
+            33_296_341,
+            b"A".to_vec(),
+            b"G".to_vec(),
+        );
+        let flags_off = declaring_tsl_and_appris(FieldOptions::default());
+        let flags_on = declaring_tsl_and_appris(FieldOptions {
+            tsl: true,
+            appris: true,
+            ..Default::default()
+        });
+        for options in [&flags_off, &flags_on] {
+            assert_eq!(value("TSL", &tc, options), FILE_TSL);
+            assert_eq!(value("APPRIS", &tc, options), FILE_APPRIS);
+            assert_eq!(value("SIFT_score", &tc, options), "0.249");
+            assert!(field_is_produced("TSL", options));
+            assert!(field_is_produced("APPRIS", options));
+        }
+        let keys = |options: &FieldOptions| {
+            extra_keys(&v, Some(&tc), options)
+                .into_iter()
+                .filter(|k| matches!(*k, "STRAND" | "TSL" | "APPRIS" | "SIFT_score"))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(keys(&flags_off), ["STRAND", "APPRIS", "SIFT_score", "TSL"]);
+        assert_eq!(keys(&flags_on), ["STRAND", "TSL", "APPRIS", "SIFT_score"]);
+    }
+
+    /// A core field a plugin declares but left unwritten on the row (dbNSFP
+    /// skips a `.` cell, dbNSFP.pm:408; a row its consequence filter passes
+    /// over gets no key) prints the cache's value under its own flag alone,
+    /// since without the flag the core hash never carried the key
+    /// (OutputFactory.pm:1609, :1616 `$self->{tsl}`, `$self->{appris}`): on
+    /// `21 30282928 G T` ENST00000340345 under `--tsl --appris` the made-up fixture's
+    /// `TSL=2` prints beside the cache's `APPRIS=P1`, and without the flags
+    /// `TSL=2` alone.
+    #[test]
+    fn a_declared_core_field_the_plugin_left_unwritten_prints_the_cache_value_under_its_flag() {
+        let mut tc = ndufv3_consequence();
+        edit_transcript(&mut tc, |t| t.appris = Some("principal1".to_string()));
+        tc.plugin_data.insert("TSL".to_string(), "2".to_string());
+        let flags_off = declaring_tsl_and_appris(FieldOptions::default());
+        let flags_on = declaring_tsl_and_appris(FieldOptions {
+            tsl: true,
+            appris: true,
+            ..Default::default()
+        });
+        assert_eq!(value("TSL", &tc, &flags_on), "2");
+        assert_eq!(value("APPRIS", &tc, &flags_on), "P1");
+        assert_eq!(value("TSL", &tc, &flags_off), "2");
+        assert_eq!(value("APPRIS", &tc, &flags_off), "");
+        // A row without a plugin value prints the cache value under the flag
+        // and nothing without it, while the column stays one the run produces.
+        let bare = ndufv3_consequence();
+        assert_eq!(value("TSL", &bare, &flags_on), "1");
+        assert_eq!(value("TSL", &bare, &flags_off), "");
+        assert!(field_is_produced("TSL", &flags_off));
+        assert!(!core_field_is_produced("TSL", &flags_off));
+        // A `--fields TSL` column with no plugin declaring it stays unproduced.
+        assert!(!field_is_produced("TSL", &FieldOptions::default()));
+    }
+
+    /// A plugin key named as one of the thirteen columns is the column's value
+    /// and never an Extra key (`VEP_output.pm:103-109`); a key outside the
+    /// thirteen stays an Extra key.
+    #[test]
+    fn a_plugin_key_named_as_a_default_column_prints_in_the_column_alone() {
+        let mut tc = ndufv3_consequence();
+        tc.codons = Some("ctG/ctA".to_string());
+        tc.plugin_data
+            .insert("Codons".to_string(), "CTG/CTA".to_string());
+        // A made-up CADD_PHRED value.
+        tc.plugin_data
+            .insert("CADD_PHRED".to_string(), "23.1".to_string());
+        let options = FieldOptions::default();
+        assert_eq!(value("Codons", &tc, &options), "CTG/CTA");
+        assert_eq!(value("CADD_PHRED", &tc, &options), "23.1");
+        let v = InputVariant::new(
+            "21".into(),
+            42_893_293,
+            42_893_293,
+            b"C".to_vec(),
+            b"T".to_vec(),
+        );
+        assert!(plugin_names_a_fixed_column(&v, Some(&tc)));
+        let keys = extra_keys(&v, Some(&tc), &options);
+        assert!(!keys.contains(&"Codons"), "{keys:?}");
+        assert!(keys.contains(&"CADD_PHRED"), "{keys:?}");
     }
 
     /// `CANONICAL` is the literal `YES` on the canonical transcript and absent
@@ -4616,6 +6600,163 @@ mod tests {
         assert_eq!(row[0].split('\t').nth(17), Some("protein_coding"));
     }
 
+    /// `CELL_TYPE` prints a regulatory row's list as `get_cell_types` builds it
+    /// (OutputFactory.pm:1959-1969): `<name>:<activity>` per requested epigenome
+    /// the feature has an activity for, in the order requested, every activity
+    /// value printed (`HUVEC:REPRESSED,HepG2:INACTIVE` and `HUVEC:NA` on Ensembl
+    /// VEP's own test cache under `--cell_type HUVEC,HepG2`), joined by `,` in
+    /// the tab and default formats and by `&` in a VCF entry. A motif row's
+    /// list is empty and still a value (`CELL_TYPE=` in the default format, an
+    /// empty tab cell); a transcript row has no such key.
+    #[test]
+    fn cell_type_projects_requested_epigenomes() {
+        use vep_core::consequence::{Activity, CellTypeActivity};
+        let entry = |name: &str, activity| CellTypeActivity {
+            name: Arc::from(name),
+            activity,
+        };
+        let options = FieldOptions {
+            regulatory: true,
+            cell_type: true,
+            ..Default::default()
+        };
+        let v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let regulatory = |cell_type: Box<[CellTypeActivity]>| TranscriptConsequence {
+            feature_id: Some(Arc::from("ENSR00000001")),
+            feature_biotype: Some(Arc::from("promoter")),
+            consequences: std::iter::once(Consequence::RegulatoryRegionVariant).collect(),
+            feature_type: FeatureType::RegulatoryFeature,
+            cell_type: Some(cell_type),
+            ..TranscriptConsequence::default()
+        };
+        let two = regulatory(Box::new([
+            entry("HUVEC", Activity::Repressed),
+            entry("HepG2", Activity::Inactive),
+        ]));
+        assert_eq!(
+            field_value("CELL_TYPE", &v, Some(&two), &options, ","),
+            "HUVEC:REPRESSED,HepG2:INACTIVE"
+        );
+        assert_eq!(
+            field_value("CELL_TYPE", &v, Some(&two), &options, "&"),
+            "HUVEC:REPRESSED&HepG2:INACTIVE"
+        );
+        let na = regulatory(Box::new([entry("HUVEC", Activity::Na)]));
+        assert_eq!(
+            field_value("CELL_TYPE", &v, Some(&na), &options, ","),
+            "HUVEC:NA"
+        );
+        for activity in [Activity::Active, Activity::Poised] {
+            let one = regulatory(Box::new([entry("A549_(m,_58_y)", activity)]));
+            assert_eq!(
+                field_value("CELL_TYPE", &v, Some(&one), &options, ","),
+                format!("A549_(m,_58_y):{}", activity.as_str())
+            );
+        }
+        // A feature whose map lacks each listed epigenome: an empty list, still
+        // a value of the row.
+        let none = regulatory(Box::new([]));
+        assert_eq!(field_value("CELL_TYPE", &v, Some(&none), &options, ","), "");
+        assert!(empty_value_is_written(
+            "CELL_TYPE",
+            &v,
+            Some(&none),
+            &options
+        ));
+        let motif = TranscriptConsequence {
+            feature_id: Some(Arc::from("ENSM00000001")),
+            consequences: std::iter::once(Consequence::TfBindingSiteVariant).collect(),
+            feature_type: FeatureType::MotifFeature,
+            cell_type: Some(Box::new([])),
+            ..TranscriptConsequence::default()
+        };
+        assert_eq!(
+            field_value("CELL_TYPE", &v, Some(&motif), &options, ","),
+            ""
+        );
+        assert!(empty_value_is_written(
+            "CELL_TYPE",
+            &v,
+            Some(&motif),
+            &options
+        ));
+        let transcript = ndufv3_consequence();
+        assert_eq!(
+            field_value("CELL_TYPE", &v, Some(&transcript), &options, ","),
+            ""
+        );
+        assert!(!empty_value_is_written(
+            "CELL_TYPE",
+            &v,
+            Some(&transcript),
+            &options
+        ));
+        assert!(!empty_value_is_written("CELL_TYPE", &v, None, &options));
+    }
+
+    /// `--cell_type` adds the `cell_type` field group, `CELL_TYPE` alone, after
+    /// the `regulatory` group's fields (Constants.pm:136-137): the 24th tab
+    /// column under `--tab --regulatory --cell_type`, the last CSQ subfield of
+    /// the VCF entry, each with Ensembl VEP's description (`:192`). Without the
+    /// flag the column is absent, and a `--fields CELL_TYPE` list prints `-` for
+    /// it; a transcript row prints `-` under the flag too.
+    #[test]
+    fn cell_type_group_adds_the_column_under_the_flag() {
+        let with = FieldOptions {
+            regulatory: true,
+            cell_type: true,
+            ..Default::default()
+        };
+        let columns = tab_columns(&with, &[], None);
+        assert_eq!(columns.len(), 24);
+        assert_eq!(columns[22..], ["TRANSCRIPTION_FACTORS", "CELL_TYPE"]);
+        assert_eq!(flag_fields(&with).last(), Some(&"CELL_TYPE"));
+        assert!(field_is_produced("CELL_TYPE", &with));
+        assert_eq!(
+            field_description("CELL_TYPE"),
+            Some("List of cell types and classifications for regulatory feature")
+        );
+        let header = tab_header(&with, &[], None, "", None, "");
+        assert!(
+            header.contains(
+                &"## CELL_TYPE : List of cell types and classifications for regulatory feature"
+                    .to_string()
+            ),
+            "{header:?}"
+        );
+        let vcf = crate::output::vcf_output::VcfOutputFormatter::new(
+            "CSQ".to_string(),
+            with.clone(),
+            Vec::new(),
+            None,
+        );
+        let csq_line = vcf
+            .header_lines(&[])
+            .into_iter()
+            .find(|line| line.starts_with("##INFO=<ID=CSQ"))
+            .unwrap();
+        assert!(
+            csq_line.contains("|TRANSCRIPTION_FACTORS|CELL_TYPE\">"),
+            "{csq_line}"
+        );
+        let without = FieldOptions {
+            regulatory: true,
+            ..Default::default()
+        };
+        assert!(!tab_columns(&without, &[], None).contains(&"CELL_TYPE".to_string()));
+        assert!(!field_is_produced("CELL_TYPE", &without));
+        let plan = ExtraFieldsPlan::new(with.clone());
+        assert!(plan.flag_fields.contains(&"CELL_TYPE"));
+        assert!(!plan.transcript_flag_fields.contains(&"CELL_TYPE"));
+        assert!(plan.transcript_fast_path);
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        v.transcript_consequences = vec![ndufv3_consequence()];
+        let tab =
+            crate::output::tab::TabOutputFormatter::new(with, Vec::new(), None, Vec::new(), true);
+        let row = crate::OutputFormatter::format_record(&tab, &[&v]).unwrap();
+        assert_eq!(row[0].split('\t').nth(23), Some("-"));
+    }
+
     /// The cache writes `-` where a transcript has no CCDS identifier; Ensembl
     /// VEP sets `CCDS` only for a value other than `-` (OutputFactory.pm:1534-1537),
     /// so the default format's Extra column carries no `CCDS=-`.
@@ -4624,9 +6765,9 @@ mod tests {
         let options = attribute_options();
         let mut tc = ndufv3_consequence();
         assert_eq!(value("CCDS", &tc, &options), "CCDS33572.1");
-        tc.ccds = Some("-".to_string());
+        edit_transcript(&mut tc, |t| t.ccds = Some("-".to_string()));
         assert_eq!(value("CCDS", &tc, &options), "");
-        tc.ccds = None;
+        edit_transcript(&mut tc, |t| t.ccds = None);
         assert_eq!(value("CCDS", &tc, &options), "");
     }
 
@@ -4640,9 +6781,11 @@ mod tests {
         let mut tc = ndufv3_consequence();
         assert_eq!(value("TREMBL", &tc, &options), "");
         assert_eq!(value("SWISSPROT", &tc, &options), "P56181.185");
-        tc.swissprot = Some("-".to_string());
-        tc.uniparc = Some("-".to_string());
-        tc.uniprot_isoform = Some("-".to_string());
+        edit_transcript(&mut tc, |t| {
+            t.swissprot = Some("-".to_string());
+            t.uniparc = Some("-".to_string());
+            t.uniprot_isoform = Some("-".to_string());
+        });
         for field in ["SWISSPROT", "TREMBL", "UNIPARC", "UNIPROT_ISOFORM"] {
             assert_eq!(value(field, &tc, &options), "", "{field}");
         }
@@ -4660,7 +6803,9 @@ mod tests {
         let mut tc = ndufv3_consequence();
         assert_eq!(value("UNIPARC", &tc, &options), "UPI000037848B");
         assert_eq!(value("UNIPROT_ISOFORM", &tc, &options), "P56181-2");
-        tc.trembl = Some("L7XE61_HUMAN,L7XCZ9_HUMAN,B7Z313_HUMAN".to_string());
+        edit_transcript(&mut tc, |t| {
+            t.trembl = Some("L7XE61_HUMAN,L7XCZ9_HUMAN,B7Z313_HUMAN".to_string())
+        });
         assert_eq!(
             value("TREMBL", &tc, &options),
             "L7XE61_HUMAN,L7XCZ9_HUMAN,B7Z313_HUMAN"
@@ -4676,7 +6821,7 @@ mod tests {
             field_value("TREMBL", &v, Some(&tc), &options, "&"),
             "L7XE61_HUMAN&L7XCZ9_HUMAN&B7Z313_HUMAN"
         );
-        tc.trembl = Some("A,,B,".to_string());
+        edit_transcript(&mut tc, |t| t.trembl = Some("A,,B,".to_string()));
         assert_eq!(value("TREMBL", &tc, &options), "A,,B");
         let fields = flag_fields(&options);
         let at = |name: &str| fields.iter().position(|f| *f == name).unwrap();
@@ -4692,11 +6837,13 @@ mod tests {
     fn refseq_dash_sentinel_suppressed() {
         let options = attribute_options();
         let mut tc = ndufv3_consequence();
-        tc.refseq = Some("NM_198996.4,NM_001302998.2".to_string());
+        edit_transcript(&mut tc, |t| {
+            t.refseq = Some("NM_198996.4,NM_001302998.2".to_string())
+        });
         assert_eq!(value("RefSeq", &tc, &options), "NM_198996.4,NM_001302998.2");
-        tc.refseq = Some("-".to_string());
+        edit_transcript(&mut tc, |t| t.refseq = Some("-".to_string()));
         assert_eq!(value("RefSeq", &tc, &options), "");
-        tc.refseq = None;
+        edit_transcript(&mut tc, |t| t.refseq = None);
         assert_eq!(value("RefSeq", &tc, &options), "");
     }
 
@@ -4711,7 +6858,7 @@ mod tests {
         let options = attribute_options();
         let mut tc = ndufv3_consequence();
         assert_eq!(value("GENE_PHENO", &tc, &options), "");
-        tc.gene_phenotype = true;
+        edit_transcript(&mut tc, |t| t.gene_phenotype = Some(1));
         assert_eq!(value("GENE_PHENO", &tc, &options), "1");
         let mut v = InputVariant::new("21".into(), 1, 1, b"A".to_vec(), b"G".to_vec());
         v.colocated_variants
@@ -4720,7 +6867,7 @@ mod tests {
                 phenotype: true,
                 ..Default::default()
             });
-        tc.gene_phenotype = false;
+        edit_transcript(&mut tc, |t| t.gene_phenotype = None);
         assert_eq!(field_value("GENE_PHENO", &v, Some(&tc), &options, ","), "");
     }
 
@@ -4763,12 +6910,14 @@ mod tests {
             ..attribute_options()
         };
         assert_eq!(value("Gene", &tc, &off), "ENSG00000160194");
-        tc.gene_version = None;
+        edit_transcript(&mut tc, |t| t.gene_version = None);
         assert_eq!(value("Gene", &tc, &options), "ENSG00000160194");
-        tc.gene_version = Some(0);
+        edit_transcript(&mut tc, |t| t.gene_version = Some(0));
         assert_eq!(value("Gene", &tc, &options), "ENSG00000160194");
-        tc.gene_id = std::sync::Arc::from("ENSG00000160194.3");
-        tc.gene_version = Some(20);
+        edit_transcript(&mut tc, |t| {
+            t.gene_stable_id = Arc::from("ENSG00000160194.3");
+            t.gene_version = Some(20);
+        });
         assert_eq!(value("Gene", &tc, &options), "ENSG00000160194.3");
         assert_eq!(version_suffix("NM_001.2", Some(5)), None);
         assert_eq!(version_suffix("NM_001.a", Some(5)), Some(5));
@@ -4787,7 +6936,7 @@ mod tests {
             ..attribute_options()
         };
         assert_eq!(value("Feature", &tc, &off), "ENST00000354250");
-        tc.transcript_id = std::sync::Arc::from("NM_021075.4");
+        edit_transcript(&mut tc, |t| t.stable_id = Arc::from("NM_021075.4"));
         assert_eq!(value("Feature", &tc, &options), "NM_021075.4");
     }
 
@@ -4806,12 +6955,14 @@ mod tests {
         assert_eq!(value("MANE", &tc, &options), "MANE_Select");
         assert_eq!(value("MANE_SELECT", &tc, &options), "NM_021075.4");
         assert_eq!(value("MANE_PLUS_CLINICAL", &tc, &options), "");
-        tc.mane_select = None;
-        tc.mane_plus_clinical = Some("NM_058174.3".to_string());
+        edit_transcript(&mut tc, |t| {
+            t.mane_select = None;
+            t.mane_plus_clinical = Some("NM_058174.3".to_string());
+        });
         assert_eq!(value("MANE", &tc, &options), "MANE_Plus_Clinical");
         assert_eq!(value("MANE_SELECT", &tc, &options), "");
         assert_eq!(value("MANE_PLUS_CLINICAL", &tc, &options), "NM_058174.3");
-        tc.mane_select = Some("NM_021075.4".to_string());
+        edit_transcript(&mut tc, |t| t.mane_select = Some("NM_021075.4".to_string()));
         assert_eq!(
             value("MANE", &tc, &options),
             "MANE_Select,MANE_Plus_Clinical"
@@ -4821,8 +6972,10 @@ mod tests {
             field_value("MANE", &v, Some(&tc), &options, "&"),
             "MANE_Select&MANE_Plus_Clinical"
         );
-        tc.mane_select = None;
-        tc.mane_plus_clinical = None;
+        edit_transcript(&mut tc, |t| {
+            t.mane_select = None;
+            t.mane_plus_clinical = None;
+        });
         assert_eq!(value("MANE", &tc, &options), "");
     }
 
@@ -4837,12 +6990,12 @@ mod tests {
         let options = attribute_options();
         let mut tc = ndufv3_consequence();
         assert_eq!(value("MANE_SELECT", &tc, &options), "NM_021075.4");
-        tc.mane_select = Some("NR_185847.1".to_string());
+        edit_transcript(&mut tc, |t| t.mane_select = Some("NR_185847.1".to_string()));
         assert_eq!(value("MANE_SELECT", &tc, &options), "NR_185847.1");
-        tc.mane_select = Some(String::new());
+        edit_transcript(&mut tc, |t| t.mane_select = Some(String::new()));
         assert_eq!(value("MANE_SELECT", &tc, &options), "");
         assert_eq!(value("MANE", &tc, &options), "MANE_Select");
-        tc.mane_select = Some("0".to_string());
+        edit_transcript(&mut tc, |t| t.mane_select = Some("0".to_string()));
         assert_eq!(value("MANE_SELECT", &tc, &options), "");
         assert_eq!(value("MANE", &tc, &options), "MANE_Select");
     }
@@ -4858,9 +7011,11 @@ mod tests {
             ..Default::default()
         };
         let mut tc = ndufv3_consequence();
-        tc.mane_plus_clinical = Some("NM_058174.3".to_string());
+        edit_transcript(&mut tc, |t| {
+            t.mane_plus_clinical = Some("NM_058174.3".to_string())
+        });
         assert_eq!(value("MANE", &tc, &options), "MANE_Select");
-        tc.mane_select = None;
+        edit_transcript(&mut tc, |t| t.mane_select = None);
         assert_eq!(value("MANE", &tc, &options), "");
         assert_eq!(
             flag_fields(&options),
@@ -4888,15 +7043,18 @@ mod tests {
     /// `tsl1 (assigned to previous version 4)` on the TPTE transcript
     /// ENST00000618007; OutputFactory.pm:1609-1613 keeps `$1` of `m/tsl(\d+)/`
     /// when it is not zero) and nothing for `tslNA`, which the loader leaves
-    /// `None`.
+    /// `None`. The digits print as the attribute spelt them, `$1` being a
+    /// string: `007`, `00`, `256` and `999` from a GFF3 that wrote such a level.
     #[test]
     fn tsl_prints_digit_only() {
         let options = attribute_options();
         let mut tc = ndufv3_consequence();
         assert_eq!(value("TSL", &tc, &options), "1");
-        tc.tsl = Some(5);
-        assert_eq!(value("TSL", &tc, &options), "5");
-        tc.tsl = None;
+        for level in ["5", "255", "007", "00", "256", "999"] {
+            edit_transcript(&mut tc, |t| t.tsl = Some(level.to_string()));
+            assert_eq!(value("TSL", &tc, &options), level);
+        }
+        edit_transcript(&mut tc, |t| t.tsl = None);
         assert_eq!(value("TSL", &tc, &options), "");
     }
 
@@ -4926,10 +7084,12 @@ mod tests {
     fn identifier_columns_read_dash_as_absent() {
         let options = attribute_options();
         let mut tc = ndufv3_consequence();
-        tc.gene_symbol = Some("-".into());
-        tc.gene_symbol_source = Some("-".into());
-        tc.hgnc_id = Some("-".into());
-        tc.protein_id = Some("-".into());
+        edit_transcript(&mut tc, |t| {
+            t.gene_symbol = Some("-".into());
+            t.gene_symbol_source = Some("-".into());
+            t.hgnc_id = Some("-".into());
+            t.protein_id = Some("-".into());
+        });
         for field in ["SYMBOL", "SYMBOL_SOURCE", "HGNC_ID", "ENSP"] {
             assert_eq!(value(field, &tc, &options), "", "{field}");
         }
@@ -4939,7 +7099,10 @@ mod tests {
     fn flags_keep_cds_codes_only() {
         let v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         let tc = TranscriptConsequence {
-            flags: std::sync::Arc::from(["cds_start_NF".to_string(), "gencode_basic".to_string()]),
+            transcript: Some(Arc::new(Transcript {
+                flags: Arc::from(["cds_start_NF".to_string(), "gencode_basic".to_string()]),
+                ..Transcript::default()
+            })),
             ..Default::default()
         };
         assert_eq!(
@@ -4962,9 +7125,17 @@ mod tests {
         );
     }
 
+    #[test]
+    fn utc_timestamp_pads_every_field_and_applies_the_century_leap_rule() {
+        assert_eq!(utc_timestamp(0), "1970-01-01 00:00:00");
+        assert_eq!(utc_timestamp(951_782_400), "2000-02-29 00:00:00");
+        assert_eq!(utc_timestamp(1_709_251_199), "2024-02-29 23:59:59");
+        assert_eq!(utc_timestamp(4_107_542_400), "2100-03-01 00:00:00");
+    }
+
     fn missense_tc() -> TranscriptConsequence {
         TranscriptConsequence {
-            transcript_id: std::sync::Arc::from("ENST1"),
+            transcript: Some(Arc::new(with_stable_id("ENST1"))),
             consequences: smallvec::smallvec![Consequence::MissenseVariant],
             hgvsp: Some("ENSP1:p.Arg97=".to_string()),
             ..Default::default()
@@ -4993,6 +7164,49 @@ mod tests {
         assert_eq!(
             field_value("HGVSp", &v, Some(&tc), &raw, ","),
             "ENSP1:p.Arg97="
+        );
+    }
+
+    /// `--json` sets `no_escape` as Ensembl VEP's `json` option set switches on
+    /// `rest`, whose set turns `no_escape` on (`Config.pm:486-498`): the JSON
+    /// output keeps the whitespace of a gene symbol, which the VCF writer turns
+    /// into `%20`, and the `=` of a synonymous HGVSp, which the text formats
+    /// write as `%3D` (`OutputFactory.pm:1527, 1764`).
+    #[test]
+    fn json_output_keeps_symbol_whitespace_and_hgvsp_equals() {
+        use crate::output::json::JsonOutputFormatter;
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        v.raw_input = Some("21\t100\t.\tA\tG\t.\t.\t.".into());
+        let mut tc = missense_tc();
+        edit_transcript(&mut tc, |t| {
+            t.gene_symbol = Some("AC011 2.1".into());
+            t.gene_symbol_source = Some("Clone_based_ensembl_gene".into());
+        });
+        v.transcript_consequences = vec![tc.clone()];
+        let json_options = FieldOptions {
+            hgvs: true,
+            symbol: true,
+            no_escape: true,
+            ..Default::default()
+        };
+        let parsed =
+            JsonOutputFormatter::new(json_options, Vec::new(), None).format_variant_value(&v);
+        let row = &parsed["transcript_consequences"][0];
+        assert_eq!(row["gene_symbol"], "AC011 2.1");
+        assert_eq!(row["hgvsp"], "ENSP1:p.Arg97=");
+        let text_options = FieldOptions {
+            hgvs: true,
+            symbol: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("HGVSp", &v, Some(&tc), &text_options, ","),
+            "ENSP1:p.Arg97%3D"
+        );
+        assert_eq!(
+            field_value("SYMBOL", &v, Some(&tc), &text_options, ","),
+            "AC011 2.1",
+            "the %20 is the VCF writer's, applied as the CSQ entry is formatted"
         );
     }
 
@@ -5321,6 +7535,355 @@ mod tests {
             ),
             "A"
         );
+    }
+
+    /// A BAM-edited cache adds `BAM_EDIT` after `GIVEN_REF` and `USED_REF`
+    /// (Constants.pm:100, the `bam_edited` group) with its description (`:251`),
+    /// valued `OK` or `FAILED`, the transcript's edit status upper-cased
+    /// (OutputFactory.pm:1551-1553), on every row of a transcript that carries
+    /// one and empty on a transcript the alignment never touched; a row without
+    /// a transcript carries none; the header lists the column under the group
+    /// alone, so a run on an unedited cache has no `## BAM_EDIT` line. The value
+    /// is set without a flag check, so under `--use_given_ref`, which leaves the
+    /// group off while the transcripts keep their status, the `Extra` column
+    /// still carries `BAM_EDIT` after the flag fields, as the default format
+    /// prints every key of the row hash (`OutputFactory/VEP_output.pm:107-110`).
+    #[test]
+    fn bam_edit_column_follows_the_bam_edited_cache() {
+        use vep_core::transcript::BamEditStatus;
+        let opts = FieldOptions {
+            use_transcript_ref: true,
+            bam_edited: true,
+            gene_phenotype: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            flag_fields(&opts)[4..],
+            ["GIVEN_REF", "USED_REF", "BAM_EDIT", "GENE_PHENO"]
+        );
+        assert!(vf_level_flag_fields(&opts).is_empty());
+        assert_eq!(
+            field_description("BAM_EDIT"),
+            Some("Indicates success or failure of edit using BAM file")
+        );
+        let header = default_format_header(&opts, &[], "/c", None, "vep -i x");
+        assert!(header
+            .iter()
+            .any(|l| l == "## BAM_EDIT : Indicates success or failure of edit using BAM file"));
+        let unedited = default_format_header(
+            &FieldOptions {
+                use_transcript_ref: true,
+                ..Default::default()
+            },
+            &[],
+            "/c",
+            None,
+            "vep -i x",
+        );
+        assert!(!unedited.iter().any(|l| l.starts_with("## BAM_EDIT")));
+        assert!(!flag_fields(&FieldOptions::default()).contains(&"BAM_EDIT"));
+        assert!(field_is_produced("BAM_EDIT", &FieldOptions::default()));
+
+        let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"C".to_vec());
+        let edited = TranscriptConsequence {
+            bam_edit_status: Some(BamEditStatus::Ok),
+            ..Default::default()
+        };
+        let failed = TranscriptConsequence {
+            bam_edit_status: Some(BamEditStatus::Failed),
+            ..Default::default()
+        };
+        let untouched = TranscriptConsequence::default();
+        let given_ref = FieldOptions {
+            gene_phenotype: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            extra_keys(&variant, Some(&edited), &given_ref)[4..],
+            ["GENE_PHENO", "BAM_EDIT"]
+        );
+        assert_eq!(
+            field_value("BAM_EDIT", &variant, Some(&edited), &given_ref, ","),
+            "OK"
+        );
+        assert!(!extra_keys(&variant, Some(&untouched), &given_ref).contains(&"BAM_EDIT"));
+        assert!(!extra_keys(&variant, None, &given_ref).contains(&"BAM_EDIT"));
+        assert_eq!(
+            extra_keys(&variant, Some(&edited), &opts)
+                .iter()
+                .filter(|k| **k == "BAM_EDIT")
+                .count(),
+            1
+        );
+        for sep in [",", "&"] {
+            assert_eq!(
+                field_value("BAM_EDIT", &variant, Some(&edited), &opts, sep),
+                "OK"
+            );
+            assert_eq!(
+                field_value("BAM_EDIT", &variant, Some(&failed), &opts, sep),
+                "FAILED"
+            );
+            assert_eq!(
+                field_value("BAM_EDIT", &variant, Some(&untouched), &opts, sep),
+                ""
+            );
+            assert_eq!(field_value("BAM_EDIT", &variant, None, &opts, sep), "");
+        }
+        let mut summary = variant.clone();
+        summary.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        assert_eq!(field_value("BAM_EDIT", &summary, None, &opts, ","), "");
+    }
+
+    /// `--refseq` adds `REFSEQ_MATCH` and `REFSEQ_OFFSET` after `RefSeq`
+    /// (Constants.pm:97) and `--merged` adds `REFSEQ_MATCH`, `SOURCE` and
+    /// `REFSEQ_OFFSET` (`:98`), each name once when both are on, before the
+    /// `GIVEN_REF`, `USED_REF` and `BAM_EDIT` of a BAM-edited cache (`:99-100`);
+    /// their descriptions are the texts of `:167` and `:249-251`, and none is a
+    /// variant-level field.
+    #[test]
+    fn refseq_and_merged_groups_add_their_columns() {
+        let refseq = FieldOptions {
+            xref_refseq: true,
+            refseq: true,
+            use_transcript_ref: true,
+            bam_edited: true,
+            gene_phenotype: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            flag_fields(&refseq)[4..],
+            [
+                "RefSeq",
+                "REFSEQ_MATCH",
+                "REFSEQ_OFFSET",
+                "GIVEN_REF",
+                "USED_REF",
+                "BAM_EDIT",
+                "GENE_PHENO"
+            ]
+        );
+        let merged = FieldOptions {
+            merged: true,
+            use_transcript_ref: true,
+            bam_edited: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            flag_fields(&merged)[4..],
+            [
+                "REFSEQ_MATCH",
+                "SOURCE",
+                "REFSEQ_OFFSET",
+                "GIVEN_REF",
+                "USED_REF",
+                "BAM_EDIT"
+            ]
+        );
+        let both = FieldOptions {
+            refseq: true,
+            merged: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            flag_fields(&both)[4..],
+            ["REFSEQ_MATCH", "REFSEQ_OFFSET", "SOURCE"]
+        );
+        assert!(vf_level_flag_fields(&both).is_empty());
+        for (field, description) in [
+            ("REFSEQ_MATCH", "RefSeq transcript match status"),
+            (
+                "REFSEQ_OFFSET",
+                "HGVS adjustment length required due to mismatch between RefSeq transcript and the reference genome",
+            ),
+            ("SOURCE", "Source of transcript"),
+            ("BAM_EDIT", "Indicates success or failure of edit using BAM file"),
+            ("GIVEN_REF", "Reference allele from input"),
+        ] {
+            assert_eq!(field_description(field), Some(description), "{field}");
+        }
+        let header = default_format_header(&merged, &[], "/c", None, "vep -i x");
+        assert!(header
+            .iter()
+            .any(|l| l == "## REFSEQ_MATCH : RefSeq transcript match status"));
+        assert!(header
+            .iter()
+            .any(|l| l == "## SOURCE : Source of transcript"));
+        for field in ["REFSEQ_MATCH", "SOURCE", "REFSEQ_OFFSET"] {
+            assert!(!flag_fields(&FieldOptions::default()).contains(&field));
+            assert!(!field_is_produced(field, &FieldOptions::default()));
+            assert!(field_is_produced(field, &merged));
+        }
+        assert!(!field_is_produced("SOURCE", &refseq));
+    }
+
+    /// `REFSEQ_MATCH` lists the transcript's attribute codes matching `^rseq`
+    /// (`grep {$_->code =~ /^rseq/}` over the attribute list, OutputFactory.pm:1547) under
+    /// `--refseq` or `--merged` (`:1546`), joined as the format joins a list,
+    /// `,` in the default and tab formats and `&` in the VCF; the codes
+    /// `enst_refseq_compare` and `_rna_edit` fail the match and a transcript
+    /// without a matching code sets no key (`:1548`), as a row without a
+    /// transcript does. Without either flag the key is not set, so the `Extra`
+    /// column of the default format never carries it.
+    #[test]
+    fn refseq_match_lists_the_rseq_attribute_codes_under_refseq_and_merged() {
+        let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"C".to_vec());
+        let one = TranscriptConsequence {
+            transcript: Some(Arc::new(with_rseq_codes(&["rseq_mrna_match"]))),
+            ..Default::default()
+        };
+        let two = TranscriptConsequence {
+            transcript: Some(Arc::new(with_rseq_codes(&[
+                "rseq_5p_mismatch",
+                "rseq_cds_mismatch",
+            ]))),
+            ..Default::default()
+        };
+        let none = TranscriptConsequence::default();
+        for flags in [
+            FieldOptions {
+                refseq: true,
+                ..Default::default()
+            },
+            FieldOptions {
+                merged: true,
+                ..Default::default()
+            },
+        ] {
+            assert_eq!(
+                field_value("REFSEQ_MATCH", &variant, Some(&one), &flags, ","),
+                "rseq_mrna_match"
+            );
+            assert_eq!(
+                field_value("REFSEQ_MATCH", &variant, Some(&two), &flags, ","),
+                "rseq_5p_mismatch,rseq_cds_mismatch"
+            );
+            assert_eq!(
+                field_value("REFSEQ_MATCH", &variant, Some(&two), &flags, "&"),
+                "rseq_5p_mismatch&rseq_cds_mismatch"
+            );
+            assert_eq!(
+                field_value("REFSEQ_MATCH", &variant, Some(&none), &flags, ","),
+                ""
+            );
+            assert_eq!(field_value("REFSEQ_MATCH", &variant, None, &flags, ","), "");
+            assert!(extra_keys(&variant, Some(&two), &flags).contains(&"REFSEQ_MATCH"));
+        }
+        let off = FieldOptions::default();
+        assert!(!extra_keys(&variant, Some(&two), &off).contains(&"REFSEQ_MATCH"));
+        assert!(!field_is_produced("REFSEQ_MATCH", &off));
+        let mut summary = variant.clone();
+        summary.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        assert_eq!(
+            field_value(
+                "REFSEQ_MATCH",
+                &summary,
+                None,
+                &FieldOptions {
+                    merged: true,
+                    ..Default::default()
+                },
+                ","
+            ),
+            ""
+        );
+    }
+
+    /// `SOURCE` prints the cache the transcript came from, `Ensembl` or `RefSeq`
+    /// as the merged cache spells its `_source_cache` key, and nothing on a
+    /// transcript without one (`$hash->{SOURCE} = $tr->{_source_cache} if
+    /// defined $tr->{_source_cache}`, OutputFactory.pm:1583); the value is set
+    /// from the transcript alone, so the one arm serves the `custom` group's
+    /// `SOURCE` too (Constants.pm:101), where it prints the custom source's name.
+    /// A row without a transcript prints nothing.
+    #[test]
+    fn source_column_prints_the_source_cache() {
+        let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"C".to_vec());
+        let opts = FieldOptions {
+            merged: true,
+            ..Default::default()
+        };
+        let ensembl = TranscriptConsequence {
+            transcript: Some(Arc::new(Transcript {
+                source_cache: Some(SourceCache::Ensembl),
+                ..Transcript::default()
+            })),
+            ..Default::default()
+        };
+        let refseq = TranscriptConsequence {
+            transcript: Some(Arc::new(Transcript {
+                source_cache: Some(SourceCache::RefSeq),
+                ..Transcript::default()
+            })),
+            ..Default::default()
+        };
+        let custom = TranscriptConsequence {
+            transcript: Some(Arc::new(Transcript {
+                source_cache: Some(SourceCache::Custom(Arc::from("my_genes"))),
+                ..Transcript::default()
+            })),
+            ..Default::default()
+        };
+        let unstamped = TranscriptConsequence::default();
+        for sep in [",", "&"] {
+            assert_eq!(
+                field_value("SOURCE", &variant, Some(&ensembl), &opts, sep),
+                "Ensembl"
+            );
+            assert_eq!(
+                field_value("SOURCE", &variant, Some(&refseq), &opts, sep),
+                "RefSeq"
+            );
+            assert_eq!(
+                field_value("SOURCE", &variant, Some(&custom), &opts, sep),
+                "my_genes"
+            );
+            assert_eq!(
+                field_value("SOURCE", &variant, Some(&unstamped), &opts, sep),
+                ""
+            );
+            assert_eq!(field_value("SOURCE", &variant, None, &opts, sep), "");
+        }
+        assert_eq!(
+            extra_keys(&variant, Some(&refseq), &opts)[4..],
+            ["REFSEQ_MATCH", "SOURCE", "REFSEQ_OFFSET"]
+        );
+    }
+
+    /// `REFSEQ_OFFSET` prints the misalignment offset `hgvs_transcript` left on
+    /// the allele when it is not 0 (OutputFactory.pm:1769), signed, in every
+    /// format; a row without one prints nothing.
+    #[test]
+    fn refseq_offset_prints_the_non_zero_offset_signed() {
+        let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"C".to_vec());
+        let opts = FieldOptions {
+            refseq: true,
+            ..Default::default()
+        };
+        let plus = TranscriptConsequence {
+            refseq_offset: Some(3),
+            ..Default::default()
+        };
+        let minus = TranscriptConsequence {
+            refseq_offset: Some(-3),
+            ..Default::default()
+        };
+        let none = TranscriptConsequence::default();
+        for sep in [",", "&"] {
+            assert_eq!(
+                field_value("REFSEQ_OFFSET", &variant, Some(&plus), &opts, sep),
+                "3"
+            );
+            assert_eq!(
+                field_value("REFSEQ_OFFSET", &variant, Some(&minus), &opts, sep),
+                "-3"
+            );
+            assert_eq!(
+                field_value("REFSEQ_OFFSET", &variant, Some(&none), &opts, sep),
+                ""
+            );
+            assert_eq!(field_value("REFSEQ_OFFSET", &variant, None, &opts, sep), "");
+        }
     }
 
     /// `--individual_zyg` adds `ZYG` alone (Constants.pm:70, the second
@@ -5811,8 +8374,11 @@ mod tests {
         }
         let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         v.transcript_consequences = vec![TranscriptConsequence {
-            transcript_id: std::sync::Arc::from("ENST1"),
-            biotype: Some("protein_coding".into()),
+            transcript: Some(Arc::new(Transcript {
+                stable_id: Arc::from("ENST1"),
+                biotype: "protein_coding".into(),
+                ..Transcript::default()
+            })),
             ..Default::default()
         }];
         let chosen: Vec<String> = ["Feature", "BIOTYPE"].map(str::to_string).to_vec();
@@ -5918,7 +8484,7 @@ mod tests {
             id: id.to_string(),
             allele_string: Some(allele_string.to_string()),
             strand: 1,
-            clin_sig: clin_sig.iter().map(|t| t.to_string()).collect(),
+            clin_sig: (!clin_sig.is_empty()).then(|| clin_sig.join(",")),
             matched_alleles: matched
                 .iter()
                 .enumerate()
@@ -6477,7 +9043,7 @@ mod tests {
     fn pubmed_keeps_duplicates_across_variants() {
         let cited = |id: &str, ids: &[&str]| {
             let mut cv = known(id, "ATA/A", &[("-", "-")], &[], None);
-            cv.pubmed = ids.iter().map(|i| i.to_string()).collect();
+            cv.pubmed = Some(ids.join(","));
             cv
         };
         let options = with_check_existing(|o| o.pubmed = true);
@@ -6539,6 +9105,74 @@ mod tests {
         );
     }
 
+    /// A stored list ending in `,` adds no empty element, alone or before the
+    /// next variant's (OutputFactory.pm:1125-1126), and a list with no true
+    /// element prints nothing (:1136-1138). Ensembl VEP 116.2 writes
+    /// `PUBMED=99000001,99000002,99000003` and `CLIN_SIG=benign,pathogenic` for
+    /// two variants storing `99000001,99000002,` with `benign,` and `99000003`
+    /// with `pathogenic`, and neither field for one storing `0,0` and `,,0`.
+    #[test]
+    fn stored_lists_end_where_their_last_element_ends() {
+        let options = with_check_existing(|o| o.pubmed = true);
+        let storing = |id: &str, pubmed: &str, clin_sig: &str| {
+            let mut cv = known(id, "ATA/A", &[("-", "-")], &[], None);
+            cv.pubmed = Some(pubmed.to_string());
+            cv.clin_sig = Some(clin_sig.to_string());
+            cv
+        };
+        let two = record(
+            "TA",
+            &["-"],
+            vec![
+                storing("rs1", "99000001,99000002,", "benign,"),
+                storing("rs2", "99000003", "pathogenic"),
+            ],
+        );
+        for (list_sep, pubmed, clin_sig) in [
+            (",", "99000001,99000002,99000003", "benign,pathogenic"),
+            ("&", "99000001&99000002&99000003", "benign&pathogenic"),
+        ] {
+            assert_eq!(
+                field_value("PUBMED", &two[0], None, &options, list_sep),
+                pubmed
+            );
+            assert_eq!(
+                field_value("CLIN_SIG", &two[0], None, &options, list_sep),
+                clin_sig
+            );
+        }
+        let kept = record("TA", &["-"], vec![storing("rs1", ",99000001", "a,,b")]);
+        assert_eq!(
+            field_value("PUBMED", &kept[0], None, &options, ","),
+            ",99000001"
+        );
+        assert_eq!(
+            field_value("CLIN_SIG", &kept[0], None, &options, ","),
+            "a,,b"
+        );
+        for (pubmed, clin_sig) in [("0,0", ",,0"), (",,", ","), ("0", "0")] {
+            let none = record("TA", &["-"], vec![storing("rs1", pubmed, clin_sig)]);
+            assert_eq!(field_value("PUBMED", &none[0], None, &options, ","), "");
+            assert_eq!(field_value("CLIN_SIG", &none[0], None, &options, ","), "");
+        }
+        let one_true = record(
+            "TA",
+            &["-"],
+            vec![
+                storing("rs1", "0,0", "0"),
+                storing("rs2", "99000001", "0,benign"),
+            ],
+        );
+        assert_eq!(
+            field_value("PUBMED", &one_true[0], None, &options, ","),
+            "0,0,99000001"
+        );
+        assert_eq!(
+            field_value("CLIN_SIG", &one_true[0], None, &options, ","),
+            "0,benign"
+        );
+    }
+
     /// A variant matched on another allele of the record prints none of its
     /// columns on this allele's rows (OutputFactory.pm:1081-1083); one matched on
     /// its span alone prints on every row.
@@ -6546,7 +9180,7 @@ mod tests {
     fn colocated_columns_follow_the_row_allele_gate() {
         let options = with_check_existing(|o| o.pubmed = true);
         let mut on_t = known("rs1", "G/T", &[("T", "T")], &["benign"], None);
-        on_t.pubmed = vec!["1".into()];
+        on_t.pubmed = Some("1".into());
         on_t.phenotype = true;
         let mut span_only = known("rs2", "dbSNP_novariation", &[], &["pathogenic"], None);
         span_only.somatic = true;
@@ -6748,5 +9382,637 @@ mod tests {
             lines.last().unwrap(),
             "#ID\tREFSEQ_MATCH\tBAM_EDIT\tCELL_TYPE\tExAC_AF\tNOT_A_FIELD"
         );
+    }
+
+    /// The `A/G` allele of a record with the two custom sources' entries: the
+    /// ClinVar entry's `exact` record matched `G`.
+    fn custom_variant() -> InputVariant {
+        let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        v.id = Some("rs1".to_string());
+        v.custom_annotations = vec![clinvar_annotations(b"G"), conservation_annotations()];
+        v.most_severe_consequence = Some(Consequence::MissenseVariant);
+        v
+    }
+
+    fn custom_options() -> FieldOptions {
+        FieldOptions {
+            custom_sources: vec![clinvar_source(), conservation_source()],
+            ..Default::default()
+        }
+    }
+
+    /// A source whose `short_name` is `SOURCE`, the key the `custom` flag group
+    /// adds (Constants.pm:101), lists its record names under that key
+    /// (OutputFactory.pm:1301); a transcript of a merged cache then overwrites
+    /// the key with its source cache (`:1583`). The key is one column, read by
+    /// the flag field, in the tab and VCF layouts and one Extra key.
+    #[test]
+    fn a_custom_source_named_source_writes_its_names_under_the_flag_field() {
+        let mut variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        variant.custom_annotations = vec![CustomAnnotations {
+            short_name: Arc::from("SOURCE"),
+            records: ["exact_1", "overlap_1"]
+                .into_iter()
+                .map(|name| CustomRecord {
+                    name: name.to_string(),
+                    allele: None,
+                    fields: IndexMap::new(),
+                    score: None,
+                })
+                .collect(),
+            matched: true,
+            stats: None,
+        }];
+        variant.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        let options = FieldOptions {
+            custom_sources: vec![CustomSourceInfo {
+                file: "/data/regions.bed.gz".to_string(),
+                short_name: "SOURCE".to_string(),
+                fields: Vec::new(),
+                filter_field: false,
+                summary_stats: Vec::new(),
+                reciprocal: false,
+                field_descriptions: IndexMap::new(),
+            }],
+            ..Default::default()
+        };
+        let plain = TranscriptConsequence::default();
+        assert_eq!(
+            field_value("SOURCE", &variant, Some(&plain), &options, ","),
+            "exact_1,overlap_1"
+        );
+        assert_eq!(
+            field_value("SOURCE", &variant, Some(&plain), &options, "&"),
+            "exact_1&overlap_1"
+        );
+        assert_eq!(
+            field_value("SOURCE", &variant, None, &options, ","),
+            "exact_1,overlap_1",
+            "the intergenic row carries the record's custom keys"
+        );
+        let merged = TranscriptConsequence {
+            transcript: Some(Arc::new(Transcript {
+                source_cache: Some(SourceCache::RefSeq),
+                ..Transcript::default()
+            })),
+            ..Default::default()
+        };
+        assert_eq!(
+            field_value("SOURCE", &variant, Some(&merged), &options, ","),
+            "RefSeq"
+        );
+
+        let plan = ExtraFieldsPlan::new(options.clone());
+        assert_eq!(
+            extra_keys_with(
+                &plan.flag_fields,
+                &plan.custom_keys,
+                &variant,
+                Some(&plain),
+                &options
+            ),
+            ["IMPACT", "DISTANCE", "STRAND", "FLAGS", "SOURCE"]
+        );
+        let columns = tab_columns(&options, &[], None);
+        assert_eq!(columns.iter().filter(|c| *c == "SOURCE").count(), 1);
+    }
+
+    /// `_add_custom_annotations_to_hash` (OutputFactory.pm:1297-1312) lists the
+    /// names under the short name and each field's values under
+    /// `<short_name>_<field>`, one entry per record carrying the field, and sets
+    /// each statistic as a scalar; `convert_arrayref` (Utils.pm:185-198) joins a
+    /// list with the format's separator, `,` in the default and tab formats and
+    /// `&` in a CSQ entry (VCF.pm:392). The default format's Extra keys sort
+    /// after the flag fields (VEP_output.pm:121-130), and `--custom` adds
+    /// `SOURCE` to the flag fields (Constants.pm:101), which a transcript of a
+    /// plain cache leaves unset (:1583).
+    #[test]
+    fn custom_keys_render_names_fields_stats_and_source_in_every_format() {
+        let variant = custom_variant();
+        let tc = TranscriptConsequence::default();
+        let options = custom_options();
+        let plan = ExtraFieldsPlan::new(options.clone());
+        assert_eq!(
+            plan.custom_keys,
+            [
+                "ClinVar",
+                "ClinVar_CLNSIG",
+                "ClinVar_CLNREVSTAT",
+                "cons",
+                "cons_PC",
+                "cons_min",
+                "cons_count",
+                "ClinVar_FILTER",
+            ]
+        );
+        assert_eq!(
+            flag_fields(&options),
+            ["IMPACT", "DISTANCE", "STRAND", "FLAGS", "SOURCE"]
+        );
+        assert_eq!(
+            extra_keys_with(
+                &plan.flag_fields,
+                &plan.custom_keys,
+                &variant,
+                Some(&tc),
+                &options
+            ),
+            [
+                "IMPACT",
+                "DISTANCE",
+                "STRAND",
+                "FLAGS",
+                "SOURCE",
+                "ClinVar",
+                "ClinVar_CLNREVSTAT",
+                "ClinVar_CLNSIG",
+                "ClinVar_FILTER",
+                "cons",
+                "cons_PC",
+                "cons_count",
+                "cons_min",
+            ]
+        );
+        assert_eq!(
+            field_value("SOURCE", &variant, Some(&tc), &options, ","),
+            ""
+        );
+        for (format_sep, names, significance) in [
+            (",", "21:100-100,rs1", "Benign,Pathogenic"),
+            ("&", "21:100-100&rs1", "Benign&Pathogenic"),
+        ] {
+            assert_eq!(
+                field_value("ClinVar", &variant, Some(&tc), &options, format_sep),
+                names
+            );
+            assert_eq!(
+                field_value("ClinVar_CLNSIG", &variant, Some(&tc), &options, format_sep),
+                significance
+            );
+            assert_eq!(
+                field_value(
+                    "ClinVar_CLNREVSTAT",
+                    &variant,
+                    Some(&tc),
+                    &options,
+                    format_sep
+                ),
+                "criteria_provided"
+            );
+            assert_eq!(
+                field_value("ClinVar_CLNDN", &variant, Some(&tc), &options, format_sep),
+                ""
+            );
+            assert_eq!(
+                field_value("cons_min", &variant, Some(&tc), &options, format_sep),
+                "0"
+            );
+            assert_eq!(
+                field_value("cons_count", &variant, Some(&tc), &options, format_sep),
+                "1"
+            );
+            assert_eq!(
+                field_value("cons", &variant, Some(&tc), &options, format_sep),
+                "0"
+            );
+        }
+        assert!(!custom_key_present("ClinVar_CLNDN", &variant, Some(&tc)));
+        let columns = tab_columns(&options, &["CADD_PHRED".to_string()], None);
+        assert_eq!(
+            &columns[DEFAULT_OUTPUT_COLS.len()..],
+            [
+                "IMPACT",
+                "DISTANCE",
+                "STRAND",
+                "FLAGS",
+                "SOURCE",
+                "CADD_PHRED",
+                "ClinVar",
+                "ClinVar_CLNSIG",
+                "ClinVar_CLNREVSTAT",
+                "cons",
+                "cons_PC",
+                "cons_min",
+                "cons_count",
+            ]
+        );
+        // On a summary row the record's hash carries the whole-record custom
+        // keys and the statistics (OutputFactory.pm:1003-1014) and no exact
+        // record.
+        let mut summary = custom_variant();
+        summary.summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        assert_eq!(
+            extra_keys_with(
+                &plan.flag_fields,
+                &plan.custom_keys,
+                &summary,
+                None,
+                &options
+            )[5..],
+            [
+                "ClinVar",
+                "ClinVar_CLNREVSTAT",
+                "ClinVar_CLNSIG",
+                "cons",
+                "cons_PC",
+                "cons_count",
+                "cons_min"
+            ]
+        );
+        assert_eq!(
+            field_value("ClinVar", &summary, None, &options, ","),
+            "21:100-100"
+        );
+        assert_eq!(
+            field_value("ClinVar_CLNSIG", &summary, None, &options, ","),
+            "Benign"
+        );
+        assert_eq!(field_value("cons_min", &summary, None, &options, ","), "0");
+    }
+
+    /// Two sources under one short name print the statistics of the last
+    /// source that matched a record: one whose every match lent its fields to
+    /// an earlier source's namesake lists no record of its own and still
+    /// carries them, while one that matched nothing (a `###CHR###` source of
+    /// another chromosome) is passed over for the source before it.
+    #[test]
+    fn custom_stats_come_from_the_last_source_that_matched() {
+        let count = |n: f64| {
+            Some(CustomStats::Values(IndexMap::from([(
+                "count".to_string(),
+                CustomValue::Number(n),
+            )])))
+        };
+        let listed = CustomAnnotations {
+            stats: count(2.0),
+            ..conservation_annotations()
+        };
+        let lent_only = CustomAnnotations {
+            records: Vec::new(),
+            matched: true,
+            stats: count(1.0),
+            ..conservation_annotations()
+        };
+        let unmatched = CustomAnnotations {
+            records: Vec::new(),
+            matched: false,
+            stats: count(0.0),
+            ..conservation_annotations()
+        };
+        assert_eq!(
+            custom_stats([&listed, &lent_only].into_iter()),
+            count(1.0).as_ref()
+        );
+        assert_eq!(
+            custom_stats([&listed, &unmatched].into_iter()),
+            count(2.0).as_ref()
+        );
+        assert_eq!(custom_stats([&unmatched].into_iter()), count(0.0).as_ref());
+
+        // The row's statistic follows the same choice; the names key lists the
+        // listed entry's record alone.
+        let options = custom_options();
+        let mut variant = custom_variant();
+        variant.custom_annotations = vec![clinvar_annotations(b"G"), listed.clone()];
+        assert_eq!(
+            field_value("cons_count", &variant, None, &options, ","),
+            "2"
+        );
+        variant.custom_annotations = vec![clinvar_annotations(b"G"), listed.clone(), lent_only];
+        assert_eq!(
+            field_value("cons_count", &variant, None, &options, ","),
+            "1"
+        );
+        assert_eq!(field_value("cons", &variant, None, &options, ","), "0");
+        variant.custom_annotations = vec![clinvar_annotations(b"G"), listed, unmatched];
+        assert_eq!(
+            field_value("cons_count", &variant, None, &options, ","),
+            "2"
+        );
+    }
+
+    /// `_add_custom_annotations_to_hash` pushes a record's field value as the
+    /// source stored it (OutputFactory.pm:1301-1303), undefined for a GFF
+    /// window with no `ID` attribute (`File/GFF.pm:198`), and `convert_arrayref`
+    /// joins the undefined entry as the empty string (Utils.pm:193): the key is
+    /// present and its entry prints empty between its neighbours.
+    #[test]
+    fn an_undefined_custom_field_prints_as_the_empty_entry() {
+        let mut variant = custom_variant();
+        variant.custom_annotations[0].records[0]
+            .fields
+            .insert("CLNSIG".to_string(), CustomFieldValue::Undefined);
+        let tc = TranscriptConsequence::default();
+        let options = custom_options();
+        assert!(custom_key_present("ClinVar_CLNSIG", &variant, Some(&tc)));
+        assert_eq!(
+            field_value("ClinVar_CLNSIG", &variant, Some(&tc), &options, ","),
+            "Benign,"
+        );
+        assert_eq!(
+            field_value("ClinVar_CLNSIG", &variant, Some(&tc), &options, "&"),
+            "Benign&"
+        );
+    }
+
+    /// A short name's list holds the records of the whole input record first
+    /// (`VariationFeature_to_output_hash` seeds the row's hash with them,
+    /// OutputFactory.pm:1003-1014) and the row's allele records after them
+    /// (`VariationFeatureOverlapAllele_to_output_hash` pushes them onto that
+    /// list, :1416-1426), whatever order the sources listed them in; the JSON
+    /// list keeps the sources' own order.
+    #[test]
+    fn whole_record_custom_records_list_before_the_rows_allele_records() {
+        let mut variant = custom_variant();
+        let second = CustomAnnotations {
+            short_name: Arc::from("ClinVar"),
+            records: vec![
+                CustomRecord {
+                    name: "rs2".to_string(),
+                    allele: Some(b"G".to_vec()),
+                    fields: IndexMap::new(),
+                    score: None,
+                },
+                CustomRecord {
+                    name: "21:100-101".to_string(),
+                    allele: None,
+                    fields: IndexMap::from([(
+                        "CLNSIG".to_string(),
+                        CustomFieldValue::Text("Uncertain".to_string()),
+                    )]),
+                    score: None,
+                },
+            ],
+            matched: true,
+            stats: None,
+        };
+        variant.custom_annotations.insert(1, second);
+        let tc = TranscriptConsequence::default();
+        let options = custom_options();
+        assert_eq!(
+            field_value("ClinVar", &variant, Some(&tc), &options, ","),
+            "21:100-100,21:100-101,rs1,rs2"
+        );
+        assert_eq!(
+            field_value("ClinVar_CLNSIG", &variant, Some(&tc), &options, "&"),
+            "Benign&Uncertain&Pathogenic"
+        );
+        // A reference row prints the whole-record records alone.
+        let reference_row = variant.reference_allele_row();
+        assert_eq!(
+            field_value("ClinVar", &reference_row, Some(&tc), &options, ","),
+            "21:100-100,21:100-101"
+        );
+    }
+
+    /// Ensembl VEP keys its hash by the whole string, `<short_name>` and
+    /// `<short_name>_<field>` (OutputFactory.pm:1300-1303), so a source whose
+    /// short name extends another's across an underscore keeps its own keys
+    /// beside the shorter name's whatever order the sources were given in: with
+    /// `A` and `A_B` both matching, `A_B` and `A_B_count` are `A_B`'s names and
+    /// statistic, and `A_B_TAG` is `A_B`'s field, not `A`'s field `B_TAG`.
+    #[test]
+    fn a_custom_key_resolves_against_every_short_name_that_opens_it() {
+        let a = CustomAnnotations {
+            short_name: Arc::from("A"),
+            records: vec![CustomRecord {
+                name: "21:100-100".to_string(),
+                allele: None,
+                fields: IndexMap::from([(
+                    "TAG".to_string(),
+                    CustomFieldValue::Text("x".to_string()),
+                )]),
+                score: None,
+            }],
+            matched: true,
+            stats: Some(CustomStats::Values(IndexMap::from([(
+                "count".to_string(),
+                CustomValue::Number(1.0),
+            )]))),
+        };
+        let a_b = CustomAnnotations {
+            short_name: Arc::from("A_B"),
+            records: vec![CustomRecord {
+                name: "b2".to_string(),
+                allele: None,
+                fields: IndexMap::from([(
+                    "TAG".to_string(),
+                    CustomFieldValue::Text("y".to_string()),
+                )]),
+                score: Some(CustomValue::Number(4.0)),
+            }],
+            matched: true,
+            stats: Some(CustomStats::Values(IndexMap::from([(
+                "count".to_string(),
+                CustomValue::Number(1.0),
+            )]))),
+        };
+        let tc = TranscriptConsequence::default();
+        let options = FieldOptions::default();
+        for order in [vec![a.clone(), a_b.clone()], vec![a_b, a]] {
+            let mut variant = custom_variant();
+            variant.custom_annotations = order;
+            for (key, value) in [
+                ("A", "21:100-100"),
+                ("A_TAG", "x"),
+                ("A_count", "1"),
+                ("A_B", "b2"),
+                ("A_B_TAG", "y"),
+                ("A_B_count", "1"),
+            ] {
+                assert!(custom_key_present(key, &variant, Some(&tc)), "{key}");
+                assert_eq!(
+                    field_value(key, &variant, Some(&tc), &options, ","),
+                    value,
+                    "{key}"
+                );
+            }
+            assert!(!custom_key_present("A_B_missing", &variant, Some(&tc)));
+            assert!(!custom_key_present("A_C", &variant, Some(&tc)));
+        }
+    }
+
+    /// `get_custom_headers` (OutputFactory.pm:2435-2503): a file with a
+    /// directory prints as `[PATH]/<basename>` (:2446); a field's description is
+    /// the source's own `##INFO` text, else its name with the first letter
+    /// upper-cased, followed by `. <field> field from <file>` (:2455-2471); `PC`
+    /// prints the overlap share's definition (:2476-2480); a statistic prints
+    /// `<stat> data from <file>` (:2488-2498); a key an earlier source listed
+    /// takes `,<file>` onto its description (:2448-2453). The default and tab
+    /// headers print the lines after the plugin lines (VEP_output.pm:167,
+    /// Tab.pm:149).
+    #[test]
+    fn custom_headers_mask_the_path_and_take_info_descriptions() {
+        let mut second_file = clinvar_source();
+        second_file.file = "more.vcf.gz".to_string();
+        second_file.fields = vec!["CLNSIG".to_string()];
+        let headers = custom_headers(&[clinvar_source(), conservation_source(), second_file]);
+        assert_eq!(
+            headers,
+            [
+                ("ClinVar", "[PATH]/custom.vcf.gz,more.vcf.gz"),
+                (
+                    "ClinVar_CLNSIG",
+                    "Clinical significance. CLNSIG field from [PATH]/custom.vcf.gz,more.vcf.gz"
+                ),
+                (
+                    "ClinVar_CLNREVSTAT",
+                    "CLNREVSTAT. CLNREVSTAT field from [PATH]/custom.vcf.gz"
+                ),
+                ("cons", "[PATH]/cons.bw"),
+                (
+                    "cons_PC",
+                    "Percentage of the input variant covered by the annotation record from [PATH]/cons.bw"
+                ),
+                ("cons_min", "min data from [PATH]/cons.bw"),
+                ("cons_count", "count data from [PATH]/cons.bw"),
+            ]
+            .map(|(name, description)| (name.to_string(), description.to_string()))
+        );
+        let mut plain = conservation_source();
+        plain.reciprocal = false;
+        plain.fields.push("type".to_string());
+        assert_eq!(
+            custom_headers(&[plain])[1..3],
+            [
+                (
+                    "cons_PC".to_string(),
+                    "Percentage of the annotation record covered by the input variant from [PATH]/cons.bw".to_string()
+                ),
+                (
+                    "cons_type".to_string(),
+                    "Type. type field from [PATH]/cons.bw".to_string()
+                ),
+            ]
+        );
+        let options = custom_options();
+        let default_lines =
+            default_format_header(&options, &plugin_headers(), "/c", None, "vep -i x");
+        let tab_lines = tab_header(&options, &plugin_headers(), None, "/c", None, "vep -i x");
+        for lines in [&default_lines, &tab_lines] {
+            let position = |line: &str| {
+                lines
+                    .iter()
+                    .position(|l| l == line)
+                    .unwrap_or_else(|| panic!("{line} in {lines:?}"))
+            };
+            assert!(
+                position("## CADD_RAW : CADD raw pathogenicity score")
+                    < position("## ClinVar : [PATH]/custom.vcf.gz")
+            );
+            assert!(
+                position("## ClinVar : [PATH]/custom.vcf.gz")
+                    < position(
+                        "## ClinVar_CLNSIG : Clinical significance. CLNSIG field from [PATH]/custom.vcf.gz"
+                    )
+            );
+            position("## cons_min : min data from [PATH]/cons.bw");
+            position("## SOURCE : Source of transcript");
+        }
+        assert!(
+            default_lines
+                .iter()
+                .position(|l| l == "## SOURCE : Source of transcript")
+                .unwrap()
+                < default_lines
+                    .iter()
+                    .position(|l| l.starts_with("## CADD_PHRED"))
+                    .unwrap()
+        );
+        assert!(tab_lines
+            .last()
+            .unwrap()
+            .ends_with("\tSOURCE\tCADD_PHRED\tCADD_RAW\tClinVar\tClinVar_CLNSIG\tClinVar_CLNREVSTAT\tcons\tcons_PC\tcons_min\tcons_count"));
+    }
+
+    /// A `FILTER` value is the list of the column's `;`-separated entries
+    /// (File/VCF.pm:222), nested in the key's list: `convert_arrayref` joins the
+    /// inner list with `;` (Utils.pm:192), which the default format escapes as
+    /// `%3B` (VEP_output.pm:118) and the tab format prints as it is. The key is
+    /// on the row whether or not the header lists it, so it joins the Extra keys
+    /// and no tab column.
+    #[test]
+    fn filter_values_join_with_semicolon_then_escape() {
+        let variant = custom_variant();
+        let tc = TranscriptConsequence::default();
+        let options = custom_options();
+        assert_eq!(
+            field_value("ClinVar_FILTER", &variant, Some(&tc), &options, ","),
+            "q10;s50"
+        );
+        assert_eq!(
+            field_value("ClinVar_FILTER", &variant, Some(&tc), &options, "&"),
+            "q10;s50"
+        );
+        assert!(custom_key_present("ClinVar_FILTER", &variant, Some(&tc)));
+        assert!(!tab_columns(&options, &[], None).contains(&"ClinVar_FILTER".to_string()));
+        assert!(custom_extra_keys(&options.custom_sources).contains(&"ClinVar_FILTER".to_string()));
+    }
+
+    /// An `exact` record names the allele it matched and prints on that allele's
+    /// rows alone (OutputFactory.pm:1416-1426); the reference allele's row of
+    /// `--process_ref_homs` and another alternate's rows print the whole-record
+    /// records only, and a statistic prints on every row. A key whose records
+    /// all fall away leaves the row.
+    #[test]
+    fn exact_record_fields_stay_off_a_reference_allele_row() {
+        let options = custom_options();
+        let plan = ExtraFieldsPlan::new(options.clone());
+        let tc = TranscriptConsequence::default();
+        let mut reference_row = custom_variant();
+        reference_row.reference_allele_row = true;
+        let mut other_allele = custom_variant();
+        other_allele.alt_alleles = vec![b"T".to_vec()];
+        for row in [&reference_row, &other_allele] {
+            assert_eq!(
+                field_value("ClinVar", row, Some(&tc), &options, ","),
+                "21:100-100"
+            );
+            assert_eq!(
+                field_value("ClinVar_CLNSIG", row, Some(&tc), &options, ","),
+                "Benign"
+            );
+            assert_eq!(
+                field_value("ClinVar_FILTER", row, Some(&tc), &options, ","),
+                ""
+            );
+            assert!(!custom_key_present("ClinVar_FILTER", row, Some(&tc)));
+            assert_eq!(field_value("cons_min", row, Some(&tc), &options, ","), "0");
+        }
+        let mut exact_only = custom_variant();
+        exact_only.custom_annotations[0].records.truncate(1);
+        exact_only.reference_allele_row = true;
+        assert_eq!(
+            extra_keys_with(
+                &plan.flag_fields,
+                &plan.custom_keys,
+                &exact_only,
+                Some(&tc),
+                &options
+            )[5..],
+            ["cons", "cons_PC", "cons_count", "cons_min"]
+        );
+        assert!(!custom_key_present("ClinVar", &exact_only, Some(&tc)));
+        assert!(!empty_value_is_written(
+            "ClinVar",
+            &exact_only,
+            Some(&tc),
+            &options
+        ));
+        // A `PC` the exact match leaves undefined is the key with an empty value.
+        let mut undefined_pc = custom_variant();
+        undefined_pc.custom_annotations[1].records[0]
+            .fields
+            .insert("PC".to_string(), CustomFieldValue::Text(String::new()));
+        assert_eq!(
+            field_value("cons_PC", &undefined_pc, Some(&tc), &options, ","),
+            ""
+        );
+        assert!(empty_value_is_written(
+            "cons_PC",
+            &undefined_pc,
+            Some(&tc),
+            &options
+        ));
     }
 }

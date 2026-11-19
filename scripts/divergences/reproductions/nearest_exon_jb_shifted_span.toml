@@ -1,0 +1,31 @@
+entry = "nearest_exon_jb_shifted_span"
+page = "docs/divergences/nearest-exon-jb-shifted-span.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 137,702 per million · 0 flag sets, 104 corpora"
+notes = "The deletion of the last base of ENSE00003584551 (ENST00000338785, forward strand), whose next base repeats it, so the shift carries the deletion one base into the intron. Ensembl VEP's plugin reads the exon set at the shifted span and writes nothing on the splice-donor rows; vep-rs reads it at the record's span, from which both engines measure the distance."
+
+[input]
+format = "vcf"
+text = """
+21	37480825	shift_probe	AG	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-computed/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-computed/reference.fa.gz"
+
+[run]
+flags = ["--plugin", "NearestExonJB", "--shift_3prime", "1", "--shift_length"]
+
+[compare]
+kind = "rows"
+where = { record = "shift_probe", feature = "ENST00000338785" }
+columns = ["Consequence", "SHIFT_LENGTH", "NearestExonJB"]
+
+[expected]
+ensembl_vep = ["splice_donor_variant | 1 | -"]
+vep_rs = ["splice_donor_variant | 1 | ENSE00003584551|0|end|189"]

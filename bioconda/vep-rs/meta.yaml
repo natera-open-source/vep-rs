@@ -24,6 +24,12 @@ requirements:
     - pkg-config  # [linux]
   host:
     - openssl  # [linux]
+  run:
+    # --output_format parquet in the release this recipe names runs the duckdb
+    # program and refuses one below 1.3.2: check_duckdb in
+    # crates/vep-cli/src/runner.rs of the source tarball. A release whose
+    # runner.rs has no check_duckdb needs no such line.
+    - duckdb-cli >=1.3.2
 
 test:
   commands:
@@ -37,6 +43,7 @@ about:
   license_family: APACHE
   license_file:
     - LICENSE
+    - NOTICE
     - THIRDPARTY.yml
   summary: Fast Rust reimplementation of Ensembl VEP.
   dev_url: https://github.com/natera-open-source/vep-rs

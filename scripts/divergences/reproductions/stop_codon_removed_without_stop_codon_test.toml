@@ -1,0 +1,30 @@
+entry = "stop_codon_removed_without_stop_codon_test"
+page = "docs/divergences/stop-codon-removed-without-stop-codon-test.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "1 · 29,474 per million · no flag needed"
+notes = "ClinVar 1993671 on GRCh38: a deletion of five bases, 19:13208046-13208050, on ENST00000635895, a reverse-strand transcript of CACNA1A whose stop codon, c.6784-6786 at cDNA 7055-7057, is the first three bases of its last exon, 13208048-13208046. The span takes the last two bases of the intron before that exon, 13208050 and 13208049, and all three bases of the stop codon, so it has no cDNA coordinate at its intron end and the row prints ?-7057, ?-6786 and ?-2262. Ensembl VEP makes no stop codon test on such a span: _ins_del_stop_altered returns 0 (VariationEffect.pm:1376 through :1444; :1453 returns 0 as well for want of the cDNA start), which :1263 reads as not lost, and _ins_del_stop_altered_cil returns 0 (:1508), which :1318 reads as a stop codon kept, so the row carries stop_retained_variant. vep-rs reads the sequence the record gives: the splice site goes with the codon, the exon bases before the deletion end at c.6783, before the old stop position c.6784-6786, no stop codon is shown and the row carries stop_lost. Both rows carry splice_acceptor_variant and IMPACT HIGH. The record writes 30 rows in each engine and 8 differ, each in the Consequence alone, on the transcripts whose stop codon lies at 13208046-13208048 behind an intron that ends at 13208049. The committed GRCh38 cache holds the transcript and no flag is needed."
+
+[input]
+format = "vcf"
+text = """
+19	13208045	1993671	ACTACT	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38/json_cache"
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = "1993671", feature = "ENST00000635895" }
+columns = ["Location", "Feature", "Consequence", "cDNA_position", "CDS_position", "Protein_position", "IMPACT"]
+
+[expected]
+ensembl_vep = ["19:13208046-13208050 | ENST00000635895 | splice_acceptor_variant,stop_retained_variant | ?-7057 | ?-6786 | ?-2262 | HIGH"]
+vep_rs = ["19:13208046-13208050 | ENST00000635895 | splice_acceptor_variant,stop_lost | ?-7057 | ?-6786 | ?-2262 | HIGH"]

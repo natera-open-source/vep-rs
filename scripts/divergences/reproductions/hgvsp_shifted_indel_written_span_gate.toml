@@ -1,0 +1,53 @@
+entry = "hgvsp_shifted_indel_written_span_gate"
+page = "docs/divergences/hgvsp-shifted-indel-written-span-gate.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 137,702 per million · 23 flag sets, 104 corpora"
+notes = "Two records written for the entry, on GRCh37, each the deletion of the last base of an intron that the 3' shift carries into the next exon: the first deletes 7:934970, the last base of intron 8 of the forward-strand ENST00000265857, and shifts two bases to coding base 897, and the second deletes 7:21934501, the last base of an intron of the forward-strand ENST00000328843 and ENST00000409508, and shifts four bases to coding base 12958 of the one and 12937 of the other. Both engines write the HGVSc of the shifted deletion with its HGVS_OFFSET and no CDS or protein position; Ensembl VEP writes no HGVSp on ENST00000265857 and ENST00000409508, where vep-rs writes the frameshift of the shifted deletion, and both write it on ENST00000328843, which has an intron one base long."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the cut of the cache is converted in the Ensembl VEP image: give --image" >&2; exit 1; }
+[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosome 7 under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
+mkdir -p "$cut/7"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
+cp "$PERL_CACHE/7/1-1000000.gz" "$PERL_CACHE/7/21000001-22000000.gz" "$cut/7/"''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens/116_GRCh37 /stage/json-cache 7 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+7	934969	intron_last_base_del_7_934969	AG	A	.	.	.
+7	21934500	intron_last_base_del_7_21934500	AG	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = [
+  "--hgvs",
+  "--fasta", "{grch37_fasta}/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa",
+]
+
+[compare]
+kind = "rows"
+where = { record = ["intron_last_base_del_7_934969", "intron_last_base_del_7_21934500"], feature = ["ENST00000265857", "ENST00000328843", "ENST00000409508"] }
+columns = ["Uploaded_variation", "Feature", "Consequence", "CDS_position", "Protein_position", "HGVSc", "HGVS_OFFSET", "HGVSp"]
+
+[expected]
+ensembl_vep = [
+  "intron_last_base_del_7_21934500 | ENST00000328843 | splice_acceptor_variant | - | - | ENST00000328843.6:c.12958del | 4 | ENSP00000330671.6:p.Glu4320AsnfsTer15",
+  "intron_last_base_del_7_21934500 | ENST00000409508 | splice_acceptor_variant | - | - | ENST00000409508.3:c.12937del | 4 | -",
+  "intron_last_base_del_7_934969 | ENST00000265857 | splice_acceptor_variant | - | - | ENST00000265857.3:c.897del | 2 | -",
+]
+vep_rs = [
+  "intron_last_base_del_7_21934500 | ENST00000328843 | splice_acceptor_variant | - | - | ENST00000328843.6:c.12958del | 4 | ENSP00000330671.6:p.Glu4320AsnfsTer15",
+  "intron_last_base_del_7_21934500 | ENST00000409508 | splice_acceptor_variant | - | - | ENST00000409508.3:c.12937del | 4 | ENSP00000475939.1:p.Glu4313AsnfsTer15",
+  "intron_last_base_del_7_934969 | ENST00000265857 | splice_acceptor_variant | - | - | ENST00000265857.3:c.897del | 2 | ENSP00000265857.3:p.Asn300ThrfsTer3",
+]

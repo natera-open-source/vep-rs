@@ -1,0 +1,33 @@
+entry = "refseq_edited_model_deleted_span_term"
+page = "docs/divergences/refseq-edited-model-deleted-span-term.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 8 of 77,601 cache transcripts · 10 flag sets, 4 corpora"
+notes = "The single-exon model NM_198689.3 lacks the fifteen genomic bases 21:46020656-46020670 between its CDS positions 134 and 135; a substitution inside them maps to no transcript coordinate."
+
+[input]
+format = "vcf"
+text = """
+21	46020662	rs373191083	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+source = "refseq"
+json_cache = "tests/golden/116/GRCh37-refseq/cache_root/homo_sapiens_refseq/116_GRCh37"
+corpus = "tests/golden/116/GRCh37-refseq"
+fasta = "tests/golden/116/GRCh37-refseq/reference.fa.gz"
+
+[run]
+flags = ["--refseq"]
+
+[compare]
+kind = "rows"
+where = { record = "rs373191083", feature = "NM_198689.3" }
+columns = ["Location", "Allele", "Feature", "Consequence", "cDNA_position", "CDS_position", "IMPACT"]
+
+[expected]
+ensembl_vep = ["21:46020662 | T | NM_198689.3 | intergenic_variant | - | - | MODIFIER"]
+vep_rs = ["21:46020662 | T | NM_198689.3 | coding_sequence_variant | - | - | MODIFIER"]

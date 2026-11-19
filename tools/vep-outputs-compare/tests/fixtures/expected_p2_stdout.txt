@@ -1,0 +1,3 @@
+wrote pooled per-class F1: {{SCRATCH}}/pooled_plain.csv (34 rows)
+vep-rs: no term clears 1000 pooled VEP tuples, so no floor can be reported under the fixed threshold
+fastvep: no term clears 1000 pooled VEP tuples, so no floor can be reported under the fixed threshold

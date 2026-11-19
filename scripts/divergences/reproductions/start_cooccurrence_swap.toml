@@ -1,0 +1,30 @@
+entry = "start_cooccurrence_swap"
+page = "docs/divergences/defect-b.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "1 · 137,761 per million · no flag needed"
+notes = "The deleted A is the first base of RUNX1's start codon and the last base of a two-base run, so the codon re-forms one base upstream: the rebuilt coding sequence still begins with ATG."
+
+[input]
+format = "vcf"
+text = """
+21	36265245	4629713	AT	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37/json_cache"
+
+[run]
+flags = []
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = "4629713", feature = "ENST00000486278" }
+
+[expected]
+ensembl_vep = ["21:36265246 | - | ENST00000486278 | frameshift_variant,start_lost,start_retained_variant"]
+vep_rs = ["21:36265246 | - | ENST00000486278 | frameshift_variant,start_retained_variant"]

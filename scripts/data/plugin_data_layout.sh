@@ -13,25 +13,39 @@
 plugin_data_file() {
 	local plugin="$1" role="$2" asm="$3"
 	case "${plugin}:${role}" in
-	CADD:snv) echo "cadd/whole_genome_SNVs.tsv.gz" ;;
-	CADD:indel)
-		# CADD v1.7 names the indel file per assembly.
-		if [[ "${asm}" == "grch37" ]]; then
-			echo "cadd/gnomad.genomes-exomes.r4.0.indel.tsv.gz"
-		else
-			echo "cadd/gnomad.genomes.r4.0.indel.tsv.gz"
-		fi
-		;;
 	REVEL:file) echo "revel/revel.tsv.gz" ;;
-	SpliceAI:snv) echo "spliceai/spliceai_scores.raw.snv.vcf.gz" ;;
-	SpliceAI:indel) echo "spliceai/spliceai_scores.raw.indel.vcf.gz" ;;
 	gnomADc:file) echo "gnomadc/gnomad_coverage.tsv.gz" ;;
 	AlphaMissense:file) echo "alphamissense/alphamissense.tsv.gz" ;;
-	dbNSFP:file) echo "dbnsfp/dbNSFP.gz" ;;
-	dbscSNV:file) echo "dbscsnv/dbscsnv.txt.gz" ;;
 	LoFtool:file) echo "loftool/LoFtool_scores.txt" ;;
 	pLI:file) echo "pli/pLI_values.txt" ;;
+	LOEUF:file)
+		# gnomAD publishes constraint per release: the GRCh37 file is the v2.1.1
+		# per-transcript table prepared as LOEUF.pm:54-59 says, the GRCh38 file Ensembl's
+		# cut of the v4.1.1 metrics with gene coordinates appended (LOEUF.pm:61-67).
+		if [[ "${asm}" == "grch37" ]]; then
+			echo "loeuf/loeuf_dataset.tsv.gz"
+		else
+			echo "loeuf/loeuf_dataset_grch38.tsv.gz"
+		fi
+		;;
+	DosageSensitivity:file) echo "dosagesensitivity/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz" ;;
 	GWAS:file) echo "gwas/gwas_catalog_associations.tsv" ;;
+	# Ensembl's per-chromosome ancestral FASTA files concatenated and bgzipped, with the
+	# .fai and .gzi samtools faidx writes; the assembly is the prefix's.
+	AncestralAllele:file) echo "ancestral_allele/homo_sapiens_ancestor.fa.gz" ;;
+	# The Platform's VEP export of every association, with its header line commented
+	# and indexed with tabix -s 1 -b 2 -e 2; study_types= selects a family inside it.
+	OpenTargets:file) echo "opentargets/open_targets_vep_full.tsv.gz" ;;
+	# Ensembl Compara publishes the GERP bigWig for GRCh38 alone, and LoFTEE's GRCh38
+	# bundle ships a copy of it (an earlier Compara release), so Conservation reads the
+	# file staged for LoFTEE.
+	Conservation:file)
+		if [[ "${asm}" != "grch38" ]]; then
+			echo "ERROR: [plugin_data_layout] Conservation has no data file on ${asm}" >&2
+			return 1
+		fi
+		plugin_data_file LoFTEE gerp "${asm}"
+		;;
 	LoFTEE:ancestor) echo "loftee/${asm}/human_ancestor.fa" ;;
 	LoFTEE:ancestor_bgzf) echo "loftee/${asm}/human_ancestor.fa.gz" ;;
 	LoFTEE:gerp)
@@ -53,27 +67,19 @@ plugin_data_file() {
 plugin_staged_files() {
 	local plugin="$1" asm="$2" f
 	case "${plugin}" in
-	CADD)
-		for role in snv indel; do
-			f="$(plugin_data_file CADD "${role}" "${asm}")"
-			echo "${f}"
-			echo "${f}.tbi"
-		done
-		;;
-	REVEL | gnomADc | AlphaMissense | dbscSNV)
+	REVEL | gnomADc | AlphaMissense | LOEUF | OpenTargets)
 		f="$(plugin_data_file "${plugin}" file "${asm}")"
 		echo "${f}"
 		echo "${f}.tbi"
 		;;
-	SpliceAI)
-		# The indel scores are not freely distributed, so only the SNV file is staged;
-		# the harness passes an indel file only when one is present.
-		f="$(plugin_data_file SpliceAI snv "${asm}")"
-		echo "${f}"
-		echo "${f}.tbi"
+	GWAS | LoFtool | pLI | DosageSensitivity | Conservation)
+		plugin_data_file "${plugin}" file "${asm}" || return 1
 		;;
-	GWAS | LoFtool | pLI)
-		plugin_data_file "${plugin}" file "${asm}"
+	AncestralAllele)
+		f="$(plugin_data_file AncestralAllele file "${asm}")"
+		echo "${f}"
+		echo "${f}.fai"
+		echo "${f}.gzi"
 		;;
 	LoFTEE)
 		f="$(plugin_data_file LoFTEE ancestor "${asm}")"
@@ -86,9 +92,6 @@ plugin_staged_files() {
 		f="$(plugin_data_file LoFTEE gerp "${asm}")"
 		echo "${f}"
 		[[ "${asm}" == "grch37" ]] && echo "${f}.tbi"
-		;;
-	dbNSFP)
-		# Unsupported (licence); nothing is staged.
 		;;
 	*)
 		echo "ERROR: [plugin_data_layout] unknown plugin ${plugin}" >&2

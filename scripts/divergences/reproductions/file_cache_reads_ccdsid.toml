@@ -1,0 +1,60 @@
+entry = "file_cache_reads_ccdsid"
+page = "docs/divergences/file-cache-reads-ccdsid.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 235 of 77,675 cache transcripts · 1 flag set, 2 corpora"
+notes = "The GRCh38 release-116 GFF3 lines of TMPRSS3 and ENST00000398397, whose transcript line carries ccdsid=CCDS42939.1. Ensembl VEP's --gff source reads no ccdsid (BaseGXF.pm:632-703, _add_identifiers), so the transcript has no _ccds and OutputFactory.pm:1534-1537 prints no CCDS; vep-rs reads the attribute into the cache and prints it. Removing the ccdsid attribute makes the engines agree. The transcript's GTF lines part the engines the same way through --gtf: the transcript line carries ccds_id \"CCDS42939\" (GTFSerializer.pm:459-464, the xref's primary identifier without the version), and vep-rs prints CCDS42939 as the GTF carries it."
+prepare = [
+  '''cat > "$STAGE/tmprss3_ccds.gff3" <<'GFF'
+##gff-version 3
+21	ensembl_havana	gene	42371840	42396122	.	-	.	ID=gene:ENSG00000160183;Name=TMPRSS3;biotype=protein_coding;description=transmembrane serine protease 3 [Source:HGNC Symbol%3BAcc:HGNC:11877];gene_id=ENSG00000160183;logic_name=ensembl_havana_gene_homo_sapiens;version=19
+21	havana	mRNA	42381876	42396122	.	-	.	ID=transcript:ENST00000398397;Parent=gene:ENSG00000160183;Name=TMPRSS3-201;biotype=protein_coding;ccdsid=CCDS42939.1;tag=gencode_basic;transcript_id=ENST00000398397;transcript_support_level=1;version=4
+21	havana	exon	42381876	42382234	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00001533046;constitutive=0;ensembl_end_phase=-1;ensembl_phase=2;exon_id=ENSE00001533046;rank=9;version=3
+21	havana	CDS	42381982	42382234	.	-	1	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42383033	42383198	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00003564347;constitutive=0;ensembl_end_phase=2;ensembl_phase=1;exon_id=ENSE00003564347;rank=8;version=1
+21	havana	CDS	42383033	42383198	.	-	2	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42383970	42384013	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00003594737;constitutive=0;ensembl_end_phase=1;ensembl_phase=2;exon_id=ENSE00003594737;rank=7;version=1
+21	havana	CDS	42383970	42384013	.	-	1	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42385409	42385534	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00003503535;constitutive=0;ensembl_end_phase=2;ensembl_phase=2;exon_id=ENSE00003503535;rank=6;version=1
+21	havana	CDS	42385409	42385534	.	-	1	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42388403	42388526	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00003610022;constitutive=0;ensembl_end_phase=2;ensembl_phase=1;exon_id=ENSE00003610022;rank=5;version=1
+21	havana	CDS	42388403	42388526	.	-	2	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42388929	42389045	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00003625818;constitutive=0;ensembl_end_phase=1;ensembl_phase=1;exon_id=ENSE00003625818;rank=4;version=1
+21	havana	CDS	42388929	42389045	.	-	2	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42389927	42390037	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00001050357;constitutive=0;ensembl_end_phase=1;ensembl_phase=1;exon_id=ENSE00001050357;rank=3;version=1
+21	havana	CDS	42389927	42390037	.	-	2	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	CDS	42395324	42395417	.	-	0	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42395324	42395468	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00003591562;constitutive=0;ensembl_end_phase=1;ensembl_phase=-1;exon_id=ENSE00003591562;rank=2;version=1
+21	havana	exon	42395942	42396122	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00004778870;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00004778870;rank=1;version=1
+GFF''',
+  "bgzip -c \"$STAGE/tmprss3_ccds.gff3\" > \"$STAGE/tmprss3_ccds.gff3.gz\" && tabix -p gff \"$STAGE/tmprss3_ccds.gff3.gz\"",
+  "\"$VEP_CACHE_BUILDER\" --species homo_sapiens --assembly GRCh38 --release 116 --gff3 \"$STAGE/tmprss3_ccds.gff3\" --genome-fasta \"$CORPUS/reference.fa.gz\" --output-dir \"$STAGE/json_cache\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	42395417	1995820	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json_cache"
+corpus = "tests/golden/116/GRCh38-gtf-builder"
+gxf = "{stage}/tmprss3_ccds.gff3.gz"
+gxf_kind = "gff"
+fasta = "tests/golden/116/GRCh38-gtf-builder/reference.fa.gz"
+
+[run]
+flags = ["--ccds"]
+
+[compare]
+kind = "field"
+field = "CCDS"
+where = { record = "1995820", feature = "ENST00000398397" }
+
+[expected]
+ensembl_vep = ["-"]
+vep_rs = ["CCDS42939.1"]

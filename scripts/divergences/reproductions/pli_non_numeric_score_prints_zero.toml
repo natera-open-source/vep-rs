@@ -1,0 +1,33 @@
+entry = "pli_non_numeric_score_prints_zero"
+page = "docs/plugins/flat-file.md#6-pli-a-table-cell-that-is-not-a-number"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the pLI plugin's header, which names the gnomAD v4 constraint table as a source for the values file, a table whose pLI column writes NA where a gene has no estimate; not seen in the measured datasets"
+# The corpus table with CXADR's cell written NA.
+prepare = [
+  "sed 's/^CXADR\t.*/CXADR\tNA/' \"$CORPUS/plugin_data/pLI_values.txt\" > \"$STAGE/pLI_values_NA.txt\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	17561425	4453310	G	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-pli/json_cache"
+
+[run]
+flags = ["--plugin", "pLI,{stage}/pLI_values_NA.txt"]
+
+[compare]
+kind = "field"
+field = "pLI_gene_value"
+where = { record = "4453310", feature = "ENST00000284878" }
+
+[expected]
+ensembl_vep = ["0.00"]
+vep_rs = ["-"]

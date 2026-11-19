@@ -404,7 +404,8 @@
    "expected_dir": "expected_filter-biotype",
    "covers": [
     "transcript_filter",
-    "transcript-filter-grammar"
+    "transcript-filter-grammar",
+    "filterset-in-run-filter"
    ],
    "divergences": [],
    "vep_rs_only_tuples": [],

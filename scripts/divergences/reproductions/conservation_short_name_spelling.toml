@@ -1,0 +1,32 @@
+entry = "conservation_short_name_spelling"
+page = "docs/divergences/phylop-short-name.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 1 of 392 flag sets · 1 flag set, 1 corpus"
+notes = "The header line of the --phyloP 100 source; the row's Extra item carries the same key over the same value, -0.980000019073486, and the phastCons100way key agrees everywhere."
+
+[input]
+format = "vcf"
+text = """
+21	5028999	.	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+fasta = "tests/golden/116/GRCh38-custom/reference.fa.gz"
+
+[run]
+flags = ["--phyloP", "100", "--phastCons", "100", "--ucsc_assembly", "hg38", "--ucsc_data_root", "{corpus}/custom/ucsc/"]
+format = "default"
+
+[compare]
+kind = "header"
+pattern = "^## ph(ly|yl)oP100way : "
+mask_paths = false
+
+[expected]
+ensembl_vep = ["## phlyoP100way : [PATH]/hg38.phyloP100way.bw"]
+vep_rs = ["## phyloP100way : [PATH]/hg38.phyloP100way.bw"]

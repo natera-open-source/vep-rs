@@ -1,0 +1,42 @@
+{
+  "assembly": "BDGP6.54",
+  "cache_version": 116,
+  "contig_order": [
+    "4",
+    "211000022278760",
+    "211000022278978",
+    "211000022279188",
+    "211000022280328",
+    "Y",
+    "2L",
+    "Unmapped_Scaffold_60_D1601",
+    "Unmapped_Scaffold_8_D1580_D1567",
+    "Y_mapped_Scaffold_9_D1573",
+    "mitochondrion_genome",
+    "rDNA"
+  ],
+  "polyphen": "",
+  "sift": "",
+  "source_versions": {
+    "assembly": "BDGP6.54",
+    "genebuild": "dmel_r6.54_FB2023_05"
+  },
+  "species": "drosophila_melanogaster",
+  "var_type": "tabix",
+  "variation_cols": [
+    "chr",
+    "variation_name",
+    "failed",
+    "somatic",
+    "start",
+    "end",
+    "allele_string",
+    "strand",
+    "clin_sig",
+    "phenotype_or_disease",
+    "clin_sig_allele",
+    "clinical_impact",
+    "pubmed",
+    "var_synonyms"
+  ]
+}

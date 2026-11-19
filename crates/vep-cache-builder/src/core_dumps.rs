@@ -19,8 +19,9 @@
 //! `analysis_description` (the domains and their display labels), `xref`,
 //! `object_xref` and `external_db` (CCDS, RefSeq, UniProt, UniParc, HGNC and
 //! the symbol source), `seq_region` with `seq_region_attrib` (the codon
-//! table) and `meta` (the source versions). From the variation database:
-//! `phenotype_feature` and `phenotype` (the gene phenotype count).
+//! table and the karyotype rank) and `meta` (the source versions). From the
+//! variation database: `phenotype_feature` and `phenotype` (the gene
+//! phenotype count).
 //!
 //! Each fact is read the way `AnnotationSource::Database::Transcript` reads
 //! it through the core API before the dumper writes the cache:
@@ -32,7 +33,7 @@ use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
-use flate2::read::GzDecoder;
+use flate2::read::MultiGzDecoder;
 use tracing::{info, warn};
 
 /// The longest dump line read, 16 MiB. A row's widest values are an xref
@@ -231,9 +232,11 @@ pub struct GeneFacts {
     pub symbol_source: Option<String>,
     /// The display xref's primary accession when its database is HGNC.
     pub hgnc_id: Option<String>,
-    /// Significant phenotype features of type `Gene` on this gene, or `None`
-    /// when no variation tables were read.
-    pub phenotype_count: Option<u32>,
+    /// Significant phenotype features of type `Gene` on this gene; 0 when no
+    /// variation tables were read, the value the Ensembl VEP dumper stores on
+    /// every transcript without a phenotype adaptor (`Database/Transcript.pm`
+    /// `get_features_by_regions_uncached`, lines 202, 243-248 and 284).
+    pub phenotype_count: u32,
 }
 
 /// The facts of one Ensembl release, keyed by stable identifier.
@@ -244,13 +247,16 @@ pub struct CoreDumps {
     /// Sequence region name to codon table, for regions carrying the
     /// `codon_table` attribute.
     codon_tables: HashMap<String, u8>,
+    /// Sequence region name to its place in the karyotype, for regions
+    /// carrying the `karyotype_rank` attribute.
+    karyotype_ranks: HashMap<String, u64>,
     /// `meta_key` to `meta_value`.
     meta: HashMap<String, String>,
 }
 
 impl CoreDumps {
     /// Read the tables under `dir`; the variation tables are optional and
-    /// their absence leaves every gene's phenotype count `None`.
+    /// their absence leaves every gene's phenotype count 0.
     pub fn load(dir: &Path) -> Result<CoreDumps> {
         let mut dumps = CoreDumps::default();
 
@@ -260,15 +266,20 @@ impl CoreDumps {
         let seq_region = id_to_name(dir, "seq_region", 4)?;
         for row in read_table(dir, "seq_region_attrib", 3)? {
             let row = row?;
-            if attrib_type.get(row.field(1)).map(String::as_str) != Some("codon_table") {
-                continue;
-            }
             let Some(name) = seq_region.get(row.field(0)) else {
                 continue;
             };
-            let codon_table = u8::try_from(row.number(2)?)
-                .with_context(|| format!("codon table {} of {name}", row.field(2)))?;
-            dumps.codon_tables.insert(name.clone(), codon_table);
+            match attrib_type.get(row.field(1)).map(String::as_str) {
+                Some("codon_table") => {
+                    let codon_table = u8::try_from(row.number(2)?)
+                        .with_context(|| format!("codon table {} of {name}", row.field(2)))?;
+                    dumps.codon_tables.insert(name.clone(), codon_table);
+                }
+                Some("karyotype_rank") => {
+                    dumps.karyotype_ranks.insert(name.clone(), row.number(2)?);
+                }
+                _ => {}
+            }
         }
         for row in read_table(dir, "meta", 4)? {
             let row = row?;
@@ -551,10 +562,11 @@ impl CoreDumps {
         }
 
         info!(
-            "Core dumps: {} transcripts, {} genes, {} codon-table regions",
+            "Core dumps: {} transcripts, {} genes, {} codon-table regions, {} karyotype regions",
             dumps.transcripts.len(),
             dumps.genes.len(),
-            dumps.codon_tables.len()
+            dumps.codon_tables.len(),
+            dumps.karyotype_ranks.len()
         );
 
         dumps.load_phenotypes(dir)?;
@@ -564,13 +576,16 @@ impl CoreDumps {
     /// The gene phenotype count, as `PhenotypeFeatureAdaptor::fetch_all_by_Gene`
     /// counts it: significant `phenotype_feature` rows of type `Gene` whose
     /// `object_id` is the gene's stable id and whose phenotype has a class.
+    /// Without the tables every gene keeps the count 0, as the Ensembl VEP
+    /// dumper stores it without a phenotype adaptor (`Database/Transcript.pm`
+    /// lines 202 and 243-248).
     fn load_phenotypes(&mut self, dir: &Path) -> Result<()> {
         if VARIATION_TABLES
             .iter()
             .any(|t| table_path(dir, t).is_none())
         {
             warn!(
-                "No phenotype tables under {}: gene_phenotype is not written",
+                "No phenotype tables under {}: gene_phenotype is 0 on every transcript",
                 dir.display()
             );
             return Ok(());
@@ -593,7 +608,7 @@ impl CoreDumps {
             }
         }
         for (stable_id, facts) in self.genes.iter_mut() {
-            facts.phenotype_count = Some(counts.get(stable_id).copied().unwrap_or(0));
+            facts.phenotype_count = counts.get(stable_id).copied().unwrap_or(0);
         }
         info!(
             "Phenotype features: {} genes with a significant phenotype",
@@ -614,6 +629,15 @@ impl CoreDumps {
     /// (table 2 on `MT`).
     pub fn codon_table(&self, seq_region_name: &str) -> Option<u8> {
         self.codon_tables.get(seq_region_name).copied()
+    }
+
+    /// The karyotype of the assembly: each sequence region carrying the
+    /// `karyotype_rank` attribute, with its rank, the order
+    /// `SliceAdaptor::fetch_all_karyotype` lists the chromosomes in
+    /// (`SliceAdaptor.pm:1271-1314`, sorted on the rank's numeric value at
+    /// `:1311`). A region without the attribute is not part of the karyotype.
+    pub fn karyotype_ranks(&self) -> &HashMap<String, u64> {
+        &self.karyotype_ranks
     }
 
     /// The core source versions Ensembl VEP writes to its cache info
@@ -728,7 +752,7 @@ pub fn read_table(
     let file =
         std::fs::File::open(&path).with_context(|| format!("Cannot open {}", path.display()))?;
     let reader: Box<dyn BufRead> = if path.extension().is_some_and(|e| e == "gz") {
-        Box::new(BufReader::with_capacity(1 << 20, GzDecoder::new(file)))
+        Box::new(BufReader::with_capacity(1 << 20, MultiGzDecoder::new(file)))
     } else {
         Box::new(BufReader::with_capacity(1 << 20, file))
     };
@@ -788,8 +812,9 @@ mod tests {
     /// A core dump slice: chromosome 21's TPTE (ENSG00000274391, display
     /// xref HGNC:12023), its transcript ENST00000622113 with translation
     /// ENSP00000482040, a lncRNA gene with no display xref, a gene whose
-    /// display xref is RFAM, one whose display xref is EntrezGene, and MT.
-    /// Rows follow the release 116 GRCh38 core schema column order.
+    /// display xref is RFAM, one whose display xref is EntrezGene, MT, and
+    /// the unplaced contig KI270728.1, a top-level region outside the
+    /// karyotype. Rows follow the release 116 GRCh38 core schema column order.
     fn fixture(dir: &Path) {
         write_table(
             dir,
@@ -827,14 +852,30 @@ mod tests {
                 "14\tMANE_Plus_Clinical\tMANE Plus Clinical\t",
                 "15\tMolecularWeight\tMolecular weight\t",
                 "16\treadthrough_tra\treadthrough transcript\t",
+                "17\tkaryotype_rank\tRank in the karyotype\t",
+                "18\ttoplevel\tTop Level\t",
             ],
         );
         write_table(
             dir,
             "seq_region",
-            &["131539\t21\t4\t46709983", "132907\tMT\t4\t16569"],
+            &[
+                "131539\t21\t4\t46709983",
+                "132907\tMT\t4\t16569",
+                "131560\tKI270728.1\t4\t1872759",
+            ],
         );
-        write_table(dir, "seq_region_attrib", &["132907\t1\t2"]);
+        write_table(
+            dir,
+            "seq_region_attrib",
+            &[
+                "132907\t1\t2",
+                "132907\t17\t25",
+                "131539\t17\t21",
+                "131539\t18\t1",
+                "131560\t18\t1",
+            ],
+        );
         write_table(
             dir,
             "meta",
@@ -1021,7 +1062,7 @@ mod tests {
         assert_eq!(tpte.symbol.as_deref(), Some("TPTE"));
         assert_eq!(tpte.symbol_source.as_deref(), Some("HGNC"));
         assert_eq!(tpte.hgnc_id.as_deref(), Some("HGNC:12023"));
-        assert_eq!(tpte.phenotype_count, None);
+        assert_eq!(tpte.phenotype_count, 0);
 
         let lnc = dumps.gene("ENSG00000279669").unwrap();
         assert_eq!(lnc.symbol, None);
@@ -1075,18 +1116,9 @@ mod tests {
     #[test]
     fn gene_phenotype_count_from_phenotype_feature() {
         let (_dir, dumps) = load_fixture(true);
-        assert_eq!(
-            dumps.gene("ENSG00000274391").unwrap().phenotype_count,
-            Some(4)
-        );
-        assert_eq!(
-            dumps.gene("ENSG00000210049").unwrap().phenotype_count,
-            Some(1)
-        );
-        assert_eq!(
-            dumps.gene("ENSG00000279669").unwrap().phenotype_count,
-            Some(0)
-        );
+        assert_eq!(dumps.gene("ENSG00000274391").unwrap().phenotype_count, 4);
+        assert_eq!(dumps.gene("ENSG00000210049").unwrap().phenotype_count, 1);
+        assert_eq!(dumps.gene("ENSG00000279669").unwrap().phenotype_count, 0);
     }
 
     /// A `readthrough_tra` attribute marks the transcript the Ensembl VEP
@@ -1100,11 +1132,16 @@ mod tests {
         assert!(!dumps.transcript("ENST00000622113").unwrap().readthrough);
     }
 
-    /// Without the variation tables no count is known: `None`, not 0.
+    /// Without the variation tables every gene counts 0: the Ensembl VEP 116.2
+    /// dumper has no phenotype adaptor without a variation database and stores
+    /// the 0 it starts from on every transcript (`Database/Transcript.pm`
+    /// lines 202, 243-248 and 284), so the key is present and the
+    /// `--transcript_filter` test `_gene_phenotype exists` keeps every row.
     #[test]
-    fn gene_phenotype_unknown_without_variation_tables() {
+    fn gene_phenotype_is_zero_without_variation_tables() {
         let (_dir, dumps) = load_fixture(false);
-        assert_eq!(dumps.gene("ENSG00000274391").unwrap().phenotype_count, None);
+        assert_eq!(dumps.gene("ENSG00000274391").unwrap().phenotype_count, 0);
+        assert_eq!(dumps.gene("ENSG00000210049").unwrap().phenotype_count, 0);
     }
 
     /// `_uniparc` is the `UniParc` xrefs of the translation
@@ -1395,6 +1432,36 @@ mod tests {
         assert_eq!(dumps.codon_table("21"), None);
     }
 
+    /// The karyotype is the `karyotype_rank` sequence region attribute
+    /// (`SliceAdaptor::fetch_all_karyotype`, `SliceAdaptor.pm:1271-1314`):
+    /// 21 ranks 21 and MT 25, and KI270728.1, a top-level contig without the
+    /// attribute, is outside it.
+    #[test]
+    fn karyotype_rank_from_seq_region_attrib() {
+        let (_dir, dumps) = load_fixture(false);
+        let ranks = dumps.karyotype_ranks();
+        assert_eq!(ranks.get("21"), Some(&21));
+        assert_eq!(ranks.get("MT"), Some(&25));
+        assert_eq!(ranks.get("KI270728.1"), None);
+        assert_eq!(ranks.len(), 2);
+    }
+
+    /// A karyotype rank that is not a number stops the build naming the
+    /// table and the column, as a malformed codon table does.
+    #[test]
+    fn malformed_karyotype_rank_names_the_table_and_column() {
+        let dir = tempfile::tempdir().unwrap();
+        fixture(dir.path());
+        let mut rows = std::fs::read_to_string(dir.path().join("seq_region_attrib.txt")).unwrap();
+        rows.push_str("131560\t17\tfirst\n");
+        std::fs::write(dir.path().join("seq_region_attrib.txt"), rows).unwrap();
+        let err = format!("{:#}", CoreDumps::load(dir.path()).unwrap_err());
+        assert!(
+            err.contains("seq_region_attrib column 2 holds \"first\", not a number"),
+            "{err}"
+        );
+    }
+
     /// The source versions `Database/Transcript.pm` `info` writes:
     /// `genebuild.version` overwrites `genebuild.initial_release_date` under
     /// `genebuild`, and a key the table lacks is absent.
@@ -1448,6 +1515,35 @@ mod tests {
             refused.to_string(),
             "x line 1 is longer than the 2-byte limit for one line"
         );
+    }
+
+    /// A compressed dump written as several gzip members, as a block compressor
+    /// or a concatenation of compressed parts writes it, is read through its
+    /// last member: its rows are the rows of the same table in one member.
+    #[test]
+    fn a_dump_of_several_gzip_members_reads_every_member() {
+        use std::io::Write;
+        let rows = ["1\ta", "2\tb", "3\tc", "4\td"];
+        let member = |rows: &[&str]| {
+            let mut encoder =
+                flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            for row in rows {
+                writeln!(encoder, "{row}").unwrap();
+            }
+            encoder.finish().unwrap()
+        };
+        let read = |bytes: Vec<u8>| -> Vec<Vec<String>> {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::write(dir.path().join("meta.txt.gz"), bytes).unwrap();
+            read_table(dir.path(), "meta", 2)
+                .unwrap()
+                .map(|row| row.unwrap().fields)
+                .collect()
+        };
+        let one_member = read(member(&rows));
+        let two_members = read([member(&rows[..2]), member(&rows[2..])].concat());
+        assert_eq!(one_member.len(), rows.len());
+        assert_eq!(two_members, one_member);
     }
 
     #[test]

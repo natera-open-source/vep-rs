@@ -3,8 +3,8 @@
 
 //! Flags accepted without effect, through the `vep` binary: a run with the flag
 //! writes the same default and JSON output as a run without it, apart from the
-//! command-line header that records the flag; and the input order is never
-//! checked.
+//! command-line header that records the flag; and no text format checks the
+//! input order, with or without `--no_check_variants_order`.
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -52,8 +52,11 @@ fn annotate(dir: &Path, input: &Path, format: &str, extra: &[&str]) -> (String, 
         .args(["--assembly", "GRCh38", "--force_overwrite", "--no_stats"])
         .args(extra)
         .stdin(Stdio::null());
-    if format == "json" {
-        cmd.arg("--json");
+    match format {
+        "json" | "tab" | "vcf" => {
+            cmd.arg(format!("--{format}"));
+        }
+        _ => {}
     }
     let output = cmd.output().unwrap();
     assert!(
@@ -68,11 +71,14 @@ fn annotate(dir: &Path, input: &Path, format: &str, extra: &[&str]) -> (String, 
 }
 
 /// The output without the header lines that differ between any two runs: the
-/// command line, which names the flag under test, and the time of the run.
+/// command line, which names the flag under test, and the time of the run, in
+/// the default and tab header's spelling and the VCF header's.
 fn without_volatile_headers(text: &str) -> String {
     text.lines()
         .filter(|l| !l.starts_with("## VEP command-line:"))
         .filter(|l| !l.starts_with("## Output produced at "))
+        .filter(|l| !l.starts_with("##VEP-command-line="))
+        .filter(|l| !l.starts_with("##VEP=\""))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -80,9 +86,14 @@ fn without_volatile_headers(text: &str) -> String {
 /// Asserts the flag changes nothing in the default and JSON outputs, the
 /// annotation itself included, against a run without it.
 fn assert_no_effect(flags: &[&str]) {
+    assert_no_effect_in(flags, &["default", "json"]);
+}
+
+/// [`assert_no_effect`] over the given text formats.
+fn assert_no_effect_in(flags: &[&str], formats: &[&str]) {
     let dir = tempfile::tempdir().unwrap();
     let input = write_input(dir.path(), RECORDS);
-    for format in ["default", "json"] {
+    for &format in formats {
         let (without, _) = annotate(dir.path(), &input, format, &[]);
         let (with, stderr) = annotate(dir.path(), &input, format, flags);
         assert!(
@@ -101,6 +112,14 @@ fn assert_no_effect(flags: &[&str]) {
 #[test]
 fn condel_is_accepted_without_effect() {
     assert_no_effect(&["--condel", "b"]);
+}
+
+/// Ensembl VEP reads `--debug` only while loading plugins (Runner.pm:920, 941),
+/// printing the directories it adds and the modules it loads; the annotation is
+/// the same with and without it.
+#[test]
+fn debug_is_accepted_without_effect() {
+    assert_no_effect(&["--debug"]);
 }
 
 #[test]
@@ -138,9 +157,14 @@ fn use_given_ref_is_accepted_without_effect() {
     assert_no_effect(&["--use_given_ref"]);
 }
 
+/// `--no_check_variants_order` reaches only the Parquet writer's order check:
+/// every text format writes the same bytes with and without it.
 #[test]
 fn no_check_variants_order_is_accepted_without_effect() {
-    assert_no_effect(&["--no_check_variants_order"]);
+    assert_no_effect_in(
+        &["--no_check_variants_order"],
+        &["default", "tab", "vcf", "json"],
+    );
 }
 
 /// vep-rs always runs offline: `--offline` changes nothing (in Ensembl VEP it
@@ -149,6 +173,21 @@ fn no_check_variants_order_is_accepted_without_effect() {
 fn offline_changes_no_output() {
     assert_no_effect(&["--offline"]);
     assert_no_effect(&["--offline", "--cache"]);
+}
+
+/// A `--convert` value Perl reads as false, `0` or the empty value, leaves the
+/// flag inactive (Config.pm:902-906), so the deprecation check passes it
+/// (:977) and the run writes what a run without the flag writes, in every text
+/// format, the value given on the command line or in a `--config` file.
+#[test]
+fn convert_with_a_false_value_changes_no_output() {
+    let formats = ["default", "tab", "vcf", "json"];
+    assert_no_effect_in(&["--convert", "0"], &formats);
+    assert_no_effect_in(&["--convert", ""], &formats);
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("flags.ini");
+    std::fs::write(&config, "convert 0\n").unwrap();
+    assert_no_effect_in(&["--config", config.to_str().unwrap()], &formats);
 }
 
 /// An IUPAC ambiguity code in an allele is annotated, not skipped: Ensembl
@@ -177,10 +216,10 @@ fn iupac_allele_is_annotated_not_skipped() {
     );
 }
 
-/// An unsorted input is annotated in input order with no order check: Ensembl
-/// VEP's `InputBuffer.pm:189-258` aborts after 100 records more than 100 bp
-/// behind their predecessor, vep-rs never does, with or without
-/// `--no_check_variants_order`.
+/// An unsorted input is annotated in input order by every text format with no
+/// order check: Ensembl VEP's `InputBuffer.pm:189-258` aborts after 100 records
+/// more than 100 bp behind their predecessor, the text formats never do, with
+/// or without `--no_check_variants_order`; only the Parquet writer checks.
 #[test]
 fn unsorted_input_is_annotated_in_input_order() {
     let dir = tempfile::tempdir().unwrap();

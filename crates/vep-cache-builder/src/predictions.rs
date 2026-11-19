@@ -11,7 +11,7 @@
 //! - Server: `ensembldb.ensembl.org:3306` (anonymous, read-only)
 //! - US mirror: `useastdb.ensembl.org:3306`
 //! - Database: `homo_sapiens_variation_{release}_{assembly_number}`
-//! - Tables: `translation_md5`, `protein_function_predictions`, `attrib`
+//! - Tables: `translation_md5`, `protein_function_predictions`, `attrib`, `attrib_type`
 //!
 //! ## Matrix format
 //!
@@ -23,12 +23,16 @@
 //! cache and a native one read through one decoder.
 
 use std::collections::HashMap;
+use std::thread;
+use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use base64::Engine;
 use mysql::prelude::Queryable;
-use mysql::{Pool, PooledConn};
+use mysql::{Conn, Opts};
 use tracing::{debug, info, warn};
+
+use crate::fasta::Peptide;
 
 /// Default Ensembl public MySQL host.
 pub const DEFAULT_MYSQL_HOST: &str = "ensembldb.ensembl.org";
@@ -69,16 +73,17 @@ pub struct PredictionBlob {
 /// Fetch prediction matrices for a set of protein sequences from Ensembl MySQL.
 ///
 /// # Arguments
-/// - `peptide_by_transcript`: Map of transcript ID to amino acid sequence.
+/// - `peptide_by_transcript`: The protein FASTA's records, each under its
+///   header's `transcript:` token.
 /// - `release`: Ensembl release number (e.g., 115).
 /// - `assembly`: Genome assembly (e.g., "GRCh38").
 /// - `host`: MySQL host (default: `ensembldb.ensembl.org`).
 /// - `port`: MySQL port (default: 3306).
 ///
 /// # Returns
-/// Map of transcript ID to prediction data.
+/// The prediction data of each record, under the record's key.
 pub fn fetch_predictions(
-    peptide_by_transcript: &HashMap<String, String>,
+    peptide_by_transcript: &HashMap<String, Peptide>,
     release: u32,
     assembly: &str,
     host: &str,
@@ -90,7 +95,7 @@ pub fn fetch_predictions(
 
     let mut md5_to_transcripts: HashMap<String, Vec<String>> = HashMap::new();
     for (tx_id, peptide) in peptide_by_transcript {
-        let md5 = format!("{:x}", md5::compute(peptide));
+        let md5 = format!("{:x}", md5::compute(&peptide.sequence));
         md5_to_transcripts
             .entry(md5)
             .or_default()
@@ -112,11 +117,10 @@ pub fn fetch_predictions(
 
     info!("Connecting to {host}:{port}/{db_name}");
     let url = format!("mysql://anonymous@{host}:{port}/{db_name}");
-    let pool =
-        Pool::new(url.as_str()).with_context(|| format!("Failed to connect to {host}:{port}"))?;
-    let mut conn = pool
-        .get_conn()
-        .context("Failed to get MySQL connection from pool")?;
+    let opts =
+        Opts::from_url(&url).with_context(|| format!("Not a MySQL address: {host}:{port}"))?;
+    let mut conn =
+        Conn::new(opts.clone()).with_context(|| format!("Failed to connect to {host}:{port}"))?;
 
     let attrib_ids = resolve_analysis_attribs(&mut conn)?;
     info!(
@@ -131,7 +135,7 @@ pub fn fetch_predictions(
     }
 
     let md5_list: Vec<&str> = md5_to_transcripts.keys().map(|s| s.as_str()).collect();
-    let matrices = batch_fetch_matrices(&mut conn, &md5_list, &attrib_ids)?;
+    let matrices = batch_fetch_matrices(&opts, &mut conn, &md5_list, &attrib_ids)?;
 
     info!(
         "Fetched {} prediction matrices for {} unique MD5s",
@@ -157,7 +161,7 @@ pub fn fetch_predictions(
 }
 
 /// Resolve analysis_attrib_id values for sift, polyphen_humvar, polyphen_humdiv.
-fn resolve_analysis_attribs(conn: &mut PooledConn) -> Result<HashMap<String, u32>> {
+fn resolve_analysis_attribs(conn: &mut Conn) -> Result<HashMap<String, u32>> {
     let rows: Vec<(u32, String)> = conn
         .query(
             "SELECT a.attrib_id, a.value
@@ -172,11 +176,23 @@ fn resolve_analysis_attribs(conn: &mut PooledConn) -> Result<HashMap<String, u32
     Ok(map)
 }
 
-/// Batch fetch prediction matrix blobs from the database.
+/// The attempts one batch gets before the fetch fails: the public server
+/// closes a connection that has streamed matrices for long enough, which
+/// surfaces as a protocol error in the middle of a response, and a fresh
+/// connection carries on from the same batch.
+const BATCH_ATTEMPTS: u32 = 3;
+
+/// The pause before a batch runs again grows by this much per failed attempt.
+const PAUSE_PER_ATTEMPT: Duration = Duration::from_secs(5);
+
+/// Batch fetch prediction matrix blobs from the database, one query per chunk
+/// of `md5s`, each run through [`fetch_batch`] so a failed chunk is retried on
+/// a new connection to `opts`.
 ///
 /// Returns a list of (md5, FetchedMatrix) pairs.
 fn batch_fetch_matrices(
-    conn: &mut PooledConn,
+    opts: &Opts,
+    conn: &mut Conn,
     md5s: &[&str],
     attrib_ids: &HashMap<String, u32>,
 ) -> Result<Vec<(String, FetchedMatrix)>> {
@@ -217,9 +233,7 @@ fn batch_fetch_matrices(
 
         let params: Vec<mysql::Value> = chunk.iter().map(|md5| mysql::Value::from(*md5)).collect();
 
-        let rows: Vec<(String, u32, Vec<u8>)> = conn
-            .exec(query, params)
-            .with_context(|| format!("Failed to fetch prediction batch {batch_idx}"))?;
+        let rows = fetch_batch(opts, conn, &query, &params, batch_idx)?;
 
         for (md5, attrib_id, blob) in rows {
             if let Some(analysis_name) = id_to_name.get(&attrib_id) {
@@ -235,6 +249,46 @@ fn batch_fetch_matrices(
     }
 
     Ok(results)
+}
+
+/// One batch's rows. The first attempt runs the query on `conn`; every later
+/// attempt opens a new connection to `opts`, which replaces `conn`, and runs
+/// the query there. A failed connection or a failed query costs one attempt
+/// and a pause of [`PAUSE_PER_ATTEMPT`] times the attempts so far; the batch
+/// gets [`BATCH_ATTEMPTS`] attempts in all.
+fn fetch_batch(
+    opts: &Opts,
+    conn: &mut Conn,
+    query: &str,
+    params: &[mysql::Value],
+    batch_idx: usize,
+) -> Result<Vec<(String, u32, Vec<u8>)>> {
+    let mut attempt = 1;
+    loop {
+        let connected = if attempt == 1 {
+            Ok(())
+        } else {
+            Conn::new(opts.clone()).map(|fresh| *conn = fresh)
+        };
+        match connected.and_then(|()| conn.exec(query, params.to_vec())) {
+            Ok(rows) => return Ok(rows),
+            Err(error) if attempt < BATCH_ATTEMPTS => {
+                warn!(
+                    "Prediction batch {batch_idx} failed ({error}); connecting again for attempt {}",
+                    attempt + 1
+                );
+                thread::sleep(PAUSE_PER_ATTEMPT * attempt);
+                attempt += 1;
+            }
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!(
+                        "Failed to fetch prediction batch {batch_idx} in {BATCH_ATTEMPTS} attempts"
+                    )
+                })
+            }
+        }
+    }
 }
 
 /// Convert fetched matrices into a PeptidePredictions struct.

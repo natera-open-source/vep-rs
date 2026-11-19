@@ -223,3 +223,72 @@ fn column_descriptions_comparator_reports_each_difference() {
         "{report}"
     );
 }
+
+/// A plugin that names its data file in a field description names the path
+/// each engine was given, so the comparators mask the path tokens of a
+/// description line, in the default and tab headers and in the VCF header,
+/// and still report a description whose words differ.
+#[test]
+fn plugin_descriptions_compare_with_their_paths_masked() {
+    let tab = |description: &str, identity: bool| {
+        let mut lines = vec![
+            "## ENSEMBL VARIANT EFFECT PREDICTOR v116.2".to_string(),
+            "## Column descriptions:".to_string(),
+            format!("## AA : Ancestral allele from {description}"),
+            "#Uploaded_variation\tLocation".to_string(),
+        ];
+        if identity {
+            lines.insert(1, format!("## vep-rs {VERSION}"));
+        }
+        lines.join("\n")
+    };
+    let expected = tab(
+        "/work/corpus/ancestral/homo_sapiens_ancestor_GRCh38.fa.gz",
+        false,
+    );
+    assert_eq!(
+        compare_tab_headers(
+            &expected,
+            &tab(
+                "/home/user/vep-rs/tests/golden/116/corpus/ancestral/x.fa.gz",
+                true
+            )
+        ),
+        ""
+    );
+    assert_eq!(
+        compare_column_descriptions(&expected, &tab("../ancestral/x.fa.gz", true)),
+        ""
+    );
+    assert_eq!(
+        compare_tab_headers(&expected, &tab("the file /work/corpus/x.fa.gz", true)),
+        "header line 3: expected \"## AA : Ancestral allele from /work/corpus/ancestral/homo_sapiens_ancestor_GRCh38.fa.gz\", got \"## AA : Ancestral allele from the file /work/corpus/x.fa.gz\""
+    );
+
+    let vcf = |description: &str, identity: bool| {
+        let mut lines = vec![
+            "##fileformat=VCFv4.1".to_string(),
+            format!("##AA=Ancestral allele from {description}"),
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO".to_string(),
+        ];
+        if identity {
+            lines.insert(1, format!("##vep-rs={VERSION}"));
+        }
+        lines.join("\n")
+    };
+    let expected = vcf(
+        "/work/corpus/ancestral/homo_sapiens_ancestor_GRCh38.fa.gz",
+        false,
+    );
+    assert_eq!(
+        compare_vcf_headers(
+            &expected,
+            &vcf("./ancestral/homo_sapiens_ancestor_GRCh38.fa.gz", true)
+        ),
+        ""
+    );
+    assert_eq!(
+        compare_vcf_headers(&expected, &vcf("/work/corpus/x.fa.gz (bgzipped)", true)),
+        "header line 2: expected \"##AA=Ancestral allele from /work/corpus/ancestral/homo_sapiens_ancestor_GRCh38.fa.gz\", got \"##AA=Ancestral allele from /work/corpus/x.fa.gz (bgzipped)\""
+    );
+}

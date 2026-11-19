@@ -1,19 +1,22 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Library entry point for vep-cli.
+//! The library behind the vep command of vep-rs, a Rust reimplementation of the Ensembl Variant Effect Predictor (VEP).
 //!
 //! # Public API surface
 //!
-//! The `pub use`s below are the **intended** library surface for downstream
-//! consumers, including a long-lived process that holds an `Annotator` and
-//! annotates many batches from one load. Code that pulls from one of these
-//! re-exports is opting in to a stable contract; code that reaches into the
-//! submodules below relies on implementation details that may move between
-//! releases.
+//! The `pub use`s below are the library surface for downstream consumers,
+//! including a long-lived process that holds an `Annotator` and annotates many
+//! batches from one load. The contract they carry is stated on
+//! `docs/developers/embedding.md`: how the crates are added, what each
+//! re-export is for, the path that writes the `vep --json` bytes, and how the
+//! surface is versioned; `crates/vep-cli/tests/library_embedding.rs` proves
+//! the bytes. Code that pulls from one of these re-exports is opting in to
+//! that contract; code that reaches into the submodules below relies on
+//! implementation details that may move between releases.
 //!
-//! Submodules remain `pub` so the in-tree binaries (`vep`, `bench_plugins`),
-//! integration tests, and downstream crates can keep reaching into them.
+//! The `pub` submodules let the in-tree binaries (`vep`, and `bench_plugins` under the `bench`
+//! feature), integration tests, and downstream crates reach into them; the rest are `pub(crate)`.
 
 pub use annotator::{
     build_thread_pool, row_to_input_variant, validate_raw_row, AnnotationError,
@@ -34,14 +37,19 @@ pub use vep_core::variant::InputVariant;
 // no separate dependency.
 pub use vep_io::output::json::JsonOutputFormatter;
 
+pub mod affinity;
 pub mod annotator;
 pub mod argv;
 pub mod cache_resolve;
 pub mod config;
 pub(crate) mod delimiter;
 pub mod dylib_plugins;
+pub mod filter_cli;
+pub mod filter_input;
+pub(crate) mod filter_regex;
 pub mod filter_set;
 pub mod frequency_filter;
+pub(crate) mod glob;
 pub mod individuals;
 pub mod input_shape;
 pub mod json_cache;
@@ -50,10 +58,14 @@ pub mod option_rules;
 pub mod output_compress;
 pub mod pick;
 pub(crate) mod pipeline;
+pub mod recode;
+pub mod recode_cli;
 pub mod regulatory;
 pub(crate) mod render;
 pub mod row_filter;
 pub mod runner;
+pub(crate) mod stats;
+pub mod stderr;
 pub mod sv_source;
 pub mod transcript_index;
 pub mod transcript_lookup;

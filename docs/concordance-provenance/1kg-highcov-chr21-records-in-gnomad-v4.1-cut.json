@@ -1,0 +1,32 @@
+{
+  "date": "2026-11-09",
+  "record": "dataset_record_overlap",
+  "purpose": "The record the section How the entries are ordered of docs/intended-divergences.md links from its sentence on the 1000 Genomes high-coverage chromosome 21 dataset, which is not one of the cuts: how many of its records are records of the gnomAD v4.1 chromosome 21 cut.",
+  "inputs": {
+    "dataset": {
+      "name": "1000 Genomes high-coverage chromosome 21, GRCh38, sites only",
+      "file": "1kg_highcov_chr21.canonical.vcf.gz",
+      "bytes": 99555942,
+      "md5": "d8921cc222ea6764d0ae4f0aff06cc35",
+      "sha256": "32003f275d8450c1c94c234f20adc44557900b513d2f5842273c48d1b09fbf7d",
+      "identified_by": "cell s06 of the n20 parallel-clones record of this directory, whose bytes and etag are these bytes and md5"
+    },
+    "cut": {
+      "name": "gnomAD v4.1 chromosome 21, GRCh38",
+      "file": "gnomad_genomes_v4.1_chr21.canonical.vcf.gz",
+      "bytes": 7086477673,
+      "sha256": "077610f9071d53d5688590d777b597db2e84cf44cacba0d3907c38177778b06a",
+      "identified_by": "cell s04 of the same record, whose bytes are these"
+    }
+  },
+  "commands": {
+    "count": "awk -F'\\t' 'FNR == 1 { file++ } /^#/ { next } file == 1 { n++; a[$2 FS $4 FS $5]++; next } { m++; k = $2 FS $4 FS $5; if (k in a) { hit += a[k]; delete a[k] } } END { print n, hit, n - hit, m }' <(zcat 1kg_highcov_chr21.canonical.vcf.gz | cut -f1-5) <(zcat gnomad_genomes_v4.1_chr21.canonical.vcf.gz | cut -f1-5)",
+    "note": "a record of the dataset is a record of the cut when a record of the cut carries the same POS, REF and ALT, VCF columns 2, 4 and 5 compared as written; both files hold chromosome 21 alone, under the name 21, and neither holds a multi-allelic record; the command prints the four counts in the order below"
+  },
+  "counts": {
+    "dataset_records": 1002753,
+    "dataset_records_in_the_cut": 998624,
+    "dataset_records_not_in_the_cut": 4129,
+    "cut_records": 10958898
+  }
+}

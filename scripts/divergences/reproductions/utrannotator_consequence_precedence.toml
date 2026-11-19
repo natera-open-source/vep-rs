@@ -1,0 +1,32 @@
+entry = "utrannotator_consequence_precedence"
+page = "docs/divergences/utrannotator-consequence-precedence.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 999,950 per million · 4 flag sets, 109 corpora"
+notes = "The substitution destroys a uORF's ATG and removes an overlapping ORF's stop codon, so uAUG_lost and uSTOP_lost both fire. Ensembl VEP writes the flag its hash lists last: under PERL_HASH_SEED=0 that is uSTOP_lost, vep-rs's value; the seed given here lists the five keys uSTOP_gained, uSTOP_lost, uAUG_gained, uFrameshift, uAUG_lost and writes the start-codon loss."
+
+[input]
+format = "vcf"
+text = """
+21	35748195	rs1396983766	G	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37-hgvs/json_cache"
+fasta = "tests/golden/116/GRCh37-hgvs/reference.fa.gz"
+
+[run]
+flags = ["--plugin", "UTRAnnotator,file={repo}/tests/golden/116/GRCh37-plugin-utr-annotator/data/uORF_5UTR_GRCh37_PUBLIC.chr21.txt"]
+perl_hash_seed = "0x0000000000000000000000000000000002"
+
+[compare]
+kind = "field"
+field = "5UTR_consequence"
+where = { record = "rs1396983766", feature = "ENST00000399295" }
+
+[expected]
+ensembl_vep = ["5_prime_UTR_premature_start_codon_loss_variant"]
+vep_rs = ["5_prime_UTR_uORF_stop_codon_loss_variant"]

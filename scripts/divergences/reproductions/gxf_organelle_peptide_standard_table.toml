@@ -1,0 +1,45 @@
+entry = "gxf_organelle_peptide_standard_table"
+page = "docs/cache-from-gtf-or-gff3.md#the-reference-peptide-of-a-mitochondrial-transcript-read-from-a-gtf-or-gff3"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 247 of 487 MT records · 0 flag sets, 7 corpora"
+notes = "Codon 31 of MT-ND1 is ATA, methionine under the vertebrate mitochondrial code and isoleucine under the standard one; an in-frame insertion after it names that residue in its HGVSp, read from the stored peptide. The GTF lines of MT-ND1 are the Ensembl GTF's gene, transcript, exon and CDS lines for ENST00000361390 over the corpus FASTA's MT record."
+# Ensembl VEP reads the GTF; vep-rs reads a cache built from it with the mitochondrial table.
+prepare = [
+  '''cat > "$STAGE/mt_nd1.gtf" <<'GTF'
+MT	insdc	gene	3307	4262	.	+	.	gene_id "ENSG00000198888"; gene_version "2"; gene_name "MT-ND1"; gene_source "insdc"; gene_biotype "protein_coding";
+MT	insdc	transcript	3307	4262	.	+	.	gene_id "ENSG00000198888"; gene_version "2"; transcript_id "ENST00000361390"; transcript_version "2"; gene_name "MT-ND1"; gene_source "insdc"; gene_biotype "protein_coding"; transcript_name "MT-ND1-201"; transcript_source "insdc"; transcript_biotype "protein_coding";
+MT	insdc	exon	3307	4262	.	+	.	gene_id "ENSG00000198888"; gene_version "2"; transcript_id "ENST00000361390"; transcript_version "2"; exon_number "1"; gene_name "MT-ND1"; gene_source "insdc"; gene_biotype "protein_coding"; transcript_name "MT-ND1-201"; transcript_source "insdc"; transcript_biotype "protein_coding"; exon_id "ENSE00001435714"; exon_version "2";
+MT	insdc	CDS	3307	4262	.	+	0	gene_id "ENSG00000198888"; gene_version "2"; transcript_id "ENST00000361390"; transcript_version "2"; exon_number "1"; gene_name "MT-ND1"; gene_source "insdc"; gene_biotype "protein_coding"; transcript_name "MT-ND1-201"; transcript_source "insdc"; transcript_biotype "protein_coding"; protein_id "ENSP00000354687"; protein_version "2";
+GTF''',
+  "bgzip -c \"$STAGE/mt_nd1.gtf\" > \"$STAGE/mt_nd1.gtf.gz\" && tabix -p gff \"$STAGE/mt_nd1.gtf.gz\"",
+  "\"$VEP_CACHE_BUILDER\" --species homo_sapiens --assembly GRCh38 --release 116 --gtf \"$STAGE/mt_nd1.gtf\" --genome-fasta \"$CORPUS/reference.fa.gz\" --codon-table MT=2 --output-dir \"$STAGE/json_cache\"",
+]
+
+[input]
+format = "vcf"
+text = """
+MT	3399	nd1_insertion_after_codon_31	A	AGCT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json_cache"
+corpus = "tests/golden/116/GRCh38-input-hgvs"
+gxf = "{stage}/mt_nd1.gtf.gz"
+gxf_kind = "gtf"
+fasta = "tests/golden/116/GRCh38-input-hgvs/reference.fa.gz"
+
+[run]
+flags = ["--hgvs"]
+
+[compare]
+kind = "field"
+field = "HGVSp"
+where = { record = "nd1_insertion_after_codon_31", feature = "ENST00000361390" }
+
+[expected]
+ensembl_vep = ["ENSP00000354687.1:p.Ile31_Gln32insAla"]
+vep_rs = ["ENSP00000354687.1:p.Met31_Gln32insAla"]

@@ -1,0 +1,45 @@
+entry = "spliceai_chopped_multiallelic"
+page = "docs/plugins/spliceai.md#a-substitution-beside-a-deletion-in-one-record"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 0.064 per million · 8 flag sets, 4 corpora"
+notes = "The chopped substitution allele A at 26965500 is the SNV fixture's `C A` row; the deletion allele has no indel row in either engine."
+
+[input]
+format = "vcf"
+text = """
+21	26965499	chopped_multiallelic	GC	G,GA	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-spliceai/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-spliceai/reference.fa.gz"
+
+[run]
+flags = [
+  "--plugin",
+  "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz",
+]
+
+[compare]
+kind = "field"
+field = "SpliceAI_pred"
+with_key = true
+where = { record = "chopped_multiallelic", allele = "A" }
+
+[expected]
+ensembl_vep = [
+  "ENST00000284987=-", "ENST00000652031=-", "ENST00000970346=-",
+  "ENST00001108182=-", "ENST00001108183=-", "ENST00001131497=-",
+]
+vep_rs = [
+  "ENST00000284987=ADAMTS5|0.05|0.71|0.72|0.66|-47|-14|3|17",
+  "ENST00000652031=ADAMTS5|0.05|0.71|0.72|0.66|-47|-14|3|17",
+  "ENST00000970346=ADAMTS5|0.05|0.71|0.72|0.66|-47|-14|3|17",
+  "ENST00001108182=ADAMTS5|0.05|0.71|0.72|0.66|-47|-14|3|17",
+  "ENST00001108183=ADAMTS5|0.05|0.71|0.72|0.66|-47|-14|3|17",
+  "ENST00001131497=ADAMTS5|0.05|0.71|0.72|0.66|-47|-14|3|17",
+]

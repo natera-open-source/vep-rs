@@ -1,0 +1,31 @@
+entry = "downstream_reverse_strand_rotation"
+page = "docs/plugins/transcript-model.md#4-downstream-the-rotation-of-a-shifted-allele-on-a-reverse-strand-transcript"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 76,935 per million · 4 flag sets, 89 corpora"
+notes = "An AG insertion after the GAGAGAG run in the single exon of CLDN17 (reverse strand): on the transcript the allele CT is shifted seven bases, a shift longer than the allele, and HGVS_OFFSET=-7 on both engines. Ensembl VEP's Downstream plugin reads the shifted point and splices the bases unrotated there; vep-rs's reads the record's own point, between coding bases 265 and 266, and writes the value it writes without --hgvs."
+
+[input]
+format = "vcf"
+text = """
+21	30166352	cldn17_ins_AG	G	GAG	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-identifiers/json_cache"
+fasta = "tests/golden/116/GRCh38-identifiers/reference.fa.gz"
+
+[run]
+flags = ["--hgvs", "--plugin", "Downstream"]
+
+[compare]
+kind = "field"
+field = "DownstreamProtein"
+where = { record = "cldn17_ins_AG", feature = "ENST00000286808" }
+
+[expected]
+ensembl_vep = ["SS"]
+vep_rs = ["ALSP"]

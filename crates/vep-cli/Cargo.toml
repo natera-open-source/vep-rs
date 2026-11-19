@@ -6,9 +6,9 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
-keywords.workspace = true
-categories = ["science::bioinformatics", "command-line-utilities"]
-description = "The vep command: a fast Rust reimplementation of the Ensembl Variant Effect Predictor (VEP) with its flags and output formats"
+keywords = ["vep", "ensembl", "variant-annotation", "vcf", "genomics"]
+categories = ["science::bioinformatics", "science::bioinformatics::genomics", "command-line-utilities"]
+description = "The vep command: a fast Rust reimplementation of the Ensembl Variant Effect Predictor (VEP) for VCF variant annotation, with VEP's flags and output formats"
 default-run = "vep"
 
 [lib]
@@ -22,6 +22,7 @@ path = "src/main.rs"
 [[bin]]
 name = "bench_plugins"
 path = "src/bin/bench_plugins.rs"
+required-features = ["bench"]
 
 [dependencies]
 vep-core = { workspace = true }
@@ -35,6 +36,7 @@ noodles-bgzf = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+indexmap = { workspace = true }
 csv = { workspace = true }
 flate2 = { workspace = true }
 rayon = { workspace = true }
@@ -47,18 +49,25 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 base64 = { workspace = true }
 regex = { workspace = true }
+libc = { workspace = true }
 mimalloc = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 serde_json = { workspace = true }
 criterion = { workspace = true }
+parquet = { workspace = true }
 
 [[bench]]
 name = "cache_load_bench"
 harness = false
 
 [features]
-default = ["mimalloc"]
+default = ["mimalloc", "parquet"]
 # Use mimalloc as the `vep` binary's global allocator.
 mimalloc = ["dep:mimalloc"]
+# The Parquet output format.
+parquet = ["vep-io/parquet"]
+# The `bench_plugins` binary, a development tool: off by default so that
+# `cargo install vep-cli` installs `vep` alone.
+bench = []

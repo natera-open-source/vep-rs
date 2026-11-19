@@ -1,6 +1,6 @@
 # Two region notations: `UPLOADED_ALLELE` under `--minimal`, and a `BND` word
 
-Two differences on region input (`--format region`), a format no measured dataset uses; nothing is set aside. The first is in the text of one field and reaches every input format but VCF, the second in which records are written.
+Two differences on region input (`--format region`), a format no measured dataset uses; nothing is set aside. The first is in the text of one field and reaches every input format but VCF, the second in which records are written. Under `--minimal`, Ensembl VEP prints the trimmed string as `UPLOADED_ALLELE`, and vep-rs prints the string as parsed. For a region whose allele is `BND`, Ensembl VEP dies with exit code 255, and vep-rs annotates a `chromosome_breakpoint` over the span.
 
 ## `UPLOADED_ALLELE` of a region record `--minimal` trims
 

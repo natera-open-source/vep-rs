@@ -1,0 +1,29 @@
+entry = "nearest_exon_jb_item_order"
+page = "docs/divergences/nearest-exon-jb-item-order.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 0.13 per million by output rows · 2 flag sets, 1 corpus"
+notes = "The record is ClinVar variation 2444492, the corpus's 34th record: a deletion of 1,783 bases that starts three bases before one exon of ENST00000703224 and ends three bases before the last base of another, so both exons lie at the smallest distance. Ensembl VEP builds the value by walking a hash's keys (NearestExonJB.pm:267-271): the 207-base exon first under the fixed seed of this run, and either order under Perl's own seed. vep-rs lists the exons in transcript order."
+
+[input]
+format = "vcf"
+path = "tests/golden/116/GRCh38-plugin-computed/variants.vcf"
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-computed/json_cache"
+
+[run]
+flags = ["--plugin", "NearestExonJB"]
+format = "default"
+
+[compare]
+kind = "field"
+field = "NearestExonJB"
+where = { record = "2444492", feature = "ENST00000703224" }
+
+[expected]
+ensembl_vep = ["ENSE00003551868|3|end|207,ENSE00003618058|3|start|117"]
+vep_rs = ["ENSE00003618058|3|start|117,ENSE00003551868|3|end|207"]

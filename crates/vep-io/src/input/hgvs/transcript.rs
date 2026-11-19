@@ -52,6 +52,7 @@
 //! the position undefined and the resolver goes on with it.
 
 use vep_core::coordinate::Strand;
+use vep_core::pick::{pick_by_categories, Rank};
 use vep_core::transcript::{
     ExonCoordMapper, MappedPiece, MapperPair, Transcript, TranscriptMapper,
 };
@@ -147,29 +148,32 @@ fn resolve(
 /// `_pick_likely_transcript` (`:2146-2226`): the transcript a gene name
 /// resolves to. Each transcript is scored in each category, 0 best, and the
 /// categories are read in order, keeping the transcripts with the lowest
-/// score until one is left: MANE Select, MANE Plus Clinical (the attribute
-/// present or not), APPRIS (the digits of the attribute's value, 10 added
-/// when the word before them is not `principal`, 100 without a value or with
-/// zero), TSL (the level, 100 without one or with zero, which `if $1` drops),
-/// canonical, biotype (`protein_coding` or not), CCDS (an entry or not), then
-/// the spliced length, longest first; the `rank` category of the order scores
-/// every transcript alike. The pick is the transcript whose scores, read in
-/// that order, are the smallest; a tie through every category takes the first
-/// in the order given, as the stable sort leaves it.
+/// score until one is left ([`pick_by_categories`]): MANE Select, MANE Plus
+/// Clinical (the attribute present or not), APPRIS (the digits of the
+/// attribute's value, 10 added when the word before them is not `principal`,
+/// 100 without a value or with zero), TSL (the level's digit run, compared as
+/// a number and tied as text, 100 without one or with zero, which `if $1`
+/// drops), canonical, biotype (`protein_coding` or not), CCDS (an entry or
+/// not), then the spliced length, longest first; the `rank` category of the
+/// order scores every transcript alike. A tie through every category takes
+/// the first in the order given, as the stable sort leaves it.
 fn pick_likely_transcript(mut transcripts: Vec<Transcript>) -> Option<Transcript> {
-    let (likeliest, _) = transcripts
-        .iter()
-        .map(likelihood_scores)
-        .enumerate()
-        .min_by_key(|(_, scores)| *scores)?;
+    let scores: Vec<[Rank; 8]> = transcripts.iter().map(likelihood_scores).collect();
+    let candidates: Vec<usize> = (0..transcripts.len()).collect();
+    let likeliest = pick_by_categories(
+        &candidates,
+        &[0, 1, 2, 3, 4, 5, 6, 7],
+        |candidate, category| scores[candidate][category],
+    )?;
     Some(transcripts.swap_remove(likeliest))
 }
 
 /// A transcript's scores in `_pick_likely_transcript`'s categories, in its
 /// order: `mane_select mane_plus_clinical appris tsl canonical biotype ccds
-/// length` (`:2158-2200`).
-fn likelihood_scores(transcript: &Transcript) -> [i64; 8] {
-    let absent = |present: bool| i64::from(!present);
+/// length` (`:2158-2200`); the TSL is the level's digit run (`:2183`), the
+/// number 100 without one (`:2163`).
+fn likelihood_scores(transcript: &Transcript) -> [Rank<'_>; 8] {
+    let absent = |present: bool| Rank::Number(i64::from(!present));
     let ccds = transcript
         .ccds
         .as_deref()
@@ -177,15 +181,12 @@ fn likelihood_scores(transcript: &Transcript) -> [i64; 8] {
     [
         absent(transcript.mane_select.is_some()),
         absent(transcript.mane_plus_clinical.is_some()),
-        appris_score(transcript.appris.as_deref()),
-        transcript
-            .tsl
-            .filter(|&tsl| tsl != 0)
-            .map_or(100, i64::from),
+        Rank::Number(appris_score(transcript.appris.as_deref())),
+        Rank::tsl(transcript.tsl.as_deref()),
         absent(transcript.canonical),
         absent(transcript.is_protein_coding()),
         absent(ccds),
-        -i64::from(transcript.spliced_length()),
+        Rank::Number(-i64::from(transcript.spliced_length())),
     ]
 }
 
@@ -545,6 +546,7 @@ pub(super) mod tests {
             source: "Ensembl".into(),
             gene_symbol: Some("GENE1".into()),
             gene_symbol_source: None,
+            gene_symbol_id: None,
             hgnc_id: None,
             gene_phenotype: None,
             canonical: false,
@@ -563,7 +565,6 @@ pub(super) mod tests {
                 .iter()
                 .enumerate()
                 .map(|(i, &(start, end))| Exon {
-                    stable_id: None,
                     start,
                     end,
                     rank: i as u32 + 1,
@@ -572,6 +573,7 @@ pub(super) mod tests {
                 })
                 .collect(),
             introns: vec![],
+            exon_ids: None,
             cdna_coding_start: coding.map(|c| c.0),
             cdna_coding_end: coding.map(|c| c.1),
             coding_region_start: None,
@@ -594,6 +596,8 @@ pub(super) mod tests {
                 }),
                 ..Default::default()
             }),
+            source_cache: None,
+            bam_edit_status: None,
             derived: Default::default(),
             id_rank: 0,
         }
@@ -923,10 +927,40 @@ pub(super) mod tests {
             picked(vec![canonical.clone(), appris, principal]),
             "ENST00000000015"
         );
-        let mut tsl1 = long.clone();
-        tsl1.stable_id = "ENST00000000016".into();
-        tsl1.tsl = Some(1);
-        assert_eq!(picked(vec![canonical.clone(), tsl1]), "ENST00000000016");
+        let with_tsl = |id: &str, level: &str| {
+            let mut t = long.clone();
+            t.stable_id = id.into();
+            t.tsl = Some(level.to_string());
+            t
+        };
+        let tsl1 = with_tsl("ENST00000000016", "1");
+        assert_eq!(
+            picked(vec![canonical.clone(), tsl1.clone()]),
+            "ENST00000000016"
+        );
+        // The TSL compares as a number (`<=>`, `:2207`): `300` loses to `2`
+        // and to a transcript without a level (100); `00` beats `1`.
+        let tsl300 = with_tsl("ENST00000000019", "300");
+        let tsl2 = with_tsl("ENST00000000020", "2");
+        assert_eq!(picked(vec![tsl300.clone(), tsl2]), "ENST00000000020");
+        assert_eq!(picked(vec![tsl300, canonical.clone()]), "ENST00000000012");
+        let tsl00 = with_tsl("ENST00000000021", "00");
+        assert_eq!(picked(vec![tsl1.clone(), tsl00]), "ENST00000000021");
+        // A tie is the same text (`eq`, `:2214`): `001` sorts with `1` but ends
+        // the tied prefix, so the first `1` is the pick over a canonical twin
+        // listed after the `001`.
+        let tsl001 = with_tsl("ENST00000000022", "001");
+        let mut canonical_tsl1 = tsl1.clone();
+        canonical_tsl1.stable_id = "ENST00000000023".into();
+        canonical_tsl1.canonical = true;
+        assert_eq!(
+            picked(vec![tsl1.clone(), tsl001, canonical_tsl1.clone()]),
+            "ENST00000000016"
+        );
+        assert_eq!(
+            picked(vec![tsl1.clone(), canonical_tsl1]),
+            "ENST00000000023"
+        );
         let mut ccds = reverse();
         ccds.stable_id = "ENST00000000017".into();
         ccds.ccds = Some("CCDS1.1".into());

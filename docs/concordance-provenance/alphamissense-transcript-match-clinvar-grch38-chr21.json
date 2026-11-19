@@ -1,0 +1,90 @@
+{
+  "date": "2026-11-02",
+  "record": "plugin_field_comparison",
+  "purpose": "The counts stated in section 1 of docs/plugins/annotation-store-divergences.md for the AlphaMissense plugin under transcript_match=1: both engines run over the GRCh38 chromosome 21 ClinVar records, and the am_class and am_pathogenicity fields of every row compared.",
+  "engines": {
+    "ensembl_vep": {
+      "image": "ensemblorg/ensembl-vep:release_116.2",
+      "image_digest": "sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+      "api_versions": {
+        "ensembl": "116.0d85231",
+        "ensembl-io": "116.6afb5dc",
+        "ensembl-variation": "116.db7394a",
+        "ensembl-vep": "116.2"
+      },
+      "plugin": {
+        "module": "AlphaMissense.pm",
+        "source": "https://github.com/Ensembl/VEP_plugins, branch release/116, commit 229bb6489d6ac20552f3a3f68134b586ed5fe3c4, the copy the image ships under /plugins",
+        "sha256": "e879693265109aeff9e0f405db7e3cdba9d96870d0338821fde8a0bbcc96de85"
+      }
+    },
+    "vep_rs": {
+      "version": "vep 0.6.0",
+      "build": "cargo build --release --locked --bin vep, target-cpu neoverse-v1 (aarch64)",
+      "cargo_lock_sha256": "f0c509a83c890e4a5ab4457e28790b06bb33a4c2e204822a2af98db5aa210a8b",
+      "binary_sha256": "a4bff03271a52897692da431fd6bffb8d18913c50475e6e3d944d50d598bd646"
+    }
+  },
+  "inputs": {
+    "clinvar": {
+      "source": "https://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/archive_2.0/2026/clinvar_20260321.vcf.gz",
+      "release": "20260321",
+      "sha256": "ba3604f2e89a6b72ad6ff481142c2f2b06cd929a849cfa908b7519ff97ea0c15",
+      "chromosome_21_cut": {
+        "command": "tabix -h clinvar_grch38.vcf.gz 21 > clinvar_grch38_chr21.vcf",
+        "sha256": "757132db055323839a4851946910017937d9b54d2a6cedc62ba1032f9b6a8518",
+        "records": 49581
+      }
+    },
+    "alphamissense": {
+      "source": "https://zenodo.org/records/10813168/files/AlphaMissense_hg38.tsv.gz",
+      "license": "CC BY 4.0",
+      "sha256": "0516cfd71c0767ac8f9c469252d429000e94e02c008b6e3a46d4b4646fcd3475",
+      "bytes": 642961469,
+      "index_sha256": "79e270945664a9a9b849dcca70fd3b7e31805d46fb43cc587a449821e05f958c"
+    },
+    "ensembl_cache": {
+      "source": "https://ftp.ensembl.org/pub/release-116/variation/indexed_vep_cache/homo_sapiens_vep_116_GRCh38.tar.gz",
+      "directory": "homo_sapiens/116_GRCh38",
+      "info_txt_sha256": "b7298ffe9c8aba8e283d2e647a28a8345e6b7c4cd71e8d42eae66acfb94dd3ad",
+      "vep_rs_cache": "the JSON conversion of the same cache by scripts/data/storable_to_json.pl (docs/cache-conversion.md), its chromosome 21 transcript shards",
+      "vep_rs_cache_info_json_sha256": "a76cea0d71ff2a088b4ee95ce5ea6c6e376b364b843dd394f5394551a643f096"
+    },
+    "fasta": {
+      "file": "Homo_sapiens.GRCh38.dna.primary_assembly.fa",
+      "source": "https://ftp.ensembl.org/pub/release-116/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz, decompressed and indexed; the reference docs/divergences/reproducing.md names",
+      "sha256": "1e74081a49ceb9739cc14c812fbb8b3db978eb80ba8e5350beb80d8ad8dfef3b"
+    }
+  },
+  "commands": {
+    "ensembl_vep": "vep -i clinvar_grch38_chr21.vcf -o ensembl_vep.txt --offline --cache --dir_cache <cache root> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa --buffer_size 5000 --fork 16 --no_stats --force_overwrite --dir_plugins /plugins --plugin AlphaMissense,file=alphamissense.tsv.gz,transcript_match=1",
+    "vep_rs": "vep -i clinvar_grch38_chr21.vcf -o vep_rs.txt --offline --json_cache <json cache>/homo_sapiens/116_GRCh38 --fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa --species homo_sapiens --assembly GRCh38 --fork 16 --buffer_size 5000 --force --no_stats --plugin AlphaMissense,file=alphamissense.tsv.gz,transcript_match=1",
+    "comparison": "rows keyed on (Uploaded_variation, Location, Allele, Feature); the am_class and am_pathogenicity entries of the Extra column compared per row; for every row vep-rs alone fills, the prediction file queried at the row's position and the version digits of the transcript matching the row's Feature tallied"
+  },
+  "counts": {
+    "input_records": 49581,
+    "records_without_an_alternate_allele": 20,
+    "records_annotated": 49561,
+    "rows_per_engine": 1348339,
+    "rows_with_am_fields": {
+      "ensembl_vep": 21243,
+      "vep_rs": 24411
+    },
+    "vep_rs_only": {
+      "rows": 3168,
+      "records": 3168,
+      "prediction_transcript_version_digits": {
+        "2": 3168
+      }
+    },
+    "ensembl_vep_only_rows": 0,
+    "both_filled": {
+      "rows": 21243,
+      "differing_values": 0
+    }
+  },
+  "notes": [
+    "The 20 records with no alternate allele (ALT `.`) write no row on either engine.",
+    "Every row vep-rs alone fills is a prediction whose transcript version has two digits, the shape AlphaMissense.pm line 259 strips one digit of; no prediction on a one-digit version differs."
+  ]
+}

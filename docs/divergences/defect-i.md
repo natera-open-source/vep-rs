@@ -1,6 +1,6 @@
 # Defect I: a dot-notation breakend without `SVTYPE` is written as a pair
 
-**The defect in one sentence.** A dot-notation single breakend (`N.`, `.N`) whose INFO carries no `SVTYPE` takes Ensembl VEP's sequence rules for its coordinates, so it is written as a span rather than as the point it names, the base after POS.
+**The defect in one sentence.** A dot-notation single breakend (`N.`, `.N`) whose INFO carries no `SVTYPE` takes Ensembl VEP's sequence rules for its coordinates, so it is written as a span rather than as the point it names, the base after POS. vep-rs writes the point whether INFO carries `SVTYPE` or not.
 
 Its start is POS + 1 when the ALT's length differs from REF's and POS when it does not, and its end is POS plus the length of REF minus one. For a REF of one or two bases the span is the pair `POS-(POS+1)`, with the cDNA, CDS and protein positions of an insertion. For a REF of three or more bases beside an ALT of another length the span begins at POS + 1, and when the two lengths are equal (`NAC` against `NA.`) at POS.
 
@@ -10,7 +10,7 @@ Its start is POS + 1 when the ALT's length differs from REF's and POS when it do
 
 **Where it is in Ensembl VEP's source** (`ensembl-io` and `ensembl-vep`):
 - `ensembl-io`, `BaseVCF4.pm`, `get_start`, lines 255-275: adds one to POS for a symbolic ALT or an ALT whose length differs from REF's, and leaves POS alone when the lengths are equal, as a two-base REF's is against `N.`.
-- `ensembl-io`, `BaseVCF4.pm`, `get_end`, lines 297-316: ends a record without `SVLEN` or `END` at the start only when the raw INFO carries `SVTYPE` or the ALT carries `<`, `[` or `]`. A dot breakend carries none, so the last branch gives POS plus the length of REF minus one: POS for a one-base REF, POS + 1 for two bases, POS + 2 for three.
+- `ensembl-io`, `BaseVCF4.pm`, `get_end`, lines 297-317: ends a record without `SVLEN` or `END` at the start only when the raw INFO carries `SVTYPE` or the ALT carries `<`, `[` or `]`. A dot breakend carries none, so the last branch gives POS plus the length of REF minus one: POS for a one-base REF, POS + 1 for two bases, POS + 2 for three.
 - `ensembl-vep`, `Bio/EnsEMBL/VEP/Parser/VCF.pm`, lines 237-245: the line is still routed to the structural path (`^\.\w+|\w+\.$`), and `get_SO_term` reads `BND` from the dot, so the record is a `chromosome_breakpoint` with a sequence record's coordinates.
 
 **What correcting it would change.** The record would be the single base at POS + 1, as it is with `SVTYPE=BND` and as vep-rs writes it; [class 16](#16-a-dot-notation-breakend-without-svtype-written-as-a-pair) would vanish.
@@ -156,7 +156,7 @@ The ENST00000390690 row:
 
 ### 16.4 Why Ensembl VEP writes that
 
-`BaseVCF4.pm` `get_start` (lines 255-275) adds one to POS for a symbolic ALT or an ALT whose length differs from REF's and leaves POS alone when the lengths are equal. `get_end` (lines 297-316) ends a record without `SVLEN` or `END` at the start only when the raw INFO carries `SVTYPE` or the ALT carries `<`, `[` or `]`. A dot breakend carries none, so the last branch gives POS plus the length of REF minus one.
+`BaseVCF4.pm` `get_start` (lines 255-275) adds one to POS for a symbolic ALT or an ALT whose length differs from REF's and leaves POS alone when the lengths are equal. `get_end` (lines 297-317) ends a record without `SVLEN` or `END` at the start only when the raw INFO carries `SVTYPE` or the ALT carries `<`, `[` or `]`. A dot breakend carries none, so the last branch gives POS plus the length of REF minus one.
 
 The length of REF therefore sets the span. Against the two-character ALT a one-base REF starts at POS + 1 and ends at POS, a two-base REF starts at POS and ends at POS + 1, and both are written as the pair `POS-(POS+1)`. A REF of three or more bases starts at POS + 1 and ends at POS plus the length of REF minus one, `21:30425651-30425652` for `NAC` against `.N` at 30425650. Against an ALT of its own length it starts at POS, `21:30425650-30425652` for `NAC` against `NA.`.
 

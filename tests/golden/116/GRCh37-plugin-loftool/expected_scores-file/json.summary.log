@@ -1,0 +1,83 @@
+[VEP run statistics]
+VEP version (API)	 116.2 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh37
+Species	homo_sapiens
+Command line options	vep --assembly GRCh37 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins [PATH]/plugins --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --json --offline --output_file [PATH]/json.jsonl --plugin LoFtool,[PATH]/LoFtool_scores.txt --quiet --stats_text
+Start time	2026-10-28 23:24:57
+End time	2026-10-28 23:24:57
+Run time	0 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/json.jsonl
+
+[Data version]
+1000genomes	phase3
+COSMIC	98
+ClinVar	202306
+HGMD-PUBLIC	20204
+assembly	GRCh37.p13
+dbSNP	156
+gencode	GENCODE 19
+genebuild	2011-04
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.2
+regbuild	1.0
+sift	sift5.2.2
+
+[General statistics]
+Lines of input read	33
+Variants processed	33
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	24
+Overlapped transcripts	101
+Overlapped regulatory features	-
+
+[Variant classes]
+insertion	4
+deletion	12
+SNV	17
+
+[Consequences (most severe)]
+frameshift_variant	4
+inframe_insertion	1
+inframe_deletion	1
+missense_variant	4
+synonymous_variant	7
+3_prime_UTR_variant	15
+intergenic_variant	1
+
+[Consequences (all)]
+frameshift_variant	19
+inframe_insertion	2
+inframe_deletion	3
+missense_variant	7
+synonymous_variant	39
+3_prime_UTR_variant	31
+non_coding_transcript_exon_variant	19
+intron_variant	6
+upstream_gene_variant	14
+downstream_gene_variant	44
+intergenic_variant	1
+
+[Coding consequences]
+frameshift_variant	19
+inframe_insertion	2
+inframe_deletion	3
+missense_variant	7
+synonymous_variant	39
+
+[Variants by chromosome]
+21	33
+
+[Position in protein]
+00-10%	1
+10-20%	1
+20-30%	3
+30-40%	8
+40-50%	11
+50-60%	7
+60-70%	13
+70-80%	18
+80-90%	7
+90-100%	1

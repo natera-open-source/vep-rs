@@ -1,0 +1,18 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	5290136	ot_qtl_deletion_lead_sqtl	GT	G	.	.	.
+21	13980370	ot_qtl_comma_biosample	C	T	.	.	.
+21	14281918	ot_gwas_three_leads	G	C	.	.	.
+21	14640467	ot_gwas_deletion_lead	GAAT	G	.	.	.
+21	14824378	ot_gwas_and_eqtl_leads	C	T	.	.	.
+21	14881104	ot_gwas_four_leads	A	G	.	.	.
+21	14881104	ot_gwas_multiallelic	A	G,T	.	.	.
+21	14881110	ot_no_record	T	A	.	.	.
+21	14971491	ot_gwas_lead_and_nonlead	A	G	.	.	.
+21	14971491	ot_gwas_other_allele	A	T	.	.	.
+21	14979687	ot_gwas_insertion_lead	G	GT	.	.	.
+21	15067644	ot_gwas_and_eqtl_two_leads	A	T	.	.	.
+21	15551809	ot_sqtl_lead_gwas_nonlead_empty_cells	G	A	.	.	.
+21	15610527	ot_gwas_nonlead_only	G	A	.	.	.
+21	46526393	ot_gwas_insertion_nonlead	A	AT	.	.	.
+21	46538370	ot_gwas_deletion_nonlead	GTGTC	G	.	.	.

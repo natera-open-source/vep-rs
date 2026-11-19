@@ -1438,4 +1438,48 @@ mod tests {
         assert_eq!(translate(b"NNN", 1), "X");
         assert_eq!(translate(b"CG", 1), "");
     }
+
+    /// `revtranslate` under the other tables a cache record can name: under
+    /// the invertebrate mitochondrial table 5 arginine lists the four `CGN`
+    /// codons alone, since `AGA` and `AGG` code serine there and join serine's
+    /// list; under the yeast mitochondrial table 3 threonine gains the four
+    /// `CTN` codons ahead of `ACN`, and leucine keeps `TTA` and `TTG` alone;
+    /// table 11 lists as table 1 does. A stop under table 3 is `TAA` and
+    /// `TAG`, since `TGA` codes tryptophan.
+    #[test]
+    fn revtranslate_follows_tables_3_5_and_11() {
+        let spelled = |codons: Vec<[u8; 3]>| -> Vec<String> {
+            codons
+                .into_iter()
+                .map(|c| String::from_utf8(c.to_vec()).unwrap())
+                .collect()
+        };
+        assert_eq!(
+            spelled(reverse_translate("R", 5)),
+            ["CGT", "CGC", "CGA", "CGG"]
+        );
+        assert_eq!(
+            spelled(reverse_translate("S", 5)),
+            ["TCT", "TCC", "TCA", "TCG", "AGT", "AGC", "AGA", "AGG"]
+        );
+        assert_eq!(
+            spelled(reverse_translate("T", 3)),
+            ["CTT", "CTC", "CTA", "CTG", "ACT", "ACC", "ACA", "ACG"]
+        );
+        assert_eq!(spelled(reverse_translate("L", 3)), ["TTA", "TTG"]);
+        assert_eq!(spelled(reverse_translate("Trp", 3)), ["TGA", "TGG"]);
+        assert_eq!(spelled(reverse_translate("*", 3)), ["TAA", "TAG"]);
+        assert_eq!(spelled(reverse_translate("Met", 5)), ["ATA", "ATG"]);
+        for residue in ["R", "S", "T", "L", "M", "W", "*"] {
+            assert_eq!(
+                reverse_translate(residue, 11),
+                reverse_translate(residue, 1),
+                "{residue}"
+            );
+        }
+        assert_eq!(translate(b"CTG", 3), "T");
+        assert_eq!(translate(b"AGA", 5), "S");
+        assert_eq!(translate(b"TGA", 5), "W");
+        assert_eq!(translate(b"ATA", 11), "I");
+    }
 }

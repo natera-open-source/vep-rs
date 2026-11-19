@@ -1,0 +1,30 @@
+entry = "alphamissense_two_digit_transcript_version"
+page = "docs/plugins/annotation-store-divergences.md#1-alphamissense-a-two-digit-transcript-version-under-transcript_match1"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 45 of 1,638 table rows · 6 flag sets, 1 corpus"
+notes = "The corpus table's row chr21 46326450 G A names ENST00000359568.10 (G43D, 0.2322); the same record's ENST00000652508.1 row is matched by both engines."
+
+[input]
+format = "vcf"
+text = """
+21	46326450	two_digit_version	G	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-alphamissense/json_cache"
+
+[run]
+flags = ["--plugin", "AlphaMissense,file={corpus}/plugin_data/alphamissense.tsv.gz,transcript_match=1"]
+
+[compare]
+kind = "field"
+field = "am_pathogenicity"
+where = { record = "two_digit_version", feature = "ENST00000359568" }
+
+[expected]
+ensembl_vep = ["-"]
+vep_rs = ["0.2322"]

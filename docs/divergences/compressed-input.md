@@ -1,6 +1,6 @@
 # Compressed bytes on standard input, and a compressed stream cut short
 
-A difference in which inputs are read, on two shapes no measured dataset has: gzip or BGZF bytes arriving on standard input or through a pipe named by path, and a compressed stream cut inside a member; nothing is set aside.
+A difference in which inputs are read, on two shapes no measured dataset has: gzip or BGZF bytes arriving on standard input or through a pipe named by path, and a compressed stream cut inside a member; nothing is set aside. Ensembl VEP writes a header-only output for the first and the records before the cut for the second, and exits 0 on both; vep-rs annotates the piped stream as it does the file and ends the run at the cut, exit 1.
 
 Ensembl VEP decompresses an input only when it is a regular file whose bytes Perl's `-B` test calls binary (`Parser.pm` line 242). Such a file is opened through `get_compressed_filehandle`, which reads it with `gzip -dc` (`Utils.pm` lines 429-453, the pipe at line 441). vep-rs reads the first bytes of whatever it is given and decompresses a gzip or BGZF stream wherever it comes from.
 

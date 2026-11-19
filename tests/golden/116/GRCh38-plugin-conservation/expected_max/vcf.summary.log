@@ -1,0 +1,120 @@
+[VEP run statistics]
+VEP version (API)	 116.2 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh38
+Species	homo_sapiens
+Command line options	vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins [PATH]/plugins --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --offline --output_file [PATH]/vcf.vcf --plugin Conservation,[PATH]/gerp.bw,MAX --quiet --stats_text --vcf
+Start time	2026-10-28 23:19:50
+End time	2026-10-28 23:19:52
+Run time	2 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/vcf.vcf
+
+[Data version]
+1000genomes	phase3
+COSMIC	102
+ClinVar	202509
+HGMD-PUBLIC	20204
+assembly	GRCh38.p14
+dbSNP	156
+gencode	GENCODE 50
+genebuild	GENCODE50
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.3
+regbuild	1.0
+sift	6.2.1
+
+[General statistics]
+Lines of input read	87
+Variants processed	87
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	54
+Overlapped transcripts	1134
+Overlapped regulatory features	-
+
+[Variant classes]
+indel	8
+substitution	9
+insertion	13
+SNV	25
+deletion	32
+
+[Consequences (most severe)]
+transcript_ablation	1
+splice_acceptor_variant	8
+splice_donor_variant	12
+stop_gained	11
+frameshift_variant	10
+stop_lost	1
+start_lost	1
+inframe_insertion	3
+inframe_deletion	6
+missense_variant	10
+protein_altering_variant	2
+splice_donor_5th_base_variant	3
+splice_region_variant	8
+splice_donor_region_variant	3
+splice_polypyrimidine_tract_variant	2
+synonymous_variant	3
+5_prime_UTR_variant	1
+intron_variant	1
+intergenic_variant	1
+
+[Consequences (all)]
+transcript_ablation	1
+splice_acceptor_variant	321
+splice_donor_variant	418
+stop_gained	200
+frameshift_variant	389
+stop_lost	16
+start_lost	70
+inframe_insertion	125
+inframe_deletion	122
+missense_variant	181
+protein_altering_variant	19
+splice_donor_5th_base_variant	147
+splice_region_variant	507
+splice_donor_region_variant	249
+splice_polypyrimidine_tract_variant	150
+stop_retained_variant	35
+synonymous_variant	233
+coding_sequence_variant	297
+5_prime_UTR_variant	16
+3_prime_UTR_variant	234
+non_coding_transcript_exon_variant	73
+intron_variant	951
+NMD_transcript_variant	552
+non_coding_transcript_variant	68
+upstream_gene_variant	143
+downstream_gene_variant	449
+intergenic_variant	1
+
+[Coding consequences]
+stop_gained	200
+frameshift_variant	389
+stop_lost	16
+start_lost	70
+inframe_insertion	125
+inframe_deletion	122
+missense_variant	181
+protein_altering_variant	19
+stop_retained_variant	35
+synonymous_variant	233
+coding_sequence_variant	297
+
+[Variants by chromosome]
+chr21	1
+21	86
+
+[Position in protein]
+00-10%	202
+10-20%	69
+20-30%	140
+30-40%	87
+40-50%	137
+50-60%	247
+60-70%	206
+70-80%	116
+80-90%	68
+90-100%	117

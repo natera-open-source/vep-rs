@@ -1,0 +1,571 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 3,
+ "included_records": {
+  "dbnsfp": [
+   "coding_mnv",
+   "deletion_rev",
+   "insertion_rev",
+   "intergenic_snv",
+   "intron_snv",
+   "missense_and_stop_lost",
+   "missense_both_strands",
+   "missense_fwd",
+   "missense_fwd_two_changes",
+   "missense_rev",
+   "missense_rev_two_alts",
+   "missense_rev_two_changes",
+   "missense_splice_region",
+   "mito_missense",
+   "mito_start_lost",
+   "start_lost_fwd",
+   "start_lost_fwd_unscored",
+   "stop_gained_fwd",
+   "stop_lost_rev",
+   "synonymous_fwd",
+   "synonymous_fwd_lowercase"
+  ]
+ },
+ "max_span": 1000000,
+ "covers": [
+  "dbNSFP"
+ ],
+ "plugin_files": {
+  "dbNSFP": [
+   "plugin_data/dbNSFP4.9a_grch38_synthetic.gz",
+   "plugin_data/dbNSFP4.9a_grch38_synthetic.gz.tbi",
+   "plugin_data/dbNSFP_replacement_logic"
+  ]
+ },
+ "suites": {
+  "dbnsfp": {
+   "reference": "default.txt.gz",
+   "input": "GRCh38-plugin-dbnsfp.input.vcf",
+   "rows": 229,
+   "combinations": 21
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 2
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 4
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 14,
+   "exemplar_records": 2
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 14,
+   "exemplar_records": 3
+  },
+  "NMD_transcript_variant,missense_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,stop_lost": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 58,
+   "exemplar_records": 5
+  },
+  "frameshift_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "intergenic_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 28,
+   "exemplar_records": 3
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 3
+  },
+  "missense_variant": {
+   "observed_rows": 40,
+   "exemplar_records": 8
+  },
+  "missense_variant,splice_region_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 3
+  },
+  "non_coding_transcript_exon_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "start_lost": {
+   "observed_rows": 3,
+   "exemplar_records": 3
+  },
+  "stop_gained": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "stop_lost": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 28,
+   "exemplar_records": 4
+  }
+ },
+ "variant_classes": {
+  "deletion": 1,
+  "insertion": 1,
+  "mnv_or_complex": 1,
+  "snv": 226
+ },
+ "records": [
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t19268555\tintergenic_snv\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t20204701\tintron_snv\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t29067663\tmissense_rev_two_changes\tT\tC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,missense_variant",
+    "downstream_gene_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t30282169\tstop_lost_rev\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t30282172\tmissense_rev\tT\tC\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t30282928\tmissense_rev_two_alts\tG\tT,A\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t30396087\tstart_lost_fwd\tA\tG\t.\t.\t.",
+   "combinations": [
+    "start_lost"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t30396091\tmissense_fwd\tC\tT\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t30396092\tsynonymous_fwd\tC\tA\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t30396095\tsynonymous_fwd_lowercase\tc\tt\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t30396101\tstop_gained_fwd\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t30396104\tcoding_mnv\tCT\tAG\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t30642890\tstart_lost_fwd_unscored\tT\tC\t.\t.\t.",
+   "combinations": [
+    "start_lost"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t30881493\tdeletion_rev\tGA\tG\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t30881500\tinsertion_rev\tT\tTA\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t33296341\tmissense_fwd_two_changes\tA\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t33447139\tmissense_splice_region\tA\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,missense_variant,splice_region_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "missense_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t39406597\tmissense_both_strands\tT\tC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "21\t42090421\tmissense_and_stop_lost\tT\tC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,missense_variant",
+    "NMD_transcript_variant,stop_lost",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "MT\t3308\tmito_start_lost\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "dbnsfp",
+   "vcf": "MT\t8993\tmito_missense\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "dbnsfp",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,SIFT_score,Polyphen2_HDIV_score"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dbnsfp",
+   "covers": [
+    "dbNSFP"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "dbnsfp-consequence-all",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,consequence=ALL,pep_match=0,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,SIFT_score,Polyphen2_HDIV_score"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dbnsfp-consequence-all",
+   "covers": [
+    "dbNSFP"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "dbnsfp-transcript-match",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,transcript_match=1,SIFT_score,SIFT_pred,MutationTaster_score,GERP++_RS"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dbnsfp-transcript-match",
+   "covers": [
+    "dbNSFP"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "dbnsfp-output-prefix",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,output_prefix=1,SIFT_score,Polyphen2_HDIV_score"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dbnsfp-output-prefix",
+   "covers": [
+    "dbNSFP"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "dbnsfp-pep-match-off",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,pep_match=0,transcript_match=1,SIFT_score,Polyphen2_HDIV_score,GERP++_RS"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dbnsfp-pep-match-off",
+   "covers": [
+    "dbNSFP"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "dbnsfp-consequence-list",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,consequence=synonymous_variant&stop_gained&start_lost,pep_match=0,SIFT_score"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dbnsfp-consequence-list",
+   "covers": [
+    "dbNSFP"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "dbnsfp-replacement-logic",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,{corpus}/plugin_data/dbNSFP_replacement_logic,Interpro_domain,clinvar_trait,SIFT_score"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dbnsfp-replacement-logic",
+   "covers": [
+    "dbNSFP"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "dbnsfp-invalid-column",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,SIFT_score,NoSuchColumn"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dbnsfp-invalid-column",
+   "covers": [
+    "dbNSFP"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "dbnsfp-all",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,ALL"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_dbnsfp-all",
+   "covers": [
+    "dbNSFP"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

@@ -189,6 +189,90 @@ fn latin1_data_line_is_annotated() {
     }
 }
 
+/// A data line that is not UTF-8 is written to the VCF output from the columns
+/// Ensembl VEP stores, its bytes kept: Ensembl VEP 116.2 splits the bytes it
+/// read, dropping a trailing empty column (ensembl-io ColumnBasedParser.pm:250),
+/// fills a structural record's QUAL, FILTER and INFO with `.` where empty or
+/// `0` (Parser/VCF.pm:464-466) and prints `.` for an absent column
+/// (OutputFactory/VCF.pm:355), so a five-column record with three trailing tabs
+/// and a Latin-1 `0xE9` in its ID prints `. .`, a structural record with QUAL
+/// `0` prints `. PASS`, and the six-column records print `50 .` whether or not
+/// the ID is UTF-8. The JSON `input` of the same records is the stored text,
+/// the byte read as the replacement character.
+#[test]
+fn latin1_short_and_structural_records_are_written_from_their_stored_columns() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut bytes = vcf_text().into_bytes();
+    bytes.extend_from_slice(b"21\t30289183\ttrail\xe9\tC\tG,G,T\t\t\t\n");
+    bytes
+        .extend_from_slice(b"21\t30165850\tsvq0\xe9\tN\t<DEL>\t0\tPASS\tSVTYPE=DEL;END=30165950\n");
+    bytes.extend_from_slice(b"21\t30165850\tdup\xe9\tN\t<DUP>\n");
+    bytes.extend_from_slice(b"21\t30289183\tsix\xe9\tC\tG\t50\n");
+    bytes.extend_from_slice(b"21\t30289183\tsix_plain\tC\tG\t50\n");
+    let latin1 = write(dir.path(), "latin1-short.vcf", &bytes);
+
+    let out = output_path(dir.path());
+    let output = vep(dir.path(), &latin1, &out, &["--vcf"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let written = std::fs::read(&out).unwrap();
+    let lines: Vec<&[u8]> = written
+        .split(|&b| b == b'\n')
+        .filter(|l| !l.is_empty() && !l.starts_with(b"#"))
+        .collect();
+    let leading: Vec<Vec<u8>> = lines
+        .iter()
+        .map(|line| {
+            let columns: Vec<&[u8]> = line.split(|&b| b == b'\t').collect();
+            columns[..7].join(&b"\t"[..])
+        })
+        .collect();
+    let expected: [&[u8]; 5] = [
+        b"21\t30289183\ttrail\xe9\tC\tG,G,T\t.\t.",
+        b"21\t30165850\tsvq0\xe9\tN\t<DEL>\t.\tPASS",
+        b"21\t30165850\tdup\xe9\tN\t<DUP>\t.\t.",
+        b"21\t30289183\tsix\xe9\tC\tG\t50\t.",
+        b"21\t30289183\tsix_plain\tC\tG\t50\t.",
+    ];
+    assert_eq!(
+        leading[5..],
+        expected,
+        "{:?}",
+        String::from_utf8_lossy(&written)
+    );
+    let info = |line: &[u8]| line.split(|&b| b == b'\t').nth(7).unwrap().to_vec();
+    assert!(
+        info(lines[6]).starts_with(b"SVTYPE=DEL;END=30165950;CSQ="),
+        "{:?}",
+        String::from_utf8_lossy(lines[6])
+    );
+    for line in &lines[5..] {
+        assert_eq!(
+            line.split(|&b| b == b'\t').count(),
+            8,
+            "{:?}",
+            String::from_utf8_lossy(line)
+        );
+    }
+
+    let inputs: Vec<String> = annotate(dir.path(), &latin1, &["--json"])
+        .iter()
+        .map(|row| {
+            let object: serde_json::Value = serde_json::from_str(row).unwrap();
+            object["input"].as_str().unwrap().to_string()
+        })
+        .collect();
+    assert_eq!(
+        inputs[5..],
+        [
+            "21\t30289183\ttrail\u{FFFD}\tC\tG,G,T",
+            "21\t30165850\tsvq0\u{FFFD}\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;END=30165950",
+            "21\t30165850\tdup\u{FFFD}\tN\t<DUP>\t.\t.\t.",
+            "21\t30289183\tsix\u{FFFD}\tC\tG\t50",
+            "21\t30289183\tsix_plain\tC\tG\t50",
+        ]
+    );
+}
+
 /// CRLF line ends read as LF line ends (ensembl-io TextParser.pm:138 replaces
 /// `\r\n` with `\n` on every line), with or without a line end on the last line.
 #[test]

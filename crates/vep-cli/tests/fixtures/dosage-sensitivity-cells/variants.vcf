@@ -1,0 +1,6 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	26112000	app_exon	G	A	.	.	.
+21	29321300	bach1_exon	C	T	.	.	.
+21	30620700	krtap20_4_snv	T	C	.	.	.
+21	31663800	sod1_exon2	G	A	.	.	.

@@ -1,0 +1,30 @@
+entry = "stop_retained_three_base_stop_codon_test"
+page = "docs/divergences/stop-retained-three-base-stop-codon-test.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "1 · 137,713 per million · no flag needed"
+notes = "A deletion of four bases, 21:26841550-26841553, on ENST00001021815, a reverse-strand transcript of ADAMTS1 whose coding sequence has 1,233 bases and whose stop codon is c.1231-1233 at 21:26841550-26841548. The deletion takes c.1228-1231: the last sense codon, c.1228-1230, and the stop codon's first base. Both engines write cDNA 1683-1686, CDS 1228-1231 and protein 410-411. In the edited sequence the three bases at c.1231-1233 are the second, third and fourth base of the 3' UTR, which are a stop codon, and the codon before them, residue 410, reads another residue than the reference's. Ensembl VEP reads those three bases alone (VariationEffect.pm:1528-1535), writes stop_retained_variant (:1318) and, its frameshift test returning 0 beside that term (:1549), inframe_deletion for four deleted bases. vep-rs keeps stop_retained_variant only where every codon before the old stop position reads the reference's residue as well, and writes frameshift_variant."
+
+[input]
+format = "vcf"
+text = """
+21	26841549	rs761640407	CATTT	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38/json_cache"
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = "rs761640407", feature = "ENST00001021815" }
+columns = ["Location", "Feature", "Consequence", "cDNA_position", "CDS_position", "Protein_position", "IMPACT"]
+
+[expected]
+ensembl_vep = ["21:26841550-26841553 | ENST00001021815 | inframe_deletion,stop_retained_variant,NMD_transcript_variant | 1683-1686 | 1228-1231 | 410-411 | MODERATE"]
+vep_rs = ["21:26841550-26841553 | ENST00001021815 | frameshift_variant,NMD_transcript_variant | 1683-1686 | 1228-1231 | 410-411 | HIGH"]

@@ -1,0 +1,32 @@
+entry = "bigwig_coords_record_name"
+page = "docs/divergences/bigwig-coords-record-name.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the coords option of --custom, which takes 0 or 1 on a source of any format (Ensembl VEP documentation, \"Custom annotations\", Options, coords); not seen in the measured datasets"
+notes = "inputs/bigwig_coords_record_name/named.bw names its chromosome chr21 and holds three one-base intervals, at the 1-based positions 5029000, 5029001 and 5029002 with the values 0.25, 0.5 and 0.75. The record `snv` overlaps the first and the record `pair` the other two; each engine names the intervals under coords=1."
+
+[input]
+format = "vcf"
+text = """
+21	5029000	snv	T	G	.	.	.
+21	5029001	pair	AC	GT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+
+[run]
+flags = ["--custom", "file={repo}/scripts/divergences/reproductions/inputs/bigwig_coords_record_name/named.bw,short_name=named,format=bigwig,type=overlap,coords=1"]
+format = "default"
+
+[compare]
+kind = "field"
+field = "named"
+where = { record = ["snv", "pair"] }
+
+[expected]
+ensembl_vep = ["21:5028999-5029000", "21:5029000-5029001,21:5029001-5029002"]
+vep_rs = ["chr21:5029000-5029000", "chr21:5029001-5029001,chr21:5029002-5029002"]

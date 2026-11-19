@@ -1,0 +1,34 @@
+entry = "leading_empty_alt_allele_dropped"
+page = "docs/divergences/defect-o.md#25-a-sequence-record-whose-first-alt-is-empty"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "malformed"
+input_class_basis = "an ALT allele is a base String, an angle-bracketed ID String or a breakend replacement string, and the missing value stands where a record has no alternate allele (VCF 4.2 specification, section 1.4.1 \"Fixed fields\", ALT): the first of the record's two ALT alleles is empty"
+notes = "The ALT column `,G` has an empty first part: Ensembl VEP minimises the working string `C//G` as the single deletion `C/-` and drops the `G` allele; vep-rs writes both alleles."
+
+[input]
+format = "vcf"
+text = """
+21	30289183	lead_empty	C	,G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-vcf-edge-cases/json_cache"
+
+[run]
+flags = ["--allele_number", "--uploaded_allele", "--variant_class"]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = "lead_empty", feature = "ENST00000416044" }
+columns = ["Location", "Allele", "Feature", "Consequence", "ALLELE_NUM", "UPLOADED_ALLELE", "VARIANT_CLASS"]
+
+[expected]
+ensembl_vep = ["21:30289183 | - | ENST00000416044 | stop_retained_variant | 1 | C//G | deletion"]
+vep_rs = [
+  "21:30289183 | - | ENST00000416044 | stop_retained_variant | 1 | C//G | sequence_alteration",
+  "21:30289183 | G | ENST00000416044 | stop_lost | 2 | C//G | sequence_alteration",
+]

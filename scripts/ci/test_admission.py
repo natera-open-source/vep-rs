@@ -4,9 +4,10 @@ text is reduced to its tags, the test regions of the changed Rust files are reco
 themselves), on the constructed shapes of the intended-divergences section, and on constructed
 inputs. Every check fails on its recorded or constructed shape and passes once the shape is
 corrected; the comment is edited in place; a stale CI run judges nothing; each exemption holds the
-close back; the API writes of a run are the expected ones and no other. The two tests that read the
-repository's own pull request template and issue forms are skipped only when `ADMISSION_RELEASE_TREE=1`
-is set, for a run of this file over a tree whose template and forms predate the rule."""
+close back; the API writes of a run are the expected ones and no other. The three tests that read the
+repository's own pull request template, issue forms and guide pages are skipped only when
+`ADMISSION_RELEASE_TREE=1` is set, for a run of this file over a tree whose template, forms and
+pages predate the rules."""
 
 from __future__ import annotations
 
@@ -29,12 +30,12 @@ import admission as adm
 
 RELEASE_TREE = pytest.mark.skipif(
     os.environ.get("ADMISSION_RELEASE_TREE") == "1",
-    reason="the release tree's template and forms predate the rule until the default branch merges in",
+    reason="the tree's template, forms and pages predate the rules",
 )
 FIXTURE_DIR = HERE / "fixtures" / "admission"
 FIXTURES = sorted(FIXTURE_DIR.glob("*.json"))
 FIXTURE_IDS = [path.stem for path in FIXTURES]
-FIXTURE_COUNT = 27
+FIXTURE_COUNT = 30
 INDEX_SAMPLE = (FIXTURE_DIR / "index-sample-main.md").read_text(encoding="utf-8")
 INDEX_SAMPLE_REGROUPED = (FIXTURE_DIR / "index-sample-regrouped.md").read_text(encoding="utf-8")
 CHECKER = ROOT / adm.PARITY_CHECKER
@@ -69,9 +70,12 @@ RECORDED = {
     "divergences-none-clean": set(),
     "divergences-none-edits-a-page": {"divergences"},
     "divergences-none-edits-a-linked-page": {"divergences"},
+    "divergences-none-edits-a-reproduction-record": {"divergences"},
+    "divergences-none-edits-the-runner": set(),
     "divergences-touches-letter": set(),
     "divergences-touches-difference-name": set(),
     "divergences-touches-page-path": set(),
+    "divergences-touches-the-index-by-path": set(),
     "divergences-touches-unknown-entry": {"divergences"},
     "divergences-touches-without-rationale": {"divergences"},
     "divergences-touches-no-entry-line": {"divergences"},
@@ -743,11 +747,11 @@ def test_declaration_names_models_and_normalises_no_llm():
     commits = [
         commit(
             "1" * 40,
-            "Subject\n\nCo-Authored-By: Example Model 2 <model@example.com>\nSigned-off-by: A <a@example.com>\n",
+            "Subject\n\nCo-Authored-By: Example Model 2 <noreply@example.com>\nSigned-off-by: A <a@example.com>\n",
         ),
         commit("2" * 40, f"Subject\n\nco-authored-by:   {adm.NO_MODEL_DECLARATION.lower()}  \n"),
         commit("5" * 40, f"Subject\n\nCo-Authored-By: {'  '.join(adm.NO_MODEL_DECLARATION.split())}\n"),
-        commit("3" * 40, "Subject\n\nCo-Authored-By: Example Model 2 <other@example.com>\n"),
+        commit("3" * 40, "Subject\n\nCo-Authored-By: Example Model 2 <noreply@other.example>\n"),
     ]
     assert adm.declared_models(commits) == ["Example Model 2", "No LLM"]
     assert adm.check_declaration(adm.declared_models(commits)) is None
@@ -758,8 +762,8 @@ def test_declaration_names_models_and_normalises_no_llm():
 
 
 def test_label_models_come_from_the_newest_declaring_commit_and_stop_at_two_names():
-    head = commit("9" * 40, "Subject\n\nCo-Authored-By: Example Model 1 <m@example.com>\n")
-    earlier = commit("8" * 40, "Subject\n\nCo-Authored-By: Example Model 2 <m@example.com>\n")
+    head = commit("9" * 40, "Subject\n\nCo-Authored-By: Example Model 1 <noreply@example.com>\n")
+    earlier = commit("8" * 40, "Subject\n\nCo-Authored-By: Example Model 2 <noreply@example.com>\n")
     assert adm.label_models([earlier, head]) == ["Example Model 1"]
     assert adm.label_models([head, earlier]) == ["Example Model 2"]
     assert adm.label_models([]) == []
@@ -768,15 +772,148 @@ def test_label_models_come_from_the_newest_declaring_commit_and_stop_at_two_name
     assert adm.label_models([earlier, head, merge_at_head]) == ["Example Model 1"]
     two = commit(
         "6" * 40,
-        "Subject\n\nCo-Authored-By: Example Model 1 <m@example.com>\nCo-Authored-By: No LLM\n",
+        "Subject\n\nCo-Authored-By: Example Model 1 <noreply@example.com>\nCo-Authored-By: No LLM\n",
     )
     assert adm.label_models([two]) == ["Example Model 1", "No LLM"]
     many = [
-        commit(f"{n:040x}", f"c\n\nCo-Authored-By: Jane Doe {n} <j{n}@example.com>\n")
+        commit(f"{n:040x}", f"c\n\nCo-Authored-By: Example Model {n} <noreply@v{n}.example>\n")
         for n in range(1, 5)
     ]
     assert adm.label_models(many) is None
-    assert adm.declared_models(many) == [f"Jane Doe {n}" for n in range(1, 5)]
+    assert adm.declared_models(many) == [f"Example Model {n}" for n in range(1, 5)]
+
+
+MODEL_LINE = "Co-Authored-By: Example Model 1 <noreply@vendor.example>\n"
+# A person's credit as GitHub writes it: the key in lower case, the address one of the two forms of
+# an account's noreply address. No account holds the login, whose two hyphens in a row GitHub
+# refuses, or the id 0.
+PERSON_LINES = (
+    "Co-authored-by: Jane Doe <example--login@users.noreply.github.com>\n",
+    "Co-authored-by: Jane Doe <0+example--login@users.noreply.github.com>\n",
+)
+PERSON_IDS = ["login", "id-and-login"]
+
+
+@pytest.mark.parametrize("person", PERSON_LINES, ids=PERSON_IDS)
+def test_a_person_s_credit_beside_a_model_s_line_declares_the_model_alone(person):
+    both = commit("1" * 40, f"Subject\n\n{MODEL_LINE}{person}")
+    assert adm.declared_models([both]) == ["Example Model 1"]
+    assert adm.label_models([both]) == ["Example Model 1"]
+    model = commit("2" * 40, f"Subject\n\n{MODEL_LINE}")
+    credit = commit("3" * 40, f"Subject\n\n{person}")
+    for commits in ([model, credit], [credit, model]):
+        assert adm.declared_models(commits) == ["Example Model 1"]
+        assert adm.label_models(commits) == ["Example Model 1"]
+
+
+def test_credits_alone_declare_nothing_and_raise_the_declaration_finding():
+    commits = [commit(f"{n}" * 40, f"Subject\n\n{line}") for n, line in enumerate(PERSON_LINES, 1)]
+    assert adm.declared_models(commits) == []
+    assert adm.label_models(commits) == []
+    finding = adm.check_declaration(adm.declared_models(commits))
+    assert finding is not None and finding.closes is True
+    assert "<noreply@" in finding.text and "`no-reply`" in finding.text
+    assert "credits a co-author" in finding.text
+    fixture = load(FIXTURE_DIR / "maintainer-docs-with-declaration.json")
+    strip_trailers(fixture, "co-authored-by:")
+    for entry in fixture["commits"]:
+        entry["commit"]["message"] += PERSON_LINES[0]
+    assert "declaration" in evaluate(fixture)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "Jane Doe <jane@example.org>",
+        "Jane Doe",
+        "Example Tool <bot@tool.example>",
+        "Jane Doe <noreply@users.noreply.github.com>",
+        "Jane Doe <NoReply@Users.NoReply.GitHub.com>",
+        "Jane Doe <jane.noreply@example.org>",
+        "Jane Doe <jane@noreply.example.org>",
+        "Jane Doe <jane@example.org> <noreply@vendor.example>",
+        "Jane Doe <noreply@vendor.example> and others",
+    ],
+)
+def test_a_trailer_without_a_vendor_s_noreply_address_is_a_credit(value):
+    assert adm.declared_models([commit("1" * 40, f"Subject\n\nCo-authored-by: {value}\n")]) == []
+    beside = commit("2" * 40, f"Subject\n\nCo-authored-by: {value}\n{MODEL_LINE}")
+    assert adm.declared_models([beside]) == ["Example Model 1"]
+
+
+def test_a_declaration_is_no_llm_or_a_name_before_a_noreply_mailbox():
+    lines = [
+        "Co-Authored-By: Example Model 1 <noreply@vendor.example>",
+        "co-authored-by:   Example  Model 2   <No-Reply@Vendor.Example>  ",
+        "CO-AUTHORED-BY: tool (Example Model 3) <NOREPLY@tool.example>",
+        "Co-authored-by: Jane Doe <example--login@users.noreply.github.com>",
+        "Co-Authored-By: <noreply@vendor.example>",
+        f"Co-authored-by: {adm.NO_MODEL_DECLARATION.lower()} <example--login@users.noreply.github.com>",
+    ]
+    commits = [commit(f"{n:040x}", f"Subject\n\n{line}\n") for n, line in enumerate(lines, 1)]
+    assert adm.declared_models(commits) == [
+        "Example Model 1",
+        "Example Model 2",
+        "tool (Example Model 3)",
+        "No LLM",
+    ]
+
+
+def test_a_trailer_without_a_value_does_not_take_the_next_line_for_one():
+    signoff = "Signed-off-by: Example Tool <noreply@tool.example>\n"
+    for key in ("Co-Authored-By:", "Co-authored-by:   "):
+        assert adm.declared_models([commit("1" * 40, f"Subject\n\n{key}\n{signoff}")]) == []
+    beside = commit("2" * 40, f"Subject\n\nCo-Authored-By:\n{signoff}{MODEL_LINE}")
+    assert adm.declared_models([beside]) == ["Example Model 1"]
+
+
+@RELEASE_TREE
+def test_the_pages_that_print_the_declaration_s_forms_print_the_ones_the_parser_reads():
+    """Two root pages print the three forms: the model's line and `No LLM` declare, the form with
+    placeholders names nothing, and each page says how an account's address is read."""
+    printed = {}
+    for page in sorted(ROOT.glob("*.md")):
+        text = page.read_text(encoding="utf-8")
+        forms = [line.strip() for line in text.splitlines() if line.lstrip().startswith("Co-Authored-By:")]
+        if forms:
+            printed[page.name] = (forms, text)
+    assert len(printed) == 2
+    for name, (forms, text) in printed.items():
+        declared = [adm.declared_models([commit("1" * 40, f"Subject\n\n{form}\n")]) for form in forms]
+        assert [len(names) for names in declared] == [1, 0, 1] and declared[2] == ["No LLM"], name
+        assert "users.noreply.github.com" in text, name
+
+
+@pytest.mark.parametrize("person", PERSON_LINES, ids=PERSON_IDS)
+def test_no_llm_beside_a_person_s_credit_declares_no_llm(person):
+    both = commit("1" * 40, f"Subject\n\nCo-Authored-By: No LLM\n{person}")
+    assert adm.declared_models([both]) == ["No LLM"]
+    assert adm.label_models([both]) == ["No LLM"]
+    assert adm.check_declaration(adm.declared_models([both])) is None
+    none = commit("2" * 40, "Subject\n\nCo-Authored-By: No LLM\n")
+    credit = commit("3" * 40, f"Subject\n\n{person}")
+    for commits in ([none, credit], [credit, none]):
+        assert adm.declared_models(commits) == ["No LLM"]
+        assert adm.label_models(commits) == ["No LLM"]
+
+
+def test_model_tool_identity_and_person_trailers_declare_the_model_alone():
+    """A branch a coding tool commits: the tool's identity is each commit's author and its sign-off's
+    signer, and is credited again beside the model and the person who ran it."""
+    tool = {"name": "Example Tool", "email": "bot@tool.example"}
+    signoff = f"Signed-off-by: {tool['name']} <{tool['email']}>\n"
+    first = commit(
+        "1" * 40,
+        f"Subject\n\n{MODEL_LINE}{signoff}"
+        f"Co-authored-by: {tool['name']} <{tool['email']}>\n{PERSON_LINES[0]}",
+    )
+    later = commit("2" * 40, f"Subject\n\n{signoff}{PERSON_LINES[1]}")
+    for entry in (first, later):
+        entry["commit"]["author"] = dict(tool)
+    assert adm.check_signoff([first, later]) is None
+    for commits in ([first, later], [later, first], [first]):
+        assert adm.declared_models(commits) == ["Example Model 1"]
+        assert adm.label_models(commits) == ["Example Model 1"]
 
 
 def test_model_label_is_bounded_and_clean():
@@ -1086,6 +1223,50 @@ def test_index_names_on_the_repository_index():
     assert all(page.startswith("docs/") and page.endswith(".md") for page in index.pages)
 
 
+def linked_rows(text: str) -> list[tuple[str, list[str]]]:
+    """(first cell, link targets) of every table row of an index that links a page, kept one row at
+    a time where `read_index` pools them; a header row, a separator and a row with no page link are
+    skipped as `read_index` skips them."""
+    lines = text.splitlines()
+    rows = []
+    for number, line in enumerate(lines):
+        if not adm.TABLE_ROW_RE.match(line) or adm.is_separator_row(line):
+            continue
+        if number + 1 < len(lines) and adm.is_separator_row(lines[number + 1]):
+            continue
+        targets = adm.page_links(line)
+        cells = adm.table_cells(line)
+        if targets and cells:
+            rows.append((cells[0], targets))
+    return rows
+
+
+def test_every_row_of_the_repository_index_names_its_entry_and_links_its_page():
+    """The repository's index names every entry in its first cell, so a contributor cites any row
+    by that name: each table row that links a page yields a first-cell name that is not empty, a
+    number or `none`, the names are unique, `read_index` yields exactly those names beside the
+    page paths, and every page it yields is a file of the tree."""
+    text = (ROOT / adm.INDEX_PATH).read_text(encoding="utf-8")
+    index = adm.read_index(text)
+    rows = linked_rows(text)
+    assert rows, "the index has no table row that links a page"
+    names = [adm.entry_name(cell) for cell, _targets in rows]
+    for name in names:
+        assert name and name != "none" and not name.isdigit(), f"a row without a name: {name!r}"
+        assert name in index.names, name
+    assert len(set(names)) == len(rows), sorted(n for n in set(names) if names.count(n) > 1)
+    assert {n for n in index.names if ".md" not in n} == set(names)
+    pages = set()
+    for _cell, targets in rows:
+        for target in targets:
+            page = target.partition("#")[0]
+            pages.add(os.path.normpath(page if page.startswith("docs/") else f"docs/{page}"))
+    assert index.pages == pages
+    assert all((ROOT / page).is_file() for page in pages), sorted(
+        page for page in pages if not (ROOT / page).is_file()
+    )
+
+
 def test_table_cells_split_on_unescaped_pipes_and_entry_name_normalises():
     assert adm.table_cells("| a | `b \\| c` | [d](e.md) |") == ["a", "`b | c`", "[d](e.md)"]
     assert adm.table_cells("a | b") == ["a", "b"]
@@ -1123,6 +1304,10 @@ def test_statements_are_read_by_their_words_with_their_lines():
 
 
 def test_divergences_none_passes_and_is_refused_on_an_artefact_edit():
+    """The first statement is refused on the index, a page a row links and a record or input of the
+    reproduction registry; it passes on every other path: the registry's own page, which describes
+    the record shape, and the runner, the order checker, their tests and their test data beside the
+    registry included."""
     assert divergences(section({"none"})) is None
     for path in (
         adm.INDEX_PATH,
@@ -1130,6 +1315,8 @@ def test_divergences_none_passes_and_is_refused_on_an_artefact_edit():
         "docs/cache-setup.md",
         "docs/plugins/spliceai.md",
         "scripts/divergences/reproductions/x.toml",
+        "scripts/divergences/reproductions/inputs/x/dense.bw",
+        "scripts/divergences/reproductions/inputs/x/README.md",
     ):
         finding = divergences(section({"none"}), [{"filename": path, "status": "modified"}])
         assert finding is not None and finding.check == "divergences" and finding.closes
@@ -1140,10 +1327,44 @@ def test_divergences_none_passes_and_is_refused_on_an_artefact_edit():
         "docs/divergences.md",
         "docs/plugins.md",
         "scripts/concordance/compare_vep_outputs.py",
+        adm.REGISTRY_PAGE,
+        "scripts/divergences/reevaluate.py",
+        "scripts/divergences/check_divergence_order.py",
+        "scripts/divergences/test_reevaluate.py",
+        "scripts/divergences/test_check_divergence_order.py",
+        "scripts/divergences/testdata/reproductions/x.toml",
+        "scripts/divergences/testdata/outputs/vep-rs/default.txt",
+        "scripts/divergences/reproductions.md",
+        "scripts/divergences-archive/reproductions/x.toml",
         "tests/golden/116/GRCh38/manifest.json",
         "crates/vep-effects/src/lib.rs",
     ):
         assert divergences(section({"none"}), [{"filename": path, "status": "modified"}]) is None, path
+
+
+def test_divergences_refusal_names_the_registry_record_and_not_the_tools_beside_it():
+    """A change that edits a record of the reproduction registry beside the runner and its test is
+    refused under the first statement for the record alone, the refusal naming the record and
+    neither tool; the registry path the check reads is a directory of the tree holding records and
+    its own page, which is no artefact, and no Python file beside it in the parent directory is
+    one."""
+    fixture = load(FIXTURE_DIR / "divergences-none-edits-a-reproduction-record.json")
+    index = adm.read_index(INDEX_SAMPLE)
+    record = "scripts/divergences/reproductions/example_record.toml"
+    assert adm.divergence_artefacts(fixture["files"], index) == [record]
+    finding = next(f for f in findings_of(fixture) if f.check == "divergences")
+    assert finding.closes and f"`{record}`" in finding.text
+    assert "`scripts/divergences/reevaluate.py`" not in finding.text
+    assert "`scripts/divergences/test_reevaluate.py`" not in finding.text
+    assert adm.DIVERGENCE_REGISTRY == "scripts/divergences/reproductions/"
+    assert adm.REGISTRY_PAGE == "scripts/divergences/reproductions/README.md"
+    registry = ROOT / adm.DIVERGENCE_REGISTRY
+    assert registry.is_dir() and any(registry.glob("*.toml")) and (ROOT / adm.REGISTRY_PAGE).is_file()
+    assert adm.divergence_artefacts([{"filename": adm.REGISTRY_PAGE}], index) == []
+    tools = sorted(path.name for path in registry.parent.glob("*.py"))
+    assert tools, "no tool sits beside the registry"
+    for tool in tools:
+        assert adm.divergence_artefacts([{"filename": f"scripts/divergences/{tool}"}], index) == [], tool
 
 
 def test_divergences_exclusivity_and_missing_shapes():
@@ -1180,6 +1401,29 @@ def test_divergences_entries_resolve_against_base_and_head_with_a_rationale():
     assert none_listed is not None and "no entry line follows it" in none_listed.text
     many = divergences(section({"touches"}, {"touches": [f"- `Z{n}`: x, because y." for n in range(7)]}))
     assert many is not None and "and 2 more" in many.text
+
+
+def test_divergences_the_index_itself_is_cited_by_its_path():
+    """A change to the index's own text or order names no row, so the index's path, with or
+    without the `docs/` prefix, resolves as an entry while the change edits the index; a change
+    that leaves the index alone cannot cite it; the index is still no page a row links, and a bare
+    tree path beside it still resolves nothing; an issue cites the index by its path freely."""
+    index_edit = [{"filename": adm.INDEX_PATH, "status": "modified"}]
+    for token in (adm.INDEX_PATH, adm.INDEX_PATH.removeprefix("docs/"), "Docs/Intended-Divergences.md"):
+        line = {"touches": [f"- `{token}`: keeps every entry; adds a paragraph under the title, because no row's reasoning changes."]}
+        assert divergences(section({"touches"}, line), index_edit) is None, token
+        unedited = divergences(section({"touches"}, line), [{"filename": "docs/plugins.md", "status": "modified"}])
+        assert unedited is not None and "while the change does not edit it" in unedited.text, token
+    renamed = [{"filename": "docs/other.md", "previous_filename": adm.INDEX_PATH, "status": "renamed"}]
+    line = {"touches": [f"- `{adm.INDEX_PATH}`: removes it, because the page moves."]}
+    assert divergences(section({"touches"}, line), renamed) is None
+    assert adm.entry_name(adm.INDEX_PATH) not in adm.read_index(INDEX_SAMPLE).names
+    assert adm.INDEX_PATH not in adm.read_index(INDEX_SAMPLE).pages
+    bare = {"touches": ["- `docs/divergences/reproducing.md`: keeps it, because x."]}
+    finding = divergences(section({"touches"}, bare), index_edit)
+    assert finding is not None and "names the index by its path" in finding.text
+    issue = issue_body(adm.ISSUE_CHOICES["touches"], f"- `{adm.INDEX_PATH}`: its order rule should state the tie-break.")
+    assert adm.check_issue_divergences(issue, adm.read_index(INDEX_SAMPLE)) is None
 
 
 def test_divergences_proposal_needs_a_description_and_may_join_the_entries():
@@ -2058,7 +2302,7 @@ def event_for(fixture: dict, action: str = "opened") -> dict:
 def test_run_event_comments_labels_and_closes_a_contributor_miss(tmp_path, capsys):
     fixture = load(FIXTURE_DIR / "fork-performance-change.json")
     fixture["commits"][-1]["commit"]["message"] += (
-        "Co-Authored-By: Example Model 3 <model@example.com>\n"
+        "Co-Authored-By: Example Model 3 <noreply@example.com>\n"
     )
     fixture["contains_base_tip"] = False
     gh = FakeGitHub(files=fixture["files"])
@@ -2279,7 +2523,10 @@ def test_run_event_labels_from_the_head_commit_and_skips_many_declarations(tmp_p
     fixture = load(FIXTURE_DIR / "maintainer-docs-with-declaration.json")
     head = fixture["pull_request"]["head"]["sha"]
     commits = fixture["commits"] + [
-        commit(f"{n:040x}", f"c\n\nSigned-off-by: A <a@example.com>\nCo-Authored-By: Model {n}\n")
+        commit(
+            f"{n:040x}",
+            f"c\n\nSigned-off-by: A <a@example.com>\nCo-Authored-By: Model {n} <noreply@example.com>\n",
+        )
         for n in range(1, 4)
     ]
     for entry in commits:
@@ -2309,7 +2556,7 @@ def test_run_event_writes_nothing_when_the_head_moved_before_the_write(tmp_path,
     declaring = [dict(c) for c in fixture["commits"]]
     declaring[-1]["commit"] = dict(
         declaring[-1]["commit"],
-        message=declaring[-1]["commit"]["message"] + "Co-Authored-By: Example Model 1\n",
+        message=declaring[-1]["commit"]["message"] + MODEL_LINE,
     )
     git = FakeGit(head, commits=declaring)
     assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 0
@@ -2325,7 +2572,7 @@ def test_run_event_syncs_the_labels_of_the_pull_request_as_re_read(tmp_path):
     declaring = [dict(c) for c in fixture["commits"]]
     declaring[-1]["commit"] = dict(
         declaring[-1]["commit"],
-        message=declaring[-1]["commit"]["message"] + "Co-Authored-By: Example Model 1\n",
+        message=declaring[-1]["commit"]["message"] + MODEL_LINE,
     )
     git = FakeGit(head, commits=declaring)
     adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path))
@@ -2333,6 +2580,42 @@ def test_run_event_syncs_the_labels_of_the_pull_request_as_re_read(tmp_path):
     assert label_writes == [
         ("DELETE", f"/repos/{REPO}/issues/0/labels/model%3A%20Earlier%20Model"),
         ("POST", f"/repos/{REPO}/issues/0/labels", {"labels": ["model: Example Model 1"]}),
+    ]
+
+
+def test_run_event_labels_the_model_and_drops_a_label_that_names_a_person(tmp_path):
+    fixture = load(FIXTURE_DIR / "fork-performance-change.json")
+    head = fixture["pull_request"]["head"]["sha"]
+    re_read = dict(fixture["pull_request"], labels=[{"name": "model: Jane Doe"}])
+    gh = FakeGitHub(files=fixture["files"], pull=re_read)
+    fixture["commits"][0]["commit"]["message"] += MODEL_LINE + PERSON_LINES[0]
+    fixture["commits"][-1]["commit"]["message"] += PERSON_LINES[0]
+    git = FakeGit(head, commits=fixture["commits"])
+    adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path))
+    writes = gh.writes()
+    assert "declares the model" not in writes[0][2]["body"]
+    assert [w for w in writes if "/labels" in w[1]] == [
+        ("DELETE", f"/repos/{REPO}/issues/0/labels/model%3A%20Jane%20Doe"),
+        ("POST", f"/repos/{REPO}/issues/0/labels", {"labels": ["model: Example Model 1"]}),
+    ]
+
+
+def test_run_event_closes_a_contributor_whose_only_trailers_credit_people(tmp_path):
+    fixture = load(FIXTURE_DIR / "fork-performance-change.json")
+    fixture["pull_request"]["body"] += NONE_SECTION
+    head = fixture["pull_request"]["head"]["sha"]
+    re_read = dict(fixture["pull_request"], labels=[{"name": "model: Jane Doe"}])
+    gh = FakeGitHub(files=fixture["files"], pull=re_read)
+    fixture["commits"][0]["commit"]["message"] += PERSON_LINES[0]
+    fixture["commits"][-1]["commit"]["message"] += PERSON_LINES[1]
+    git = FakeGit(head, commits=fixture["commits"])
+    assert adm.run_event(event_for(fixture), gh, git, repo_dir(tmp_path)) == 1
+    writes = gh.writes()
+    assert "No commit declares the model" in writes[0][2]["body"]
+    assert "closes=1" in writes[0][2]["body"]
+    assert ("PATCH", f"/repos/{REPO}/pulls/0", {"state": "closed"}) in writes
+    assert [w for w in writes if "/labels" in w[1]] == [
+        ("DELETE", f"/repos/{REPO}/issues/0/labels/model%3A%20Jane%20Doe"),
     ]
 
 
@@ -2581,6 +2864,22 @@ def test_run_local_reports_a_branch_behind_the_base(tmp_path, capsys):
     assert "git fetch upstream && git merge --signoff upstream/main" in err
     with pytest.raises(adm.AdmissionError, match="run `git fetch upstream` first"):
         adm.run_local(repo, "upstream/main", None)
+
+
+def test_run_local_asks_for_a_declaration_beside_a_person_s_credit(tmp_path, capsys):
+    repo = scratch_repo(tmp_path)
+    (repo / "docs.md").write_text("docs\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-s", "-m", f"Docs\n\n{PERSON_LINES[0]}")
+    assert adm.run_local(repo, "origin/main", None) == 1
+    assert "No commit declares the model" in capsys.readouterr().err
+    (repo / "more.md").write_text("more\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-s", "-m", f"More\n\n{MODEL_LINE}{PERSON_LINES[1]}")
+    assert adm.run_local(repo, "origin/main", None) == 0
+    out = capsys.readouterr().out
+    assert "admission: OK (2 commits, 2 files" in out
+    assert "model Example Model 1;" in out and "Jane Doe" not in out
 
 
 def test_log_commits_survives_separator_bytes_in_a_message_and_orders_parents_first(tmp_path):

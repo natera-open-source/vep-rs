@@ -1,0 +1,80 @@
+[VEP run statistics]
+VEP version (API)	 116.2 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh38
+Species	homo_sapiens
+Command line options	vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins [PATH]/plugins --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --offline --output_file [PATH]/tab.txt --plugin NMD --plugin Faulty --plugin pLI,[PATH]/pLI_values.txt --quiet --stats_text --tab
+Start time	2026-10-29 03:21:15
+End time	2026-10-29 03:21:15
+Run time	0 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/tab.txt
+
+[Data version]
+1000genomes	phase3
+COSMIC	102
+ClinVar	202509
+HGMD-PUBLIC	20204
+assembly	GRCh38.p14
+dbSNP	156
+gencode	GENCODE 50
+genebuild	GENCODE50
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.3
+regbuild	1.0
+sift	6.2.1
+
+[General statistics]
+Lines of input read	30
+Variants processed	30
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	11
+Overlapped transcripts	57
+Overlapped regulatory features	-
+
+[Variant classes]
+insertion	4
+deletion	13
+SNV	13
+
+[Consequences (most severe)]
+splice_donor_variant	4
+stop_gained	11
+frameshift_variant	15
+
+[Consequences (all)]
+splice_donor_variant	80
+stop_gained	150
+frameshift_variant	239
+missense_variant	3
+splice_region_variant	3
+coding_sequence_variant	22
+3_prime_UTR_variant	133
+non_coding_transcript_exon_variant	24
+intron_variant	16
+NMD_transcript_variant	237
+non_coding_transcript_variant	2
+upstream_gene_variant	23
+downstream_gene_variant	62
+
+[Coding consequences]
+stop_gained	150
+frameshift_variant	239
+missense_variant	3
+coding_sequence_variant	22
+
+[Variants by chromosome]
+21	30
+
+[Position in protein]
+00-10%	0
+10-20%	123
+20-30%	57
+30-40%	15
+40-50%	47
+50-60%	41
+60-70%	13
+70-80%	17
+80-90%	66
+90-100%	35

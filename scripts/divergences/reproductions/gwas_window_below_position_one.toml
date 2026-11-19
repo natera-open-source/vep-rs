@@ -1,0 +1,47 @@
+entry = "gwas_window_below_position_one"
+page = "docs/divergences/gwas-window-below-position-one.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", POS, which counts the 1st base as position 1, so a record at position 1 or 2 is legal; not seen in the measured datasets"
+notes = "Ensembl VEP's warnings file carries `Plugin 'GWAS' went wrong: You must specify a region in the format chr, chr:start or chr:start-end` for pos1 and `Plugin 'GWAS' went wrong: ERROR: No start specified` for pos2; its processed catalog holds the row at 21:2."
+# Ensembl VEP's plugin builds its processed catalog under --dir, which must be writable: a directory of the stage.
+# The corpus catalog slice with the row of rs2823265 (study GCST90002367, risk allele G) moved to CHR_POS 2.
+prepare = [
+  "mkdir -p \"$STAGE/vepdir\"",
+  "awk -F '\\t' -v OFS='\\t' '$22 == \"rs2823265\" { $13 = \"2\" } { print }' \"$CORPUS/plugin_data/gwas_catalog_slice.tsv\" > \"$STAGE/gwas_catalog_pos2.tsv\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	1	pos1	C	G	.	.	.
+21	2	pos2	C	G	.	.	.
+21	3	pos3	C	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-gwas/json_cache"
+
+[run]
+flags = ["--dir", "{stage}/vepdir", "--plugin", "GWAS,file={stage}/gwas_catalog_pos2.tsv"]
+
+# The three records are intergenic, one row each; the catalog row names position 2 alone.
+[compare]
+kind = "rows"
+where = { record = ["pos1", "pos2", "pos3"] }
+columns = ["Location", "Allele", "Feature", "Consequence", "GWAS_study", "GWAS_risk_allele"]
+
+[expected]
+ensembl_vep = [
+  "21:1 | G | - | intergenic_variant | - | -",
+  "21:2 | G | - | intergenic_variant | - | -",
+  "21:3 | G | - | intergenic_variant | - | -",
+]
+vep_rs = [
+  "21:1 | G | - | intergenic_variant | - | -",
+  "21:2 | G | - | intergenic_variant | GCST90002367 | G",
+  "21:3 | G | - | intergenic_variant | - | -",
+]

@@ -1,0 +1,674 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 2000,
+ "max_span": 1000000,
+ "fasta": "reference.fa.gz",
+ "covers": [
+  "regulatory_gff",
+  "extended_promoters",
+  "emars"
+ ],
+ "suites": {
+  "reg": {
+   "reference": "bare.txt",
+   "input": "candidates.vcf",
+   "rows": 1201,
+   "combinations": 20
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 15,
+   "exemplar_records": 5
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant": {
+   "observed_rows": 16,
+   "exemplar_records": 3
+  },
+  "5_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 2
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 5
+  },
+  "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 23,
+   "exemplar_records": 5
+  },
+  "NMD_transcript_variant,synonymous_variant": {
+   "observed_rows": 42,
+   "exemplar_records": 5
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 202,
+   "exemplar_records": 6
+  },
+  "intergenic_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 10
+  },
+  "intron_variant": {
+   "observed_rows": 63,
+   "exemplar_records": 11
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 21,
+   "exemplar_records": 8
+  },
+  "intron_variant,splice_donor_5th_base_variant": {
+   "observed_rows": 29,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 145,
+   "exemplar_records": 15
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 43,
+   "exemplar_records": 17
+  },
+  "non_coding_transcript_exon_variant,splice_region_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 2
+  },
+  "splice_region_variant,synonymous_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "stop_lost": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 61,
+   "exemplar_records": 5
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 493,
+   "exemplar_records": 13
+  }
+ },
+ "variant_classes": {
+  "deletion": 2,
+  "insertion": 4,
+  "mnv_or_complex": 1,
+  "snv": 546
+ },
+ "records": [
+  {
+   "suite": "reg",
+   "vcf": "21\t5010249\tins_before_motif_start\tT\tTACG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t5010249\tdel_covers_motif_pair\tTGGTCCCCAGGGAGCT\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t5010250\tins_after_motif_start\tG\tGACG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t5010255\tmultiallelic_in_motif\tC\tA,G\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t5010256\tmnv_in_motif\tCAG\tGCT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t5011549\tins_inside_enhancer_end\tG\tGTT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t5011550\tins_past_enhancer_end\tT\tTTT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t5014321\tdel_covers_ctcf\tGTGGGCCTGTGGGGGGCGCTTACC\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t5500000\tno_feature\tT\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t5553153\tpromoter_before_extension\tG\tT\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t5553154\tpromoter_extended_start\tA\tC\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t5553168\tpromoter_core_minus_one\tC\tG\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t5553169\tpromoter_core_start\tT\tA\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t20000000\tstraddle_before_boundary\tA\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t20000001\tstraddle_after_boundary\tC\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t25881968\t1292893\tC\tG\t.\t.\tAF_TGP=0.25599;ALLELEID=1282699;CLNDISDB=MedGen:C3661900;CLNDN=not_provided;CLNHGVS=NC_000021.9:g.25881968C>G;CLNREVSTAT=criteria_provided,_multiple_submitters,_no_conflicts;CLNSIG=Benign;CLNSIGSCV=SCV001943427|SCV005307154;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA14890395;GENEINFO=APP:351;MC=SO:0001627|intron_variant;ORIGIN=1;RS=214484",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t26170577\t1102353\tG\tA\t.\t.\tALLELEID=1107326;CLNDISDB=Human_Phenotype_Ontology:HP:0002511,Human_Phenotype_Ontology:HP:0006878,Human_Phenotype_Ontology:HP:0007213,MONDO:MONDO:0004975,MeSH:D000544,MedGen:C0002395,Orphanet:1020;CLNDN=Alzheimer_disease;CLNHGVS=NC_000021.9:g.26170577G>A;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Likely_benign;CLNSIGSCV=SCV001628268;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA410167207;GENEINFO=APP:351;MC=SO:0001583|missense_variant,SO:0001627|intron_variant;ORIGIN=1;RS=913925398",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t26844269\t2331895\tC\tA\t.\t.\tALLELEID=2320782;CLNDISDB=MedGen:CN169374;CLNDN=not_specified;CLNHGVS=NC_000021.9:g.26844269C>A;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV003665827;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA409979352;GENEINFO=ADAMTS1:9510;MC=SO:0001583|missense_variant;ORIGIN=1;RS=1267255632",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t26844508\t3266359\tG\tC\t.\t.\tALLELEID=3429120;CLNDISDB=MedGen:CN169374;CLNDN=not_specified;CLNHGVS=NC_000021.9:g.26844508G>C;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV005110025;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;GENEINFO=ADAMTS1:9510;MC=SO:0001583|missense_variant;ORIGIN=1",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t26844947\t4637501\tC\tT\t.\t.\tALLELEID=4739410;CLNDISDB=MedGen:CN169374;CLNDN=not_specified;CLNHGVS=NC_000021.9:g.26844947C>T;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV007245240;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;GENEINFO=ADAMTS1:9510;MC=SO:0001583|missense_variant;ORIGIN=1",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t28966650\t3292295\tA\tG\t.\t.\tALLELEID=3453212;CLNDISDB=MedGen:CN169374;CLNDN=not_specified;CLNHGVS=NC_000021.9:g.28966650A>G;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV005130062;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;GENEINFO=LTN1:26046;MC=SO:0001583|missense_variant;ORIGIN=1",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,missense_variant",
+    "downstream_gene_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t29326752\t3816801\tC\tT\t.\t.\tALLELEID=3926262;CLNDISDB=MedGen:CN169374;CLNDN=not_specified;CLNHGVS=NC_000021.9:g.29326752C>T;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV005962782;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;GENEINFO=BACH1:571;MC=SO:0001583|missense_variant,SO:0001619|non-coding_transcript_variant;ORIGIN=1",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t33070937\t3204277\tC\tA\t.\t.\tALLELEID=3370499;CLNDISDB=MedGen:CN169374;CLNDN=not_specified;CLNHGVS=NC_000021.9:g.33070937C>A;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV004995278;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA410188552;GENEINFO=OLIG1:116448;MC=SO:0001583|missense_variant;ORIGIN=1;RS=2517355844",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t33325124\t3672666\tA\tC\t.\t.\tALLELEID=3804803;CLNDISDB=MedGen:C3661900;CLNDN=not_provided;CLNHGVS=NC_000021.9:g.33325124A>C;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Likely_benign;CLNSIGSCV=SCV005776336;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;GENEINFO=IFNAR1:3454|LOC119230225:119230225;MC=SO:0001623|5_prime_UTR_variant,SO:0001627|intron_variant,SO:0001819|synonymous_variant;ORIGIN=1",
+   "combinations": [
+    "NMD_transcript_variant,synonymous_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t33403603\t4706332\tC\tT\t.\t.\tALLELEID=4820114;CLNDISDB=MONDO:MONDO:0013953,MedGen:C4013947,OMIM:614889,Orphanet:319547,Orphanet:319574;CLNDN=Immunodeficiency_28;CLNHGVS=NC_000021.9:g.33403603C>T;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Likely_benign;CLNSIGSCV=SCV007366570;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;GENEINFO=IFNGR2:3460|LOC119266102:119266102;MC=SO:0001819|synonymous_variant;ORIGIN=1",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "NMD_transcript_variant,synonymous_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t33543101\t3690193\tC\tA\t.\t.\tALLELEID=3820491;CLNDISDB=MedGen:C3661900;CLNDN=not_provided;CLNHGVS=NC_000021.9:g.33543101C>A;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Likely_benign;CLNSIGSCV=SCV005797622;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;GENEINFO=SON:6651;MC=SO:0001619|non-coding_transcript_variant,SO:0001819|synonymous_variant;ORIGIN=1",
+   "combinations": [
+    "NMD_transcript_variant,synonymous_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t36747925\t2390685\tG\tC\t.\t.\tALLELEID=2374407;CLNDISDB=MedGen:CN169374;CLNDN=not_specified;CLNHGVS=NC_000021.9:g.36747925G>C;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV003729067;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA320406141;GENEINFO=SIM2:6493|LOC130066635:130066635;MC=SO:0001583|missense_variant;ORIGIN=1;RS=918144853",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t40339208\t3273811\tC\tT\t.\t.\tALLELEID=3434754;CLNDISDB=MeSH:D030342,MedGen:C0950123;CLNDN=Inborn_genetic_diseases;CLNHGVS=NC_000021.9:g.40339208C>T;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV005117067;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;GENEINFO=DSCAM:1826;MC=SO:0001583|missense_variant,SO:0001619|non-coding_transcript_variant;ORIGIN=1",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t41859044\t4143882\tC\tT\t.\t.\tALLELEID=4256018;CLNDISDB=MedGen:CN169374;CLNDN=not_specified;CLNHGVS=NC_000021.9:g.41859044C>T;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV006400387;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;GENEINFO=PRDM15:63977;MC=SO:0001583|missense_variant,SO:0001627|intron_variant;ORIGIN=1",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t42879463\t2720648\tC\tG\t.\t.\tALLELEID=2891051;CLNDISDB=MedGen:C3661900|.;CLNDN=not_provided|WDR4-related_disorder;CLNHGVS=NC_000021.9:g.42879463C>G;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Likely_benign;CLNSIGSCV=SCV004277000;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA10046316;GENEINFO=WDR4:10785;MC=SO:0001623|5_prime_UTR_variant,SO:0001627|intron_variant,SO:0001819|synonymous_variant;ORIGIN=1;RS=138295040",
+   "combinations": [
+    "NMD_transcript_variant,synonymous_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t44114203\t3149923\tT\tC\t.\t.\tAF_EXAC=2e-05;ALLELEID=3311767;CLNDISDB=MedGen:CN169374;CLNDN=not_specified;CLNHGVS=NC_000021.9:g.44114203T>C;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV004934554;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA321434805;GENEINFO=PWP2:5822|LOC121853021:121853021;MC=SO:0001583|missense_variant;ORIGIN=1;RS=778347598",
+   "combinations": [
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t44114206\t2509063\tT\tC\t.\t.\tAF_ESP=0.00015;AF_EXAC=2e-05;ALLELEID=2675924;CLNDISDB=MedGen:CN169374;CLNDN=not_specified;CLNHGVS=NC_000021.9:g.44114206T>C;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV003937487;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA321434812;GENEINFO=PWP2:5822|LOC121853021:121853021;MC=SO:0001583|missense_variant;ORIGIN=1;RS=146998876",
+   "combinations": [
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t44296432\t2168402\tC\tT\t.\t.\tAF_EXAC=1e-05;ALLELEID=1895950;CLNDISDB=MONDO:MONDO:0009411,MedGen:C0085859,OMIM:240300,Orphanet:3453|MeSH:D030342,MedGen:C0950123;CLNDN=Polyglandular_autoimmune_syndrome,_type_1|Inborn_genetic_diseases;CLNHGVS=NC_000021.9:g.44296432C>T;CLNREVSTAT=criteria_provided,_multiple_submitters,_no_conflicts;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV003483135|SCV007167790;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA10052177;GENEINFO=AIRE:326|LOC130066813:130066813;MC=SO:0001583|missense_variant;ORIGIN=1;RS=777798500",
+   "combinations": [
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t44297726\t623346\tG\tC\t.\t.\tALLELEID=612336;CLNDISDB=MONDO:MONDO:0009411,MedGen:C0085859,OMIM:240300,Orphanet:3453;CLNDN=Polyglandular_autoimmune_syndrome,_type_1;CLNHGVS=NC_000021.9:g.44297726G>C;CLNREVSTAT=criteria_provided,_multiple_submitters,_no_conflicts;CLNSIG=Pathogenic/Likely_pathogenic;CLNSIGSCV=SCV000891605|SCV002818157|SCV004036184;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA410426349;GENEINFO=AIRE:326;MC=SO:0001578|stop_lost;ORIGIN=1;RS=1568932096",
+   "combinations": [
+    "non_coding_transcript_exon_variant",
+    "stop_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t44330229\t716898\tC\tT\t.\t.\tAF_ESP=8e-05;AF_EXAC=0.00247;AF_TGP=0.00419;ALLELEID=728944;CLNDISDB=MedGen:C3661900;CLNDN=not_provided;CLNHGVS=NC_000021.9:g.44330229C>T;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Benign;CLNSIGSCV=SCV001033307;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA10053474;GENEINFO=CFAP410:755;MC=SO:0001583|missense_variant;ORIGIN=1;RS=185842266",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t44330463\t1174324\tC\tA\t.\t.\tAF_EXAC=0.34744;AF_TGP=0.26398;ALLELEID=1163671;CLNDISDB=MedGen:C3661900;CLNDN=not_provided;CLNHGVS=NC_000021.9:g.44330463C>A;CLNREVSTAT=criteria_provided,_multiple_submitters,_no_conflicts;CLNSIG=Benign;CLNSIGSCV=SCV001739054|SCV005275153;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA10053523;GENEINFO=CFAP410:755;MC=SO:0001627|intron_variant,SO:0001819|synonymous_variant;ORIGIN=1;RS=2070573",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "splice_region_variant,synonymous_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t44425778\t728909\tA\tG\t.\t.\tAF_ESP=0.00262;AF_EXAC=0.00107;AF_TGP=0.0022;ALLELEID=742687;CLNDISDB=MedGen:CN169374|MedGen:C3661900;CLNDN=not_specified|not_provided;CLNHGVS=NC_000021.9:g.44425778A>G;CLNREVSTAT=criteria_provided,_multiple_submitters,_no_conflicts;CLNSIG=Benign/Likely_benign;CLNSIGSCV=SCV001047939|SCV004146664|SCV005276946|SCV006455878;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA10055590;GENEINFO=TRPM2:7226;MC=SO:0001583|missense_variant,SO:0001619|non-coding_transcript_variant,SO:0001623|5_prime_UTR_variant;ORIGIN=1;RS=45513700",
+   "combinations": [
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t44646570\t1801777\tG\tA\t.\t.\tAF_ESP=0.00024;AF_EXAC=0.0001;AF_TGP=0.0002;ALLELEID=1858969;CLNDISDB=MONDO:MONDO:0002380,MeSH:D009208,MedGen:C0027070|MedGen:CN169374;CLNDN=Myoepithelial_tumor|not_specified;CLNHGVS=NC_000021.9:g.44646570G>A;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Likely_benign;CLNSIGSCV=SCV003710838;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA10060748;GENEINFO=TSPEAR:54084|KRTAP10-11:386678;MC=SO:0001583|missense_variant,SO:0001627|intron_variant;ORIGIN=3;RS=373410945",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t44893462\t2539611\tC\tT\t.\t.\tALLELEID=2704631;CLNDISDB=MeSH:D030342,MedGen:C0950123;CLNDN=Inborn_genetic_diseases;CLNHGVS=NC_000021.9:g.44893462C>T;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV003969056;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA410485819;GENEINFO=ITGB2:3689;MC=SO:0001583|missense_variant;ORIGIN=1;RS=1240049873",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t44920915\t899125\tA\tG\t.\t.\tALLELEID=886920;CLNDISDB=MONDO:MONDO:0007293,MedGen:C0398738,OMIM:116920,Orphanet:2968,Orphanet:99842;CLNDN=Leukocyte_adhesion_deficiency_1;CLNHGVS=NC_000021.9:g.44920915A>G;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV001303938;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA321868445;GENEINFO=ITGB2:3689;MC=SO:0001627|intron_variant;ORIGIN=1;RS=7280802",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "5_prime_UTR_variant,NMD_transcript_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t45478358\t2008671\tG\tA\t.\t.\tAF_EXAC=1e-05;ALLELEID=2066621;CLNDISDB=MedGen:C3661900;CLNDN=not_provided;CLNHGVS=NC_000021.9:g.45478358G>A;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Uncertain_significance;CLNSIGSCV=SCV003213821;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA10066171;GENEINFO=COL18A1:80781;MC=SO:0001627|intron_variant;ORIGIN=1;RS=199641561",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant",
+    "downstream_gene_variant",
+    "intron_variant,splice_donor_5th_base_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t46254422\t4105145\tA\tC\t.\t.\tALLELEID=4222080;CLNDISDB=MeSH:D030342,MedGen:C0950123;CLNDN=Inborn_genetic_diseases;CLNHGVS=NC_000021.9:g.46254422A>C;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Likely_benign;CLNSIGSCV=SCV006360208;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;GENEINFO=MCM3AP:8888|LOC130066871:130066871;MC=SO:0001583|missense_variant;ORIGIN=1",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "reg",
+   "vcf": "21\t46324279\t2729938\tG\tC\t.\t.\tAF_EXAC=1e-05;ALLELEID=2889980;CLNDISDB=MedGen:C3661900|.;CLNDN=not_provided|PCNT-related_disorder;CLNHGVS=NC_000021.9:g.46324279G>C;CLNREVSTAT=criteria_provided,_single_submitter;CLNSIG=Likely_benign;CLNSIGSCV=SCV004344354;CLNVC=single_nucleotide_variant;CLNVCSO=SO:0001483;CLNVI=ClinGen:CA10078095;GENEINFO=PCNT:5116;MC=SO:0001819|synonymous_variant;ORIGIN=1;RS=772286933",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "5_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,synonymous_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 40,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "regulatory-gff",
+   "flags": [
+    "--regulatory_gff",
+    "file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_regulatory-gff",
+   "covers": [
+    "regulatory_gff",
+    "emars"
+   ],
+   "reference_warnings": [
+    "Using regulatory features from --regulatory_gff; ignoring the regulatory data in this cache"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "regulatory-gff-extended",
+   "flags": [
+    "--regulatory_gff",
+    "file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz",
+    "--extended_promoters"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_regulatory-gff-extended",
+   "covers": [
+    "regulatory_gff",
+    "extended_promoters",
+    "emars"
+   ],
+   "reference_warnings": [
+    "Using regulatory features from --regulatory_gff; ignoring the regulatory data in this cache"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "regulatory-gff-cell-type",
+   "flags": [
+    "--regulatory_gff",
+    "file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz",
+    "--cell_type",
+    "astrocyte"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_regulatory-gff-cell-type",
+   "covers": [
+    "regulatory_gff",
+    "emars"
+   ],
+   "reference_warnings": [
+    "Using regulatory features from --regulatory_gff; ignoring the regulatory data in this cache",
+    "--cell_type is ignored for regulatory features from --regulatory_gff; a GFF carries no epigenome activity data"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "regulatory-gff-unnamed-chr21",
+   "flags": [
+    "--regulatory_gff",
+    "file={corpus}/gff/regulatory_features.unnamed-chr21.gff3.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_regulatory-gff-unnamed-chr21",
+   "covers": [
+    "regulatory_gff"
+   ],
+   "reference_warnings": [
+    "Using regulatory features from --regulatory_gff; ignoring the regulatory data in this cache"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "regulatory-gff-structural",
+   "flags": [
+    "--regulatory_gff",
+    "file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz"
+   ],
+   "input": "structural.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_regulatory-gff-structural",
+   "covers": [
+    "regulatory_gff",
+    "emars"
+   ],
+   "reference_warnings": [
+    "Using regulatory features from --regulatory_gff; ignoring the regulatory data in this cache"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "regulatory-gff-structural-pick",
+   "flags": [
+    "--regulatory_gff",
+    "file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz",
+    "--pick"
+   ],
+   "input": "structural.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_regulatory-gff-structural-pick",
+   "covers": [
+    "regulatory_gff",
+    "emars",
+    "pick-ranking-of-regulatory-rows"
+   ],
+   "reference_warnings": [
+    "Using regulatory features from --regulatory_gff; ignoring the regulatory data in this cache"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

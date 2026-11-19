@@ -362,12 +362,6 @@ fn cached_to_colocated(
     cv: CachedVariation,
     matched_alleles: Vec<MatchedAllele>,
 ) -> ColocatedVariant {
-    let comma_list = |value: Option<String>| -> Vec<String> {
-        value
-            .filter(|s| !s.is_empty())
-            .map(|s| s.split(',').map(|t| t.trim().to_string()).collect())
-            .unwrap_or_default()
-    };
     ColocatedVariant {
         chr: cv.chr,
         id: cv.variation_name,
@@ -376,9 +370,9 @@ fn cached_to_colocated(
         allele_string: Some(cv.allele_string).filter(|s| !s.is_empty()),
         strand: cv.strand,
         somatic: cv.somatic != 0,
-        clin_sig: comma_list(cv.clin_sig),
+        clin_sig: cv.clin_sig,
         phenotype: cv.phenotype_or_disease != 0,
-        pubmed: comma_list(cv.pubmed),
+        pubmed: cv.pubmed,
         matched_alleles,
         frequency_strings: cv.frequencies,
         clinvar: cv.clinvar,
@@ -388,22 +382,23 @@ fn cached_to_colocated(
 
 /// Appends the `Extra` column of one default-format row: `KEY=VALUE` pairs
 /// joined by `;`, keys in VEP's order (IMPACT, DISTANCE, STRAND, FLAGS, then the
-/// active flag fields, then plugin keys alphabetically), values with `;` escaped
-/// as `%3B` and their control bytes percent-encoded, lists joined by `,`, and a
-/// lone `-` when no field applies. `tc`
-/// is `None` for an intergenic row, which carries IMPACT and no STRAND, and for
-/// a summary row, which carries the variant-level keys alone.
+/// active flag fields, then plugin and custom keys alphabetically), values with
+/// `;` escaped as `%3B` and their control bytes percent-encoded, lists joined by
+/// `,`, and a lone `-` when no field applies. `tc` is `None` for an intergenic
+/// row, which carries IMPACT and no STRAND, and for a summary row, which carries
+/// the variant-level keys alone.
 ///
 /// This is the hot path for the default `-o vep` format: it runs once per
 /// (variant x transcript consequence). For a sequence variant with no optional
-/// field group active, no plugin data and a vocabulary that prints DISTANCE as
-/// the SO terms do, it writes the four fixed keys directly, and so does a
-/// transcript or intergenic row when the `regulatory` group is the only other
-/// one active, since its six fields are empty on such a row; every other row
-/// writes each value through [`vep_io::output::fields::write_field_value`], and
-/// a row without plugin data that is not structural carries the plan's flag
-/// fields alone (a transcript row without the five motif fields), so its key
-/// list is not rebuilt.
+/// field group active, no plugin or custom data and a vocabulary that prints
+/// DISTANCE as the SO terms do, it writes the four fixed keys directly, and so
+/// does a transcript or intergenic row when the `regulatory` and `cell_type`
+/// groups are the only other ones active, since their fields are empty on such
+/// a row; every other row writes each value through
+/// [`vep_io::output::fields::write_field_value`], and a row without plugin or
+/// custom data that is not structural and carries no unflagged `BAM_EDIT` has
+/// the plan's flag fields alone (a transcript row without the five motif fields
+/// and `CELL_TYPE`), so its key list is not rebuilt.
 pub fn write_extra_fields(
     variant: &InputVariant,
     tc: Option<&vep_core::consequence::TranscriptConsequence>,
@@ -412,12 +407,19 @@ pub fn write_extra_fields(
 ) {
     let has_plugin_data =
         !variant.plugin_data.is_empty() || tc.is_some_and(|t| !t.plugin_data.is_empty());
+    let has_custom_data = !variant.custom_annotations.is_empty();
     let summary_row = tc.is_none() && variant.summary_terms.is_some();
     let transcript_row = tc.is_none_or(|t| t.feature_type == FeatureType::Transcript);
+    // `BAM_EDIT` is set with no flag check (OutputFactory.pm:1551-1553), so an
+    // edited transcript's row carries it with the `bam_edited` group off.
+    let unflagged_bam_edit =
+        !plan.options.bam_edited && tc.is_some_and(|t| t.bam_edit_status.is_some());
     if (!plan.any_optional_group || (plan.transcript_fast_path && transcript_row))
         && !has_plugin_data
+        && !has_custom_data
         && !variant.is_structural
         && !summary_row
+        && !unflagged_bam_edit
         && plan.options.user_group_is_plain()
     {
         return write_user_group(tc, out);
@@ -425,9 +427,14 @@ pub fn write_extra_fields(
 
     let options = &plan.options;
     let mut first = true;
-    if has_plugin_data || variant.is_structural {
-        for key in vep_io::output::fields::extra_keys_with(&plan.flag_fields, variant, tc, options)
-        {
+    if has_plugin_data || has_custom_data || variant.is_structural || unflagged_bam_edit {
+        for key in vep_io::output::fields::extra_keys_with(
+            &plan.flag_fields,
+            &plan.custom_keys,
+            variant,
+            tc,
+            options,
+        ) {
             write_extra_pair(out, key, variant, tc, options, &mut first);
         }
     } else {
@@ -449,7 +456,8 @@ pub fn write_extra_fields(
 /// `;` in the value escaped as `%3B` and its control bytes percent-encoded
 /// ([`vep_io::output::fields::percent_encode_control_bytes`]), or nothing when
 /// the row has no value and the empty value is not one the format writes
-/// ([`vep_io::output::fields::empty_value_is_written`]).
+/// ([`vep_io::output::fields::empty_value_is_written`]) nor a plugin's
+/// ([`vep_io::output::fields::empty_plugin_value_is_written`]).
 fn write_extra_pair(
     out: &mut Vec<u8>,
     key: &str,
@@ -468,6 +476,7 @@ fn write_extra_pair(
     vep_io::output::fields::write_field_value(out, key, variant, tc, options, ",");
     if out.len() == value_start
         && !vep_io::output::fields::empty_value_is_written(key, variant, tc, options)
+        && !vep_io::output::fields::empty_plugin_value_is_written(key, variant, tc, options)
     {
         out.truncate(pair_start);
         return;
@@ -503,7 +512,7 @@ fn write_user_group(tc: Option<&vep_core::consequence::TranscriptConsequence>, o
     out.extend_from_slice(if tc.strand < 0 { b"-1" } else { b"1" });
     let mut wrote_flags = false;
     let flags_start = out.len();
-    for flag in tc.flags.iter().filter(|f| f.starts_with("cds_")) {
+    for flag in tc.flags().iter().filter(|f| f.starts_with("cds_")) {
         out.extend_from_slice(if wrote_flags { b"," } else { b";FLAGS=" });
         out.extend_from_slice(flag.as_bytes());
         wrote_flags = true;
@@ -514,6 +523,8 @@ fn write_user_group(tc: Option<&vep_core::consequence::TranscriptConsequence>, o
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use vep_core::transcript::Transcript;
 
     /// A cache record as `parse_record` builds it from the release-116 GRCh38
     /// chromosome 21 cache (`chr variation_name failed somatic start end allele_string
@@ -1422,18 +1433,52 @@ mod tests {
         );
     }
 
+    /// `BAM_EDIT` is set on every row of a transcript carrying an edit status
+    /// with no flag check (OutputFactory.pm:1551-1553), so with the `bam_edited`
+    /// group off (`--use_given_ref` on a BAM-edited cache) the key still follows
+    /// the flag fields in `Extra`, on the fast path and beside other groups
+    /// alike; an untouched transcript's row is unchanged.
+    #[test]
+    fn unflagged_bam_edit_reaches_the_extra_column() {
+        let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        let edited = TranscriptConsequence {
+            bam_edit_status: Some(vep_core::transcript::BamEditStatus::Ok),
+            ..Default::default()
+        };
+        assert_eq!(
+            extra(&variant, Some(&edited), &FieldOptions::default()),
+            "IMPACT=MODIFIER;STRAND=1;BAM_EDIT=OK"
+        );
+        let with_symbol = FieldOptions {
+            symbol: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            extra(&variant, Some(&edited), &with_symbol),
+            "IMPACT=MODIFIER;STRAND=1;BAM_EDIT=OK"
+        );
+        let untouched = TranscriptConsequence::default();
+        assert_eq!(
+            extra(&variant, Some(&untouched), &FieldOptions::default()),
+            "IMPACT=MODIFIER;STRAND=1"
+        );
+    }
+
     #[test]
     fn distance_precedes_strand_and_flags_follow_it() {
         let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         let tc = TranscriptConsequence {
+            transcript: Some(Arc::new(Transcript {
+                flags: Arc::from([
+                    "cds_start_NF".to_string(),
+                    "cds_end_NF".to_string(),
+                    "gencode_basic".to_string(),
+                ]),
+                ..Transcript::default()
+            })),
             impact: Impact::MODIFIER,
             strand: 1,
             distance: Some(2500),
-            flags: std::sync::Arc::from([
-                "cds_start_NF".to_string(),
-                "cds_end_NF".to_string(),
-                "gencode_basic".to_string(),
-            ]),
             ..Default::default()
         };
         assert_eq!(
@@ -1451,12 +1496,15 @@ mod tests {
     fn transcript_rows_keep_the_fast_path_under_the_regulatory_group_alone() {
         let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         let transcript = TranscriptConsequence {
+            transcript: Some(Arc::new(Transcript {
+                biotype: "protein_coding".into(),
+                ..Transcript::default()
+            })),
             impact: Impact::MODIFIER,
             strand: 1,
             consequences: std::iter::once(vep_core::consequence::Consequence::UpstreamGeneVariant)
                 .collect(),
             distance: Some(120),
-            biotype: Some("protein_coding".into()),
             ..Default::default()
         };
         let regulatory = FieldOptions {
@@ -1491,26 +1539,28 @@ mod tests {
             "IMPACT=MODIFIER;DISTANCE=120;STRAND=1;BIOTYPE=protein_coding"
         );
         let motif = TranscriptConsequence {
-            transcript_id: "ENSM1".into(),
+            feature_id: Some("ENSM1".into()),
             feature_type: FeatureType::MotifFeature,
             impact: Impact::MODIFIER,
             strand: -1,
             motif: Some(Box::new(vep_core::consequence::MotifFields {
                 name: "ENSPFM1".into(),
                 pos: Some(3),
+                high_inf_pos: Some(true),
+                score_change: Some(-0.0124),
                 factors: ["A".into(), "B".into()].into(),
             })),
             ..Default::default()
         };
         assert_eq!(
             extra(&variant, Some(&motif), &regulatory),
-            "IMPACT=MODIFIER;STRAND=-1;MOTIF_NAME=ENSPFM1;MOTIF_POS=3;TRANSCRIPTION_FACTORS=A,B"
+            "IMPACT=MODIFIER;STRAND=-1;MOTIF_NAME=ENSPFM1;MOTIF_POS=3;HIGH_INF_POS=Y;MOTIF_SCORE_CHANGE=-0.012;TRANSCRIPTION_FACTORS=A,B"
         );
         let enhancer = TranscriptConsequence {
-            transcript_id: "ENSR1".into(),
+            feature_id: Some("ENSR1".into()),
+            feature_biotype: Some("enhancer".into()),
             feature_type: FeatureType::RegulatoryFeature,
             impact: Impact::MODIFIER,
-            biotype: Some("enhancer".into()),
             ..Default::default()
         };
         assert_eq!(
@@ -1526,9 +1576,12 @@ mod tests {
     fn a_flag_with_a_control_byte_is_encoded_on_both_paths() {
         let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         let tc = TranscriptConsequence {
+            transcript: Some(Arc::new(Transcript {
+                flags: Arc::from(["cds_\tx".to_string(), "cds_end_NF\n".to_string()]),
+                ..Transcript::default()
+            })),
             impact: Impact::MODIFIER,
             strand: 1,
-            flags: std::sync::Arc::from(["cds_\tx".to_string(), "cds_end_NF\n".to_string()]),
             ..Default::default()
         };
         let fast = extra(&variant, Some(&tc), &FieldOptions::default());
@@ -1564,7 +1617,7 @@ mod tests {
         variant.colocated_variants.push(ColocatedVariant {
             id: "rs123".to_string(),
             allele_string: Some("AC/-".to_string()),
-            clin_sig: vec!["pathogenic".to_string(), "likely_pathogenic".to_string()],
+            clin_sig: Some("pathogenic,likely_pathogenic".to_string()),
             somatic: true,
             phenotype: false,
             matched_alleles: vec![MatchedAllele {
@@ -1626,14 +1679,17 @@ mod tests {
     fn extra_column_skips_the_dash_sentinel() {
         let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         let tc = TranscriptConsequence {
+            transcript: Some(Arc::new(Transcript {
+                ccds: Some("-".to_string()),
+                refseq: Some("-".to_string()),
+                swissprot: Some("-".to_string()),
+                trembl: Some("L7XE61_HUMAN,L7XCZ9_HUMAN".to_string()),
+                uniparc: Some("UPI000002DB1C".to_string()),
+                uniprot_isoform: Some("-".to_string()),
+                ..Transcript::default()
+            })),
             impact: Impact::LOW,
             strand: 1,
-            ccds: Some("-".to_string()),
-            refseq: Some("-".to_string()),
-            swissprot: Some("-".to_string()),
-            trembl: Some("L7XE61_HUMAN,L7XCZ9_HUMAN".to_string()),
-            uniparc: Some("UPI000002DB1C".to_string()),
-            uniprot_isoform: Some("-".to_string()),
             ..Default::default()
         };
         let options = FieldOptions {
@@ -1688,5 +1744,35 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(extra(&variant, None, &without), "IMPACT=MODIFIER");
+    }
+
+    /// A plugin key the row carries with the empty value writes `KEY=`, as
+    /// Ensembl VEP's default writer prints every key of a plugin's result, an
+    /// undefined or empty value included (VEP_output.pm:107-119), at record
+    /// level and at transcript level alike, sorted among the other plugin keys.
+    #[test]
+    fn extra_column_writes_a_plugins_empty_value() {
+        let mut variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        variant
+            .plugin_data
+            .insert("gnomAD_filters".to_string(), String::new());
+        variant
+            .plugin_data
+            .insert("gnomAD_AC_hom".to_string(), "19".to_string());
+        let mut tc = TranscriptConsequence {
+            impact: Impact::LOW,
+            strand: 1,
+            ..Default::default()
+        };
+        tc.plugin_data
+            .insert("scores_Comment".to_string(), String::new());
+        assert_eq!(
+            extra(&variant, Some(&tc), &FieldOptions::default()),
+            "IMPACT=LOW;STRAND=1;gnomAD_AC_hom=19;gnomAD_filters=;scores_Comment="
+        );
+        assert_eq!(
+            extra(&variant, None, &FieldOptions::default()),
+            "IMPACT=MODIFIER;gnomAD_AC_hom=19;gnomAD_filters="
+        );
     }
 }

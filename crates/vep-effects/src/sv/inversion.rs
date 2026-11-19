@@ -14,11 +14,12 @@
 //! (`Bio/EnsEMBL/Variation/...`, `Config.pm` being `Utils/Config.pm`).
 
 use super::{
-    engulfed_transcript_row_terms, is_mature_mirna_sv, overlaps_any_exon,
+    engulfed_transcript_row_terms, frameshift_intron_span, is_mature_mirna_sv, overlaps_any_exon,
     overlaps_any_intron_trimmed, overlaps_cds_exon, overlaps_five_prime_utr,
     overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
 };
 use smallvec::{smallvec, SmallVec};
+use std::sync::Arc;
 use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
@@ -38,7 +39,7 @@ use vep_core::variant::InputVariant;
 ///   but not overlapping the transcript body
 pub fn calculate(
     variant: &InputVariant,
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
@@ -79,8 +80,8 @@ pub fn calculate(
     // `complete_overlap`/`within_feature`/<biotype>, so the miRNA predicate is
     // never skipped, and `get_all_OverlapConsequences` (267/277-279) pins
     // `assigned_tier = 2` before every tier-3 context term: Perl emits
-    // mature_miRNA_variant alone. Tested before the `fully_contains` branch,
-    // which would otherwise short-circuit it.
+    // mature_miRNA_variant alone. Tested here for the partial-overlap path, which has no miRNA
+    // arm; `engulfed_transcript_context_terms` repeats the test for the `fully_contains` branch.
     if is_mature_mirna_sv(transcript, sv_start, sv_end) {
         return Some(build_transcript_consequence(
             transcript,
@@ -110,12 +111,10 @@ pub fn calculate(
             consequences.push(Consequence::NmdTranscriptVariant);
         }
 
+        // A row no predicate claims carries Ensembl VEP's default term,
+        // `intergenic_variant` (`BaseVariationFeatureOverlapAllele.pm:285`).
         if consequences.is_empty() {
-            if transcript.has_cds() {
-                consequences.push(Consequence::CodingTranscriptVariant);
-            } else {
-                consequences.push(Consequence::NonCodingTranscriptVariant);
-            }
+            consequences.push(Consequence::IntergenicVariant);
         }
     }
 
@@ -143,15 +142,25 @@ fn calculate_protein_coding_consequences(
     sv_start: u64,
     sv_end: u64,
 ) {
-    if overlaps_cds_exon(transcript, sv_start, sv_end) {
+    // An inversion wholly inside a frameshift intron takes its region's term: the
+    // coding or UTR term of `frameshift_intron_span` here, the non-coding term of
+    // `calculate_non_coding_consequences` on a transcript without a translation.
+    let frameshift_intron = frameshift_intron_span(transcript, sv_start, sv_end);
+    if overlaps_cds_exon(transcript, sv_start, sv_end)
+        || frameshift_intron.is_some_and(|span| span.coding)
+    {
         push_unique(consequences, Consequence::CodingSequenceVariant);
     }
 
-    if overlaps_five_prime_utr(transcript, sv_start, sv_end) {
+    if overlaps_five_prime_utr(transcript, sv_start, sv_end)
+        || frameshift_intron.is_some_and(|span| span.five_prime_utr)
+    {
         push_unique(consequences, Consequence::FivePrimeUtrVariant);
     }
 
-    if overlaps_three_prime_utr(transcript, sv_start, sv_end) {
+    if overlaps_three_prime_utr(transcript, sv_start, sv_end)
+        || frameshift_intron.is_some_and(|span| span.three_prime_utr)
+    {
         push_unique(consequences, Consequence::ThreePrimeUtrVariant);
     }
 
@@ -193,7 +202,7 @@ fn calculate_non_coding_consequences(
 /// Calculate upstream or downstream consequence for an SV that doesn't overlap
 /// the transcript body.
 fn calculate_distance_consequence(
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     sv_start: u64,
     sv_end: u64,
     upstream_distance: u64,
@@ -236,7 +245,7 @@ fn calculate_distance_consequence(
 
 /// Build a `TranscriptConsequence` with SV-specific fields.
 fn build_transcript_consequence(
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     consequences: ConsequenceList,
     impact: Impact,
     distance: Option<u64>,
@@ -262,9 +271,24 @@ mod tests {
     //
     use crate::sv::tests::make_mature_mirna_transcript;
     use crate::test_helpers::{make_test_transcript, make_test_transcript_with_flags};
-
     use vep_core::consequence::FeatureType;
     use vep_core::variant::VariantClass;
+
+    /// [`super::calculate`] on a transcript the test owns: the row shares a copy of
+    /// it, as the index shares its handle.
+    fn calculate(
+        variant: &InputVariant,
+        transcript: &Transcript,
+        upstream_distance: u64,
+        downstream_distance: u64,
+    ) -> Option<TranscriptConsequence> {
+        super::calculate(
+            variant,
+            &Arc::new(transcript.clone()),
+            upstream_distance,
+            downstream_distance,
+        )
+    }
 
     /// Helper: build a structural inversion variant.
     fn make_inversion(start: u64, sv_end: u64) -> InputVariant {
@@ -328,9 +352,9 @@ mod tests {
     fn inversion_rows_carry_the_transcript_lengths() {
         let tx = make_test_transcript();
         let csq = calculate(&make_inversion(25_000_200, 25_000_301), &tx, 5000, 5000).unwrap();
-        assert_eq!(csq.cds_length, tx.cds_length());
-        assert_eq!(csq.cdna_length, tx.spliced_length());
-        assert!(csq.cds_length.is_some_and(|n| n > 0) && csq.cdna_length > 0);
+        assert_eq!(csq.cds_length(), tx.cds_length());
+        assert_eq!(csq.cdna_length(), tx.spliced_length());
+        assert!(csq.cds_length().is_some_and(|n| n > 0) && csq.cdna_length() > 0);
     }
 
     /// Non-coding counterpart of the donor-dinucleotide test above.
@@ -339,8 +363,8 @@ mod tests {
     /// `calculate_protein_coding_consequences` and once in
     /// `calculate_non_coding_consequences`. The coding-site test alone does not
     /// cover the non-coding site: with only that site untrimmed the coding tests
-    /// stay green while the non-coding path yields `[IntronVariant,
-    /// NonCodingTranscriptVariant]`, so each site has its own test.
+    /// stay green while the non-coding path yields
+    /// `[NonCodingTranscriptExonVariant, IntronVariant]`, so each site has its own test.
     #[test]
     fn test_inv_non_coding_touching_only_donor_dinucleotide_has_no_intron_variant() {
         let mut tx = make_test_transcript();
@@ -405,9 +429,6 @@ mod tests {
     /// An inversion fully containing a mature miRNA must produce
     /// `mature_miRNA_variant` alone (Perl tier-2 short-circuit), not the tier-3
     /// `non_coding_transcript_variant`.
-    ///
-    /// Without the `is_mature_mirna_sv` early return above the `fully_contains`
-    /// branch this assert fails with `[NonCodingTranscriptVariant]`.
     #[test]
     fn test_inv_fully_containing_mirna_gives_mature_mirna_only() {
         let tx = make_mature_mirna_transcript();
@@ -738,10 +759,10 @@ mod tests {
         let result = calculate(&v, &tx, 5000, 5000);
         assert!(result.is_some());
         let csq = result.unwrap();
-        assert_eq!(&*csq.transcript_id, "ENST00000000001");
-        assert_eq!(&*csq.gene_id, "ENSG00000000001");
-        assert_eq!(csq.gene_symbol.as_deref(), Some("TEST1"));
-        assert_eq!(csq.biotype.as_deref(), Some("protein_coding"));
+        assert_eq!(csq.transcript_id(), "ENST00000000001");
+        assert_eq!(csq.gene_id(), "ENSG00000000001");
+        assert_eq!(csq.gene_symbol(), Some("TEST1"));
+        assert_eq!(csq.biotype(), Some("protein_coding"));
         assert!(csq.canonical);
         assert_eq!(csq.strand, 1);
         assert_eq!(csq.feature_type, FeatureType::Transcript);
@@ -817,8 +838,8 @@ mod tests {
 
     #[test]
     fn test_inv_coding_transcript_variant_fallback() {
-        // A protein-coding transcript with only intron overlap outside the CDS
-        // falls back to coding_transcript_variant.
+        // With `coding_region_start` cleared, `has_cds` is false; the inversion over
+        // the first intron yields `intron_variant`, so the empty-list fallback never runs.
         let mut tx = make_test_transcript();
         tx.coding_region_start = None;
         tx.coding_region_end = None;

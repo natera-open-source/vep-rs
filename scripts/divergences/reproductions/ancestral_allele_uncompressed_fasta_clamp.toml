@@ -1,0 +1,49 @@
+entry = "ancestral_allele_uncompressed_fasta_clamp"
+page = "docs/plugins/ancestral-allele.md#2-a-span-past-the-end-of-an-uncompressed-fastas-record"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the AncestralAllele plugin's header, which accepts an uncompressed FASTA file, and the faidx format page, neither of which sets the length of a record; not seen in the measured datasets"
+notes = "Ensembl VEP reads a path not ending `.gz` through Bio::DB::Fasta, whose `_calc_offset` lowers a residue index past the record's length to the last residue, so a span wholly past the end reads one base, the record's last; vep-rs and the bgzipped form of the same record give the empty string. Neither engine warns, and Bio::DB::Fasta writes its own index beside the file."
+# The committed chromosome 21 record cut to its first 14,439,400 bases (the first 144,395 lines), uncompressed, with a
+# hand-written .fai; the record ends on the C at 21:14439400, the base of the dataset's anc_intergenic_snv. awk reads
+# the stream to its end, where head would close the pipe early and fail the step under pipefail.
+prepare = [
+  'zcat "$CORPUS/ancestral/homo_sapiens_ancestor_21.slice.fa.gz" | awk "NR <= 144395" > "$STAGE/cut.fa"',
+  'printf "ANCESTOR_for_chromosome:GRCh38:21:1:46709983:1\t14439400\t48\t100\t101\n" > "$STAGE/cut.fa.fai"',
+]
+
+[input]
+format = "vcf"
+text = """
+21	14439400	anc_intergenic_snv	C	T	.	.	.
+21	14740399	anc_three_base_deletion	CTAG	C	.	.	.
+21	19268555	rs937007124	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-ancestral/json_cache"
+
+[run]
+flags = ["--plugin", "AncestralAllele,{stage}/cut.fa"]
+
+# The substitution at the record's last base (the control, `C` on both engines), the three-base deletion past the end
+# on one of its transcripts and the intergenic substitution 4.8 Mb past the end.
+[compare]
+kind = "rows"
+where = { record = ["anc_intergenic_snv", "anc_three_base_deletion", "rs937007124"], feature = ["-", "ENST00000660333"] }
+columns = ["Location", "Allele", "Feature", "AA"]
+
+[expected]
+ensembl_vep = [
+  "21:14439400 | T | - | C",
+  "21:14740400-14740402 | - | ENST00000660333 | C",
+  "21:19268555 | T | - | C",
+]
+vep_rs = [
+  "21:14439400 | T | - | C",
+  "21:14740400-14740402 | - | ENST00000660333 | ",
+  "21:19268555 | T | - | ",
+]

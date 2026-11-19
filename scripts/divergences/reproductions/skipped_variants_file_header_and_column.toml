@@ -1,0 +1,45 @@
+entry = "skipped_variants_file_header_and_column"
+page = "docs/divergences/skipped-variants-file-header.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --input_data and --skipped_variants_file options (Ensembl VEP documentation, \"Running Ensembl VEP\") and the VCF 4.3 specification, section 1.2 \"Character encoding, non-printable characters and characters with special meaning\", which makes the encoding UTF-8, so an identifier may hold a multi-byte character; not seen in the measured datasets"
+notes = "Both records are given as --input_data beside -i STDIN: Ensembl VEP's header prints the in-memory handle it reads the string through, vep-rs's the -i value, and the record column of the line carrying the two-byte character is 40 bytes in Ensembl VEP and 40 characters in vep-rs. The skipped-variants file is written at the warnings file's path so that the warnings comparison reads it; the warnings themselves go to another file. The cut of the quoted line in the skip warning, the sentence's third mechanism, is not compared."
+
+[input]
+format = "vcf"
+text = """
+21	30165901	invalid_alleles	X	Y	.	.	.
+Z	1000	idé_accent_then_a_long_identifier_tail	A	G	.	.	K=v
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-individual-zyg/json_cache"
+chromosomes = ["21"]
+
+[run]
+stdin = true
+flags = [
+  "--input_data", "21\t30165901\tinvalid_alleles\tX\tY\t.\t.\t.\nZ\t1000\tidé_accent_then_a_long_identifier_tail\tA\tG\t.\t.\tK=v",
+  "--skipped_variants_file", "{out}_warnings.txt",
+  "--warning_file", "{out}_messages.txt",
+]
+
+[compare]
+kind = "warnings"
+pattern = "."
+sorted = false
+
+[expected]
+ensembl_vep = [
+  "[VEP skipped the following variants from *Bio::EnsEMBL::VEP::Runner::IN]",
+  "Line 1    \t21 30165901 invalid_alleles X Y . . .   \tInvalid allele string X/Y or possible parsing error",
+  "Line 2    \tZ 1000 idé_accent_then_a_long_identifie\tChromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features",
+]
+vep_rs = [
+  "[VEP skipped the following variants from STDIN]",
+  "Line 1    \t21 30165901 invalid_alleles X Y . . .   \tInvalid allele string X/Y or possible parsing error",
+  "Line 2    \tZ 1000 idé_accent_then_a_long_identifier\tChromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features",
+]

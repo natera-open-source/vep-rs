@@ -1,0 +1,328 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "included_records": {
+  "ta": [
+   "rs1184063233",
+   "rs1255945263",
+   "rs1291258748",
+   "rs1361703761",
+   "rs1398151563",
+   "rs2074312880",
+   "rs2074361249",
+   "rs374325784",
+   "rs463608",
+   "rs576571770"
+  ]
+ },
+ "max_span": 1000000,
+ "flags": [
+  "--plugin",
+  "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz"
+ ],
+ "covers": [
+  "TranscriptAnnotator",
+  "api-plugin-licence-headers"
+ ],
+ "suites": {
+  "ta": {
+   "reference": "reference.txt",
+   "input": "candidates.vcf",
+   "rows": 108,
+   "combinations": 17
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,inframe_deletion": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_region_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 3
+  },
+  "NMD_transcript_variant,stop_gained": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,synonymous_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 3
+  },
+  "frameshift_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "inframe_deletion": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 9,
+   "exemplar_records": 8
+  },
+  "intron_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_region_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 25,
+   "exemplar_records": 4
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "stop_gained": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 18,
+   "exemplar_records": 3
+  }
+ },
+ "variant_classes": {
+  "deletion": 18,
+  "snv": 90
+ },
+ "records": [
+  {
+   "suite": "ta",
+   "vcf": "21\t10521702\trs463608\tC\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_region_variant",
+    "intron_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t10524568\trs1184063233\tT\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant",
+    "intron_variant,splice_polypyrimidine_tract_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t10538730\trs1255945263\tG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t10538731\trs2074312880\tA\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t10541117\trs2074361249\tA\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t10541121\trs374325784\tG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,synonymous_variant",
+    "intron_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t10541121\trs374325784\tG\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,synonymous_variant",
+    "intron_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t10541121\trs374325784\tG\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,synonymous_variant",
+    "intron_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t10541124\trs1361703761\tTG\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t10542444\trs1398151563\tG\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,stop_gained",
+    "intron_variant",
+    "stop_gained"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t10561166\trs576571770\tGTTC\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,inframe_deletion",
+    "inframe_deletion"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t14485915\trs1291258748\tG\tC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "cols",
+   "flags": [
+    "--plugin",
+    "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,cols=SIFT_score:Comment"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_cols",
+   "covers": [
+    "TranscriptAnnotator"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "transcript_annotator_SIFT_score",
+    "transcript_annotator_Comment"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  },
+  {
+   "name": "prefix-0",
+   "flags": [
+    "--plugin",
+    "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,prefix=0"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_prefix-0",
+   "covers": [
+    "TranscriptAnnotator"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "SIFT_score",
+    "SIFT_pred",
+    "Comment"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  },
+  {
+   "name": "trim-0",
+   "flags": [
+    "--plugin",
+    "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,trim=0"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_trim-0",
+   "covers": [
+    "TranscriptAnnotator"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "transcript_annotator_SIFT_score",
+    "transcript_annotator_SIFT_pred",
+    "transcript_annotator_Comment"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "transcript_annotator_SIFT_score",
+  "transcript_annotator_SIFT_pred",
+  "transcript_annotator_Comment"
+ ],
+ "field_divergences": [],
+ "field_divergence_summary": {}
+}

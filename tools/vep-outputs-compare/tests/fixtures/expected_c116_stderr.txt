@@ -1,0 +1,1 @@
+WARNING: [compare_vep_outputs] no input VCF for sample_b under {{INPUT_DIR}}; gVCF variant sites are recognised from an ID-less record's generated name only

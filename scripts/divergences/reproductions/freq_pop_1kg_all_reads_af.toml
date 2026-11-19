@@ -1,0 +1,31 @@
+entry = "freq_pop_1kg_all_reads_af"
+page = "docs/divergences/filter-common-1kg-all.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 395 of 32,292 table rows · 5 flag sets, 13 corpora"
+notes = "The first mechanism of the entry: rs8131855's 1000 Genomes AF is 0.0986, above the 0.01 --filter_common sets, but under 1KG_ALL Ensembl VEP reads no frequency from a release-116 cache and keeps the record; vep-rs reads the AF column and drops the allele."
+
+[input]
+format = "vcf"
+text = """
+21	38441162	common_snv	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-freqfilter/json_cache"
+
+[run]
+flags = ["--check_existing", "--filter_common"]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = "common_snv", feature = "ENST00000288319" }
+columns = ["Location", "Allele", "Feature", "Consequence", "Existing_variation"]
+
+[expected]
+ensembl_vep = ["21:38441162 | G | ENST00000288319 | intron_variant | rs8131855"]
+vep_rs = []

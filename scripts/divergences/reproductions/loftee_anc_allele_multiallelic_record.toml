@@ -1,0 +1,45 @@
+entry = "loftee_anc_allele_multiallelic_record"
+page = "docs/plugins/loftee.md#4-the-ancestral-allele-filter-withheld-from-every-allele-of-a-multi-allelic-record"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 248.7 per million · 4 flag sets, 61 corpora"
+notes = "Ensembl VEP's LoF plugin is the LOFTEE repository's grch38 branch (--extra-dir loftee=<checkout>), and it reads the ancestral base through `samtools faidx`, which the image lacks: the run needs --tool-dir with samtools. The one-allele record is the control: both engines filter its T allele ANC_ALLELE."
+
+# At 21:32314600 the reference reads C, the corpus's ancestral FASTA reads T, and C>T is a stop gain on ENST00000339944.
+# The same allele alone, then beside a sibling allele whose string makes the record's allele string longer than three characters.
+[input]
+format = "vcf"
+text = """
+21	32314600	one	C	T	.	.	.
+21	32314600	two	C	T,A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-loftee/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-loftee/reference.fa.gz"
+
+[run]
+tools = ["samtools"]
+flags = [
+  "--dir_plugins", "{loftee}",
+  "--plugin", "LoF,loftee_path:{loftee},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_bigwig:{corpus}/plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw",
+]
+
+# The A allele's rows are synonymous and carry no LoF field; END_TRUNC keeps the call LC on both sides.
+[compare]
+kind = "rows"
+where = { record = ["one", "two"], feature = "ENST00000339944", allele = "T" }
+columns = ["Uploaded_variation", "Location", "Allele", "Feature", "Consequence", "LoF", "LoF_filter"]
+
+[expected]
+ensembl_vep = [
+  "one | 21:32314600 | T | ENST00000339944 | stop_gained | LC | END_TRUNC,ANC_ALLELE",
+  "two | 21:32314600 | T | ENST00000339944 | stop_gained | LC | END_TRUNC",
+]
+vep_rs = [
+  "one | 21:32314600 | T | ENST00000339944 | stop_gained | LC | END_TRUNC,ANC_ALLELE",
+  "two | 21:32314600 | T | ENST00000339944 | stop_gained | LC | END_TRUNC,ANC_ALLELE",
+]

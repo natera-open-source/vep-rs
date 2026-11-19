@@ -1,0 +1,40 @@
+entry = "hgvsg_repeated_or_reference_equal_alt"
+page = "docs/divergences/hgvsg-allele-lookup.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\" (ALT carries no rule against a repeated allele); not seen in the measured datasets; classed by its most reachable shape, a repeated ALT allele: an ALT equal to REF breaks \"alternate non-reference alleles\" (ALT, the same section)"
+notes = "Two records at the first base of IFNGR2's start codon: one whose ALT list names the reference base, one that repeats an allele; the rows on ENST00000290219."
+
+[input]
+format = "vcf"
+text = """
+21	34775850	refeq	A	A,C	.	.	.
+21	34775850	dupalt	A	C,C,G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37-hgvs/json_cache"
+fasta = "tests/golden/116/GRCh37-hgvs/reference.fa.gz"
+
+[run]
+flags = ["--hgvsg", "--allele_number"]
+
+[compare]
+kind = "rows"
+where = { feature = "ENST00000290219" }
+columns = ["Uploaded_variation", "Allele", "ALLELE_NUM", "HGVSg"]
+
+[expected]
+ensembl_vep = [
+  "refeq | C | 1 | 21:g.34775850dup",
+  "dupalt | C | 1 | 21:g.34775850A>C",
+  "dupalt | G | 2 | 21:g.34775850A>C",
+]
+vep_rs = [
+  "refeq | C | 1 | 21:g.34775850A>C",
+  "dupalt | C | 1 | 21:g.34775850A>C",
+  "dupalt | G | 2 | 21:g.34775850A>G",
+]

@@ -8,7 +8,7 @@ homepage.workspace = true
 rust-version.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Indexed FASTA access wrapper for VEP"
+description = "Indexed reference FASTA access for vep-rs, a Rust reimplementation of Ensembl VEP"
 
 [dependencies]
 vep-core = { workspace = true }

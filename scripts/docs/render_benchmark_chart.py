@@ -21,10 +21,10 @@ the wide one puts the names beside the bars and shows from BREAKPOINT px. An emb
 `<style>` shows one of them and gives the root that layout's aspect ratio; a style
 element in an inlined SVG applies to the whole page, so its selectors name only the
 chart's own classes. Every label is set at FONT units, which renders at 12 px or more
-wherever the page shows its layout.
+wherever a page shows its layout.
 
-Page and file: the file is inlined into a Markdown page, so it has no blank line and no
-colour of its own. Bars carry the classes `bar-vep-rs`, `bar-ensembl-vep` and
+Page and file: the file is written for a page that inlines it into its Markdown, so it has
+no blank line and no colour of its own. Bars carry the classes `bar-vep-rs`, `bar-ensembl-vep` and
 `bar-fastvep` for the page's stylesheet, and text and gridlines use the page's `--fg`.
 The root's width and height are the wide layout's, the size the file takes where no page
 sizes it, as when it is opened on its own or shown through an `<img>` element.

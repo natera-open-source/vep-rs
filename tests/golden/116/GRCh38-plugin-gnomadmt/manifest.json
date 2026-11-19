@@ -1,0 +1,294 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "included_records": {
+  "mt": [
+   "MT_21_AT/A",
+   "MT_3_T/C",
+   "MT_42_T/TC",
+   "MT_60_T/G",
+   "MT_6_C/CCTCAA",
+   "rs199474657",
+   "rs199476104",
+   "rs199476112",
+   "rs199476118",
+   "rs199476133",
+   "rs267606617"
+  ]
+ },
+ "max_span": 1000000,
+ "flags": [
+  "--plugin",
+  "gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz"
+ ],
+ "covers": [
+  "gnomADMt",
+  "api-plugin-licence-headers"
+ ],
+ "suites": {
+  "mt": {
+   "reference": "reference.txt",
+   "input": "candidates.vcf",
+   "rows": 197,
+   "combinations": 4
+  }
+ },
+ "combinations": {
+  "downstream_gene_variant": {
+   "observed_rows": 78,
+   "exemplar_records": 11
+  },
+  "missense_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 4
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 112,
+   "exemplar_records": 11
+  }
+ },
+ "variant_classes": {
+  "deletion": 10,
+  "insertion": 20,
+  "snv": 167
+ },
+ "records": [
+  {
+   "suite": "mt",
+   "vcf": "MT\t3\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mt",
+   "vcf": "MT\t6\t.\tC\tCCTCAA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mt",
+   "vcf": "MT\t21\t.\tAT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mt",
+   "vcf": "MT\t42\t.\tT\tTC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mt",
+   "vcf": "MT\t60\t.\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mt",
+   "vcf": "MT\t1555\trs267606617\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mt",
+   "vcf": "MT\t3243\trs199474657\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mt",
+   "vcf": "MT\t3460\trs199476118\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mt",
+   "vcf": "MT\t8993\trs199476133\tT\tG,C\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "mt",
+   "vcf": "MT\t11778\trs199476112\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mt",
+   "vcf": "MT\t14484\trs199476104\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "fields-all",
+   "flags": [
+    "--plugin",
+    "gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz,fields=all"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "json"
+   ],
+   "expected_dir": "expected_fields-all",
+   "covers": [
+    "gnomADMt"
+   ]
+  },
+  {
+   "name": "hap-filter",
+   "flags": [
+    "--plugin",
+    "gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz,hap_filter=HV:A:B"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_hap-filter",
+   "covers": [
+    "gnomADMt"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "gnomAD_hap_AC_hom",
+    "gnomAD_hap_AC_het",
+    "gnomAD_hap_AF_hom",
+    "gnomAD_hap_AF_het",
+    "gnomAD_hap_AN"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  },
+  {
+   "name": "pop-filter",
+   "flags": [
+    "--plugin",
+    "gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz,fields=pop_AC_hom:pop_AF_hom:pop_AN,pop_filter=eas:fin:afr"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_pop-filter",
+   "covers": [
+    "gnomADMt"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "gnomAD_pop_AC_hom",
+    "gnomAD_pop_AF_hom",
+    "gnomAD_pop_AN"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  },
+  {
+   "name": "fields-subset",
+   "flags": [
+    "--plugin",
+    "gnomADMt,file=data/gnomad.v3.1.chrM.slice.vcf.bgz,fields=filters:hap_defining_variant:AN:max_hl:variant_collapsed"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_fields-subset",
+   "covers": [
+    "gnomADMt"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "gnomAD_filters",
+    "gnomAD_hap_defining_variant",
+    "gnomAD_AN",
+    "gnomAD_max_hl",
+    "gnomAD_variant_collapsed"
+   ],
+   "field_divergences": [],
+   "field_divergence_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "gnomAD_hap_AC_hom",
+  "gnomAD_hap_AC_het",
+  "gnomAD_hap_AF_hom",
+  "gnomAD_hap_AF_het",
+  "gnomAD_hap_AN"
+ ],
+ "field_divergences": [],
+ "field_divergence_summary": {}
+}

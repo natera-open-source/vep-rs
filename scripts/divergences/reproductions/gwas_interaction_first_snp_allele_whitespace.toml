@@ -1,0 +1,35 @@
+entry = "gwas_interaction_first_snp_allele_whitespace"
+page = "docs/plugins/flat-file.md#3-gwas-the-first-snp-of-an-interaction-row-never-matches-its-own-risk-allele"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 1 of 790 table rows · 2 flag sets, 1 corpus"
+# The committed slice's one interaction row, `rs10830963-G x rs4818032-C` on `11 x 21`, with its two SNPs written in the other order;
+# Ensembl VEP's plugin builds its processed catalog under --dir, which must be writable: a directory of the stage.
+prepare = [
+  "mkdir -p \"$STAGE/vepdir\"",
+  "sed -e 's/\t11 x 21\t/\t21 x 11\t/' -e 's/\t92975544 x 39375657\t/\t39375657 x 92975544\t/' -e 's/\trs10830963-G x rs4818032-C\t/\trs4818032-C x rs10830963-G\t/' -e 's/\trs10830963 x rs4818032\t/\trs4818032 x rs10830963\t/' \"$CORPUS/plugin_data/gwas_catalog_slice.tsv\" > \"$STAGE/gwas_catalog_slice_swapped.tsv\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	39375657	rs4818032	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-gwas/json_cache"
+
+[run]
+flags = ["--dir", "{stage}/vepdir", "--plugin", "GWAS,file={stage}/gwas_catalog_slice_swapped.tsv"]
+
+[compare]
+kind = "rows"
+where = { record = "rs4818032", feature = "ENST00000398753" }
+columns = ["Location", "Allele", "Feature", "GWAS_risk_allele", "GWAS_study"]
+
+[expected]
+ensembl_vep = ["21:39375657 | C | ENST00000398753 | - | -"]
+vep_rs = ["21:39375657 | C | ENST00000398753 | C | GCST006494"]

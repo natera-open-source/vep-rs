@@ -8,18 +8,29 @@ Or: ``python3 scripts/concordance/test_compare_vep_outputs.py``
 from __future__ import annotations
 
 import csv
+import dataclasses
+import gzip
+import json
 import os
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from collections import Counter
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
+from unittest import mock
 
+import compare_vep_outputs as cvo
 from compare_vep_outputs import (
     CLASSIFICATION_CHAIN,
     EXCLUDING_RULES,
     EXCLUSION_REGISTRY,
     MODE_REQUIRED,
+    ExclusionRule,
     PER_CLASS_MIN_TUPLES,
     PerClassCounts,
     _is_covered_splice_region_swap,
@@ -793,12 +804,6 @@ class IntronicOvercallSwapTests(unittest.TestCase):
         )
 
 
-# No test class covers a stop_lost/3'UTR trade-off mask because the comparator
-# has none (see the note in compare_vep_outputs.py). A test importing a
-# predicate the comparator lacks fails the MODULE at import, and a test file
-# that cannot be imported reports no failures.
-
-
 class SortCollationTests(unittest.TestCase):
     """`_sort_unique_stream_to_file` must collate by byte, whatever the caller's locale.
 
@@ -843,6 +848,225 @@ class SortCollationTests(unittest.TestCase):
     def test_matches_python_sorted(self) -> None:
         """The external sort and Python's fallback must agree, since either may run."""
         self.assertEqual(self._sorted_under("en_US.UTF-8"), sorted(self.KEYS))
+
+
+class KeyFileOrderTests(unittest.TestCase):
+    """`compare_sorted_key_files` walks both key files forward once and takes each to
+    ascend with every key once.
+
+    Where a key sorts below the key before it, a walk that went on would step past a key
+    both files hold and count it as missing and as extra at once, which lowers F1 with no
+    error raised. The walk stops there instead, naming the file and the line.
+    """
+
+    def _compare(self, perl: list[str], rust: list[str]) -> tuple:
+        from compare_vep_outputs import compare_sorted_key_files
+
+        with tempfile.TemporaryDirectory() as d:
+            self.perl_path, self.rust_path = Path(d) / "perl.keys", Path(d) / "rust.keys"
+            self.perl_path.write_text("".join(k + "\n" for k in perl), encoding="utf-8")
+            self.rust_path.write_text("".join(k + "\n" for k in rust), encoding="utf-8")
+            return compare_sorted_key_files(
+                self.perl_path,
+                self.rust_path,
+                file_name="f",
+                discordant_out=None,
+                track_consequence_buckets=False,
+            )
+
+    def test_a_key_below_the_key_before_it_in_the_first_file_names_that_file_and_line(self) -> None:
+        with self.assertRaises(ValueError) as raised:
+            self._compare(["a1", "c3", "b2", "d4"], ["a1", "b2", "c3", "d4"])
+        message = str(raised.exception)
+        self.assertIn(f"{self.perl_path}: line 3:", message)
+        self.assertNotIn(str(self.rust_path), message)
+
+    def test_a_key_below_the_key_before_it_in_the_second_file_names_that_file_and_line(self) -> None:
+        with self.assertRaises(ValueError) as raised:
+            self._compare(["a1", "b2", "c3", "d4", "e5"], ["a1", "b2", "c3", "e5", "d4"])
+        message = str(raised.exception)
+        self.assertIn(f"{self.rust_path}: line 5:", message)
+        self.assertNotIn(str(self.perl_path), message)
+
+    def test_a_key_out_of_order_after_a_key_only_the_first_file_holds_names_that_file_and_line(self) -> None:
+        with self.assertRaises(ValueError) as raised:
+            self._compare(["a1", "b2", "d4", "c3"], ["a1", "x9"])
+        self.assertIn(f"{self.perl_path}: line 4:", str(raised.exception))
+
+    def test_a_key_out_of_order_after_a_key_only_the_second_file_holds_names_that_file_and_line(self) -> None:
+        with self.assertRaises(ValueError) as raised:
+            self._compare(["a1", "x9"], ["a1", "b2", "d4", "c3"])
+        self.assertIn(f"{self.rust_path}: line 4:", str(raised.exception))
+
+    def test_a_key_written_twice_names_the_line_of_its_second_copy(self) -> None:
+        with self.assertRaises(ValueError) as raised:
+            self._compare(["a1", "b2", "b2", "c3"], ["a1", "b2", "c3"])
+        self.assertIn(f"{self.perl_path}: line 3:", str(raised.exception))
+
+    def test_files_that_ascend_are_counted_to_their_last_keys(self) -> None:
+        counts = self._compare(["a1", "b2", "d4", "e5", "f6"], ["a1", "c3", "d4"])
+        self.assertEqual(counts[:5], (5, 3, 2, 3, 1))
+
+
+class RunStoppedOnKeyOrderTests(unittest.TestCase):
+    """A compare run that stops on a key file out of order keeps the files it stopped on.
+
+    The program's own sort writes every key file in order, so each run here that must stop
+    puts a stand-in `sort` first on the path, which writes the keys descending from a given
+    call on. The stopped run leaves the temporary directory of its key files in place and
+    names it in the error, and the discordance report written so far is renamed with a
+    `.partial` suffix, so no file of the report directory carries a name read as a result.
+    Every other ending removes the temporary directory.
+    """
+
+    COLS = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\n"
+    RESULT_NAMES = ("discordant.tsv", "discordant_open.tsv", "summary.json", "summary.md")
+
+    STAND_IN_SORT = """#!/bin/sh
+n=$(( $(cat "$STAND_IN_SORT_CALLS" 2>/dev/null || echo 0) + 1 ))
+echo "$n" > "$STAND_IN_SORT_CALLS"
+if [ "$n" -ge "$STAND_IN_SORT_FROM" ]; then
+    if [ "$STAND_IN_SORT_MODE" = fail ]; then
+        cat > /dev/null
+        echo "stand-in sort fails" >&2
+        exit 3
+    fi
+    exec "{sort}" "$@" -r
+fi
+exec "{sort}" "$@"
+"""
+
+    @staticmethod
+    def _line(loc: str, feature: str) -> str:
+        return f"v1\t{loc}\t-\tg1\t{feature}\tTranscript\tintron_variant\n"
+
+    def setUp(self) -> None:
+        sort = shutil.which("sort")
+        if sort is None:
+            self.skipTest("no sort program to stand in for")
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        for sub in ("perl", "rust", "report", "bin"):
+            (self.tmp / sub).mkdir()
+        shared = self._line("21:100", "tx1") + self._line("21:200", "tx2") + self._line("21:300", "tx3")
+        (self.tmp / "perl" / "output.txt").write_text(self.COLS + shared, encoding="utf-8")
+        (self.tmp / "rust" / "output.txt").write_text(
+            self.COLS + shared + self._line("21:900", "tx9"), encoding="utf-8"
+        )
+        stand_in = self.tmp / "bin" / "sort"
+        stand_in.write_text(self.STAND_IN_SORT.replace("{sort}", sort), encoding="utf-8")
+        stand_in.chmod(0o755)
+        self.report = self.tmp / "report"
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _run(self, *extra: str, mode: str | None = None, start: int = 1) -> subprocess.CompletedProcess:
+        import compare_vep_outputs
+
+        env = dict(os.environ)
+        if mode is not None:
+            env["PATH"] = f"{self.tmp / 'bin'}{os.pathsep}{env['PATH']}"
+            env["STAND_IN_SORT_MODE"] = mode
+            env["STAND_IN_SORT_FROM"] = str(start)
+            env["STAND_IN_SORT_CALLS"] = str(self.tmp / "sort.calls")
+        return subprocess.run(
+            [
+                sys.executable,
+                compare_vep_outputs.__file__,
+                "--perl-dir", str(self.tmp / "perl"),
+                "--rust-dir", str(self.tmp / "rust"),
+                "--report-dir", str(self.report),
+                "--assembly", "GRCh37",
+                *extra,
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def _kept_directory(self) -> Path:
+        kept = sorted(self.report.glob("compare_vep_tmp_*"))
+        self.assertEqual(len(kept), 1, f"temporary directories left in the report directory: {kept}")
+        return kept[0]
+
+    def _descending_keys(self, side: str, transform=None) -> list[str]:
+        from compare_vep_outputs import iter_vep_key_lines
+
+        keys = set(iter_vep_key_lines(self.tmp / side / "output.txt", consequence_transform=transform))
+        return sorted(keys, reverse=True)
+
+    def test_a_run_stopped_on_a_key_file_out_of_order_keeps_its_key_files_and_names_their_directory(self) -> None:
+        run = self._run(mode="descending")
+        self.assertNotEqual(run.returncode, 0)
+        error = run.stderr.strip().splitlines()[-1]
+        kept = self._kept_directory()
+        self.assertIn(f"{kept / 'output.txt.perl.keys.sorted.txt'}: line 2:", error)
+        self.assertIn(f"the key files are kept in {kept}", error)
+        for side in ("perl", "rust"):
+            keys = (kept / f"output.txt.{side}.keys.sorted.txt").read_text(encoding="utf-8").splitlines()
+            self.assertEqual(keys, self._descending_keys(side))
+
+    def test_a_run_stopped_on_a_key_file_out_of_order_leaves_no_file_under_a_result_name(self) -> None:
+        run = self._run(mode="descending")
+        self.assertNotEqual(run.returncode, 0)
+        for name in self.RESULT_NAMES:
+            self.assertFalse((self.report / name).exists(), name)
+        partial = self.report / "discordant.tsv.partial"
+        self.assertTrue(partial.read_text(encoding="utf-8").startswith("file_name\tsource\tlocation\t"))
+        self.assertIn(f"the rows written before the stop in {partial}", run.stderr.strip().splitlines()[-1])
+
+    def test_a_stop_in_the_context_collapsed_comparison_keeps_its_key_files_too(self) -> None:
+        from compare_vep_outputs import collapse_transcript_context_terms
+
+        run = self._run("--discordant-tsv", "custom.tsv", mode="descending", start=3)
+        self.assertNotEqual(run.returncode, 0)
+        error = run.stderr.strip().splitlines()[-1]
+        kept = self._kept_directory()
+        self.assertIn(f"{kept / 'output.txt.perl.keys.collapsed.sorted.txt'}: line 2:", error)
+        self.assertIn(f"the key files are kept in {kept}", error)
+        for side in ("perl", "rust"):
+            keys = (kept / f"output.txt.{side}.keys.collapsed.sorted.txt").read_text(encoding="utf-8").splitlines()
+            self.assertEqual(keys, self._descending_keys(side, collapse_transcript_context_terms))
+        for name in ("custom.tsv", "custom_open.tsv", "summary.json", "summary.md"):
+            self.assertFalse((self.report / name).exists(), name)
+        self.assertTrue((self.report / "custom.tsv.partial").exists())
+
+    def test_a_run_that_ends_well_removes_its_temporary_directory(self) -> None:
+        run = self._run()
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(sorted(p.name for p in self.report.iterdir()), sorted(self.RESULT_NAMES))
+
+    def test_a_run_that_ends_on_another_error_removes_its_temporary_directory(self) -> None:
+        run = self._run(mode="fail", start=2)
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("sort -u failed", run.stderr.strip().splitlines()[-1])
+        self.assertEqual([p.name for p in self.report.iterdir()], ["discordant.tsv"])
+
+    def test_a_value_error_from_elsewhere_in_the_comparison_removes_its_temporary_directory(self) -> None:
+        import compare_vep_outputs
+
+        # main() lifts the interpreter's bound on an integer's digits for the whole process, so
+        # a test that calls it in this process puts the bound back.
+        self.addCleanup(sys.set_int_max_str_digits, sys.get_int_max_str_digits())
+        argv = [
+            "compare_vep_outputs.py",
+            "--perl-dir", str(self.tmp / "perl"),
+            "--rust-dir", str(self.tmp / "rust"),
+            "--report-dir", str(self.report),
+            "--assembly", "GRCh37",
+        ]
+        with (
+            mock.patch.object(sys, "argv", argv),
+            mock.patch.object(
+                compare_vep_outputs, "compare_sorted_key_files", side_effect=ValueError("another error")
+            ),
+            self.assertRaises(ValueError) as raised,
+        ):
+            compare_vep_outputs.main()
+        self.assertIs(type(raised.exception), ValueError)
+        self.assertEqual([p.name for p in self.report.iterdir()], ["discordant.tsv"])
 
 
 class SubstitutionRejectionTests(unittest.TestCase):
@@ -1256,6 +1480,7 @@ class CompareModeOpenTsvEndToEndTests(unittest.TestCase):
         import sys
         from compare_vep_outputs import main
 
+        self.addCleanup(sys.set_int_max_str_digits, sys.get_int_max_str_digits())
         argv = sys.argv
         sys.argv = [
             "compare_vep_outputs.py",
@@ -1293,6 +1518,129 @@ class CompareModeOpenTsvEndToEndTests(unittest.TestCase):
         self.assertTrue((self.tmp / "report" / "custom.tsv").exists())
         self.assertTrue((self.tmp / "report" / "custom_open.tsv").exists())
         self.assertFalse((self.tmp / "report" / "discordant_open.tsv").exists())
+
+
+class CanonicalContigsFromCacheTests(unittest.TestCase):
+    """Under an assembly that is not GRCh37 or GRCh38 the canonical set is the one
+    ``--canonical-contigs`` names, the cache's ``contig_order`` as run_concordance.sh
+    passes it; bare, the flag keeps the human set for the human assemblies and is
+    off, with a warning, for any other."""
+
+    COLS = (
+        "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\n"
+    )
+    CONTIG_ORDER = ("2L", "2R", "3L", "3R", "4", "X", "Y", "mitochondrion_genome")
+
+    @staticmethod
+    def _line(loc: str, feature: str, csq: str) -> str:
+        return f"v\t{loc}\tA\tG\t{feature}\tTranscript\t{csq}\n"
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        for sub in ("perl", "rust", "report", "cache"):
+            (self.tmp / sub).mkdir()
+        shared = (
+            self._line("2L:100", "FBtr0", "missense_variant")
+            + self._line("X:200", "FBtr1", "intron_variant")
+            + self._line("mitochondrion_genome:300", "FBtr2", "synonymous_variant")
+        )
+        (self.tmp / "perl" / "output.txt").write_text(
+            self.COLS + shared + self._line("rDNA:400", "FBtr3", "intron_variant"),
+            encoding="utf-8",
+        )
+        (self.tmp / "rust" / "output.txt").write_text(
+            self.COLS
+            + shared
+            + self._line("Unmapped_Scaffold_8_D1580_D1567:500", "FBtr4", "intron_variant"),
+            encoding="utf-8",
+        )
+        (self.tmp / "cache" / "info.json").write_text(
+            json.dumps({"species": "drosophila_melanogaster", "assembly": "BDGP6.54",
+                        "contig_order": self.CONTIG_ORDER}),
+            encoding="utf-8",
+        )
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _run(self, *extra: str) -> tuple[dict, str]:
+        import contextlib
+        import io
+        import sys
+        from compare_vep_outputs import main
+
+        self.addCleanup(sys.set_int_max_str_digits, sys.get_int_max_str_digits())
+        argv = sys.argv
+        sys.argv = [
+            "compare_vep_outputs.py",
+            "--perl-dir", str(self.tmp / "perl"),
+            "--rust-dir", str(self.tmp / "rust"),
+            "--report-dir", str(self.tmp / "report"),
+            *extra,
+        ]
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(main(), 0)
+        finally:
+            sys.argv = argv
+        summary = json.loads((self.tmp / "report" / "summary.json").read_text(encoding="utf-8"))
+        return summary, out.getvalue()
+
+    def test_canonical_contigs_come_from_the_caches_contig_order_for_a_non_human_assembly(
+        self,
+    ) -> None:
+        # The list run_concordance.sh derives from the cache's info.json.
+        info = json.loads((self.tmp / "cache" / "info.json").read_text(encoding="utf-8"))
+        contig_list = ",".join(info["contig_order"])
+        summary, out = self._run("--assembly", "BDGP6.54", "--canonical-contigs", contig_list)
+        self.assertTrue(summary["canonical_contigs_filter_active"])
+        self.assertEqual(summary["canonical_contigs_set"], sorted(self.CONTIG_ORDER))
+        raw = summary["aggregate"]
+        # The rDNA and scaffold rows are outside the set: three tuples each side, all shared.
+        self.assertEqual(
+            (raw["perl_tuple_count"], raw["rust_tuple_count"], raw["intersection_count"]),
+            (3, 3, 3),
+        )
+        self.assertNotIn("WARNING: --canonical-contigs", out)
+
+        # The same set from a file, one name per line, a comment line ignored.
+        listing = self.tmp / "contigs.txt"
+        listing.write_text("# the cache's karyotype\n" + "\n".join(self.CONTIG_ORDER) + "\n")
+        from_file, _ = self._run("--assembly", "BDGP6.54", "--canonical-contigs", str(listing))
+        self.assertEqual(from_file["canonical_contigs_set"], sorted(self.CONTIG_ORDER))
+        self.assertEqual(from_file["aggregate"]["intersection_count"], 3)
+
+        # Bare under a non-human assembly: no set is derivable, the filter is off and
+        # the one-sided rows count, with the warning naming the assembly and the remedy.
+        bare, out = self._run("--assembly", "BDGP6.54")
+        self.assertFalse(bare["canonical_contigs_filter_active"])
+        self.assertIsNone(bare["canonical_contigs_set"])
+        self.assertEqual(
+            (bare["aggregate"]["perl_tuple_count"], bare["aggregate"]["rust_tuple_count"]),
+            (4, 4),
+        )
+        self.assertIn("--assembly is BDGP6.54, which names no canonical set", out)
+        self.assertIn("--canonical-contigs <file or list>", out)
+
+        # Bare under a human assembly keeps the human set.
+        from compare_vep_outputs import CANONICAL_CONTIGS
+
+        human, _ = self._run("--assembly", "GRCh38")
+        self.assertEqual(human["canonical_contigs_set"], sorted(CANONICAL_CONTIGS))
+
+    def test_a_canonical_contigs_value_naming_no_contig_is_a_usage_error(self) -> None:
+        from compare_vep_outputs import parse_canonical_contigs
+
+        self.assertEqual(parse_canonical_contigs("2L, X mitochondrion_genome"),
+                         frozenset({"2L", "X", "mitochondrion_genome"}))
+        empty = self.tmp / "empty.txt"
+        empty.write_text("# nothing\n\n")
+        with self.assertRaises(SystemExit):
+            parse_canonical_contigs(str(empty))
+        with self.assertRaises(SystemExit):
+            parse_canonical_contigs(",")
 
 
 # Per-consequence-class F1
@@ -1882,6 +2230,7 @@ class VepTotalsCacheTests(unittest.TestCase):
         from compare_vep_outputs import main
 
         class_csv = self.tmp / "class.csv"
+        self.addCleanup(sys.set_int_max_str_digits, sys.get_int_max_str_digits())
         argv = sys.argv
         sys.argv = [
             "compare_vep_outputs.py", "--by-consequence-class",
@@ -1953,6 +2302,7 @@ class VepTotalsCacheTests(unittest.TestCase):
         import sys
         from compare_vep_outputs import main
 
+        self.addCleanup(sys.set_int_max_str_digits, sys.get_int_max_str_digits())
         argv = sys.argv
         sys.argv = [
             "compare_vep_outputs.py", "--by-consequence-class",
@@ -2375,16 +2725,26 @@ class ReferenceRegistryTests(unittest.TestCase):
     def test_the_taxonomy_page_names_every_class_of_both_registries(self) -> None:
         """`docs/concordance-provenance/116.2-divergence-classes.md` is the 116.2 registry's
         taxonomy: every bucket the comparator reports under either release is named on it,
-        so a class cannot be added here without its definition reaching the page."""
+        so a class cannot be added here without its definition reaching the page. The
+        row-aware pair rules have a section of their own, whose list names them in the
+        registry's order and names no class the registry lacks."""
         from compare_vep_outputs import REFERENCE_REGISTRIES
 
         page = (Path(__file__).resolve().parents[2] / "docs" / "concordance-provenance"
                 / "116.2-divergence-classes.md").read_text(encoding="utf-8")
         for registry in REFERENCE_REGISTRIES.values():
-            for rule in (*registry.pair_rules, *registry.one_sided_rules):
+            for rule in (*registry.pair_rules, *registry.row_pair_rules, *registry.one_sided_rules):
                 self.assertIn(f"`{rule.bucket}`", page, rule.bucket)
         for release in REFERENCE_REGISTRIES:
             self.assertIn(f"`{release}`", page)
+        heading = "The pair classes that read the two rows of a pair"
+        _, found, after = page.partition(f". {heading}\n")
+        self.assertTrue(found, f"the page has no section {heading!r}")
+        listed = [line[4:].partition("`")[0] for line in after.partition("\n#")[0].splitlines()
+                  if line.startswith("- [`")]
+        self.assertEqual(listed, [rule.bucket for registry in REFERENCE_REGISTRIES.values()
+                                  for rule in registry.row_pair_rules],
+                         "the section lists the registry's row-aware pair rules, in their order")
 
     def test_the_flag_defaults_to_116_2_and_names_its_choices(self) -> None:
         from compare_vep_outputs import DEFAULT_REFERENCE_RELEASE
@@ -2398,7 +2758,7 @@ class ReferenceRegistryTests(unittest.TestCase):
 
 class ReferenceRecordScopeTests(unittest.TestCase):
     """The 116.2 collector reads the sorted merge once: a Location whose rows are all
-    vep-rs's and structural is a record the reference dropped; a Location with any
+    vep-rs's and structural is a candidate for a record the reference dropped; a Location with any
     reference row, under any allele, is not."""
 
     @staticmethod
@@ -3041,7 +3401,7 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
 
     def test_the_dot_breakend_pair_takes_the_spans_start_or_the_base_after_it(self) -> None:
         """The reference's start is POS + 1 when the ALT's length differs from the REF's and POS
-        when it does not, its end POS + len(REF) - 1 (BaseVCF4.pm:264-275, 297-316), and vep-rs
+        when it does not, its end POS + len(REF) - 1 (BaseVCF4.pm:264-275, 297-317), and vep-rs
         writes the point POS + 1 for every shape. Ensembl VEP 116.2 writes `21 30425650 x NAC .N
         . . .` at `21:30425651-30425652` and `21 30425650 x NACG .N . . .` at `21:30425651-30425653`
         (the point is the span's start), `21 30425650 x NAC NA. . . .` and `21 30425650 x NAC .AC
@@ -3086,6 +3446,168 @@ class Apply116OneSidedRulesTests(unittest.TestCase):
         rows = [self.row("extra_in_rust", loc, "N[chr21:30425700[", "ENST00000418755", "downstream_gene_variant")]
         (_, _, buckets), _ = self.run_pass(rows, self.scope(breakends=breakends))
         self.assertEqual(buckets["bnd_synonym_mate_rows_lost"]["count"], 0)
+
+
+class DroppedRecordNameTests(unittest.TestCase):
+    """The skipped-record class sets a row aside because the reference dropped its input
+    record, not because the reference has no row at one Location.
+
+    Both engines print the input record's name in the first column. A Location at which the
+    engine under test wrote a structural row and the reference nothing is set aside only
+    when no reference row of the same file carries the name of a row there. The rule is one
+    for every engine: the rows below are written as vep-rs writes a structural record (the
+    reference's own start and class word) and as an engine that prints the record from POS
+    under its symbolic allele writes it. Every row is synthetic.
+    """
+
+    COLS = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\n"
+    SHARED = "snv_1\t21:100\t-\tg1\tT_SHARED\tTranscript\tintron_variant\n"
+
+    @staticmethod
+    def line(name: str, loc: str, allele: str, feature: str, csq: str = "feature_truncation") -> str:
+        return f"{name}\t{loc}\t{allele}\tg1\t{feature}\tTranscript\t{csq}\n"
+
+    def compare(self, perl: str, rust: str, files: dict[str, tuple[str, str]] | None = None):
+        """Run compare mode over one output pair (or ``files``: name to both sides' rows) and
+        return the class's statistics with the open discordance rows."""
+        from compare_vep_outputs import main
+
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        for sub in ("perl", "rust", "report"):
+            (tmp / sub).mkdir()
+        for name, (perl_rows, rust_rows) in (files or {"output.txt": (perl, rust)}).items():
+            (tmp / "perl" / name).write_text(self.COLS + self.SHARED + perl_rows, encoding="utf-8")
+            (tmp / "rust" / name).write_text(self.COLS + self.SHARED + rust_rows, encoding="utf-8")
+        self.addCleanup(sys.set_int_max_str_digits, sys.get_int_max_str_digits())
+        argv = sys.argv
+        sys.argv = ["compare_vep_outputs.py", "--perl-dir", str(tmp / "perl"),
+                    "--rust-dir", str(tmp / "rust"), "--report-dir", str(tmp / "report"),
+                    "--assembly", "GRCh38", "--glob", "*.txt"]
+        try:
+            with mock.patch("builtins.print"):
+                self.assertEqual(main(), 0)
+        finally:
+            sys.argv = argv
+        adjusted = json.loads((tmp / "report" / "summary.json").read_text())["aggregate"]["adjusted"]
+        open_rows = (tmp / "report" / "discordant_open.tsv").read_text().splitlines()[1:]
+        return adjusted["excluded_categories"]["reference_skipped_record"], open_rows
+
+    def test_a_symbolic_record_the_reference_wrote_one_base_on_is_not_set_aside(self) -> None:
+        """The engine writes the record at POS under `<DEL>`, the reference at POS + 1 under
+        `deletion`: the reference has no row at the engine's Location and wrote the record."""
+        perl = self.line("sv_kept", "21:5001-5300", "deletion", "T1")
+        rust = self.line("sv_kept", "21:5000-5300", "<DEL>", "T1") + self.line("sv_kept", "21:5000-5300", "<DEL>", "T2")
+        bucket, open_rows = self.compare(perl, rust)
+        self.assertEqual(bucket, {"count": 0, "excluded": 0, "records": 0, "perl": 0, "rust": 0})
+        self.assertEqual(sum("\t21:5000-5300\t" in row for row in open_rows), 2, "the engine's rows stay charged")
+        self.assertEqual(sum("\t21:5001-5300\t" in row for row in open_rows), 1, "and so does the reference's")
+
+    def test_a_symbolic_record_the_reference_wrote_no_row_for_is_set_aside(self) -> None:
+        rust = self.line("sv_dropped", "21:7000-27000100", "<DEL>", "T1") + self.line("sv_dropped", "21:7000-27000100", "<DEL>", "T2")
+        bucket, open_rows = self.compare("", rust)
+        self.assertEqual(bucket, {"count": 2, "excluded": 2, "records": 1, "perl": 0, "rust": 2})
+        self.assertEqual(open_rows, [])
+
+    def test_a_record_written_as_vep_rs_writes_it_follows_the_same_rule(self) -> None:
+        """Under the reference's class word: a record the reference wrote with another end
+        stays charged, and a record no reference row names is set aside."""
+        perl = self.line("sv_kept", "21:5001-5300", "deletion", "T1")
+        rust = self.line("sv_kept", "21:5001-5400", "deletion", "T1") + self.line("sv_dropped", "21:800-900", "CPX", "T3")
+        bucket, open_rows = self.compare(perl, rust)
+        self.assertEqual(bucket, {"count": 1, "excluded": 1, "records": 1, "perl": 0, "rust": 1})
+        self.assertEqual(sum("\t21:5001-5400\t" in row for row in open_rows), 1)
+        self.assertFalse(any("\t21:800-900\t" in row for row in open_rows))
+
+    def test_a_record_without_an_id_is_told_by_its_generated_name(self) -> None:
+        """Ensembl VEP names a record without an ID from its own line, `CHROM_POS_REF/ALT`
+        with the POS as the input gives it. An engine that generates the same name and prints
+        the record from POS is charged for a record the reference wrote one base on, and a
+        record under a generated name no reference row carries is set aside."""
+        perl = self.line("21_5000_k/<DEL>", "21:5001-5300", "deletion", "T1")
+        rust = self.line("21_5000_k/<DEL>", "21:5000-5300", "<DEL>", "T1") + self.line("21_9000_k/<DEL>", "21:9000-29001000", "<DEL>", "T4")
+        bucket, open_rows = self.compare(perl, rust)
+        self.assertEqual(bucket, {"count": 1, "excluded": 1, "records": 1, "perl": 0, "rust": 1})
+        self.assertEqual(sum("\t21:5000-5300\t" in row for row in open_rows), 1)
+        self.assertFalse(any("\t21:9000-29001000\t" in row for row in open_rows))
+
+    def test_a_sequence_allele_of_a_dropped_record_goes_with_it(self) -> None:
+        rust = self.line("sv_mixed", "21:800-900", "CPX", "T3") + self.line("sv_mixed", "21:800-900", "-", "T3", "intron_variant")
+        bucket, open_rows = self.compare("", rust)
+        self.assertEqual(bucket, {"count": 2, "excluded": 2, "records": 1, "perl": 0, "rust": 2})
+        self.assertEqual(open_rows, [])
+
+    def test_a_location_shared_with_a_record_the_reference_wrote_stays_charged(self) -> None:
+        """Two records at one Location of the engine, one the reference wrote elsewhere: the
+        Location stands for both, and no row of a record the reference wrote is set aside."""
+        perl = self.line("sv_kept", "21:5001-5300", "deletion", "T1")
+        rust = self.line("sv_kept", "21:5000-5300", "<DEL>", "T1") + self.line("sv_dropped", "21:5000-5300", "<DUP>", "T2")
+        bucket, open_rows = self.compare(perl, rust)
+        self.assertEqual(bucket["excluded"], 0)
+        self.assertEqual(sum("\t21:5000-5300\t" in row for row in open_rows), 2)
+
+    def test_a_row_that_names_no_record_is_not_set_aside(self) -> None:
+        """An empty first column, `.` and `-` name no input record, so nothing shows that the
+        reference dropped it."""
+        for name in ("", ".", "-"):
+            with self.subTest(name=name):
+                bucket, open_rows = self.compare("", self.line(name, "21:7000-27000100", "<DEL>", "T1"))
+                self.assertEqual(bucket["excluded"], 0)
+                self.assertEqual(len(open_rows), 1)
+
+    def test_a_name_is_read_without_the_blanks_around_it(self) -> None:
+        """The first column is read stripped, as the key's columns are: a name with blanks
+        around it in one output is the name without them in the other."""
+        perl = self.line("sv_kept", "21:5001-5300", "deletion", "T1")
+        bucket, open_rows = self.compare(perl, self.line(" sv_kept ", "21:5000-5300", "<DEL>", "T1"))
+        self.assertEqual(bucket["excluded"], 0)
+        self.assertEqual(sum("\t21:5000-5300\t" in row for row in open_rows), 1)
+
+    def test_a_name_is_looked_for_in_the_reference_output_of_the_same_file(self) -> None:
+        """A reference row of another file under the same name is another input's record."""
+        files = {
+            "a.txt": ("", self.line("sv_1", "21:7000-27000100", "<DEL>", "T1")),
+            "b.txt": (self.line("sv_1", "21:5001-5300", "deletion", "T1"), self.line("sv_1", "21:5001-5300", "deletion", "T1")),
+        }
+        bucket, open_rows = self.compare("", "", files=files)
+        self.assertEqual(bucket, {"count": 1, "excluded": 1, "records": 1, "perl": 0, "rust": 1})
+        self.assertEqual(open_rows, [])
+
+    def test_a_reference_row_the_comparison_does_not_read_names_no_record(self) -> None:
+        """The name is looked for on the rows the comparison keys: a reference row on a contig
+        outside the canonical set is not one."""
+        perl = self.line("sv_1", "GL000195.1:5001-5300", "deletion", "T1")
+        bucket, _ = self.compare(perl, self.line("sv_1", "21:7000-27000100", "<DEL>", "T1"))
+        self.assertEqual(bucket, {"count": 1, "excluded": 1, "records": 1, "perl": 0, "rust": 1})
+
+    def test_outputs_with_no_candidate_location_are_not_read_again(self) -> None:
+        from compare_vep_outputs import reference_named_locations
+
+        with mock.patch("compare_vep_outputs.iter_record_names") as reader:
+            self.assertEqual(reference_named_locations(Path("perl.txt"), Path("rust.txt"), set()), set())
+        reader.assert_not_called()
+
+    def test_the_named_locations_are_those_holding_a_name_the_reference_wrote(self) -> None:
+        from compare_vep_outputs import ReferenceRecordScope, reference_named_locations
+
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        perl, rust = tmp / "perl.txt", tmp / "rust.txt"
+        perl.write_text(self.COLS + self.line("sv_kept", "21:5001-5300", "deletion", "T1"), encoding="utf-8")
+        rust.write_text(
+            self.COLS
+            + self.line("sv_kept", "21:5000-5300", "<DEL>", "T1")
+            + self.line("sv_dropped", "21:7000-27000100", "<DEL>", "T1")
+            + self.line("sv_kept", "21:1-5", "<DEL>", "T9"),
+            encoding="utf-8",
+        )
+        candidates = {"21:5000-5300", "21:7000-27000100"}
+        self.assertEqual(reference_named_locations(perl, rust, candidates), {"21:5000-5300"})
+        scope = ReferenceRecordScope()
+        scope.absent = {("f", loc) for loc in candidates} | {("g", "21:5000-5300")}
+        self.assertEqual(scope.absent_locations("f"), candidates)
+        scope.record_reference_named("f", {"21:5000-5300"})
+        self.assertEqual(scope.absent, {("f", "21:7000-27000100"), ("g", "21:5000-5300")})
 
 
 class NumifiedCoordinateTests(unittest.TestCase):
@@ -3199,6 +3721,7 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
 
         out = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, out, True)
+        self.addCleanup(sys.set_int_max_str_digits, sys.get_int_max_str_digits())
         argv = sys.argv
         sys.argv = ["compare_vep_outputs.py", "--perl-dir", str(self.FIXTURE / "perl"),
                     "--rust-dir", str(self.FIXTURE / "rust"), "--report-dir", str(out),
@@ -3223,6 +3746,7 @@ class ReferenceReleaseFixtureTests(unittest.TestCase):
         out, inputs = Path(tempfile.mkdtemp()), Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, out, True)
         self.addCleanup(shutil.rmtree, inputs, True)
+        self.addCleanup(sys.set_int_max_str_digits, sys.get_int_max_str_digits())
         argv = sys.argv
         sys.argv = ["compare_vep_outputs.py", "--perl-dir", str(self.FIXTURE / "perl"),
                     "--rust-dir", str(self.FIXTURE / "rust"), "--report-dir", str(out),
@@ -3311,6 +3835,1457 @@ class GvcfSiteRowsFixtureTests(unittest.TestCase):
             if predicted != rows:
                 mismatches.append((pos, ref, alt_column, sorted(predicted), sorted(rows)))
         self.assertEqual(mismatches, [])
+
+
+ROW_COLS = (
+    "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\t"
+    "CDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tExtra\n"
+)
+
+
+def stop_codon_row(allele: str, consequence: str, cdna: str, cds: str, location: str = "19:13208046-13208050",
+                   feature_type: str = "Transcript", name: str = "1993671", feature: str = "ENST00000635895") -> str:
+    """One fabricated row of the default format, as the format comparator's stop codon tests
+    write it."""
+    return (f"{name}\t{location}\t{allele}\tENSG1\t{feature}\t{feature_type}\t{consequence}\t{cdna}\t{cds}"
+            "\t-\t-\t-\t-\tIMPACT=LOW;STRAND=-1\n")
+
+
+def compare_row_outputs(test: unittest.TestCase, perl: str, rust: str, *options: str) -> tuple[dict, list[str]]:
+    """Run compare mode over one fabricated output pair, with the options a concordance run
+    passes, and return the summary's adjusted block with the open discordance rows."""
+    from compare_vep_outputs import main
+
+    tmp = Path(tempfile.mkdtemp())
+    test.addCleanup(shutil.rmtree, tmp, True)
+    for sub, rows in (("perl", perl), ("rust", rust)):
+        (tmp / sub).mkdir()
+        (tmp / sub / "output.txt").write_text(ROW_COLS + rows, encoding="utf-8")
+    test.addCleanup(sys.set_int_max_str_digits, sys.get_int_max_str_digits())
+    argv = ["compare_vep_outputs.py", "--perl-dir", str(tmp / "perl"), "--rust-dir", str(tmp / "rust"),
+            "--report-dir", str(tmp / "report"), "--assembly", "GRCh38", *options]
+    with mock.patch.object(sys, "argv", argv), mock.patch("builtins.print"):
+        test.assertEqual(main(), 0)
+    adjusted = json.loads((tmp / "report" / "summary.json").read_text())["aggregate"]["adjusted"]
+    return adjusted, (tmp / "report" / "discordant_open.tsv").read_text().splitlines()[1:]
+
+
+@contextmanager
+def row_pair_rules(*rules: ExclusionRule) -> Iterator[None]:
+    """The 116.2 registry with ``rules`` as its row-aware pair rules."""
+    registry = dataclasses.replace(cvo.REFERENCE_REGISTRIES["116.2"], row_pair_rules=rules)
+    with mock.patch.dict(cvo.REFERENCE_REGISTRIES, {"116.2": registry}), \
+            mock.patch.dict(cvo.PAIR_RULE_DEFINITIONS, {r.bucket: "A fabricated shape." for r in rules}), \
+            mock.patch.dict(cvo.PAIR_RULE_CITATIONS, {r.taxonomy_class: "Fabricated.pm:1" for r in rules}):
+        yield
+
+
+def fabricated_row_rule(predicate: Callable[..., bool]) -> ExclusionRule:
+    return ExclusionRule(bucket="fabricated_row_shape", predicate=predicate, classifies=True, excludes=True,
+                         taxonomy_class="fabricated_row_shape", row_aware=True)
+
+
+class RowAwarePairRuleTests(unittest.TestCase):
+    """A pair rule may read, beside the two consequence sets and the allele, the first
+    column, the Location, the cDNA_position and the CDS_position of the two rows of an
+    unmatched pair, fetched from the two outputs the comparator is given. Every row is
+    fabricated."""
+
+    def test_a_row_aware_rule_is_handed_the_named_columns_of_the_two_rows_of_an_unmatched_pair(self) -> None:
+        seen: list[tuple] = []
+
+        def shape(e, a) -> bool:
+            seen.append((e, a))
+            return True
+
+        name = "19_13208045_GACCTG/G"
+        matched = stop_codon_row("-", "missense_variant", "10-12", "4-6", feature="ENST00000000001")
+        perl = matched + stop_codon_row("-", "stop_retained_variant", "?-7057", "-", name=name)
+        rust = matched + stop_codon_row("-", "stop_lost", "?-7057/7140", "-/7023", name=name)
+        with row_pair_rules(fabricated_row_rule(shape)):
+            adjusted, open_rows = compare_row_outputs(self, perl, rust)
+        ((e, a),) = seen
+        self.assertEqual(
+            (e.key, e.location, e.allele, e.consequence, e.fields, e.indel),
+            ("19:13208046-13208050|-|ENST00000635895|Transcript", "19:13208046-13208050", "-",
+             "stop_retained_variant", {"cDNA_position": "?-7057", "CDS_position": "-"}, True),
+        )
+        self.assertEqual((a.consequence, a.fields, a.indel),
+                         ("stop_lost", {"cDNA_position": "?-7057/7140", "CDS_position": "-/7023"}, True))
+        self.assertEqual(adjusted["excluded_categories"]["fabricated_row_shape"], {"count": 1, "excluded": 1})
+        self.assertEqual(list(adjusted["excluded_categories"])[len(CLASSIFICATION_CHAIN)], "fabricated_row_shape")
+        self.assertEqual(list(adjusted["divergence_classes"])[len(EXCLUSION_REGISTRY)], "fabricated_row_shape")
+        self.assertEqual((adjusted["f1"], adjusted["excluded_perl_tuples"], adjusted["excluded_rust_tuples"]), (1.0, 1, 1))
+        self.assertEqual(open_rows, [])
+
+    def test_a_record_under_an_identifier_leaves_the_shape_to_the_location(self) -> None:
+        seen: list[tuple] = []
+        perl = stop_codon_row("-", "stop_retained_variant", "7055-7059", "6978-6982")
+        rust = stop_codon_row("-", "coding_sequence_variant", "7055-7059", "6978-6982")
+        with row_pair_rules(fabricated_row_rule(lambda e, a: seen.append((e.indel, a.indel, e.location)) or False)):
+            adjusted, open_rows = compare_row_outputs(self, perl, rust)
+        self.assertEqual(seen, [(None, None, "19:13208046-13208050")])
+        self.assertEqual(adjusted["excluded_categories"]["fabricated_row_shape"], {"count": 0, "excluded": 0})
+        self.assertEqual(len(open_rows), 2)
+
+    def test_only_an_unmatched_pair_no_earlier_rule_takes_reaches_a_row_aware_rule(self) -> None:
+        seen: list[tuple] = []
+        matched = stop_codon_row("-", "missense_variant", "10-12", "4-6", feature="ENST00000000001")
+        perl = (matched
+                + stop_codon_row("-", "stop_retained_variant", "20-22", "14-16", feature="ENST00000000002")
+                + stop_codon_row("-", "intron_variant", "-", "-", feature="ENST00000000004"))
+        rust = (matched
+                + stop_codon_row("-", "stop_lost", "20-22", "14-16", feature="ENST00000000003")
+                + stop_codon_row("-", "intron_variant,splice_region_variant", "-", "-", feature="ENST00000000004"))
+        with row_pair_rules(fabricated_row_rule(lambda e, a: seen.append((e, a)) or True)):
+            adjusted, open_rows = compare_row_outputs(self, perl, rust)
+        self.assertEqual(seen, [], "a matched tuple, a tuple one engine alone writes and a pair an earlier rule takes")
+        self.assertEqual(adjusted["excluded_categories"]["fabricated_row_shape"], {"count": 0, "excluded": 0})
+        self.assertEqual(adjusted["excluded_categories"]["intronic_overcall_swap"], {"count": 1, "excluded": 1})
+        self.assertEqual(sorted(row.split("\t")[4] for row in open_rows), ["ENST00000000002", "ENST00000000003"])
+
+    def test_the_rows_of_one_key_stand_or_fall_together(self) -> None:
+        perl = (stop_codon_row("-", "stop_retained_variant", "10-12", "4-6", name="first")
+                + stop_codon_row("-", "stop_retained_variant", "20-22", "14-16", name="second")
+                + stop_codon_row("-", "stop_retained_variant", "10-12", "4-6", name="third"))
+        rust = stop_codon_row("-", "stop_lost", "10-12", "4-6", name="first")
+        for refused, expected in ((None, ({"count": 1, "excluded": 1}, 0)), ("20-22", ({"count": 0, "excluded": 0}, 2))):
+            seen: list[str] = []
+
+            def shape(e, a, refused=refused, seen=seen) -> bool:
+                seen.append(e.fields["cDNA_position"])
+                return e.fields["cDNA_position"] != refused
+
+            with row_pair_rules(fabricated_row_rule(shape)):
+                adjusted, open_rows = compare_row_outputs(self, perl, rust)
+            self.assertEqual(seen, ["10-12", "20-22"], "each distinct row of the reference's tuple, once")
+            self.assertEqual((adjusted["excluded_categories"]["fabricated_row_shape"], len(open_rows)), expected, refused)
+
+    def test_a_row_of_fewer_than_nine_columns_is_put_to_no_row_aware_rule(self) -> None:
+        seen: list[tuple] = []
+        short = "1993671\t19:13208046-13208050\t-\tENSG1\tENST00000635895\tTranscript\t{}\t?-7057\n"
+        cols = "\t".join(ROW_COLS.split("\t")[:8]) + "\n"
+        with row_pair_rules(fabricated_row_rule(lambda e, a: seen.append((e, a)) or True)), \
+                mock.patch(f"{__name__}.ROW_COLS", cols):
+            adjusted, open_rows = compare_row_outputs(self, short.format("stop_retained_variant"), short.format("stop_lost"))
+        self.assertEqual(seen, [])
+        self.assertEqual((adjusted["excluded_categories"]["fabricated_row_shape"], len(open_rows)), ({"count": 0, "excluded": 0}, 2))
+
+    def test_without_a_row_aware_rule_no_output_is_read_again_and_the_report_is_the_registry_s(self) -> None:
+        perl = stop_codon_row("-", "stop_retained_variant", "?-7057", "-")
+        rust = stop_codon_row("-", "stop_lost", "?-7057", "-")
+        with row_pair_rules(), mock.patch("compare_vep_outputs.fetch_pair_rows", side_effect=AssertionError("read")):
+            adjusted, open_rows = compare_row_outputs(self, perl, rust)
+        self.assertEqual(len(open_rows), 2)
+        chain = [r.bucket for r in CLASSIFICATION_CHAIN] + [r.bucket for r in cvo.REFERENCE_116_2_ONE_SIDED_RULES]
+        self.assertEqual(list(adjusted["excluded_categories"]), chain)
+        self.assertEqual(adjusted["divergence_classes"], json.loads(json.dumps(cvo.divergence_class_definitions("116.2"))))
+
+    def test_the_115_2_registry_asks_no_row_aware_rule(self) -> None:
+        seen: list[tuple] = []
+        self.assertEqual(cvo.REFERENCE_REGISTRIES["115.2"].row_pair_rules, ())
+        perl = stop_codon_row("-", "stop_retained_variant", "?-7057", "-")
+        rust = stop_codon_row("-", "stop_lost", "?-7057", "-")
+        with row_pair_rules(fabricated_row_rule(lambda e, a: seen.append((e, a)) or True)):
+            adjusted, open_rows = compare_row_outputs(self, perl, rust, "--reference-release", "115.2")
+        self.assertEqual((seen, len(open_rows)), ([], 2))
+        self.assertNotIn("fabricated_row_shape", adjusted["excluded_categories"])
+
+    def test_a_row_aware_rule_matches_nothing_without_the_rows(self) -> None:
+        rule = fabricated_row_rule(lambda e, a: True)
+        self.assertFalse(rule.matches("stop_retained_variant", "stop_lost", "-"))
+        self.assertFalse(rule.matches("stop_retained_variant", "stop_lost", "-", ([], [])))
+        row = cvo.pair_row(stop_codon_row("-", "stop_lost", "?-7057", "-").rstrip("\n").split("\t")[:9])
+        self.assertTrue(rule.matches("stop_retained_variant", "stop_lost", "-", ([row], [row])))
+        self.assertEqual(cvo.report_class_definitions("115.2"), cvo.divergence_class_definitions("115.2"))
+        registry = cvo.REFERENCE_REGISTRIES["116.2"]
+        self.assertEqual(
+            list(cvo.report_class_definitions("116.2")),
+            [r.bucket for r in (*registry.pair_rules, *registry.row_pair_rules, *registry.one_sided_rules)],
+        )
+
+    def test_the_fetch_reads_the_two_outputs_alone_and_only_for_the_pairs_it_is_given(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        rows = []
+        for sub, source, term in (("perl", "missing_in_rust", "stop_retained_variant"), ("rust", "extra_in_rust", "stop_lost")):
+            (tmp / sub).mkdir()
+            (tmp / sub / "output.txt").write_text(
+                ROW_COLS + stop_codon_row("-", term, "?-7057", "-", location="19:013208046-+13208050"), encoding="utf-8")
+            rows.append({"file_name": "output.txt", "source": source, "location": "19:13208046-13208050", "allele": "-",
+                         "feature": "ENST00000635895", "feature_type": "Transcript", "consequence_set": term})
+        self.assertEqual(cvo.fetch_pair_rows(rows, [], tmp / "absent", tmp / "absent"), {})
+        fetched = cvo.fetch_pair_rows(rows, [(0, 1)], tmp / "perl", tmp / "rust")
+        self.assertEqual(sorted(fetched), [0, 1])
+        self.assertEqual([r.location for r in fetched[0]], ["19:013208046-+13208050"], "the Location as the row writes it")
+        self.assertEqual(fetched[1][0].consequence, "stop_lost")
+
+
+class RowPairRuleChecks:
+    """The four checks of one row-aware pair rule of the 116.2 registry, on the fabricated
+    rows the format comparator's test of the same class builds: the rule's pair is set
+    aside; the pair with one further differing term, and the pair with a position column
+    outside the rule's condition, stay differences; and beside the pair a tuple vep-rs lacks
+    and a tuple of other terms stay differences."""
+
+    bucket: str
+    reference: str
+    candidate: str
+    further_term: str
+    other_column: tuple[str, str]
+
+    MATCHED = stop_codon_row("-", "missense_variant", "10-12", "4-6", location="21:5000-5002", feature="ENST00000000001")
+
+    def scored(self, perl: str, rust: str) -> tuple[dict, float, list[str]]:
+        adjusted, open_rows = compare_row_outputs(self, self.MATCHED + perl, self.MATCHED + rust)
+        return adjusted["excluded_categories"][self.bucket], adjusted["f1"], open_rows
+
+    def test_the_pair_of_rows_is_set_aside(self) -> None:
+        self.assertEqual(self.scored(self.reference, self.candidate), ({"count": 1, "excluded": 1}, 1.0, []))
+
+    def test_one_further_differing_term_stays_a_difference(self) -> None:
+        stats, f1, open_rows = self.scored(self.reference, self.further_term)
+        self.assertEqual((stats, len(open_rows)), ({"count": 0, "excluded": 0}, 2))
+        self.assertLess(f1, 1.0)
+
+    def test_a_column_outside_the_condition_stays_a_difference(self) -> None:
+        stats, f1, open_rows = self.scored(*self.other_column)
+        self.assertEqual((stats, len(open_rows)), ({"count": 0, "excluded": 0}, 2))
+        self.assertLess(f1, 1.0)
+
+    def test_a_missing_tuple_and_a_wrong_tuple_stay_differences(self) -> None:
+        missing = stop_codon_row("-", "intron_variant", "-", "-", location="21:5000-5002", feature="ENST00000000002")
+        wrong = "21:7000-7002"
+        stats, f1, open_rows = self.scored(
+            self.reference + missing + stop_codon_row("-", "missense_variant", "30-32", "24-26", location=wrong),
+            self.candidate + stop_codon_row("-", "synonymous_variant", "30-32", "24-26", location=wrong),
+        )
+        self.assertEqual(stats, {"count": 1, "excluded": 1})
+        self.assertEqual(sorted(row.split("\t")[2] for row in open_rows), ["21:5000-5002", wrong, wrong])
+        self.assertLess(f1, 1.0)
+
+
+class StopCodonOverlapGenomicSpanRuleTests(RowPairRuleChecks, unittest.TestCase):
+    """`stop_codon_overlap_genomic_span`: the reference's coding_sequence_variant against
+    vep-rs's stop_retained_variant beside splice_region_variant, on a row whose stop codon
+    test is made."""
+
+    bucket = "stop_codon_overlap_genomic_span"
+    terms = "splice_region_variant,{},NMD_transcript_variant"
+    reference = stop_codon_row("-", terms.format("coding_sequence_variant"), "1705", "1630", "3:36993663")
+    candidate = stop_codon_row("-", terms.format("stop_retained_variant"), "1705", "1630", "3:36993663")
+    further_term = stop_codon_row("-", terms.format("stop_retained_variant,stop_lost"), "1705", "1630", "3:36993663")
+    other_column = (
+        stop_codon_row("-", terms.format("coding_sequence_variant"), "1705-?", "1630-?", "3:36993663"),
+        stop_codon_row("-", terms.format("stop_retained_variant"), "1705-?", "1630-?", "3:36993663"),
+    )
+
+
+class StopRetainedWithoutStopCodonTestRuleTests(RowPairRuleChecks, unittest.TestCase):
+    """`stop_retained_without_stop_codon_test`: the reference's stop_retained_variant against
+    nothing, coding_sequence_variant or frameshift_variant, on rows whose stop codon test is
+    not made."""
+
+    bucket = "stop_retained_without_stop_codon_test"
+    terms = "splice_acceptor_variant,{}"
+    reference = stop_codon_row("-", terms.format("stop_retained_variant"), "?-7057", "-")
+    candidate = stop_codon_row("-", terms.format("coding_sequence_variant"), "?-7057", "-")
+    further_term = stop_codon_row("-", terms.format("coding_sequence_variant,frameshift_variant"), "?-7057", "-")
+    other_column = (reference, stop_codon_row("-", terms.format("coding_sequence_variant"), "7055-7059", "6978-6982"))
+
+
+class StopRetainedThreeBaseStopCodonTestRuleTests(RowPairRuleChecks, unittest.TestCase):
+    """`stop_retained_three_base_stop_codon_test`: the reference's stop_retained_variant
+    against coding_sequence_variant, or against frameshift_variant with or without
+    stop_gained, on rows whose stop codon test is made."""
+
+    bucket = "stop_retained_three_base_stop_codon_test"
+    terms = "{},3_prime_UTR_variant"
+    location = "2:190970701-190970707"
+    reference = stop_codon_row("-", terms.format("stop_retained_variant"), "2558-2564", "2249-?", location)
+    candidate = stop_codon_row("-", terms.format("coding_sequence_variant"), "2558-2564", "2249-?", location)
+    further_term = stop_codon_row("-", terms.format("coding_sequence_variant,frameshift_variant"), "2558-2564", "2249-?", location)
+    other_column = (reference, stop_codon_row("-", terms.format("coding_sequence_variant"), "2558-?", "2249-?", location))
+
+
+class StopCodonRemovedWithoutStopCodonTestRuleTests(RowPairRuleChecks, unittest.TestCase):
+    """`stop_codon_removed_without_stop_codon_test`: the reference's stop_retained_variant
+    against vep-rs's stop_lost, on rows without a cDNA position at one end or a CDS start."""
+
+    bucket = "stop_codon_removed_without_stop_codon_test"
+    terms = "splice_acceptor_variant,{}"
+    reference = stop_codon_row("-", terms.format("stop_retained_variant"), "?-7057", "-")
+    candidate = stop_codon_row("-", terms.format("stop_lost"), "?-7057", "-")
+    further_term = stop_codon_row("-", terms.format("stop_lost,frameshift_variant"), "?-7057", "-")
+    other_column = (
+        stop_codon_row("-", terms.format("stop_retained_variant"), "7055-7059", "6978-6982"),
+        stop_codon_row("-", terms.format("stop_lost"), "7055-7059", "6978-6982"),
+    )
+
+
+class StopCodonOverlapInsertionRangeRuleTests(RowPairRuleChecks, unittest.TestCase):
+    """`stop_codon_overlap_insertion_range`: the reference's coding_sequence_variant, or its
+    frameshift_variant with or without stop_gained, against vep-rs's stop_retained_variant on
+    an insertion's row with both cDNA positions and a CDS start."""
+
+    bucket = "stop_codon_overlap_insertion_range"
+    location = "19:13208046-13208047"
+    reference = stop_codon_row("TTGA", "inframe_insertion,coding_sequence_variant", "7054-7055", "6977-6978", location)
+    candidate = stop_codon_row("TTGA", "inframe_insertion,stop_retained_variant", "7054-7055", "6977-6978", location)
+    further_term = stop_codon_row("TTGA", "inframe_insertion,stop_retained_variant,stop_lost", "7054-7055", "6977-6978", location)
+    other_column = (
+        stop_codon_row("TTGA", "inframe_insertion,coding_sequence_variant", "7054-?", "6977-?", location),
+        stop_codon_row("TTGA", "inframe_insertion,stop_retained_variant", "7054-?", "6977-?", location),
+    )
+
+
+class SpliceTermPastTheRecordSpanRuleTests(RowPairRuleChecks, unittest.TestCase):
+    """`splice_term_past_the_record_span`: the reference's splice_donor_variant and
+    intron_variant against vep-rs's splice_region_variant, on a row under an identifier, which
+    carries no record: its three positions lie in the transcript's sequence under an allele of
+    five."""
+
+    bucket = "splice_term_past_the_record_span"
+    location = "7:100998-101000"
+    reference = stop_codon_row("GTTCA", "splice_donor_variant,frameshift_variant,intron_variant", "998-1000", "898-900", location)
+    candidate = stop_codon_row("GTTCA", "frameshift_variant,splice_region_variant", "998-1000", "898-900", location)
+    further_term = stop_codon_row("GTTCA", "stop_gained,frameshift_variant,splice_region_variant", "998-1000", "898-900", location)
+    other_column = (
+        stop_codon_row("GTTCA", "splice_donor_variant,frameshift_variant,intron_variant", "999-?", "899-?", location),
+        stop_codon_row("GTTCA", "frameshift_variant,splice_region_variant", "999-?", "899-?", location),
+    )
+
+
+def stop_codon_pair_row(row: str) -> cvo.PairRow:
+    """The row a row-aware pair rule reads of one fabricated row of the default format."""
+    return cvo.pair_row(row.rstrip("\n").split("\t")[:9])
+
+
+class InsertionRangeRuleRowTests(unittest.TestCase):
+    """`stop_codon_overlap_insertion_range` takes an insertion between two neighbouring
+    positions and no wider row: a Location of two neighbouring positions on every row; where
+    the first column spells the record's alleles, a reference allele that is empty once the
+    shared first base is dropped; under an identifier, an allele of another length than two.
+    Under an identifier two bases replaced by a sequence of another length have an
+    insertion's Location and allele, and are set aside with the insertions."""
+
+    TWO = "19:13208046-13208047"
+    # (first column, Location, allele, the shape)
+    WIDER = (
+        ("19_13208046_AC/GTT", TWO, "GTT", "two bases replaced by three"),
+        ("19_13208046_AC/AGT", TWO, "AGT", "two bases replaced by three, the first base shared"),
+        ("19_13208046_AC/A/T", TWO, "A", "a deletion written as a sequence"),
+        ("19_13208046_A/AC/T", "19:13208046", "AC", "an insertion kept with its shared first base"),
+        ("19_13208046_-/TGA", "19:13208046", "TGA", "an insertion's alleles at one position"),
+        ("19_13208046_AC/A/T", TWO, "GTT", "an allele no alternate names beside a reference allele of two"),
+        ("1993671", TWO, "CG", "a two-base allele under an identifier"),
+    )
+    INSERTED = (
+        ("19_13208046_-/TGA", TWO, "TGA", "an insertion, the reference allele empty"),
+        ("19_13208046_A/ATGA", TWO, "TGA", "an insertion spelt with its shared first base"),
+        ("19_13208046_-/CG/T", TWO, "CG", "an insertion of two bases, the alleles spelt"),
+        ("19_13208046_-/CG/T", TWO, "TGA", "an allele no alternate names beside an empty reference allele"),
+        ("1993671", TWO, "TGA", "an insertion under an identifier"),
+        ("1993671", TWO, "G", "under an identifier, two bases replaced by one"),
+        ("1993671", TWO, "CGT", "under an identifier, two bases replaced by three"),
+    )
+
+    @staticmethod
+    def rows(name: str, location: str, allele: str) -> tuple[str, str]:
+        return tuple(  # type: ignore[return-value]
+            stop_codon_row(allele, terms, "7054-7055", "6977-6978", location, name=name)
+            for terms in ("coding_sequence_variant", "stop_retained_variant")
+        )
+
+    def taken(self, name: str, location: str, allele: str) -> bool:
+        reference, candidate = self.rows(name, location, allele)
+        return cvo.stop_codon_overlap_insertion_range_pair(stop_codon_pair_row(reference), stop_codon_pair_row(candidate))
+
+    def test_an_insertion_between_two_positions_is_taken_and_a_wider_row_stays_a_difference(self) -> None:
+        self.assertEqual([shape for *row, shape in self.INSERTED if not self.taken(*row)], [])
+        self.assertEqual([shape for *row, shape in self.WIDER if self.taken(*row)], [])
+
+    def test_the_comparison_sets_the_insertions_aside_and_leaves_the_wider_rows_open(self) -> None:
+        perl = rust = ""
+        for i, (name, location, allele, _) in enumerate((*self.WIDER, *self.INSERTED)):
+            chromosome, _, span = location.partition(":")
+            start, _, end = span.partition("-")
+            moved = f"{chromosome}:{int(start) + 100 * i}" + (f"-{int(end) + 100 * i}" if end else "")
+            reference, candidate = self.rows(name, moved, allele)
+            perl, rust = perl + reference, rust + candidate
+        adjusted, open_rows = compare_row_outputs(self, perl, rust)
+        self.assertEqual(adjusted["excluded_categories"]["stop_codon_overlap_insertion_range"],
+                         {"count": len(self.INSERTED), "excluded": len(self.INSERTED)})
+        self.assertEqual(len(open_rows), 2 * len(self.WIDER))
+
+    def test_the_row_carries_whether_its_alleles_make_an_insertion(self) -> None:
+        self.assertIn("insertion", [f.name for f in dataclasses.fields(cvo.PairRow)])
+        for (name, location, allele, shape), insertion in zip(
+            (*self.WIDER, *self.INSERTED),
+            (False, False, False, False, True, False, None, True, True, True, True, None, None, None),
+        ):
+            self.assertIs(stop_codon_pair_row(self.rows(name, location, allele)[0]).insertion, insertion, shape)
+        self.assertIs(cvo.reference_allele_is_empty("A", ["AT", "*"]), True)
+        self.assertIs(cvo.reference_allele_is_empty("A", ["AT", "AG"]), True)
+        self.assertIs(cvo.reference_allele_is_empty("TCT", ["TCTC"]), False, "a base stays past the shared first one")
+        self.assertIs(cvo.reference_allele_is_empty("-", ["T"], chopped=True), True)
+        self.assertIs(cvo.reference_allele_is_empty("A", ["AT"], chopped=True), False)
+        self.assertIs(cvo.reference_allele_is_empty("GACCTG", ["G"]), False)
+        self.assertIs(cvo.reference_allele_is_empty("A", ["T", "G"]), False)
+
+
+class ThreeBaseRuleSubsetTests(unittest.TestCase):
+    """`stop_retained_three_base_stop_codon_test` takes the reference's stop_retained_variant
+    alone, or beside one of inframe_insertion, inframe_deletion and protein_altering_variant,
+    against frameshift_variant with or without stop_gained. Two or three of them stay a
+    difference."""
+
+    SEVERAL = (
+        "inframe_insertion,inframe_deletion",
+        "inframe_insertion,protein_altering_variant",
+        "inframe_deletion,protein_altering_variant",
+        "inframe_insertion,inframe_deletion,protein_altering_variant",
+    )
+    CANDIDATES = ("frameshift_variant", "stop_gained,frameshift_variant")
+
+    @staticmethod
+    def row(terms: str, location: str = "2:190970701-190970707") -> str:
+        return stop_codon_row("-", terms, "961-967", "264-270", location)
+
+    def taken(self, reference: str, candidate: str) -> bool:
+        return cvo.stop_retained_three_base_stop_codon_test_pair(
+            stop_codon_pair_row(self.row(reference)), stop_codon_pair_row(self.row(candidate)))
+
+    def test_the_retained_term_is_taken_alone_or_beside_one_read_away_term_and_no_more(self) -> None:
+        for candidate in self.CANDIDATES:
+            self.assertTrue(self.taken("stop_retained_variant", candidate), candidate)
+            for one in sorted(cvo.FRAMESHIFT_READ_TERMS):
+                self.assertTrue(self.taken(f"{one},stop_retained_variant", candidate), (one, candidate))
+        taken = [(several, candidate) for several in self.SEVERAL for candidate in self.CANDIDATES
+                 if self.taken(f"{several},stop_retained_variant", candidate)]
+        self.assertEqual(taken, [])
+
+    def test_the_comparison_sets_none_or_one_aside_and_leaves_several_open(self) -> None:
+        references = ["stop_retained_variant", *(f"{one},stop_retained_variant" for one in sorted(cvo.FRAMESHIFT_READ_TERMS)),
+                      *(f"{several},stop_retained_variant" for several in self.SEVERAL)]
+        perl = "".join(self.row(terms, f"2:{1000 * (i + 1)}-{1000 * (i + 1) + 6}") for i, terms in enumerate(references))
+        rust = "".join(self.row("frameshift_variant", f"2:{1000 * (i + 1)}-{1000 * (i + 1) + 6}") for i in range(len(references)))
+        adjusted, open_rows = compare_row_outputs(self, perl, rust)
+        self.assertEqual(adjusted["excluded_categories"]["stop_retained_three_base_stop_codon_test"], {"count": 4, "excluded": 4})
+        self.assertEqual(len(open_rows), 2 * len(self.SEVERAL))
+
+    def test_the_definitions_name_the_term_alone_or_beside_one_and_the_row_under_an_identifier(self) -> None:
+        definition = cvo.PAIR_RULE_DEFINITIONS["stop_retained_three_base_stop_codon_test"]
+        self.assertIn(
+            "where the reference writes it alone or beside one of inframe_insertion, inframe_deletion and "
+            "protein_altering_variant, frameshift_variant with or without stop_gained in the place of those terms.",
+            definition,
+        )
+        self.assertIn(
+            "Under an identifier a row is read as an insertion's by a Location of two neighbouring positions and an "
+            "Allele of another length than two",
+            cvo.PAIR_RULE_DEFINITIONS["stop_codon_overlap_insertion_range"],
+        )
+
+
+def row_pair_predicate(test: unittest.TestCase, bucket: str) -> Callable[..., bool]:
+    """The predicate of the row-aware pair rule the 116.2 registry holds under ``bucket``."""
+    predicates = {rule.bucket: rule.predicate for rule in cvo.REFERENCE_REGISTRIES["116.2"].row_pair_rules}
+    test.assertIn(bucket, predicates)
+    return predicates[bucket]
+
+
+def splice_term_rows(reference: str, candidate: str, *, allele: str = "GTTCA", location: str = "7:100998-101000",
+                     cdna: str = "998-1000", cds: str = "898-900", candidate_cdna: str | None = None,
+                     candidate_cds: str | None = None, **columns: str) -> tuple[str, str]:
+    """The reference's and vep-rs's fabricated row of one key: the two sets of terms on three
+    positions that lie in the transcript's sequence under an allele of five, unless an
+    argument says otherwise. ``columns`` are `stop_codon_row`'s."""
+    return (
+        stop_codon_row(allele, reference, cdna, cds, location, **columns),
+        stop_codon_row(allele, candidate, candidate_cdna or cdna, candidate_cds or cds, location, **columns),
+    )
+
+
+# What differs from `splice_term_rows`'s row on two neighbouring positions of one exon, and on
+# the first three positions of an exon.
+TWO_NEIGHBOURS = {"location": "7:100999-101000", "cdna": "999-1000", "cds": "899-900"}
+EXON_START = {"cdna": "901-903", "cds": "801-803"}
+
+
+class SpliceTermPastTheRecordSpanRowTests(unittest.TestCase):
+    """Without its record, `splice_term_past_the_record_span` takes a Transcript row whose
+    Location holds three or more positions under an allele of more nucleotide letters, both
+    rows carrying the same cDNA and CDS positions and two cDNA positions as far apart as the
+    Location's ends, where every term of the six the reference holds (the five intron-window
+    splice terms and intron_variant) is gone from vep-rs's set and none of the six is in it,
+    with nothing in their place or splice_region_variant where a donor, acceptor, donor
+    region or fifth base term is gone. Every other row stays a difference, a Location of two
+    neighbouring positions included. Every row stands under an identifier, so none carries
+    its record's alleles."""
+
+    BUCKET = "splice_term_past_the_record_span"
+    DONOR = "splice_donor_variant,frameshift_variant"
+    FIFTH = "splice_donor_variant,frameshift_variant,splice_donor_5th_base_variant"
+    TRACT = "frameshift_variant,splice_polypyrimidine_tract_variant"
+    INTRON = "frameshift_variant,intron_variant"
+    BACK = "frameshift_variant,splice_region_variant"
+    NOTHING = "frameshift_variant"
+    # (the shape, the reference's terms, vep-rs's terms, what differs from `splice_term_rows`'s row)
+    TAKEN = (
+        ("the donor term gone and the region term back", DONOR, BACK, {}),
+        ("the donor term gone and nothing back", DONOR, NOTHING, {}),
+        ("the donor and the donor region term gone", DONOR + ",splice_donor_region_variant", BACK, {}),
+        ("the donor and the fifth base term gone", FIFTH, NOTHING, {"allele": "GTTCAGGAT"}),
+        ("the acceptor term gone at an exon's first positions", "splice_acceptor_variant,frameshift_variant", BACK, EXON_START),
+        ("the acceptor and the tract term gone", "splice_acceptor_variant," + TRACT, BACK, EXON_START),
+        ("the tract term alone gone and nothing back", TRACT, NOTHING, EXON_START),
+        ("the intron term gone with the donor and the donor region term", DONOR + ",splice_donor_region_variant,intron_variant", BACK, {}),
+        ("the intron term gone with the donor and the fifth base term", FIFTH + ",intron_variant", NOTHING, {"allele": "GTTCAGGAT"}),
+        ("the intron term gone with the acceptor term", "splice_acceptor_variant," + INTRON, BACK, EXON_START),
+        ("the intron term alone gone and nothing back", INTRON, NOTHING, {}),
+        ("four positions under an allele of five", DONOR, BACK, {"location": "7:100997-101000", "cdna": "997-1000", "cds": "897-900"}),
+        ("positions with the transcript's lengths appended", DONOR, BACK, {"cdna": "998-1000/2400", "cds": "898-900/1800"}),
+    )
+    REFUSED = (
+        ("a span across an exon's end", DONOR, BACK, {"cdna": "999-?", "cds": "899-?"}),
+        ("an intron span", "splice_donor_variant,intron_variant", "intron_variant", {"cdna": "-", "cds": "-"}),
+        ("an allele as long as the span", DONOR, NOTHING, {"allele": "GTT"}),
+        ("an allele shorter than the span", DONOR, NOTHING, {"allele": "GT"}),
+        ("a Location of one position", DONOR, NOTHING, {"location": "7:101000", "cdna": "1000", "cds": "900", "allele": "GTT"}),
+        ("a deletion", DONOR, NOTHING, {"allele": "-"}),
+        ("an insertion between two neighbouring positions", DONOR, NOTHING, {**TWO_NEIGHBOURS, "allele": "GTT"}),
+        ("two replaced bases", DONOR, BACK, TWO_NEIGHBOURS),
+        ("one of the five splice terms kept", FIFTH, "frameshift_variant,splice_donor_5th_base_variant", {}),
+        ("the intron term kept where the donor term is gone", DONOR + ",intron_variant", BACK + ",intron_variant", {}),
+        ("the intron term kept and nothing back", DONOR + ",intron_variant", INTRON, {}),
+        ("the donor region term come", FIFTH, "frameshift_variant,splice_donor_region_variant", {}),
+        ("the region term come where the tract term alone is gone", TRACT, BACK, EXON_START),
+        ("the region term come where the intron term alone is gone", INTRON, BACK, {}),
+        ("other cDNA positions on vep-rs's row", DONOR, BACK, {"candidate_cdna": "498-500"}),
+        ("other CDS positions on vep-rs's row", DONOR, BACK, {"candidate_cds": "398-400"}),
+        ("cDNA positions further apart than the Location's ends", DONOR, BACK, {"cdna": "997-1000", "cds": "897-900"}),
+        ("the terms the other way round", BACK, DONOR, {}),
+        ("a further term gone", DONOR, "splice_region_variant", {}),
+        ("a further term come", DONOR, "stop_gained," + BACK, {}),
+        ("a row of another feature type", DONOR, BACK, {"feature_type": "RegulatoryFeature"}),
+    )
+
+    def taken(self, reference: str, candidate: str, changed: dict[str, str]) -> bool:
+        e, a = (stop_codon_pair_row(row) for row in splice_term_rows(reference, candidate, **changed))
+        return row_pair_predicate(self, self.BUCKET)(e, a)
+
+    def test_a_longer_allele_over_three_positions_of_the_transcript_is_taken_and_no_other_row(self) -> None:
+        self.assertEqual([shape for shape, *row in self.TAKEN if not self.taken(*row)], [])
+        self.assertEqual([shape for shape, *row in self.REFUSED if self.taken(*row)], [])
+
+    def test_the_comparison_sets_the_taken_rows_aside_and_leaves_the_others_open(self) -> None:
+        perl = rust = ""
+        for i, (_, reference, candidate, changed) in enumerate((*self.TAKEN, *self.REFUSED)):
+            e, a = splice_term_rows(reference, candidate, feature=f"ENST{i:011d}", **changed)
+            perl, rust = perl + e, rust + a
+        adjusted, open_rows = compare_row_outputs(self, perl, rust)
+        self.assertEqual(adjusted["excluded_categories"][self.BUCKET], {"count": len(self.TAKEN), "excluded": len(self.TAKEN)})
+        self.assertEqual(sorted(row.split("\t")[4] for row in open_rows),
+                         sorted(2 * [f"ENST{i:011d}" for i in range(len(self.TAKEN), len(self.TAKEN) + len(self.REFUSED))]))
+
+
+class RecordAlleleReferenceTests(unittest.TestCase):
+    """`replaced_reference` reads, by position from a record's own alleles, the reference bases
+    an output row's allele stands in for; `uploaded_position` reads the record's POS from a
+    first column that spells the alleles; and `pair_row` carries the bases of such a row.
+    Every record is fabricated."""
+
+    # (the shape, POS, REF, the alternates, Location, Allele, the reference bases)
+    READ = (
+        ("three bases replaced by five", 100998, "ACG", ("GTTCA",), "7:100998-101000", "GTTCA", "ACG"),
+        ("three bases replaced by five behind a shared first base", 100997, "TACG", ("TGTTCA",), "7:100998-101000", "GTTCA", "ACG"),
+        ("one base replaced by one", 101000, "A", ("G",), "7:101000", "G", "A"),
+        ("the second of two alternates", 100998, "ACG", ("TTT", "GTTCA"), "7:100998-101000", "GTTCA", "ACG"),
+        ("a pure insertion", 100999, "A", ("AGTT",), "7:100999-101000", "GTT", ""),
+        ("a pure insertion behind two shared bases", 100998, "AC", ("ACGTT",), "7:100999-101000", "GTT", ""),
+        ("a deletion", 100997, "TACG", ("T",), "7:100998-101000", "-", "ACG"),
+        ("lower-case alleles", 100998, "acg", ("gttca",), "7:100998-101000", "GTTCA", "ACG"),
+    )
+    # (the shape, POS, REF, the alternates, Location, Allele)
+    NOT_READ = (
+        ("an alternate that writes no such row", 100998, "ACG", ("GTTCAT",), "7:100998-101000", "GTTCA"),
+        ("a Location past the record's bases", 100998, "ACG", ("GTTCA",), "7:100999-101001", "GTTCA"),
+        ("two alternates that read the row differently", 100999, "AC", ("GTT", "AGTTC"), "7:100999-101000", "GTT"),
+        ("an allele that is not a sequence", 100998, "ACG", ("<DEL>",), "7:100998-101000", "deletion"),
+        ("a Location that names no whole positions", 100998, "ACG", ("GTTCA",), "7:100998-101000.5", "GTTCA"),
+        ("a row without a Location", 100998, "ACG", ("GTTCA",), None, "GTTCA"),
+    )
+
+    def test_the_bases_an_allele_stands_in_for_are_read_by_position_from_the_record_s_alleles(self) -> None:
+        read = {shape: cvo.replaced_reference(*record) for shape, *record, _ in self.READ}
+        self.assertEqual(read, {shape: bases for shape, *_, bases in self.READ})
+        self.assertEqual([shape for shape, *record in self.NOT_READ if cvo.replaced_reference(*record) is not None], [])
+
+    def test_a_first_column_that_spells_the_alleles_spells_the_record_s_position_before_them(self) -> None:
+        self.assertEqual(cvo.uploaded_position("7_100998_ACG/GTTCA"), 100998)
+        self.assertEqual(cvo.uploaded_position("7_100997_tacg/t/-"), 100997)
+        self.assertEqual(cvo.uploaded_position("chrUn_made_up_100998_A/T"), 100998)
+        for identifier in ("1993671", "rs1993671", "7_100998", "made_up_7"):
+            self.assertIsNone(cvo.uploaded_position(identifier), identifier)
+
+    def test_a_row_carries_the_bases_its_first_column_spells_and_none_under_an_identifier(self) -> None:
+        self.assertIn("reference", [f.name for f in dataclasses.fields(cvo.PairRow)])
+
+        def row(name: str, location: str, allele: str) -> cvo.PairRow:
+            return stop_codon_pair_row(stop_codon_row(allele, "frameshift_variant", "998-1000", "898-900", location, name=name))
+
+        for shape, position, reference, alternates, location, allele, bases in self.READ:
+            spelt = f"7_{position}_{reference}/{'/'.join(alternates)}"
+            self.assertEqual(row(spelt, location, allele).reference, bases, shape)
+            self.assertIsNone(row("1993671", location, allele).reference, shape)
+        self.assertIsNone(row("7_100998_ACG/GTTCAT", "7:100998-101000", "GTTCA").reference, "an alternate that writes no such row")
+
+
+class RecordReferencesFromTheInputTests(unittest.TestCase):
+    """`read_record_references` gives each row that carries no reference bases the bases its
+    allele stands in for, read by position from the records of the input VCF, plain or
+    gzipped. Every record is fabricated."""
+
+    HEADER = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+    # (CHROM, POS, REF, ALT)
+    RECORDS = (
+        ("7", 100998, "ACG", "GTTCA"),
+        ("chr7", 200997, "TACG", "TGTTCA"),
+        ("7", 300999, "A", "AGTT"),
+        ("7", 400997, "TACG", "T"),
+        ("7", 500999, "AC", "GTT"),
+        ("7", 500999, "A", "AGTT"),
+        ("7", 700998, "ACG", "TTT,GTTCA"),
+    )
+    # (the shape, Location, Allele, the reference bases the records give)
+    ROWS = (
+        ("a replacement", "7:100998-101000", "GTTCA", "ACG"),
+        ("a replacement behind a shared first base, the record's chromosome under a prefix", "7:200998-201000", "GTTCA", "ACG"),
+        ("an insertion, the row's chromosome under a prefix", "chr7:300999-301000", "GTT", ""),
+        ("a deletion", "7:400998-401000", "-", "ACG"),
+        ("the second alternate of a record", "7:700998-701000", "GTTCA", "ACG"),
+        ("a row two records read differently", "7:500999-501000", "GTT", None),
+        ("a row whose record lies elsewhere", "7:600998-601000", "GTTCA", None),
+        ("a row at a record's place that the record does not write", "7:100998-101000", "GTTC", None),
+        ("a row of another chromosome than its record's", "8:100998-101000", "GTTCA", None),
+    )
+
+    def rows(self) -> list[cvo.PairRow]:
+        return [stop_codon_pair_row(stop_codon_row(allele, "frameshift_variant", "998-1000", "898-900", location))
+                for _, location, allele, _ in self.ROWS]
+
+    def written(self, name: str) -> Path:
+        """The records as an input VCF of the given name, gzipped under a ``.gz`` suffix."""
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        opener = gzip.open if name.endswith(".gz") else open
+        with opener(tmp / name, "wt", encoding="utf-8") as handle:
+            handle.write(self.HEADER)
+            for i, (chrom, position, reference, alternates) in enumerate(self.RECORDS):
+                handle.write(f"{chrom}\t{position}\tmade_up_{i}\t{reference}\t{alternates}\t.\t.\t.\n")
+        return tmp / name
+
+    def test_rows_under_an_identifier_take_their_record_s_bases_from_a_plain_and_a_gzipped_vcf(self) -> None:
+        for name in ("input.vcf", "input.vcf.gz"):
+            rows = self.rows()
+            self.assertEqual([row.reference for row in rows], [None] * len(self.ROWS), name)
+            cvo.read_record_references(self.written(name), rows)
+            self.assertEqual({shape: row.reference for (shape, *_), row in zip(self.ROWS, rows)},
+                             {shape: bases for shape, *_, bases in self.ROWS}, name)
+
+    def test_a_row_that_carries_its_bases_keeps_them_and_the_file_is_not_opened_when_no_row_asks(self) -> None:
+        records = self.written("input.vcf")
+        absent = records.parent / "absent.vcf"
+        spelt = stop_codon_pair_row(stop_codon_row("GTT", "frameshift_variant", "999-1000", "899-900", "7:500999-501000",
+                                                   name="7_500999_AC/GTT"))
+        self.assertEqual(spelt.reference, "AC")
+        for path in (absent, records):
+            cvo.read_record_references(path, [spelt])
+            self.assertEqual(spelt.reference, "AC", path.name)
+        cvo.read_record_references(absent, [])
+        with self.assertRaises(FileNotFoundError):
+            cvo.read_record_references(absent, self.rows())
+
+
+class SpliceTermRecordRegionTests(unittest.TestCase):
+    """The three readings `splice_term_past_the_record_span` makes of a record: the regions in
+    which its two alleles differ (`differing_regions`), the terms those regions and the span
+    give beside one intron (`intron_rows`), and the places of that intron a row's cDNA
+    positions allow (`intron_placements`). Every offset counts from the span's first base."""
+
+    DONOR, ACCEPTOR, FIFTH = "splice_donor_variant", "splice_acceptor_variant", "splice_donor_5th_base_variant"
+    DONOR_REGION, TRACT = "splice_donor_region_variant", "splice_polypyrimidine_tract_variant"
+    REGION, INTRON = "splice_region_variant", "intron_variant"
+    # (the shape, the reference bases, the allele, the regions)
+    DIFFERING = (
+        ("every index differs and the longer allele runs on", "ACG", "GTTCA", [(0, 4)]),
+        ("two indices alike before the longer allele runs on", "ACGT", "ACTTAG", [(2, 2), (4, 5)]),
+        ("three runs of indices", "ACGTAC", "ATGTCCGG", [(1, 1), (4, 4), (6, 7)]),
+        ("a shorter allele", "ACGT", "AT", [(1, 3)]),
+        ("one reference base", "A", "GTT", [(0, 0)]),
+        ("an allele of one base", "ACG", "T", [(0, 2)]),
+        ("two alleles alike", "ACG", "ACG", [(0, 2)]),
+    )
+    # (the shape, the regions, the span's bases, the intron's first and last offset, whether the strand is the
+    # forward one, whether another intron of the transcript is a frameshift intron, the reference's terms, the
+    # candidate's terms)
+    INTRON_ROWS = (
+        ("an intron right after a span of three",
+         ((0, 5),), 3, (3, 102), True, False, (DONOR, DONOR_REGION, INTRON), (REGION,)),
+        ("the same intron on the reverse strand",
+         ((0, 5),), 3, (3, 102), False, False, (ACCEPTOR, INTRON), (REGION,)),
+        ("regions that end on the intron's second base, on the reverse strand",
+         ((0, 4),), 3, (3, 102), False, False, (ACCEPTOR,), (REGION,)),
+        ("an intron three bases after a span of two",
+         ((0, 5),), 2, (4, 103), True, False, (DONOR,), (REGION,)),
+        ("an intron four bases after a span of two",
+         ((0, 5),), 2, (5, 104), True, False, (), ()),
+        ("the donor region term withheld beside the fifth base term",
+         ((0, 7),), 2, (2, 101), True, False, (DONOR, FIFTH, INTRON), (REGION,)),
+        ("a span on an intron's third and fourth base",
+         ((0, 3),), 2, (-2, 97), True, False, (FIFTH, INTRON), (DONOR_REGION, INTRON)),
+        ("a span across an exon's end",
+         ((0, 6),), 2, (1, 100), True, False, (DONOR, FIFTH, INTRON), (DONOR, INTRON)),
+        ("a span of two before an intron's 5' end on the reverse strand",
+         ((0, 3),), 2, (-96, 3), False, False, (DONOR, DONOR_REGION, INTRON), (DONOR_REGION, INTRON)),
+        ("the tract off the exons",
+         ((0, 14),), 3, (-69, 30), True, False, (TRACT, INTRON), (INTRON,)),
+        ("the same span under the wide exons, twelve bases and more from each",
+         ((0, 14),), 3, (-69, 30), True, True, (TRACT, INTRON), (INTRON,)),
+        ("a span that ends four bases before an intron's end",
+         ((0, 6),), 3, (-93, 6), True, False, (ACCEPTOR, TRACT, INTRON), (REGION, TRACT, INTRON)),
+        ("the same span under the wide exons, which hold it",
+         ((0, 6),), 3, (-93, 6), True, True, (ACCEPTOR, INTRON), (REGION, INTRON)),
+        ("a short intron whose two ends the span reads",
+         ((0, 23),), 3, (-2, 21), True, False, (ACCEPTOR, FIFTH, TRACT, INTRON), (FIFTH, INTRON)),
+        ("a frameshift intron, whose regions set nothing",
+         ((0, 5),), 3, (3, 10), True, False, (), ()),
+        ("an intron of fourteen bases",
+         ((0, 5),), 3, (3, 16), True, False, (DONOR, DONOR_REGION, INTRON), (REGION,)),
+        ("a region before a frameshift intron and one on it",
+         ((0, 2), (5, 6)), 3, (5, 12), True, False, (REGION,), (REGION,)),
+        ("the same two regions beside a long intron",
+         ((0, 2), (5, 6)), 3, (5, 104), True, False, (DONOR,), (REGION,)),
+    )
+    # Cases of the shape of `INTRON_ROWS` on which splice_region_variant follows the order of the regions: the
+    # reference's row holds it where the last region read before one meets the intron's first two or last two
+    # bases lies in a window of the term, the candidate's where any region does.
+    REGION_TERM = (
+        ("two runs, the first in a window of the region term and the last in none",
+         ((5, 5), (8, 10)), 8, (-1, 98), True, False, (INTRON,), (REGION, INTRON)),
+        ("two runs, the last in a window of the region term and the first in none",
+         ((2, 2), (8, 10)), 8, (-85, 14), True, False, (REGION, TRACT, INTRON), (REGION, TRACT, INTRON)),
+        ("five runs in a twenty-base intron, the last in a window",
+         ((0, 0), (2, 2), (4, 4), (6, 6), (8, 10)), 8, (-6, 13), True, False, (REGION, TRACT, INTRON), (REGION, TRACT, INTRON)),
+        ("the same five runs before the tract of a longer intron, the last in no window",
+         ((0, 0), (2, 2), (4, 4), (6, 6), (8, 10)), 8, (-6, 24), True, False, (TRACT, INTRON), (REGION, INTRON)),
+        ("a run on the intron's first two bases between two runs in a window, the donor term withholding the region term",
+         ((0, 0), (2, 2), (6, 8)), 6, (2, 101), True, False, (DONOR, FIFTH, INTRON), (DONOR, DONOR_REGION, INTRON)),
+    )
+
+    def test_two_alleles_differ_in_runs_of_indices_and_one_base_gives_the_span(self) -> None:
+        regions = {shape: cvo.differing_regions(reference, allele) for shape, reference, allele, _ in self.DIFFERING}
+        self.assertEqual(regions, {shape: expected for shape, *_, expected in self.DIFFERING})
+
+    def test_the_regions_give_the_reference_s_terms_and_the_span_the_candidate_s_beside_one_intron(self) -> None:
+        rows = {shape: cvo.intron_rows(regions, span, *intron, forward, wide_exons)
+                for shape, regions, span, intron, forward, wide_exons, _, _ in self.INTRON_ROWS}
+        self.assertEqual(rows, {shape: (frozenset(expected), frozenset(actual)) for shape, *_, expected, actual in self.INTRON_ROWS})
+
+    def test_the_last_region_read_decides_the_reference_s_region_term_and_any_region_the_candidate_s(self) -> None:
+        rows = {shape: cvo.intron_rows(regions, span, *intron, forward, wide_exons)
+                for shape, regions, span, intron, forward, wide_exons, _, _ in self.REGION_TERM}
+        self.assertEqual(rows, {shape: (frozenset(expected), frozenset(actual)) for shape, *_, expected, actual in self.REGION_TERM})
+
+    def test_two_numbered_cdna_positions_as_far_apart_as_the_span_put_the_intron_after_the_span_or_before_it(self) -> None:
+        places = list(cvo.intron_placements(3, 2, ("998", "1000", "898", "900")))
+        after = [place for place in places if place[1] > 0]
+        self.assertEqual({(forward, start) for forward, start, _ in after},
+                         {(forward, start) for forward in (True, False) for start in range(3, 10)}, "one to seven bases on")
+        self.assertTrue(all(end >= start for _, start, end in after))
+        self.assertIn((True, 3, 3), after, "an intron of one base")
+        self.assertIn((False, 9, 10), after, "a two-base intron seven bases on")
+        self.assertTrue(any(end - start > 10**6 for _, start, end in after), "an intron longer than any window")
+        before = [place for place in places if place[1] <= 0]
+        self.assertEqual(sorted(before), sorted((forward, start, end) for forward in (True, False)
+                                                for start in range(-16, 0) for end in range(start, 0)),
+                         "an intron of sixteen bases or fewer that ends before the span's first base")
+        self.assertIn((True, -2, -1), before, "a two-base intron that ends beside the span")
+        self.assertEqual(list(cvo.intron_placements(3, 2, ("997", "1000", "897", "900"))), [], "numbers further apart than the span")
+
+    def test_two_numbered_cdna_positions_closer_than_the_span_put_an_intron_of_the_missing_length_inside_it(self) -> None:
+        self.assertEqual(sorted(cvo.intron_placements(5, 2, ("998", "1000", "898", "900"))),
+                         [(False, 1, 2), (False, 2, 3), (True, 1, 2), (True, 2, 3)], "two bases of five, the span's ends kept")
+        self.assertEqual(sorted(cvo.intron_placements(3, 2, ("999", "1000", "899", "900"))),
+                         [(False, 1, 1), (True, 1, 1)], "the middle base of three")
+        self.assertEqual(list(cvo.intron_placements(2, 2, ("1000", "1000", "900", "900"))), [], "no base inside a span of two")
+
+    def test_a_half_numbered_cdna_position_puts_one_end_of_the_intron_inside_the_span(self) -> None:
+        places = set(cvo.intron_placements(2, 5, ("1000", "?", "900", "?")))
+        self.assertEqual({start for forward, start, _ in places if forward}, {1})
+        self.assertEqual({end for forward, _, end in places if not forward}, {0})
+        self.assertTrue(all(end >= 1 if forward else start <= 0 for forward, start, end in places))
+        mirrored = set(cvo.intron_placements(2, 5, ("?", "901", "?", "801")))
+        self.assertEqual({end for forward, _, end in mirrored if forward}, {0})
+        self.assertEqual({start for forward, start, _ in mirrored if not forward}, {1})
+        three = cvo.intron_placements(3, 5, ("999", "?", "899", "?"))
+        self.assertEqual({start for forward, start, _ in three if forward}, {1, 2})
+
+    def test_an_unnumbered_cdna_position_puts_the_span_inside_the_intron(self) -> None:
+        places = list(cvo.intron_placements(2, 3, ("-", "-", "-", "-")))
+        self.assertEqual({forward for forward, _, _ in places}, {True, False})
+        self.assertTrue(all(start <= 0 and end >= 1 for _, start, end in places))
+        self.assertIn((True, 0, 1), places, "an intron that is the span")
+        self.assertIn((False, -17, 42), places, "the furthest start and end a window reaches")
+        self.assertNotIn((True, 0, 43), places)
+        self.assertEqual(sum(forward and start == 0 and end > 10**6 for forward, start, end in places), 1, "a far end, once")
+        reached = {end for _, _, end in cvo.intron_placements(2, 30, ("-", "-", "-", "-"))}
+        self.assertIn(1 + 30 + 18, reached, "an end the regions reach")
+        self.assertNotIn(1 + 30 + 19, reached)
+
+
+@dataclasses.dataclass(frozen=True)
+class RecordPair:
+    """One fabricated pair of rows with its record and the two verdicts of
+    `splice_term_past_the_record_span`: with the record's alleles, and without them."""
+
+    kind: str
+    position: int
+    reference: str
+    alternate: str
+    location: str
+    perl: str
+    rust: str
+    with_record: bool
+    without_record: bool
+
+
+def record_row(position: int, reference: str, alternate: str) -> tuple[str, str]:
+    """The positions of the Location and the Allele of the row a VCF record of one alternate
+    writes: the shared first base dropped where the two alleles differ in length, as
+    `reference_allele_is_empty` reads a record, an insertion between its two neighbouring
+    positions and a deletion under ``-``."""
+    if len(reference) != len(alternate) and reference[0] == alternate[0]:
+        position, reference, alternate = position + 1, reference[1:], alternate[1:]
+    if not reference:
+        return f"{position - 1}-{position}", alternate
+    end = position + len(reference) - 1
+    return (f"{position}-{end}" if end > position else str(position)), alternate or "-"
+
+
+class SpliceTermPastTheRecordSpanKindTests(unittest.TestCase):
+    """One fabricated pair of rows with its record for each kind of record on which the
+    reference's set and vep-rs's differ by a term of the six, or by the splice_region_variant
+    an insertion beside an exon's end loses, with the two verdicts
+    `splice_term_past_the_record_span` gives it: with the record's alleles, and without them.
+
+    Each pair stands in its own block of 10,000 positions of chromosome 7, on one of two
+    layouts of the block. On the forward strand's an exon ends at position 1000 (cDNA 1000,
+    CDS 900), its intron runs from 1001 to 1100 and the next exon starts at 1101 (cDNA 1001).
+    On the reverse strand's an exon starts at 1000 (cDNA 901, CDS 801) and runs down the
+    block, the intron before it runs from its 3' end at 1001 to its 5' end at 1100, and the
+    exon before that ends at 1101 (cDNA 900). A two-base intron runs from 1001 to 1002 and a
+    twenty-base intron from 1001 to 1020, each in the place of the layout's intron.
+
+    With the record a pair is set aside where an allele longer than its two or more reference
+    bases gives, at one place of the intron, the reference's terms from its regions and
+    vep-rs's from its span, which lies inside an exon, across its end or in the intron.
+    Without the record only three or more positions of the transcript's sequence are set
+    aside, vep-rs's row holding none of the six. A pure insertion, an allele that is not the
+    longer one, a term gone whose window holds a base of the span, a differing term outside
+    the class and differing positions stay differences either way."""
+
+    BUCKET = "splice_term_past_the_record_span"
+    DONOR, ACCEPTOR, FIFTH = "splice_donor_variant", "splice_acceptor_variant", "splice_donor_5th_base_variant"
+    DONOR_REGION, TRACT = "splice_donor_region_variant", "splice_polypyrimidine_tract_variant"
+    REGION, SHIFT, INTRON, CODING = "splice_region_variant", "frameshift_variant", "intron_variant", "coding_sequence_variant"
+    # The cDNA and CDS positions of two and of three bases: the last of the forward layout's exon, the first of
+    # the reverse layout's, and those that end two bases short of the intron on each layout; and the positions
+    # of a span that holds no base of the transcript's sequence.
+    END2, END3, START2, START3 = ("999-1000", "899-900"), ("998-1000", "898-900"), ("901-902", "801-802"), ("901-903", "801-803")
+    SHORT2, SHORT3 = ("997-998", "897-898"), ("996-998", "896-898")
+    REVERSE_SHORT2, REVERSE_SHORT3, NONE = ("903-904", "803-804"), ("903-905", "803-805"), ("-", "-")
+    # The reference's terms on a span before the forward layout's intron whose regions reach its third base, and
+    # those whose regions reach its fifth; the terms vep-rs writes with the region term back, and with nothing.
+    THIRD, PAST_FIFTH = (DONOR, SHIFT, DONOR_REGION, INTRON), (DONOR, SHIFT, FIFTH, INTRON)
+    BACK, NOTHING = (SHIFT, REGION), (SHIFT,)
+    # (the kind, the record's POS in its block, REF, ALT, the cDNA and CDS positions with vep-rs's cDNA position
+    # where it is another, the reference's terms, vep-rs's terms, set aside with the record, set aside without it)
+    PAIRS = (
+        ("two bases at an exon's end replaced by five, the region term back", 999, "AC", "GTTCA", END2, THIRD, BACK, True, False),
+        ("two bases at an exon's end replaced by five, nothing back", 999, "AC", "GTTCA", END2, THIRD, NOTHING, False, False),
+        ("three bases at an exon's end replaced by six, the region term back", 998, "ACG", "GTTCAG", END3, THIRD, BACK, True, True),
+        ("three bases at an exon's end replaced by six, nothing back", 998, "ACG", "GTTCAG", END3, THIRD, NOTHING, False, True),
+        ("two bases at an exon's end replaced by six, the region term back", 999, "AC", "GTTCAG", END2, THIRD, BACK, True, False),
+        ("two bases at an exon's end replaced by six, nothing back", 999, "AC", "GTTCAG", END2, THIRD, NOTHING, False, False),
+        ("three bases at an exon's end replaced by seven, the region term back", 998, "ACG", "GTTCAGG", END3, THIRD, BACK, True, True),
+        ("three bases at an exon's end replaced by seven, nothing back", 998, "ACG", "GTTCAGG", END3, THIRD, NOTHING, False, True),
+        ("two bases at an exon's end replaced by eight, the fifth base term gone with the donor's",
+         999, "AC", "GTTCAGGA", END2, PAST_FIFTH, BACK, True, False),
+        ("two bases at an exon's end replaced by eight, nothing back", 999, "AC", "GTTCAGGA", END2, PAST_FIFTH, NOTHING, False, False),
+        ("three bases at an exon's end replaced by nine, the fifth base term gone with the donor's",
+         998, "ACG", "GTTCAGGAT", END3, PAST_FIFTH, BACK, True, True),
+        ("three bases at an exon's end replaced by nine, nothing back", 998, "ACG", "GTTCAGGAT", END3, PAST_FIFTH, NOTHING, False, True),
+        ("two bases one short of an exon's end replaced by six", 998, "AC", "GTTCAG", ("998-999", "898-899"), THIRD, BACK, True, False),
+        ("two bases two short of an exon's end replaced by seven, the region term back",
+         997, "AC", "GTTCAGG", SHORT2, THIRD, BACK, True, False),
+        ("two bases two short of an exon's end replaced by seven, nothing back", 997, "AC", "GTTCAGG", SHORT2, THIRD, NOTHING, False, False),
+        ("three bases two short of an exon's end replaced by eight, the region term back",
+         996, "ACG", "GTTCAGGA", SHORT3, THIRD, BACK, True, True),
+        ("three bases two short of an exon's end replaced by eight, nothing back",
+         996, "ACG", "GTTCAGGA", SHORT3, THIRD, NOTHING, False, True),
+        ("two bases two short of an exon's end replaced by eight, the region term back",
+         997, "AC", "GTTCAGGA", SHORT2, THIRD, BACK, True, False),
+        ("two bases two short of an exon's end replaced by eight, nothing back", 997, "AC", "GTTCAGGA", SHORT2, THIRD, NOTHING, False, False),
+        ("two bases at an exon's start on the reverse strand replaced by four, the region term back",
+         999, "AC", "GTTC", START2, (ACCEPTOR, SHIFT), BACK, True, False),
+        ("two bases at an exon's start on the reverse strand replaced by four, nothing back",
+         999, "AC", "GTTC", START2, (ACCEPTOR, SHIFT), NOTHING, False, False),
+        ("three bases at an exon's start on the reverse strand replaced by five, the region term back",
+         998, "ACG", "GTTCA", START3, (ACCEPTOR, SHIFT), BACK, True, True),
+        ("three bases at an exon's start on the reverse strand replaced by five, nothing back",
+         998, "ACG", "GTTCA", START3, (ACCEPTOR, SHIFT), NOTHING, False, True),
+        ("two bases two short of an exon's start on the reverse strand replaced by six, the region term back",
+         997, "AC", "GTTCAG", REVERSE_SHORT2, (ACCEPTOR, SHIFT), BACK, True, False),
+        ("two bases two short of an exon's start on the reverse strand replaced by six, nothing back",
+         997, "AC", "GTTCAG", REVERSE_SHORT2, (ACCEPTOR, SHIFT), NOTHING, False, False),
+        ("three bases two short of an exon's start on the reverse strand replaced by seven, the region term back",
+         996, "ACG", "GTTCAGG", REVERSE_SHORT3, (ACCEPTOR, SHIFT), BACK, True, True),
+        ("three bases two short of an exon's start on the reverse strand replaced by seven, nothing back",
+         996, "ACG", "GTTCAGG", REVERSE_SHORT3, (ACCEPTOR, SHIFT), NOTHING, False, True),
+        ("three bases two short of an exon's start on the reverse strand replaced by nine, the intron term gone with the acceptor's",
+         996, "ACG", "GTTCAGGAT", REVERSE_SHORT3, (ACCEPTOR, SHIFT, INTRON), BACK, True, True),
+        ("three bases two short of an exon's start on the reverse strand replaced by nine, nothing back",
+         996, "ACG", "GTTCAGGAT", REVERSE_SHORT3, (ACCEPTOR, SHIFT, INTRON), NOTHING, False, True),
+        ("the two exon bases after a two-base intron replaced by six, the fifth base term gone and the donor region term back",
+         1003, "AC", "GTTCAG", ("1001-1002", "901-902"), (FIFTH, SHIFT), (DONOR_REGION, SHIFT), True, False),
+        ("three bases whose last lies six before a two-base intron on the reverse strand replaced by six, the fifth base term gone",
+         993, "ACG", "GTTCAG", ("906-908", "806-808"), (FIFTH, SHIFT), BACK, True, True),
+        ("two bases of an intron on the reverse strand replaced by four, the donor term gone beside a kept donor region term",
+         1097, "AC", "GTTC", NONE, (DONOR, DONOR_REGION, INTRON), (DONOR_REGION, INTRON), True, False),
+        ("two bases of an intron on the reverse strand replaced by eight, the donor and the fifth base term gone",
+         1093, "AC", "GTTCAGGA", NONE, (DONOR, FIFTH, INTRON), (REGION, INTRON), True, False),
+        ("two bases of an intron on the reverse strand replaced by eight, nothing back",
+         1093, "AC", "GTTCAGGA", NONE, (DONOR, FIFTH, INTRON), (INTRON,), False, False),
+        ("three bases of an intron replaced by seven, the acceptor term gone beside a kept tract term",
+         1094, "ACG", "GTTCAGG", NONE, (ACCEPTOR, TRACT, INTRON), (REGION, TRACT, INTRON), True, False),
+        ("three bases of an intron replaced by seven, nothing back",
+         1094, "ACG", "GTTCAGG", NONE, (ACCEPTOR, TRACT, INTRON), (TRACT, INTRON), False, False),
+        ("three bases of an intron replaced by seven on a transcript with a frameshift intron, the acceptor term gone and no tract term",
+         1094, "ACG", "GTTCAGG", NONE, (ACCEPTOR, INTRON), (REGION, INTRON), True, False),
+        ("an intron's third and fourth base replaced by four, the fifth base term gone and the donor region term back",
+         1003, "AC", "GTTC", NONE, (FIFTH, INTRON), (DONOR_REGION, INTRON), True, False),
+        ("an intron's third and fourth base replaced by four, nothing back",
+         1003, "AC", "GTTC", NONE, (FIFTH, INTRON), (INTRON,), False, False),
+        ("two bases across an exon's end replaced by seven, the fifth base term gone beside a kept donor term",
+         1000, "AC", "GTTCAGG", ("1000-?", "900-?"), (DONOR, FIFTH, CODING, INTRON), (DONOR, CODING, INTRON), True, False),
+        ("an intron's second and third base replaced by five, the fifth base term gone and the donor region term back",
+         1002, "AC", "GTTCA", NONE, (DONOR, FIFTH, INTRON), (DONOR, DONOR_REGION, INTRON), True, False),
+        ("the same two rows without the donor region term, the rows of an intron's first two bases",
+         1002, "AC", "GTTCA", NONE, (DONOR, FIFTH, INTRON), (DONOR, INTRON), True, False),
+        ("two bases of an intron on the reverse strand replaced by four, the fifth base term gone and the donor region term back",
+         1094, "AC", "GTTC", NONE, (FIFTH, INTRON), (DONOR_REGION, INTRON), True, False),
+        ("two bases of an intron on the reverse strand replaced by four, the fifth base term gone and nothing back",
+         1094, "AC", "GTTC", NONE, (FIFTH, INTRON), (INTRON,), False, False),
+        ("two bases of an intron on the reverse strand replaced by five, the fifth base term gone and the region term back",
+         1093, "AC", "GTTCA", NONE, (FIFTH, INTRON), (REGION, INTRON), True, False),
+        ("two bases of an intron on the reverse strand replaced by five, the fifth base term gone and nothing back",
+         1093, "AC", "GTTCA", NONE, (FIFTH, INTRON), (INTRON,), False, False),
+        ("an intron's first two bases replaced by four, the donor region term gone beside a kept donor term",
+         1001, "AC", "GTTC", NONE, (DONOR, DONOR_REGION, INTRON), (DONOR, INTRON), True, False),
+        ("two bases across an exon's end replaced by five, the donor region term gone beside a kept donor term",
+         1000, "AC", "GTTCA", ("1000-?", "900-?"), (DONOR, DONOR_REGION, CODING, INTRON), (DONOR, CODING, INTRON), True, False),
+        ("two bases of an intron on the reverse strand replaced by four, the donor region term gone and the region term back",
+         1092, "AC", "GTTC", NONE, (DONOR_REGION, INTRON), (REGION, INTRON), True, False),
+        ("two bases of an intron on the reverse strand replaced by four, the donor region term gone and nothing back",
+         1092, "AC", "GTTC", NONE, (DONOR_REGION, INTRON), (INTRON,), False, False),
+        ("three bases of an intron replaced by fifteen, the tract term gone",
+         1070, "ACG", "GTTCAGGATCCTTAG", NONE, (TRACT, INTRON), (INTRON,), True, False),
+        ("an intron's last two bases on the reverse strand replaced by five, the tract term gone beside a kept acceptor term",
+         1001, "AC", "GTTCA", NONE, (ACCEPTOR, TRACT, INTRON), (ACCEPTOR, INTRON), True, False),
+        ("three bases across an exon's end replaced by eight, the intron term kept on the intron's first base",
+         999, "ACG", "GTTCAGGA", ("999-?", "899-?"), (DONOR, FIFTH, CODING, INTRON), (DONOR, CODING, INTRON), True, False),
+        ("three bases across an exon's end replaced by eight, the intron term gone from the intron's first base",
+         999, "ACG", "GTTCAGGA", ("999-?", "899-?"), (DONOR, FIFTH, CODING, INTRON), (DONOR, CODING), False, False),
+        ("two bases across an exon's end replaced by four with one base alike, the donor region term gone",
+         1000, "AC", "TCTG", ("1000-?", "900-?"), (DONOR, DONOR_REGION, CODING, INTRON), (DONOR, CODING, INTRON), True, False),
+        ("two bases across an exon's end replaced by four with one base alike, the donor term gone from the donor's base",
+         1000, "AC", "TCTG", ("1000-?", "900-?"), (DONOR, DONOR_REGION, CODING, INTRON), (CODING, INTRON), False, False),
+        ("eight bases of an intron on the reverse strand replaced by ten, the donor term gone from the donor's base",
+         1092, "ACGTACGT", "GTGTATCTAG", NONE, (DONOR, DONOR_REGION, INTRON), (DONOR_REGION, INTRON), False, False),
+        ("three bases of an intron on the reverse strand replaced by four, the tract term gone from the tract's base",
+         1001, "ACG", "TCGA", NONE, (ACCEPTOR, TRACT, INTRON), (ACCEPTOR, INTRON), False, False),
+        ("two bases across an exon's start on the reverse strand replaced by eight, the acceptor term gone from the acceptor's base",
+         1000, "AC", "TCGTTCAG", ("?-901", "?-801"), (ACCEPTOR, CODING, INTRON), (CODING, INTRON), False, False),
+        ("eight bases of a twenty-base intron replaced by eleven alike at four of them, the tract term gone from the tract's bases",
+         1007, "ACGTACGT", "GCTTGCTTGAT", NONE, (REGION, TRACT, INTRON), (REGION, INTRON), False, False),
+        ("an insertion of three between an intron's second and third base",
+         1002, "A", "AGTT", NONE, (REGION, INTRON), (INTRON,), False, False),
+        ("an insertion of three between the third and the second base from an intron's 3' end, the region term gone",
+         1002, "T", "TGTT", NONE, (REGION, TRACT, INTRON), (TRACT, INTRON), False, False),
+        ("an insertion of three between the third and the second base from an intron's 3' end, the tract term gone",
+         1002, "T", "TGTT", NONE, (REGION, TRACT, INTRON), (REGION, INTRON), False, False),
+        ("an insertion of four between an intron's last base and an exon's first",
+         1100, "A", "AGTTC", ("?-1001", "?-901"), (REGION, CODING, INTRON), (CODING, INTRON), False, False),
+        ("an insertion of four between an exon's last base and an intron's first on the reverse strand",
+         1100, "A", "AGTTC", ("900-?", "800-?"), (REGION, CODING, INTRON), (CODING, INTRON), False, False),
+        ("an insertion of three between a two-base intron's last base and an exon's first",
+         1002, "A", "AGTT", ("?-1001", "?-901"), (REGION, CODING, INTRON), (CODING, INTRON), False, False),
+        ("an insertion of three between an exon's last base and a two-base intron's first on the reverse strand",
+         1002, "A", "AGTT", ("900-?", "800-?"), (REGION, CODING, INTRON), (CODING, INTRON), False, False),
+        ("an insertion of five between the eighteenth and the seventeenth base from an intron's 3' end",
+         1083, "A", "AGTTCA", NONE, (TRACT, INTRON), (INTRON,), False, False),
+        ("an insertion of five between the seventeenth and the eighteenth base from an intron's 3' end on the reverse strand",
+         1017, "A", "AGTTCA", NONE, (TRACT, INTRON), (INTRON,), False, False),
+        ("an insertion of three between two bases of one exon",
+         990, "A", "AGTT", ("990-991", "890-891"), (DONOR, SHIFT), NOTHING, False, False),
+        ("an insertion of four between an exon's last two bases",
+         999, "A", "AGTTC", END2, (DONOR, SHIFT, REGION), BACK, False, False),
+        ("three bases replaced by three", 998, "ACG", "GTT", END3, (DONOR, SHIFT), NOTHING, False, False),
+        ("four bases replaced by three", 997, "ACGA", "GTT", ("997-1000", "897-900"), (DONOR, SHIFT), NOTHING, False, False),
+        ("three bases deleted", 997, "TACG", "T", END3, (DONOR, SHIFT), NOTHING, False, False),
+        ("one base replaced by three", 1000, "A", "GTT", ("1000", "900"), (DONOR, SHIFT), NOTHING, False, False),
+        ("a further term gone", 998, "ACG", "GTTCAG", END3, THIRD, (REGION,), False, False),
+        ("a further term come", 998, "ACG", "GTTCAG", END3, THIRD, ("stop_gained", SHIFT, REGION), False, False),
+        ("the intron term kept inside an exon", 998, "ACG", "GTTCAG", END3, THIRD, (SHIFT, REGION, INTRON), False, False),
+        ("the terms the other way round", 998, "ACG", "GTTCAG", END3, BACK, THIRD, False, False),
+        ("another cDNA position on vep-rs's row", 998, "ACG", "GTTCAG", (*END3, "498-500"), THIRD, BACK, False, False),
+    )
+    # Pairs whose first column spells the alleles, which every reading of the row has: (the kind, POS in its
+    # block, REF, ALT, the cDNA and CDS positions, the reference's terms, vep-rs's terms, set aside)
+    SPELT = (
+        ("two bases at an exon's end replaced by five, the first column spelling the alleles",
+         999, "AC", "GTTCA", END2, THIRD, BACK, True),
+        ("two bases of an intron on the reverse strand replaced by eight, the first column spelling the alleles",
+         1093, "AC", "GTTCAGGA", NONE, (DONOR, FIFTH, INTRON), (REGION, INTRON), True),
+        ("three bases at an exon's start on the reverse strand replaced by five behind a shared first base, the first column spelling the alleles",
+         997, "TACG", "TGTTCA", START3, (ACCEPTOR, SHIFT), BACK, True),
+        ("an insertion of three between an intron's second and third base, the first column spelling the alleles",
+         1002, "A", "AGTT", NONE, (REGION, INTRON), (INTRON,), False),
+        ("an insertion of three between two bases of one exon, the first column spelling the alleles",
+         990, "A", "AGTT", ("990-991", "890-891"), (DONOR, SHIFT), NOTHING, False),
+    )
+
+    @classmethod
+    def built(cls) -> list[RecordPair]:
+        """Every pair of the two tables, each in its own block, under an identifier or, for a
+        pair of `SPELT`, under the first column Ensembl VEP writes for a record without one."""
+        pairs = []
+        for index, (kind, place, reference, alternate, positions, expected, actual, *verdicts) in enumerate((*cls.PAIRS, *cls.SPELT)):
+            position = 100000 + 10000 * index + place
+            span, allele = record_row(position, reference, alternate)
+            cdna, cds, *other = positions
+            name = f"7_{position}_{reference}/{alternate}" if len(verdicts) == 1 else f"made_up_{index}"
+            perl, rust = splice_term_rows(",".join(expected), ",".join(actual), allele=allele, location=f"7:{span}", cdna=cdna,
+                                          cds=cds, candidate_cdna=other[0] if other else None, name=name)
+            pairs.append(RecordPair(kind, position, reference, alternate, f"7:{span}", perl, rust, verdicts[0], verdicts[-1]))
+        return pairs
+
+    def test_the_rule_gives_each_kind_its_verdict_with_the_record_and_without_it(self) -> None:
+        predicate = row_pair_predicate(self, self.BUCKET)
+        verdicts = {}
+        for pair in self.built():
+            e, a = stop_codon_pair_row(pair.perl), stop_codon_pair_row(pair.rust)
+            bases = cvo.replaced_reference(pair.position, pair.reference, [pair.alternate], pair.location, e.allele)
+            self.assertIsNotNone(bases, pair.kind)
+            if e.reference is None:
+                without_record = predicate(e, a)
+                e, a = dataclasses.replace(e, reference=bases), dataclasses.replace(a, reference=bases)
+                verdicts[pair.kind] = (predicate(e, a), without_record)
+            else:
+                self.assertEqual((e.reference, a.reference), (bases, bases), pair.kind)
+                verdicts[pair.kind] = (predicate(e, a),) * 2
+        self.assertEqual(verdicts, {pair.kind: (pair.with_record, pair.without_record) for pair in self.built()})
+        self.assertEqual(len(verdicts), len(self.PAIRS) + len(self.SPELT))
+
+    def test_the_comparison_sets_a_kind_aside_by_the_input_records_where_it_is_given_them(self) -> None:
+        pairs = self.built()
+        # Three positions under an identifier at a place where the input holds a record of another alternate
+        # allele: no record writes the row, which is read as a row without one.
+        position = 100000 + 10000 * len(pairs) + 998
+        location = f"7:{position}-{position + 2}"
+        perl, rust = splice_term_rows(",".join(self.THIRD), ",".join(self.BACK), allele="GTTCAG", location=location)
+        pairs.append(RecordPair("three positions whose record holds another alternate allele", position, "ACG", "GTTCAGGA",
+                                location, perl, rust, True, True))
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        records = ""
+        for pair in pairs:
+            name = pair.perl.split("\t", 1)[0]
+            identifier = "." if cvo.uploaded_alleles(name) else name
+            records += f"7\t{pair.position}\t{identifier}\t{pair.reference}\t{pair.alternate}\t.\t.\t.\n"
+        (tmp / "input.vcf").write_text("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n" + records, encoding="utf-8")
+        perl, rust = "".join(pair.perl for pair in pairs), "".join(pair.rust for pair in pairs)
+        for options, verdict in ((("--input-vcf", str(tmp / "input.vcf")), "with_record"), ((), "without_record")):
+            adjusted, open_rows = compare_row_outputs(self, perl, rust, *options)
+            taken = sum(getattr(pair, verdict) for pair in pairs)
+            self.assertEqual(adjusted["excluded_categories"][self.BUCKET], {"count": taken, "excluded": taken}, verdict)
+            self.assertEqual(sorted(row.split("\t")[2] for row in open_rows),
+                             sorted(2 * [pair.location for pair in pairs if not getattr(pair, verdict)]), verdict)
+        # A pair the input alone sets aside has a Location of two positions or a cDNA position that is not two
+        # numbers: without the input such a row stays open.
+        by_the_input_alone = [stop_codon_pair_row(pair.perl) for pair in pairs if pair.with_record and not pair.without_record]
+        self.assertTrue(by_the_input_alone)
+        for row in by_the_input_alone:
+            numbered = row.fields["cDNA_position"].replace("-", "").isdigit()
+            self.assertTrue(cvo.location_span(row) == 2 or not numbered, row.location)
+
+
+# Two bases across an exon's end replaced by seven, the first column spelling the alleles: the
+# span lacks a cDNA position at its end, and the intron's fifth base lies past it.
+ACROSS_AN_EXON_END = {"allele": "GTTCAGG", "location": "7:101000-101001", "cdna": "1000-?", "cds": "900-?",
+                      "name": "7_101000_AC/GTTCAGG"}
+
+
+class SpliceTermBesideAStopCodonClassTests(unittest.TestCase):
+    """A row can differ by the terms of a stop codon class beside those of
+    `splice_term_past_the_record_span`. The class takes such a pair where the stop codon
+    class's rule takes the two rows read with vep-rs's splice and intron terms on both, and
+    its own reading takes them with the reference's other terms on both. One further
+    differing term outside both classes stays a difference, and a pair that differs by the
+    stop codon class's terms alone is that class's."""
+
+    BUCKET = "splice_term_past_the_record_span"
+    STOP_CODON_BUCKET = "stop_codon_removed_without_stop_codon_test"
+    REFERENCE = "splice_donor_variant,splice_donor_5th_base_variant,stop_retained_variant,intron_variant"
+    CANDIDATE = "splice_donor_variant,stop_lost,intron_variant"
+    FURTHER = "splice_donor_variant,stop_lost,3_prime_UTR_variant,intron_variant"
+    STOP_CODON_ALONE = "splice_donor_variant,stop_retained_variant,intron_variant"
+
+    def verdicts(self, reference: str, candidate: str) -> tuple[bool, bool]:
+        """Whether this class's rule, and the stop codon class's, takes the pair of rows."""
+        e, a = (stop_codon_pair_row(row) for row in splice_term_rows(reference, candidate, **ACROSS_AN_EXON_END))
+        self.assertEqual((e.reference, a.reference), ("AC", "AC"))
+        return row_pair_predicate(self, self.BUCKET)(e, a), row_pair_predicate(self, self.STOP_CODON_BUCKET)(e, a)
+
+    def counted(self, reference: str, candidate: str) -> tuple[int, int, int]:
+        """The pairs the comparison sets aside under this class's bucket and under the stop
+        codon class's, and the rows it leaves open."""
+        adjusted, open_rows = compare_row_outputs(self, *splice_term_rows(reference, candidate, **ACROSS_AN_EXON_END))
+        counts = []
+        for bucket in (self.BUCKET, self.STOP_CODON_BUCKET):
+            stats = adjusted["excluded_categories"][bucket]
+            self.assertEqual(stats["count"], stats["excluded"], bucket)
+            counts.append(stats["excluded"])
+        return counts[0], counts[1], len(open_rows)
+
+    def test_a_pair_that_differs_by_the_terms_of_both_classes_is_set_aside_under_this_class(self) -> None:
+        self.assertEqual(self.verdicts(self.REFERENCE, self.CANDIDATE), (True, False))
+        self.assertEqual(self.counted(self.REFERENCE, self.CANDIDATE), (1, 0, 0))
+
+    def test_one_further_term_outside_both_classes_stays_a_difference(self) -> None:
+        self.assertEqual(self.verdicts(self.REFERENCE, self.FURTHER), (False, False))
+        self.assertEqual(self.counted(self.REFERENCE, self.FURTHER), (0, 0, 2))
+
+    def test_a_pair_that_differs_by_the_stop_codon_class_s_terms_alone_is_that_class_s(self) -> None:
+        self.assertEqual(self.verdicts(self.STOP_CODON_ALONE, self.CANDIDATE), (False, True))
+        self.assertEqual(self.counted(self.STOP_CODON_ALONE, self.CANDIDATE), (0, 1, 0))
+
+
+WITH_START_LOST = "frameshift_variant,start_lost,start_retained_variant"
+WITHOUT_START_LOST = "frameshift_variant,start_retained_variant"
+
+
+def fabricated_row(location: str, allele: str, feature: str, consequence: str = "feature_truncation") -> str:
+    """One fabricated row of an output: the Location, the allele, the feature and the
+    consequence set."""
+    return f"v\t{location}\t{allele}\tg1\t{feature}\tTranscript\t{consequence}\n"
+
+
+def buffer_bound_pairs(digits: int) -> dict[str, tuple[str, str]]:
+    """The reference's intergenic row and vep-rs's transcript row of one fabricated record,
+    for each coordinate the buffer bound's class reads, a run of ``digits`` nines: the
+    record's own position, a span's end and a breakend mate's position."""
+    coordinate = "9" * digits
+    records = {
+        "position": (f"21:{coordinate}", "N[5:30000000["),
+        "end": (f"21:5000-{coordinate}", "deletion"),
+        "mate": ("21:30425651", f"N[5:{coordinate}["),
+    }
+    return {
+        f"{shape} of {digits} digits": (fabricated_row(location, allele, "-"), fabricated_row(location, allele, "T1"))
+        for shape, (location, allele) in records.items()
+    }
+
+
+# A bracket breakend allele whose mate position, the bound 2147478648, is written in the
+# decimal digits of another script than `0` to `9`, on a chromosome no cache names.
+def other_digits(number: int) -> str:
+    """``number`` written in the decimal digits of another script than ``0`` to ``9``."""
+    return "".join(chr(0x0660 + int(digit)) for digit in str(number))
+
+
+OTHER_DIGITS_MATE = f"N[Chr21:{other_digits(2147478648)}["
+
+# Fabricated output pairs, the reference's rows and vep-rs's: nothing left to compare and
+# its neighbours, then coordinates around the widths an integer type holds and past the
+# length of an integer's text CPython converts by default.
+FABRICATED_PAIRS: dict[str, tuple[str, str]] = {
+    "no tuple": ("", ""),
+    "every tuple shared": (fabricated_row("21:100", "-", "T1", "intron_variant"),) * 2,
+    "every tuple set aside as a pair": (
+        fabricated_row("21:100", "-", "T1", WITH_START_LOST),
+        fabricated_row("21:100", "-", "T1", WITHOUT_START_LOST),
+    ),
+    "every tuple set aside on one side": ("", fabricated_row("21:1000-2000", "deletion", "T1")),
+    "one tuple left": (
+        fabricated_row("21:100", "-", "T1", WITH_START_LOST),
+        fabricated_row("21:100", "-", "T1", WITHOUT_START_LOST) + fabricated_row("21:300", "-", "T2", "intron_variant"),
+    ),
+    "one tuple shared, the others set aside": (
+        fabricated_row("21:100", "-", "T1", WITH_START_LOST) + fabricated_row("21:500", "-", "T3", "intron_variant"),
+        fabricated_row("21:100", "-", "T1", WITHOUT_START_LOST) + fabricated_row("21:500", "-", "T3", "intron_variant"),
+    ),
+    **{name: pair for digits in (9, 10, 19, 20, 21, 39, 46, 4301) for name, pair in buffer_bound_pairs(digits).items()},
+    "a mate position in other digits at the bound": (
+        fabricated_row("21:30425651", OTHER_DIGITS_MATE, "-"),
+        fabricated_row("21:30425651", OTHER_DIGITS_MATE, "T1"),
+    ),
+    "a mate position in other digits beside the record's own end": (
+        fabricated_row("21:30425651", "N.", "-"),
+        fabricated_row("21:30425651", "N.", "-") + fabricated_row("21:30425651", OTHER_DIGITS_MATE, "T1"),
+    ),
+    "a Location in other digits at the bound": (
+        fabricated_row(f"21:{other_digits(2147478648)}", "N[5:30000000[", "-"),
+        fabricated_row(f"21:{other_digits(2147478648)}", "N[5:30000000[", "T1"),
+    ),
+    "a position in other digits beside the same in 0 to 9": (
+        fabricated_row(f"21:{other_digits(100)}", "-", "T1", "intron_variant"),
+        fabricated_row("21:100", "-", "T1", "intron_variant"),
+    ),
+    "a superscript digit in a Location": (
+        fabricated_row("21:10\u00b2", "-", "T1", "intron_variant"),
+        fabricated_row("21:102", "-", "T1", "intron_variant"),
+    ),
+    "a dot breakend pair at a start of 40 digits": (
+        fabricated_row(f"21:{'9' * 40}-{'9' * 46}", ".N", "-"),
+        fabricated_row(f"21:{'9' * 40}", ".N", "-"),
+    ),
+    "a dot breakend pair after a start of 40 digits": (
+        fabricated_row(f"21:{'9' * 40}-{'9' * 46}", ".N", "-"),
+        fabricated_row(f"21:1{'0' * 40}", ".N", "-"),
+    ),
+}
+
+
+def span_rows(location: str) -> tuple[str, str]:
+    """One fabricated structural record at ``location``: the reference's rows and vep-rs's,
+    which name one transcript alike and one each alone."""
+
+    def rows(*features: str) -> str:
+        return "".join(fabricated_row(location, "deletion", feature) for feature in features)
+
+    return rows("T1", "T2"), rows("T1", "T3")
+
+
+# Fabricated spans past the size the 115.2 scope class reads, the end after a blank: one an
+# integer's reading drops (a no-break space) and one it refuses (U+001C).
+FABRICATED_SPANS_115_2: dict[str, tuple[str, str]] = {
+    "a span past the scope size": span_rows("21:5000-30000000"),
+    "a span end after a no-break space": span_rows("21:5000-\u00a030000000"),
+    "a span end after a blank an integer's reading refuses": span_rows("21:5000-\x1c30000000"),
+}
+
+
+class NothingLeftToCompareTests(unittest.TestCase):
+    """The adjusted figures of an output pair whose every differing tuple a class sets aside:
+    precision, recall and F1 read 0.0 where a side holds no tuple, the value `prf` gives a
+    ratio over nothing. Every row is fabricated."""
+
+    def adjusted(self, name: str) -> dict:
+        return compare_row_outputs(self, *FABRICATED_PAIRS[name])[0]
+
+    def assert_figures(self, adjusted: dict, tuples: int, excluded: tuple[int, int], figure: float) -> None:
+        counts = (adjusted["perl_tuple_count"], adjusted["rust_tuple_count"], adjusted["intersection_count"])
+        self.assertEqual(counts, (tuples, tuples, tuples))
+        self.assertEqual((adjusted["excluded_perl_tuples"], adjusted["excluded_rust_tuples"]), excluded)
+        self.assertEqual((adjusted["precision"], adjusted["recall"], adjusted["f1"]), (figure, figure, figure))
+
+    def test_a_pair_whose_every_tuple_is_set_aside_reads_an_adjusted_f1_of_zero(self) -> None:
+        self.assert_figures(self.adjusted("every tuple set aside as a pair"), 0, (1, 1), 0.0)
+        self.assert_figures(self.adjusted("every tuple set aside on one side"), 0, (0, 1), 0.0)
+
+    def test_a_pair_without_a_tuple_reads_an_adjusted_f1_of_zero(self) -> None:
+        self.assert_figures(self.adjusted("no tuple"), 0, (0, 0), 0.0)
+
+    def test_one_shared_tuple_beside_tuples_all_set_aside_reads_an_adjusted_f1_of_one(self) -> None:
+        self.assert_figures(self.adjusted("one tuple shared, the others set aside"), 1, (1, 1), 1.0)
+
+    def test_a_ratio_over_nothing_is_zero(self) -> None:
+        self.assertEqual(cvo.prf(0, 0, 0), (0.0, 0.0, 0.0))
+        self.assertEqual(cvo.prf(0, 0, 3), (0.0, 0.0, 0.0))
+        self.assertEqual(cvo.prf(0, 3, 0), (0.0, 0.0, 0.0))
+
+
+class BufferBoundCoordinateLengthTests(unittest.TestCase):
+    """The buffer bound's class reads a coordinate by its value, whatever its length. Every
+    row is fabricated."""
+
+    def counted(self, digits: int) -> dict[str, tuple[int, int]]:
+        counts = {}
+        for name, pair in buffer_bound_pairs(digits).items():
+            stats = compare_row_outputs(self, *pair)[0]["excluded_categories"][cvo.BND_MATE_32_BIT_BUFFER_BUCKET]
+            counts[name.split()[0]] = (stats["count"], stats["excluded"])
+        return counts
+
+    def test_a_coordinate_at_or_past_the_bound_is_counted_whatever_its_length(self) -> None:
+        for digits in (10, 19, 20, 21, 39, 46, 4301):
+            with self.subTest(digits=digits):
+                self.assertEqual(self.counted(digits), {"position": (1, 0), "end": (1, 0), "mate": (1, 0)})
+
+    def test_a_coordinate_below_the_bound_is_not_counted(self) -> None:
+        self.assertEqual(self.counted(9), {"position": (0, 0), "end": (0, 0), "mate": (0, 0)})
+
+    def test_a_mate_position_in_other_digits_than_0_to_9_names_no_breakend_mate(self) -> None:
+        self.assertIsNone(cvo.bracket_mate(OTHER_DIGITS_MATE))
+        self.assertIsNone(cvo.reference_mate_chromosome(OTHER_DIGITS_MATE))
+        for name, bucket in (
+            ("a mate position in other digits at the bound", cvo.BND_MATE_32_BIT_BUFFER_BUCKET),
+            ("a mate position in other digits beside the record's own end", cvo.BND_SYNONYM_MATE_ROWS_LOST_BUCKET),
+        ):
+            with self.subTest(pair=name):
+                stats = compare_row_outputs(self, *FABRICATED_PAIRS[name])[0]["excluded_categories"][bucket]
+                self.assertEqual((stats["count"], stats["excluded"]), (0, 0))
+
+
+class TenDigitsAloneTests(unittest.TestCase):
+    """Every reader of a coordinate takes the digits ``0`` to ``9`` alone: a position, a span's
+    end, a mate's position or a Location written in the decimal digits of another script is
+    no number to it. One test a reader; every row is fabricated."""
+
+    @staticmethod
+    def row(location: str, allele: str, cdna: str = "-") -> cvo.PairRow:
+        return cvo.pair_row(["rs1", location, allele, "g1", "T1", "Transcript", "intron_variant", cdna, "-"])
+
+    def test_the_location_span_reader(self) -> None:
+        self.assertEqual(cvo._location_span("21:5-9"), ("21", 5, 9))
+        self.assertIsNone(cvo._location_span(f"21:{other_digits(5)}-{other_digits(9)}"))
+
+    def test_the_reader_of_a_coordinate_that_is_no_integer(self) -> None:
+        self.assertFalse(cvo._non_integer_end("21:5-9"))
+        self.assertTrue(cvo._non_integer_end(f"21:{other_digits(5)}-{other_digits(9)}"))
+
+    def test_the_rewriting_of_a_location(self) -> None:
+        self.assertEqual(cvo.canonical_location("21:005-+9"), "21:5-9")
+        written = f"21:{other_digits(5)}-{other_digits(9)}"
+        self.assertEqual(cvo.canonical_location(written), written)
+        self.assertEqual(cvo.canonical_location("21:10\u00b2"), "21:10\u00b2")
+
+    def test_the_span_size_reader(self) -> None:
+        self.assertTrue(cvo._span_exceeds_max_sv_size("21:5-2147478648"))
+        self.assertFalse(cvo._span_exceeds_max_sv_size(f"21:5-{other_digits(2147478648)}"))
+        self.assertTrue(cvo._span_exceeds_max_sv_size("21:5-\u00a02147478648\u2003"))
+        self.assertFalse(cvo._span_exceeds_max_sv_size("21:5-\x1c2147478648"))
+
+    def test_the_mate_position_reader(self) -> None:
+        self.assertEqual(cvo.bracket_mate("N[5:30000000["), ("5", 30000000))
+        self.assertIsNone(cvo.bracket_mate(f"N[5:{other_digits(30000000)}["))
+
+    def test_the_reader_of_vep_rs_s_position(self) -> None:
+        self.assertEqual(cvo.vep_rs_pos("30425650"), 30425650)
+        self.assertIsNone(cvo.vep_rs_pos(other_digits(30425650)))
+
+    def test_the_readers_of_a_generated_record_name(self) -> None:
+        self.assertEqual(cvo.uploaded_alleles("21_100_A/G"), ("A", ["G"]))
+        self.assertEqual(cvo.uploaded_position("21_100_A/G"), 100)
+        name = f"21_{other_digits(100)}_A/G"
+        self.assertIsNone(cvo.uploaded_alleles(name))
+        self.assertIsNone(cvo.uploaded_position(name))
+        self.assertIsNotNone(cvo._GENERATED_NAME_RE.match("21_100_A/G,<NON_REF>"))
+        self.assertIsNone(cvo._GENERATED_NAME_RE.match(f"21_{other_digits(100)}_A/G,<NON_REF>"))
+
+    def test_the_row_readers_of_a_location_s_ends(self) -> None:
+        spans_five = f"21:{other_digits(1)}-{other_digits(5)}"
+        self.assertTrue(cvo.indel_row(self.row("21:1-5", "AC")))
+        self.assertFalse(cvo.indel_row(self.row(spans_five, "AC")))
+        self.assertTrue(cvo.length_changing_row(self.row("21:1-5", "RY")))
+        self.assertFalse(cvo.length_changing_row(self.row(spans_five, "RY")))
+        self.assertTrue(cvo.insertion_row(self.row("21:1-2", "AC")))
+        self.assertFalse(cvo.insertion_row(self.row(f"21:{other_digits(1)}-{other_digits(2)}", "AC")))
+
+    def test_the_readers_of_a_row_s_transcript_positions(self) -> None:
+        numbered = list(cvo.intron_placements(3, 20, ("10", "12", "4", "6")))
+        unnumbered = list(cvo.intron_placements(3, 20, ("?", "?", "4", "6")))
+        self.assertNotEqual(numbered, unnumbered)
+        self.assertEqual(list(cvo.intron_placements(3, 20, (other_digits(10), other_digits(12), "4", "6"))), unnumbered)
+        self.assertTrue(cvo.longer_allele_inside_one_exon(self.row("21:100-102", "ACGTA", "10-12")))
+        other = f"{other_digits(10)}-{other_digits(12)}"
+        self.assertFalse(cvo.longer_allele_inside_one_exon(self.row("21:100-102", "ACGTA", other)))
+
+    def test_the_reader_of_the_input_records(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        records = tmp / "input.vcf"
+        records.write_text("#CHROM\tPOS\tID\tREF\tALT\n21\t100\trs1\tACG\tA\n", encoding="utf-8")
+        asked = self.row("21:101-102", "-")
+        cvo.read_record_references(records, [asked])
+        self.assertEqual(asked.reference, "CG")
+        other = self.row(f"21:{other_digits(101)}-{other_digits(102)}", "-")
+        cvo.read_record_references(records, [other])
+        self.assertIsNone(other.reference)
+
+
+OUTPUTS_TOOL_NAME = "vep-outputs-compare"
+
+
+def built_outputs_tool() -> Path | None:
+    """The built Rust comparator: the file ``VEP_OUTPUTS_COMPARE`` names, else the binary under
+    the cargo target directory or under the tool's own."""
+    named = os.environ.get("VEP_OUTPUTS_COMPARE")
+    if named:
+        return Path(named)
+    targets = [Path(__file__).resolve().parents[2] / "tools" / OUTPUTS_TOOL_NAME / "target"]
+    if os.environ.get("CARGO_TARGET_DIR"):
+        targets.insert(0, Path(os.environ["CARGO_TARGET_DIR"]))
+    for target in targets:
+        for profile in ("release", "debug"):
+            if (target / profile / OUTPUTS_TOOL_NAME).is_file():
+                return target / profile / OUTPUTS_TOOL_NAME
+    return None
+
+
+class OutputsToolWritesTheSameReportsTests(unittest.TestCase):
+    """The Rust comparator beside this program over the fabricated pairs: the same exit
+    status, standard output, standard error and report files, byte for byte. The test runs
+    where the tool is built and skips elsewhere."""
+
+    def reports(self, tmp: Path, program: list[str], *options: str) -> dict[str, object]:
+        """What one program writes over the pair under ``tmp``, the run's time masked."""
+        report = tmp / "report"
+        run = subprocess.run(
+            [*program, "--perl-dir", str(tmp / "perl"), "--rust-dir", str(tmp / "rust"),
+             "--report-dir", str(report), "--assembly", "GRCh38", *options],
+            capture_output=True, check=False,
+        )
+        written: dict[str, object] = {"exit status": run.returncode, "stdout": run.stdout, "stderr": run.stderr}
+        for file in sorted(report.iterdir()):
+            content = file.read_bytes()
+            if file.name == "summary.json":
+                stamp = json.loads(content)["generated_at_utc"].encode()
+                self.assertEqual(content.count(stamp), 1)
+                content = content.replace(stamp, b"")
+            written[file.name] = content
+        shutil.rmtree(report)
+        return written
+
+    def test_the_tool_writes_this_program_s_reports_over_the_fabricated_pairs(self) -> None:
+        tool = built_outputs_tool()
+        if tool is None:
+            self.skipTest(f"no {OUTPUTS_TOOL_NAME} binary: set VEP_OUTPUTS_COMPARE or build tools/{OUTPUTS_TOOL_NAME}")
+        cases = [(name, pair, ()) for name, pair in FABRICATED_PAIRS.items()]
+        cases += [(name, pair, ("--reference-release", "115.2")) for name, pair in FABRICATED_SPANS_115_2.items()]
+        for name, (perl, rust), options in cases:
+            with self.subTest(pair=name):
+                tmp = Path(tempfile.mkdtemp())
+                self.addCleanup(shutil.rmtree, tmp, True)
+                for side, rows in (("perl", perl), ("rust", rust)):
+                    (tmp / side).mkdir()
+                    (tmp / side / "output.txt").write_text(ROW_COLS + rows, encoding="utf-8")
+                own = self.reports(tmp, [sys.executable, cvo.__file__], *options)
+                self.assertEqual(own["exit status"], 0, own["stderr"])
+                self.assertEqual(sorted(own)[:4], ["discordant.tsv", "discordant_open.tsv", "exit status", "stderr"])
+                self.assertEqual(self.reports(tmp, [str(tool), *options]), own)
 
 
 if __name__ == "__main__":

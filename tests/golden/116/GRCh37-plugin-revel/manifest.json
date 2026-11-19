@@ -1,0 +1,370 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh37",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "included_records": {
+  "GRCh37-plugin-revel": [
+   "1005867",
+   "1579956",
+   "1939062",
+   "1950758",
+   "2327814",
+   "2435631",
+   "2989420",
+   "3374283",
+   "339691",
+   "3623575",
+   "3948879",
+   "4146685",
+   "4293351",
+   "4455281",
+   "639887",
+   "751541",
+   "shared_base_40604416",
+   "two_alts_14982700"
+  ]
+ },
+ "max_span": 1000000,
+ "flags": [
+  "--dir_plugins",
+  "{corpus}/plugin_data",
+  "--plugin",
+  "REVEL,file={corpus}/plugin_data/revel.tsv.gz"
+ ],
+ "covers": [
+  "REVEL"
+ ],
+ "suites": {
+  "GRCh37-plugin-revel": {
+   "reference": "default.txt",
+   "input": "variants.vcf",
+   "rows": 187,
+   "combinations": 17
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 2
+  },
+  "5_prime_UTR_variant,coding_sequence_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 6
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 46,
+   "exemplar_records": 13
+  },
+  "frameshift_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "frameshift_variant,stop_gained": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 4
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 41,
+   "exemplar_records": 11
+  },
+  "missense_variant,splice_region_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 15,
+   "exemplar_records": 7
+  },
+  "non_coding_transcript_exon_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "splice_donor_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 14,
+   "exemplar_records": 2
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 24,
+   "exemplar_records": 12
+  }
+ },
+ "variant_classes": {
+  "deletion": 14,
+  "insertion": 16,
+  "mnv_or_complex": 11,
+  "snv": 146
+ },
+ "records": [
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t14982700\ttwo_alts_14982700\tG\tA,T\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t34640722\t339691\tG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "downstream_gene_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t34927452\t639887\tG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t34950722\t1950758\tC\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t34955837\t1939062\tT\tC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t35821745\t3374283\tA\tC\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t36253002\t3948879\tG\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t38439626\t1579956\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t40555192\t4146685\tC\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t40604416\tshared_base_40604416\tCC\tCT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t40604417\t2327814\tC\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t44479061\t2435631\tACACGGAGGTGCCAC\tA\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,coding_sequence_variant",
+    "downstream_gene_variant",
+    "frameshift_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t44483184\t751541\tA\tATGATCTGCAGAGGGCGCGGCTTCAGGGCTCAAGGCCAGCAAAAGCCCCACCTGGATGATCCACCCCAG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant,stop_gained",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t45706929\t3623575\tC\tT\t.\t.\t.",
+   "combinations": [
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t46917008\t4455281\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_variant,splice_donor_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t47537315\t4293351\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t47558436\t1005867\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-revel",
+   "vcf": "21\t47681175\t2989420\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "revel-no-match",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/plugin_data",
+    "--plugin",
+    "REVEL,file={corpus}/plugin_data/revel.tsv.gz,no_match=1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_revel-no-match",
+   "covers": [
+    "REVEL"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "revel-positional-no-match",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/plugin_data",
+    "--plugin",
+    "REVEL,{corpus}/plugin_data/revel.tsv.gz,1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_revel-positional-no-match",
+   "covers": [
+    "REVEL"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "plugin_files": {
+  "REVEL": [
+   "plugin_data/revel.tsv.gz",
+   "plugin_data/revel.tsv.gz.tbi"
+  ]
+ },
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

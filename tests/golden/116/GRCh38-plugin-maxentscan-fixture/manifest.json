@@ -1,0 +1,786 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 200,
+ "included_records": {
+  "mes": [
+   "1_201374981_T/C"
+  ]
+ },
+ "kept_records": 20,
+ "max_span": 1000000,
+ "cache_cost_flank": 5000,
+ "flags": [
+  "--dir_plugins",
+  "{corpus}",
+  "--plugin",
+  "MaxEntScan,{generated}/fordownload_synthetic"
+ ],
+ "fasta": "reference.fa.gz",
+ "covers": [
+  "MaxEntScan",
+  "api-params-parsing"
+ ],
+ "flag_sets": [
+  {
+   "name": "swa-ncss",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "MaxEntScan,{generated}/fordownload_synthetic,SWA,NCSS"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_swa-ncss",
+   "covers": [
+    "MaxEntScan"
+   ],
+   "divergences": [
+    {
+     "location": "21:14221090-14221175",
+     "allele": "-",
+     "feature": "ENST00001045222",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+     ],
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    }
+   ],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {
+    "stop_codon_removed_without_stop_codon_test": 1
+   },
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "MaxEntScan_ref",
+    "MaxEntScan_alt",
+    "MaxEntScan_diff"
+   ],
+   "field_divergences": [
+    {
+     "location": "1:201374981",
+     "allele": "C",
+     "feature": "ENST00000714314",
+     "feature_type": "Transcript",
+     "record_indices": [
+      0
+     ],
+     "consequence_set": "5_prime_UTR_variant,splice_region_variant",
+     "field": "MaxEntScan_ref",
+     "vep": "4.568",
+     "vep_rs": "-3.441",
+     "expected_divergence": "maxentscan_overlapping_windows"
+    },
+    {
+     "location": "1:201374981",
+     "allele": "C",
+     "feature": "ENST00000714314",
+     "feature_type": "Transcript",
+     "record_indices": [
+      0
+     ],
+     "consequence_set": "5_prime_UTR_variant,splice_region_variant",
+     "field": "MaxEntScan_alt",
+     "vep": "-0.284",
+     "vep_rs": "-4.441",
+     "expected_divergence": "maxentscan_overlapping_windows"
+    },
+    {
+     "location": "1:201374981",
+     "allele": "C",
+     "feature": "ENST00000714314",
+     "feature_type": "Transcript",
+     "record_indices": [
+      0
+     ],
+     "consequence_set": "5_prime_UTR_variant,splice_region_variant",
+     "field": "MaxEntScan_diff",
+     "vep": "4.852",
+     "vep_rs": "1.000",
+     "expected_divergence": "maxentscan_overlapping_windows"
+    }
+   ],
+   "field_divergence_summary": {
+    "maxentscan_overlapping_windows": 3
+   }
+  },
+  {
+   "name": "swa-ncss-verbose",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "MaxEntScan,{generated}/fordownload_synthetic,SWA,NCSS,verbose"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_swa-ncss-verbose",
+   "covers": [
+    "MaxEntScan",
+    "api-params-parsing"
+   ],
+   "divergences": [
+    {
+     "location": "21:14221090-14221175",
+     "allele": "-",
+     "feature": "ENST00001045222",
+     "feature_type": "Transcript",
+     "record_indices": [
+      8
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+     ],
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    }
+   ],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {
+    "stop_codon_removed_without_stop_codon_test": 1
+   },
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "MaxEntScan_ref",
+    "MaxEntScan_alt",
+    "MaxEntScan_diff",
+    "MaxEntScan_ref_seq",
+    "MaxEntScan_alt_seq"
+   ],
+   "field_divergences": [
+    {
+     "location": "1:201374981",
+     "allele": "C",
+     "feature": "ENST00000714314",
+     "feature_type": "Transcript",
+     "record_indices": [
+      0
+     ],
+     "consequence_set": "5_prime_UTR_variant,splice_region_variant",
+     "field": "MaxEntScan_ref",
+     "vep": "4.568",
+     "vep_rs": "-3.441",
+     "expected_divergence": "maxentscan_overlapping_windows"
+    },
+    {
+     "location": "1:201374981",
+     "allele": "C",
+     "feature": "ENST00000714314",
+     "feature_type": "Transcript",
+     "record_indices": [
+      0
+     ],
+     "consequence_set": "5_prime_UTR_variant,splice_region_variant",
+     "field": "MaxEntScan_alt",
+     "vep": "-0.284",
+     "vep_rs": "-4.441",
+     "expected_divergence": "maxentscan_overlapping_windows"
+    },
+    {
+     "location": "1:201374981",
+     "allele": "C",
+     "feature": "ENST00000714314",
+     "feature_type": "Transcript",
+     "record_indices": [
+      0
+     ],
+     "consequence_set": "5_prime_UTR_variant,splice_region_variant",
+     "field": "MaxEntScan_diff",
+     "vep": "4.852",
+     "vep_rs": "1.000",
+     "expected_divergence": "maxentscan_overlapping_windows"
+    },
+    {
+     "location": "1:201374981",
+     "allele": "C",
+     "feature": "ENST00000714314",
+     "feature_type": "Transcript",
+     "record_indices": [
+      0
+     ],
+     "consequence_set": "5_prime_UTR_variant,splice_region_variant",
+     "field": "MaxEntScan_ref_seq",
+     "vep": "GAGGTGGGC",
+     "vep_rs": "GGCACGCGTGAGTGGGGCAGGAG",
+     "expected_divergence": "maxentscan_overlapping_windows"
+    },
+    {
+     "location": "1:201374981",
+     "allele": "C",
+     "feature": "ENST00000714314",
+     "feature_type": "Transcript",
+     "record_indices": [
+      0
+     ],
+     "consequence_set": "5_prime_UTR_variant,splice_region_variant",
+     "field": "MaxEntScan_alt_seq",
+     "vep": "GGGGTGGGC",
+     "vep_rs": "GGCACGCGTGAGTGGGGCAGGGG",
+     "expected_divergence": "maxentscan_overlapping_windows"
+    }
+   ],
+   "field_divergence_summary": {
+    "maxentscan_overlapping_windows": 5
+   }
+  }
+ ],
+ "suites": {
+  "mes": {
+   "reference": "default.txt",
+   "input": "candidates.vcf",
+   "rows": 350,
+   "combinations": 43
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 4
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant": {
+   "observed_rows": 21,
+   "exemplar_records": 3
+  },
+  "5_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant,splice_region_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 15,
+   "exemplar_records": 6
+  },
+  "NMD_transcript_variant,intron_variant,splice_donor_region_variant,splice_donor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant,splice_region_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 4
+  },
+  "NMD_transcript_variant,missense_variant,splice_region_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 4
+  },
+  "NMD_transcript_variant,splice_acceptor_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 3
+  },
+  "NMD_transcript_variant,splice_donor_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 3
+  },
+  "NMD_transcript_variant,splice_region_variant,stop_gained": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,splice_region_variant,synonymous_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,synonymous_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 2
+  },
+  "coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 3
+  },
+  "frameshift_variant,splice_region_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 2
+  },
+  "intron_variant": {
+   "observed_rows": 43,
+   "exemplar_records": 5
+  },
+  "intron_variant,non_coding_transcript_exon_variant,splice_acceptor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_exon_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 7
+  },
+  "intron_variant,non_coding_transcript_variant,splice_region_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_donor_region_variant,splice_donor_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_region_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 2
+  },
+  "missense_variant,splice_region_variant": {
+   "observed_rows": 19,
+   "exemplar_records": 4
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 13,
+   "exemplar_records": 8
+  },
+  "non_coding_transcript_exon_variant,splice_region_variant": {
+   "observed_rows": 14,
+   "exemplar_records": 4
+  },
+  "non_coding_transcript_variant,splice_acceptor_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 3
+  },
+  "non_coding_transcript_variant,splice_donor_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 2
+  },
+  "non_coding_transcript_variant,splice_region_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 2
+  },
+  "splice_acceptor_variant": {
+   "observed_rows": 9,
+   "exemplar_records": 3
+  },
+  "splice_donor_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 3
+  },
+  "splice_region_variant,synonymous_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 48,
+   "exemplar_records": 15
+  }
+ },
+ "variant_classes": {
+  "deletion": 43,
+  "insertion": 27,
+  "snv": 280
+ },
+ "records": [
+  {
+   "suite": "mes",
+   "vcf": "1\t201374981\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,NMD_transcript_variant",
+    "5_prime_UTR_variant,splice_region_variant",
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14216100\t.\tC\tA\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14216282\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,splice_region_variant,synonymous_variant",
+    "NMD_transcript_variant,synonymous_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "splice_region_variant,synonymous_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14216282\t.\tGGT\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "NMD_transcript_variant,splice_donor_variant",
+    "non_coding_transcript_variant,splice_donor_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14216284\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "NMD_transcript_variant,splice_donor_variant",
+    "non_coding_transcript_variant,splice_donor_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14219561\t.\tA\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,missense_variant",
+    "NMD_transcript_variant,splice_acceptor_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "non_coding_transcript_variant,splice_acceptor_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14219563\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,missense_variant",
+    "NMD_transcript_variant,missense_variant,splice_region_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "missense_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14219725\t.\tG\tGCA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
+    "NMD_transcript_variant,frameshift_variant,splice_region_variant",
+    "NMD_transcript_variant,intron_variant",
+    "frameshift_variant,splice_region_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_variant,splice_region_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14221089\t.\tTTTCAAAGGGAGTTCTCGCTCTTCTGAACCAGCTAACCAAAGTTTTGAGAGCTGTGTTAAGATAAATTCACACAACTACAGGTAATT\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant",
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+    "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant",
+    "coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant",
+    "intron_variant,non_coding_transcript_exon_variant,splice_acceptor_variant",
+    "intron_variant,non_coding_transcript_exon_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14221097\t.\tG\tA,T\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant",
+    "NMD_transcript_variant,missense_variant,splice_region_variant",
+    "NMD_transcript_variant,splice_region_variant,stop_gained",
+    "missense_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14221140\t.\tC\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,missense_variant",
+    "NMD_transcript_variant,synonymous_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14224545\t.\tT\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,intron_variant,splice_region_variant",
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant,splice_region_variant",
+    "intron_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14226878\t.\tA\tC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,splice_acceptor_variant",
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "non_coding_transcript_variant,splice_acceptor_variant",
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14374290\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant",
+    "downstream_gene_variant",
+    "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14378300\t.\tT\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14381543\t.\tC\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant,splice_region_variant",
+    "intron_variant",
+    "missense_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14381543\t.\tC\tCTG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant,splice_region_variant",
+    "frameshift_variant,splice_region_variant",
+    "intron_variant",
+    "non_coding_transcript_variant,splice_region_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14381545\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,splice_acceptor_variant",
+    "intron_variant",
+    "non_coding_transcript_variant,splice_acceptor_variant",
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14383091\t.\tCCA\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "intron_variant,splice_donor_region_variant,splice_donor_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14383093\t.\tA\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,splice_donor_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "mes",
+   "vcf": "21\t14383095\t.\tC\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant,splice_region_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "missense_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "generated": {
+  "command": [
+   "python3",
+   "scripts/fixtures/maxentscan_fixture_matrices.py",
+   "--seed",
+   "1",
+   "--out",
+   "{generated}/fordownload_synthetic"
+  ],
+  "sha256": {
+   "fordownload_synthetic/me2x5": "9a20395e2fa17309f093fe7639be8586f003871de922baf45fe009c0f48fcc4f",
+   "fordownload_synthetic/splicemodels/splice5sequences": "2038817c2f7db39dbc844025d532ffa7b7bb70ab7bf3caf6f4c0e7fb21afbbed",
+   "fordownload_synthetic/splicemodels/me2x3acc1": "e2c6e57a2d78af58cd36387f13265dd30a31a3aad24a5e1af57627734b8fd959",
+   "fordownload_synthetic/splicemodels/me2x3acc2": "aef563318088bbf6115ff83e4018b6667f7c21223840beddf3ebe9942febb4ca",
+   "fordownload_synthetic/splicemodels/me2x3acc3": "7d4c3d6ae3973b98452d0877682272329c8d5b2f5b17163d2d6814c124c1c568",
+   "fordownload_synthetic/splicemodels/me2x3acc4": "be27b92c4933fe125a50905792aa891f477feeb86088f6710f7bd3c556447820",
+   "fordownload_synthetic/splicemodels/me2x3acc5": "7df95a12ee2c58b143334d2671f5e3f569fd945862453fec67ec9414855c7894",
+   "fordownload_synthetic/splicemodels/me2x3acc6": "7dd66833a77dae702158b9a5f04af446bd7e468e409e0d3b5a435e3101ef5170",
+   "fordownload_synthetic/splicemodels/me2x3acc7": "66dc4120c8fedb3098798cd41b558472b6253e0c3de9061dc4583834ac58b083",
+   "fordownload_synthetic/splicemodels/me2x3acc8": "eaf6641a698310cb1cac836df576c1577d76c13860cd49b69c44bb163c754974",
+   "fordownload_synthetic/splicemodels/me2x3acc9": "cf13e3635cc10499dcc10b49d6ec0e2f648600ecd5694829ffd29f5ad1ff9ae3",
+   "fordownload_synthetic/notes.txt": "49833d61e5241f39adb58bd6cd47afd1bf8454646aead0b9a7eb685e060970bb",
+   "fordownload_synthetic/splice5sequences": "6945b8ee82f5243216193db2055d174df9afcd7c732eb71013866d79372176f0",
+   "fordownload_synthetic/splicemodels/me2x5": "393690ecec093cc1fd8372874d13908c6e8f6f9777d7e1cd9e298023cf9eabe0",
+   "fordownload_synthetic/splicemodels/me2x3acc10": "6d8c6e54e392fbc1748751d3fd0ccf18b0ce4dda9a427aa474e699b93365b582",
+   "fordownload_synthetic/splicemodels/notes.txt": "49833d61e5241f39adb58bd6cd47afd1bf8454646aead0b9a7eb685e060970bb"
+  }
+ },
+ "divergences": [
+  {
+   "location": "21:14221090-14221175",
+   "allele": "-",
+   "feature": "ENST00001045222",
+   "feature_type": "Transcript",
+   "record_indices": [
+    8
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  }
+ ],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {
+  "stop_codon_removed_without_stop_codon_test": 1
+ },
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "MaxEntScan_ref",
+  "MaxEntScan_alt",
+  "MaxEntScan_diff"
+ ],
+ "field_divergences": [
+  {
+   "location": "1:201374981",
+   "allele": "C",
+   "feature": "ENST00000714314",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "5_prime_UTR_variant,splice_region_variant",
+   "field": "MaxEntScan_ref",
+   "vep": "4.568",
+   "vep_rs": "-3.441",
+   "expected_divergence": "maxentscan_overlapping_windows"
+  },
+  {
+   "location": "1:201374981",
+   "allele": "C",
+   "feature": "ENST00000714314",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "5_prime_UTR_variant,splice_region_variant",
+   "field": "MaxEntScan_alt",
+   "vep": "-0.284",
+   "vep_rs": "-4.441",
+   "expected_divergence": "maxentscan_overlapping_windows"
+  },
+  {
+   "location": "1:201374981",
+   "allele": "C",
+   "feature": "ENST00000714314",
+   "feature_type": "Transcript",
+   "record_indices": [
+    0
+   ],
+   "consequence_set": "5_prime_UTR_variant,splice_region_variant",
+   "field": "MaxEntScan_diff",
+   "vep": "4.852",
+   "vep_rs": "1.000",
+   "expected_divergence": "maxentscan_overlapping_windows"
+  }
+ ],
+ "field_divergence_summary": {
+  "maxentscan_overlapping_windows": 3
+ }
+}

@@ -8,15 +8,27 @@
 //! A corpus lives at `tests/golden/<release>/<name>/` with `variants.vcf`,
 //! `manifest.json`, its cache and `expected/{default.txt,tab.txt,vcf.vcf,
 //! json.jsonl}[.gz]`; `<name>` is the assembly, optionally suffixed
-//! (`GRCh37-hgvs`), and the manifest's `assembly` is what the run passes to
-//! `--assembly`. The cache is `json_cache/`, passed with `--json_cache`, unless
+//! (`GRCh37-hgvs`), the manifest's `assembly` is what the run passes to
+//! `--assembly` and its `species` (`homo_sapiens` when absent) what it passes
+//! to `--species`. The cache is `json_cache/`, passed with `--json_cache`, unless
 //! the manifest's `cache_layout` is `ensembl`: then it sits at
-//! `cache_root/homo_sapiens/<release>_<assembly>/` and every run passes
+//! `cache_root/<species>/<release>_<assembly>/` (the species directory suffixed
+//! `_refseq` or `_merged` when the manifest's flags carry `--refseq` or
+//! `--merged`) and every run passes
 //! `--cache --dir_cache <corpus>/cache_root --cache_version <release>`, so the
 //! binary resolves the directory as Ensembl VEP does. The manifest may also
-//! carry `flags` (extra command-line flags, such as `--hgvs`) and `fasta` (a
-//! reference beside the manifest, bgzipped with its `.fai` and `.gzi`, passed
-//! to `--fasta` as it is); with `fasta_in_cache` true the reference and its
+//! carry `flags` (extra command-line flags, such as `--hgvs`; a word may carry
+//! `{corpus}`, the corpus directory, so a flag names a file beside the manifest
+//! without an absolute path, as a `runs[].argv` token may, and `{plugins}`, the
+//! plugin directory each engine reads, here the corpus's `plugin_data` and in
+//! the reference run the directory of Ensembl VEP's plugin modules;
+//! [`corpus_flags`])
+//! and `fasta` (a reference beside the manifest, bgzipped with its `.fai` and
+//! `.gzi`, passed to `--fasta` as it is); a word may also carry `{generated}`,
+//! the directory the manifest's `generated` block writes before the run: its
+//! `command`, run from the repository root, and the `sha256` of every file it
+//! writes, for a fixture the corpus reproduces from a seed instead of committing
+//! ([`generated_dir`]). With `fasta_in_cache` true the reference and its
 //! indexes are placed inside a staged copy of the cache instead, which the run
 //! names as its cache with no `--fasta`, so the run relies on the binary's
 //! detection of an indexed `.fa` or `.fa.gz` in the cache directory. Its
@@ -24,21 +36,40 @@
 //! consequence terms are documented to differ between VEP and vep-rs (with the
 //! corpus record ordinals they belong to), and `vep_rs_only_tuples` the keys
 //! only vep-rs emits, each classified; both are compared against their
-//! documented shape rather than for equality. The class
+//! documented shape rather than for equality. A `divergences` item's
+//! `vep_rs_consequence_sets` are vep-rs's sets in a run without a reference
+//! sequence; an item may state its sets in a run that has one under
+//! `vep_rs_consequence_sets_with_reference_sequence`, and such a run is held to
+//! those: where they are VEP's own set the key is compared for equality like
+//! any other ([`Documented::for_run`], [`has_reference_sequence`]). The class
 //! `reference_skipped_record` names a record the reference dropped before
 //! annotation (its `reference_rows` is 0 and `reference_warning` quotes the
 //! reason): the reference writes nothing for it, so the record-level VCF line
 //! and JSON object vep-rs writes for it are counted, not compared, while every
-//! consequence entry on it must still be a documented vep-rs-only key.
+//! consequence entry on it must still be a documented vep-rs-only key; the two
+//! `--check_frequency` classes of [`RECORD_DROPPING_CLASSES`] mark their records
+//! the same way.
 //! `field_divergences` names keys whose terms agree but whose named field (an
-//! HGVS string) is documented to differ, with the value vep-rs prints; every
-//! other field of such a key compares exactly. A run under `--nearest transcript`
+//! HGVS string) is documented to differ, with the value vep-rs prints; the key
+//! carries the row's consequence set, so a record sharing a Location and Allele
+//! with the documented one keeps its own rows compared exactly, and every other
+//! field of a documented key compares exactly. A run under `--nearest transcript`
 //! compares its `NEAREST` values as the coordinates of the named transcripts'
 //! start sites ([`nearest_as_coordinates`]). `masks` lists the mask classes
 //! applied to every run of the corpus before the comparison: under
 //! [`REGULATORY_FEATURE_ROWS`] the reference loses its regulatory rows
-//! ([`apply_masks`]), and under [`ORDER_ONLY`] the `DOMAINS`, `FREQS` and `ZYG`
-//! items of both sides compare as a multiset ([`list_columns_as_multisets`]).
+//! ([`apply_masks`]), under [`ORDER_ONLY`] the `DOMAINS`, `FREQS`, `ZYG` and
+//! `NearestExonJB` items and the `5UTR_annotation` pair groups of both sides
+//! compare as a multiset ([`list_columns_as_multisets`]), under
+//! [`UNLOADED_MODULE_PLUGIN`] the reference's run-time warnings about a plugin
+//! module vep-rs cannot load stand against vep-rs's load warning for it
+//! ([`compare_warnings`]), and under [`CONSERVATION_SHORT_NAME_SPELLING`] and
+//! [`PC_DESCRIPTION_TEXT`] the reference text is read with a `--phyloP` source's
+//! key spelt `phyloP<N>way` and with vep-rs's description of a `PC` field
+//! ([`masked_reference_text`]). A class of [`CORRECTED_BEHAVIOUR_CLASSES`]
+//! changes no comparison here: its rows are the documented items of the three
+//! lists, and naming it in `masks` states which corrected behaviour they belong
+//! to.
 //!
 //! A corpus is run once per [`Run`]: the manifest's own run (its `flags`,
 //! `variants.vcf`, every format, `expected/`) and once per `flag_sets` entry,
@@ -47,10 +78,14 @@
 //! input with `-i STDIN`), `formats` (the formats compared, all four by default),
 //! `expected_dir` (`expected_<name>` by default), `unordered` (the entries
 //! compared without their order, for a set whose rows the reference emits in
-//! hash order) and `perl_mode` (`offline` by default; `database` for a reference
-//! Ensembl VEP wrote connected to its database, whose default and tab headers
-//! compare by their column descriptions alone and whose VCF `##VEP=` line by
-//! the tokens it names). An entry carrying its own
+//! hash order) and `perl_mode` (the manifest's own, `offline` when it names
+//! none; `database` for a reference Ensembl VEP wrote connected to its
+//! database, whose default and tab headers compare by their column
+//! descriptions alone and whose VCF `##VEP=` line by the tokens it names; `gtf`
+//! or `gff` for one it wrote reading its transcripts from the file given to
+//! `--gtf` or `--gff` while vep-rs reads the cache built from that file, whose
+//! headers compare the same way once the source's `SOURCE` column and header
+//! lines are set aside, [`GXF_PERL_MODES`]). An entry carrying its own
 //! `divergences` documents its run; one without inherits the manifest's lists.
 //! An entry carrying its own `masks` lists the classes of its run; one without
 //! inherits the manifest's.
@@ -73,16 +108,19 @@
 //! The VCF and JSON formats carry no `Location`, so their entries are keyed by
 //! the corpus record ordinal, found by matching each output record to its
 //! input line by the first five columns (of the VCF line, of the JSON object's
-//! `input`).
+//! `input`); the VCF output of an input that is not a VCF carries no such line,
+//! so its records are the input records in turn, one per line.
 
 #![allow(dead_code)]
 
 use std::borrow::Borrow;
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+
+use indexmap::IndexMap;
 
 use vep_core::cache_manifest::{CacheManifest, MANIFEST_FILE};
 use vep_core::consequence::Consequence;
@@ -94,9 +132,15 @@ pub struct Corpus {
     pub name: String,
     /// The assembly passed to `--assembly`: the manifest's `assembly`, else the name.
     pub assembly: String,
+    /// The species passed to `--species`, and the cache directory's name under the
+    /// Ensembl layout: the manifest's `species`, else [`DEFAULT_SPECIES`].
+    pub species: String,
     pub dir: PathBuf,
     pub manifest: serde_json::Value,
 }
+
+/// The species of a manifest that names none.
+pub const DEFAULT_SPECIES: &str = "homo_sapiens";
 
 impl Corpus {
     /// Whether the cache sits in Ensembl VEP's layout under `cache_root/`
@@ -112,15 +156,57 @@ impl Corpus {
         }
     }
 
-    /// The cache directory itself: `json_cache/`, or the leaf of the Ensembl layout.
+    /// The cache directory itself: `json_cache/`, or the leaf of the Ensembl layout
+    /// under [`Self::species_dir`].
     pub fn cache_dir(&self) -> PathBuf {
         if self.ensembl_cache_layout() {
             self.cache_root()
-                .join("homo_sapiens")
+                .join(self.species_dir())
                 .join(format!("{}_{}", self.release, self.assembly))
         } else {
             self.dir.join("json_cache")
         }
+    }
+
+    /// The transcript-set flags of the manifest's `flags`, `--refseq` and
+    /// `--merged`, in that order. A corpus cut from a RefSeq or merged cache
+    /// declares the set in its `info.json`, which the binary holds a run's flags
+    /// to, so every run of the corpus carries them.
+    pub fn transcript_set_flags(&self) -> Vec<String> {
+        let flags = strings(&self.manifest["flags"]);
+        ["--refseq", "--merged"]
+            .into_iter()
+            .filter(|flag| flags.iter().any(|f| f == flag))
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// The arguments a run of a RefSeq or merged corpus needs beyond its cache:
+    /// [`Self::transcript_set_flags`] and, since a BAM-edited cache switches
+    /// `--use_transcript_ref` on and reads the reference, `--fasta` naming the
+    /// corpus FASTA; empty for every other corpus.
+    pub fn transcript_set_args(&self) -> Vec<String> {
+        let mut args = self.transcript_set_flags();
+        if !args.is_empty() {
+            if let Some(fasta) = self.manifest["fasta"].as_str() {
+                args.push("--fasta".to_string());
+                args.push(self.dir.join(fasta).display().to_string());
+            }
+        }
+        args
+    }
+
+    /// The species directory of the Ensembl layout: the species, with `_refseq`
+    /// and then `_merged` appended for each of `--refseq` and `--merged` the
+    /// manifest's flags carry, the directory the binary resolves from the same
+    /// flags as Ensembl VEP does (`CacheDir.pm:312`).
+    pub fn species_dir(&self) -> String {
+        let mut dir = self.species.clone();
+        for flag in self.transcript_set_flags() {
+            dir.push('_');
+            dir.push_str(flag.trim_start_matches('-'));
+        }
+        dir
     }
 
     /// The cache root of the Ensembl layout, `cache_root/`.
@@ -152,7 +238,7 @@ impl Corpus {
 
     /// The arguments naming the committed cache: `--json_cache <dir>`, or under
     /// the Ensembl layout `--cache --dir_cache <root> --cache_version <release>`,
-    /// so the run resolves `<root>/homo_sapiens/<release>_<assembly>` itself.
+    /// so the run resolves `<root>/<species>/<release>_<assembly>` itself.
     pub fn cache_args(&self) -> Vec<String> {
         if self.ensembl_cache_layout() {
             vec![
@@ -215,21 +301,182 @@ pub const REGULATORY_FEATURE_ROWS: &str = "regulatory_feature_rows";
 /// identifier, so `DOMAINS` agrees as a set and not in order; `FREQS` lists the
 /// frequencies that filtered a record in hash order (`OutputFactory.pm:1152-1153`),
 /// as does the `ZYG` list of `--individual_zyg` (`OutputFactory.pm:983`), which
-/// vep-rs prints in the order the run names the samples. Under the class the
-/// items of the three columns in the default, tab and VCF formats and the JSON
-/// `domains` and `zyg` arrays compare as a multiset
-/// ([`list_columns_as_multisets`]); every other field compares exactly.
+/// vep-rs prints in the order the run names the samples; the UTRAnnotator
+/// plugin's `5UTR_annotation` writes its `key=value` pairs and its groups in
+/// hash order (UTRAnnotator.pm:282-288), which vep-rs fixes, as the
+/// NearestExonJB plugin lists its exon items (NearestExonJB.pm:267-271). Under
+/// the class the items of the four columns and the pair groups of the fifth in
+/// the default, tab and VCF formats and the JSON `domains` and `zyg` arrays and
+/// `NearestExonJB` string compare as a multiset ([`list_columns_as_multisets`]);
+/// every other field compares exactly.
 pub const ORDER_ONLY: &str = "order_only";
 
-/// Every mask class a manifest may name.
-const MASK_CLASSES: [&str; 2] = [REGULATORY_FEATURE_ROWS, ORDER_ONLY];
+/// The mask class of a corpus whose flags name a plugin module of its own that
+/// Ensembl VEP loads from the plugins directory and vep-rs, which runs no such
+/// module, cannot. The reference's run-time warnings about that plugin,
+/// `Plugin '<Name>' did not return a hashref, output ignored!` and `Plugin
+/// '<Name>' went wrong: <reason>` (OutputFactory.pm:2235 and :2244), are set
+/// aside, and the one line vep-rs writes about it, `Failed to load plugin
+/// <Name>: ...`, is required in their place and set aside too; every other
+/// warning compares as usual ([`compare_warnings`]).
+pub const UNLOADED_MODULE_PLUGIN: &str = "unloaded_module_plugin";
 
-/// The classes a `masks` list names, each one of [`MASK_CLASSES`].
+/// The mask class of a run under `--phyloP`: Ensembl VEP's option set names
+/// each source `phlyoP<N>way` while the file it reads is `phyloP<N>way`
+/// (`Config.pm:555`), so the misspelt key heads the reference's header line,
+/// tab column, `Extra` item, CSQ field and JSON `custom_annotations` member
+/// where vep-rs writes `phyloP<N>way`. Under the class the reference text is
+/// read with the key spelt as vep-rs spells it ([`masked_reference_text`]).
+pub const CONSERVATION_SHORT_NAME_SPELLING: &str = "conservation_short_name_spelling";
+
+/// The mask class of a run whose `--custom` source asks for the `PC` field:
+/// Ensembl VEP describes it (`AnnotationSourceAdaptor.pm:395-397`) as the
+/// share of the input variant covered under `reciprocal=0` and as a minimum
+/// reciprocal overlap under `reciprocal=1`, while `File.pm:556-564` computes
+/// the share of the annotation record the variant covers without `reciprocal`
+/// and the share of the variant the record covers with it. vep-rs's header
+/// names the share computed; under the class the reference's
+/// `## <key>_PC : <text> from <file>` and `##INFO=<ID=<key>_PC,...>` lines
+/// are read with that text ([`masked_reference_text`]).
+pub const PC_DESCRIPTION_TEXT: &str = "pc_description_text";
+
+/// The classes of the behaviours vep-rs corrects where Ensembl VEP 116.2 is
+/// wrong, each a page or section of `docs/intended-divergences.md`. A corpus
+/// documents the rows of such a class in its `divergences`, `vep_rs_only_tuples`
+/// or `field_divergences` under `expected_divergence`, which the harness applies
+/// whatever the class, and names the class in `masks` so the comparison states
+/// what it sets aside; the format comparator's built-in classes of the same
+/// names recognise the shapes without a manifest.
+const CORRECTED_BEHAVIOUR_CLASSES: &[&str] = &[
+    "start_cooccurrence_swap",
+    "splice_family_swap",
+    "gxf_reverse_strand_utr_sequence",
+    "conservation_max_text_order",
+    "gwas_haplotype_cross_product",
+    "alphamissense_two_digit_transcript_version",
+    "cadd_structural_allele_match",
+    "splicevault_sibling_allele_rows",
+    "splicevault_json_later_rows",
+    "transcript_annotator_sibling_allele_rows",
+    "utrannotator_gained_start_window",
+    "loeuf_zero_minimum",
+    "maxentscan_overlapping_windows",
+    "dosage_sensitivity_regulatory_row_warnings",
+    "hgvs_shift_shared_across_alleles",
+    "hgvs_shift_sequence_edge_window",
+    "refseq_edited_model_hgvsc_offset",
+    "frequency_filter_zero_value",
+    "frequency_filter_allele_key_order",
+    "organelle_peptide_paths_translation_table",
+    "hgvs_shifted_indel_written_span_gate",
+    "hgvs_shifted_deletion_clamped_span",
+    "hgvs_clipped_reference_against_whole_alternate",
+    "hgvs_added_bases_left_at_the_span_end",
+    "hgvs_insertion_left_where_the_shift_stops",
+    "hgvs_added_bases_written_outside_the_transcript",
+];
+
+/// The mask classes that change how the harness compares; a manifest may also
+/// name a class of [`CORRECTED_BEHAVIOUR_CLASSES`].
+const MASK_CLASSES: &[&str] = &[
+    REGULATORY_FEATURE_ROWS,
+    ORDER_ONLY,
+    UNLOADED_MODULE_PLUGIN,
+    CONSERVATION_SHORT_NAME_SPELLING,
+    PC_DESCRIPTION_TEXT,
+    FILE_CACHE_WRITES_NO_SOURCE_FIELD,
+];
+
+/// The misspelt key's parts: the prefix Ensembl VEP's set writes and vep-rs's
+/// spelling of it; the width and `way` follow each.
+const MISSPELT_CONSERVATION_PREFIX: &str = "phlyoP";
+const CONSERVATION_PREFIX: &str = "phyloP";
+
+/// Ensembl VEP's two `PC` descriptions, each paired with vep-rs's text for the
+/// share that setting of `reciprocal` computes.
+const PC_DESCRIPTIONS: [(&str, &str); 2] = [
+    (
+        "Percentage of input variant covered by reference variant",
+        "Percentage of the annotation record covered by the input variant",
+    ),
+    (
+        "Percentage of minimum reciprocal overlap between input variant and reference variant",
+        "Percentage of the input variant covered by the annotation record",
+    ),
+];
+
+/// The reference output of one format as the run's text mask classes read it,
+/// applied before the header comparison and the parse. Under
+/// [`CONSERVATION_SHORT_NAME_SPELLING`] every `phlyoP<N>way` (a digit run
+/// between the prefix and `way`) becomes `phyloP<N>way`, in the header lines
+/// and the rows alike; under [`PC_DESCRIPTION_TEXT`] every header line
+/// describing a `<key>_PC` field with one of Ensembl VEP's two texts carries
+/// vep-rs's text for the share the field reports. Without either class the
+/// text is returned as it is.
+pub fn masked_reference_text(masks: &[String], text: String) -> String {
+    let mut text = text;
+    if masks_name(masks, CONSERVATION_SHORT_NAME_SPELLING) {
+        text = respelt_conservation_keys(&text);
+    }
+    if masks_name(masks, PC_DESCRIPTION_TEXT) {
+        text = with_pc_descriptions(&text);
+    }
+    text
+}
+
+/// `text` with every `phlyoP<N>way` key spelt `phyloP<N>way`; a `phlyoP` not
+/// followed by a digit run and `way` stays as written.
+fn respelt_conservation_keys(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find(MISSPELT_CONSERVATION_PREFIX) {
+        let after = &rest[at + MISSPELT_CONSERVATION_PREFIX.len()..];
+        let digits = after.len() - after.trim_start_matches(|c: char| c.is_ascii_digit()).len();
+        let is_key = digits > 0 && after[digits..].starts_with("way");
+        out.push_str(&rest[..at]);
+        out.push_str(if is_key {
+            CONSERVATION_PREFIX
+        } else {
+            MISSPELT_CONSERVATION_PREFIX
+        });
+        rest = after;
+    }
+    out.push_str(rest);
+    out
+}
+
+/// `text` with every `## <key>_PC : ...` and `##INFO=<ID=<key>_PC,...>` header
+/// line carrying vep-rs's `PC` description in place of Ensembl VEP's; the key a
+/// header line describes is read as [`without_transcript_source`] reads it.
+fn with_pc_descriptions(text: &str) -> String {
+    fn described_key(line: &str) -> Option<&str> {
+        if let Some(rest) = line.strip_prefix("## ") {
+            rest.split_once(" : ").map(|(key, _)| key)
+        } else {
+            line.strip_prefix("##INFO=<ID=")
+                .and_then(|rest| rest.split(',').next())
+        }
+    }
+    let mut out: Vec<String> = Vec::new();
+    for line in text.split_inclusive('\n') {
+        let is_pc_line = described_key(line.trim_end()).is_some_and(|key| key.ends_with("_PC"));
+        let replaced = PC_DESCRIPTIONS
+            .iter()
+            .find(|(perl_text, _)| is_pc_line && line.contains(perl_text))
+            .map(|(perl_text, vep_rs_text)| line.replacen(perl_text, vep_rs_text, 1));
+        out.push(replaced.unwrap_or_else(|| line.to_string()));
+    }
+    out.concat()
+}
+
+/// The classes a `masks` list names, each one of [`MASK_CLASSES`] or
+/// [`CORRECTED_BEHAVIOUR_CLASSES`].
 fn mask_classes(label: &str, masks: &serde_json::Value) -> Vec<String> {
     let masks = strings(masks);
     for class in &masks {
         assert!(
-            MASK_CLASSES.contains(&class.as_str()),
+            MASK_CLASSES.contains(&class.as_str())
+                || CORRECTED_BEHAVIOUR_CLASSES.contains(&class.as_str()),
             "{label}: unknown mask class {class}"
         );
     }
@@ -241,13 +488,10 @@ fn masks_name(masks: &[String], class: &str) -> bool {
     masks.iter().any(|m| m == class)
 }
 
-/// The `Feature_type` values of the rows [`REGULATORY_FEATURE_ROWS`] drops.
+/// The `Feature_type` values of the rows [`REGULATORY_FEATURE_ROWS`] drops; in
+/// the JSON format the entries of the `regulatory_feature_consequences` and
+/// `motif_feature_consequences` arrays.
 const REGULATORY_FEATURE_TYPES: [&str; 2] = ["RegulatoryFeature", "MotifFeature"];
-/// The JSON record arrays holding those rows.
-const REGULATORY_JSON_ARRAYS: [&str; 2] = [
-    "regulatory_feature_consequences",
-    "motif_feature_consequences",
-];
 /// The warnings-file phrase vep-rs writes when the cache holds no regulatory
 /// data; [`REGULATORY_FEATURE_ROWS`] requires the line.
 const REGULATORY_NOTICE: &str = "this cache holds no regulatory data";
@@ -274,8 +518,12 @@ pub fn apply_masks(masks: &[String], format: &str, expected: &mut Vec<Entry>) {
         return;
     }
     let record_of = |key: &str| key.split('|').next().unwrap_or_default().to_string();
+    let regulatory_entry = |e: &Entry| e.key.ends_with("|regulatory") || e.key.ends_with("|motif");
     let mut remaining: HashMap<String, Vec<Consequence>> = HashMap::new();
-    for entry in expected.iter().filter(|e| !e.key.ends_with("|record")) {
+    for entry in expected
+        .iter()
+        .filter(|e| !e.key.ends_with("|record") && !regulatory_entry(e))
+    {
         let terms = remaining.entry(record_of(&entry.key)).or_default();
         for term in entry
             .consequence
@@ -289,11 +537,14 @@ pub fn apply_masks(masks: &[String], format: &str, expected: &mut Vec<Entry>) {
             );
         }
     }
+    let dropped_records: HashSet<String> = expected
+        .iter()
+        .filter(|e| regulatory_entry(e))
+        .map(|e| record_of(&e.key))
+        .collect();
+    expected.retain(|e| !regulatory_entry(e));
     for entry in expected.iter_mut().filter(|e| e.key.ends_with("|record")) {
-        let mut dropped = false;
-        for array in REGULATORY_JSON_ARRAYS {
-            dropped |= entry.fields.remove(array).is_some();
-        }
+        let dropped = dropped_records.contains(&record_of(&entry.key));
         // A record that lost no row keeps Ensembl VEP's own value under comparison.
         if dropped && entry.fields.contains_key("most_severe_consequence") {
             let terms = remaining.remove(&record_of(&entry.key)).unwrap_or_default();
@@ -308,19 +559,29 @@ pub fn apply_masks(masks: &[String], format: &str, expected: &mut Vec<Entry>) {
 }
 
 /// The columns [`ORDER_ONLY`] compares as multisets in the text formats; the
-/// JSON format carries `DOMAINS` as a consequence's `domains` array and `ZYG` as
-/// the record's `zyg` array.
-const ORDER_ONLY_COLUMNS: [&str; 3] = ["DOMAINS", "FREQS", "ZYG"];
+/// JSON format carries `DOMAINS` as a consequence's `domains` array, `ZYG` as
+/// the record's `zyg` array and `NearestExonJB` as the consequence's
+/// `,`-joined `nearestexonjb` string.
+const ORDER_ONLY_COLUMNS: [&str; 4] = ["DOMAINS", "FREQS", "ZYG", "NearestExonJB"];
+
+/// The column [`ORDER_ONLY`] compares as a multiset of `key=value` groups: the
+/// UTRAnnotator plugin writes one `:`-joined group of pairs per affected
+/// upstream ORF, the pairs and the groups in Ensembl VEP's hash order
+/// (UTRAnnotator.pm:282-288 at VEP_plugins release/116) and in vep-rs's fixed
+/// order; the JSON format nests the groups as objects, which compare by key.
+const ORDER_ONLY_PAIR_GROUP_COLUMN: &str = "5UTR_annotation";
 
 /// Rewrites every [`ORDER_ONLY_COLUMNS`] value of one side into its items in
 /// sorted order: the default and tab formats' `,`-joined items
 /// (`Utils.pm:185-198`), the VCF's `&`-joined items (`OutputFactory/VCF.pm:391`),
-/// the JSON `domains` array's objects by their compact text and the JSON `zyg`
-/// array's strings. Applied to both sides under [`ORDER_ONLY`], it makes two
-/// lists of the same items in any order compare equal while lists differing in
-/// an item, or in how often one occurs, still differ. The default format's raw
-/// `Extra` text is rewritten with each field; an absent or `-` value stays as
-/// written.
+/// the JSON `domains` array's objects by their compact text, the JSON `zyg`
+/// array's strings and the JSON `nearestexonjb` string's `,`-joined items; the
+/// [`ORDER_ONLY_PAIR_GROUP_COLUMN`]'s groups each into
+/// their sorted pairs, then into sorted groups. Applied to both sides under
+/// [`ORDER_ONLY`], it makes two lists of the same items in any order compare
+/// equal while lists differing in an item, or in how often one occurs, still
+/// differ. The default format's raw `Extra` text is rewritten with each field;
+/// an absent or `-` value stays as written.
 pub fn list_columns_as_multisets(entries: &mut [Entry], format: &str) {
     if format == "json" {
         for entry in entries {
@@ -335,23 +596,38 @@ pub fn list_columns_as_multisets(entries: &mut [Entry], format: &str) {
                     entry.fields.insert("domains".to_string(), sorted);
                 }
             }
-            if let Some(value) = entry.fields.get("zyg").cloned() {
-                let sorted = sorted_items(value.split(','), ",");
-                entry.fields.insert("zyg".to_string(), sorted);
+            for field in ["zyg", "nearestexonjb"] {
+                if let Some(value) = entry.fields.get(field).cloned() {
+                    let sorted = sorted_items(value.split(','), ",");
+                    entry.fields.insert(field.to_string(), sorted);
+                }
             }
         }
         return;
     }
     let separator = if format == "vcf" { "&" } else { "," };
     for entry in entries {
-        for column in ORDER_ONLY_COLUMNS {
+        for column in ORDER_ONLY_COLUMNS
+            .iter()
+            .copied()
+            .chain([ORDER_ONLY_PAIR_GROUP_COLUMN])
+        {
             let Some(value) = entry.fields.get(column).cloned() else {
                 continue;
             };
             if value.is_empty() || value == "-" {
                 continue;
             }
-            let sorted = sorted_items(value.split(separator), separator);
+            let sorted = if column == ORDER_ONLY_PAIR_GROUP_COLUMN {
+                sorted_items(
+                    value
+                        .split(separator)
+                        .map(|group| sorted_items(group.split(':'), ":")),
+                    separator,
+                )
+            } else {
+                sorted_items(value.split(separator), separator)
+            };
             if let Some(extra) = entry.fields.get_mut("Extra") {
                 *extra = extra.replace(&format!("{column}={value}"), &format!("{column}={sorted}"));
             }
@@ -465,10 +741,14 @@ pub fn corpora() -> Vec<Corpus> {
                 .as_str()
                 .map(str::to_string)
                 .unwrap_or_else(|| name.clone());
+            let species = manifest["species"]
+                .as_str()
+                .map_or_else(|| DEFAULT_SPECIES.to_string(), str::to_string);
             out.push(Corpus {
                 release: rel.file_name().to_string_lossy().into_owned(),
                 name,
                 assembly,
+                species,
                 dir,
                 manifest,
             });
@@ -501,6 +781,15 @@ fn read_maybe_gz(path: &Path) -> String {
 /// order; a line that is not UTF-8 is read with its invalid bytes replaced, as
 /// the binary reads it for its text outputs.
 fn data_lines(path: &Path) -> Vec<String> {
+    input_text(path)
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .map(str::to_string)
+        .collect()
+}
+
+/// An input file's text, decompressed when its name says it is gzipped.
+fn input_text(path: &Path) -> String {
     let bytes = if path.extension().is_some_and(|e| e == "gz" || e == "bgz") {
         let mut decompressed = Vec::new();
         flate2::read::MultiGzDecoder::new(fs::File::open(path).unwrap())
@@ -510,11 +799,16 @@ fn data_lines(path: &Path) -> Vec<String> {
     } else {
         fs::read(path).unwrap()
     };
-    String::from_utf8_lossy(&bytes)
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// Whether the input file is a VCF: one carries a `##fileformat=VCF` or a
+/// `#CHROM` header line, which no other input format does.
+fn input_is_vcf(path: &Path) -> bool {
+    input_text(path)
         .lines()
-        .filter(|l| !l.starts_with('#'))
-        .map(str::to_string)
-        .collect()
+        .take_while(|l| l.starts_with('#'))
+        .any(|l| l.starts_with("##fileformat=VCF") || l.starts_with("#CHROM"))
 }
 
 /// The output formats a run compares when its entry names none.
@@ -540,10 +834,15 @@ pub struct Run<'a> {
     /// fields, not the order of the entries.
     pub unordered: bool,
     /// How the reference was generated: `offline` (Ensembl VEP on its cache,
-    /// the default) or `database` (Ensembl VEP connected to the Ensembl
-    /// database, for a column it writes only with one). A database reference's
-    /// preamble describes a connection rather than a cache, so its default and
-    /// tab headers compare by their column descriptions and column line alone.
+    /// the default), `database` (Ensembl VEP connected to the Ensembl
+    /// database, for a column it writes only with one) or `gtf` or `gff`
+    /// (Ensembl VEP reading its transcripts from the file given to `--gtf` or
+    /// `--gff`, [`GXF_PERL_MODES`]). A database reference's preamble describes
+    /// a connection rather than a cache, so its default and tab headers compare
+    /// by their column descriptions and column line alone; a GTF or GFF
+    /// reference's names no cache either and compares the same way, after its
+    /// transcript source's `SOURCE` column and header lines are set aside
+    /// ([`without_transcript_source`]).
     pub perl_mode: String,
     /// The mask classes applied to the run: the flag set's own `masks`, else
     /// the manifest's ([`Corpus::masks`]).
@@ -599,6 +898,18 @@ impl Run<'_> {
         self.flag_value("--vcf_info_field").unwrap_or("CSQ")
     }
 
+    /// Whether the run reads a VCF: `--format vcf` says so, another named
+    /// format (`ensembl`, `region`, `hgvs`) says not, and without a `--format`
+    /// word the input file decides, as Ensembl VEP detects the format itself
+    /// ([`input_is_vcf`]). A VCF output carries a copy of a VCF input's line
+    /// and of no other format's.
+    pub fn reads_vcf(&self) -> bool {
+        match self.flag_value("--format") {
+            Some(format) => format == "vcf",
+            None => input_is_vcf(&self.corpus.dir.join(&self.input)),
+        }
+    }
+
     /// The expected output `name` (or its `.gz`) in the run's expected directory.
     pub fn expected(&self, name: &str) -> String {
         read_maybe_gz(&self.corpus.dir.join(&self.expected_dir).join(name))
@@ -609,8 +920,20 @@ impl Run<'_> {
         data_lines(&self.corpus.dir.join(&self.input))
     }
 
-    pub fn documented(&self) -> Documented {
-        Documented::from_manifest(self.documented)
+    /// The run's documented keys, each `divergences` item read for the run's
+    /// setting: with or without a reference sequence ([`Self::has_reference_sequence`]).
+    pub fn documented(&self, out_dir: &Path) -> Documented {
+        Documented::for_run(self.documented, self.has_reference_sequence(out_dir))
+    }
+
+    /// Whether the binary has a reference sequence in this run, by the words
+    /// the run gives it ([`base_args`]) and the cache directory it names.
+    pub fn has_reference_sequence(&self, out_dir: &Path) -> bool {
+        has_reference_sequence(
+            &base_args(self, out_dir),
+            &self.corpus.run_cache_dir(out_dir),
+            self.corpus,
+        )
     }
 
     /// Whether the run's `NEAREST` values compare as transcription start
@@ -627,10 +950,234 @@ impl Run<'_> {
         masks_name(&self.masks, REGULATORY_FEATURE_ROWS)
     }
 
-    /// Whether the run compares `DOMAINS`, `FREQS` and `ZYG` as multisets ([`ORDER_ONLY`]).
+    /// Whether the run's reference ran a plugin module vep-rs cannot load
+    /// ([`UNLOADED_MODULE_PLUGIN`]).
+    pub fn masks_unloaded_module_plugin(&self) -> bool {
+        masks_name(&self.masks, UNLOADED_MODULE_PLUGIN)
+    }
+
+    /// Whether the run compares `DOMAINS`, `FREQS`, `ZYG` and `NearestExonJB` as
+    /// multisets ([`ORDER_ONLY`]).
     pub fn order_only(&self) -> bool {
         masks_name(&self.masks, ORDER_ONLY)
     }
+
+    /// Whether the reference read its transcripts from a GTF or GFF file
+    /// ([`GXF_PERL_MODES`]).
+    pub fn transcript_source_reference(&self) -> bool {
+        GXF_PERL_MODES.contains(&self.perl_mode.as_str())
+    }
+
+    /// Whether the reference's preamble names no cache (a database or a GTF or
+    /// GFF reference), so the headers compare by their column descriptions.
+    pub fn headers_by_descriptions(&self) -> bool {
+        self.perl_mode == "database" || self.transcript_source_reference()
+    }
+}
+
+/// The `perl_mode` values of a reference Ensembl VEP wrote reading its
+/// transcripts from a GTF or GFF annotation source (`--gtf <file>`, `--gff
+/// <file>`: `Config.pm:532-541` turns each into a `--custom` source of that
+/// format) instead of a cache, while vep-rs annotates against the cache
+/// `vep-cache-builder` built from the same file. Such a reference stamps every
+/// transcript it reads with the source's short name and writes it as `SOURCE`,
+/// with the source's own column and the header lines describing both, which a
+/// cache built from the file never carries: the documented intended divergence
+/// `file_cache_writes_no_source_field`
+/// (`docs/divergences/file-cache-writes-no-source-field.md`).
+/// [`without_transcript_source`] sets them aside before the comparison.
+pub const GXF_PERL_MODES: [&str; 2] = ["gtf", "gff"];
+
+/// Every `perl_mode` a manifest or flag set may name.
+const PERL_MODES: [&str; 4] = ["offline", "database", "gtf", "gff"];
+
+/// The mask class of a run whose reference read its transcripts from a GTF or
+/// GFF ([`GXF_PERL_MODES`]): the `SOURCE` column, the source's own column and
+/// the header lines describing both, which [`without_transcript_source`] sets
+/// aside. A corpus with such a reference names the class in `masks`, so the
+/// comparison states what it sets aside ([`compare_run`]).
+pub const FILE_CACHE_WRITES_NO_SOURCE_FIELD: &str = "file_cache_writes_no_source_field";
+
+/// The column the transcript source stamps on every row it annotates.
+const SOURCE_COLUMN: &str = "SOURCE";
+
+/// A GTF or GFF reference output of one format without its transcript source,
+/// the class `file_cache_writes_no_source_field`
+/// (`docs/divergences/file-cache-writes-no-source-field.md`): the `SOURCE`
+/// column (the default format's `SOURCE=<file>` Extra item, the tab column, the
+/// CSQ field and the JSON consequence's `source` key), the source's own
+/// annotation column, named by its short name and empty on every row since a
+/// transcript source annotates no record (the tab column and the CSQ field),
+/// and the header lines describing both (`## SOURCE : Source of transcript`,
+/// the `## <file> : <path>` line naming the source file, the tab column
+/// headers, the two names in the CSQ format list and the VCF's
+/// `##INFO=<ID=<file>,...>` line). The source's line is recognised by its text
+/// ending in the key it describes, as Ensembl VEP writes a custom source's
+/// header (`OutputFactory.pm:2435-2470`, `## <short name> : <path>`), which no
+/// other header line does. In the VCF the fields dropped are those the last
+/// `##INFO=<ID=<info_field>,...>` line carrying a `Format: ` clause names, and
+/// the entry rewritten is a line's last one under the field, as
+/// [`parse_vcf_info`] reads them; a header line of the field without the clause
+/// and an earlier entry (one `--keep_csq` kept) stay as written.
+pub fn without_transcript_source(format: &str, text: &str, info_field: &str) -> String {
+    fn describes_itself(key: &str, description: &str) -> bool {
+        description
+            .trim_end_matches(['"', '>'])
+            .rsplit('/')
+            .next()
+            .is_some_and(|base| base == key)
+    }
+    /// The entries of an INFO annotation value (`,`-joined, their fields
+    /// `|`-joined) without the fields at `dropped`.
+    fn without_fields(entries: &str, dropped: &[usize]) -> String {
+        entries
+            .split(',')
+            .map(|entry| {
+                let fields: Vec<&str> = entry.split('|').collect();
+                without_positions(&fields, dropped).join("|")
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+    let mut dropped: BTreeSet<String> = BTreeSet::from([SOURCE_COLUMN.to_string()]);
+    for line in text.lines().filter(|l| l.starts_with("##")) {
+        let (key, description) = if let Some(rest) = line.strip_prefix("## ") {
+            match rest.split_once(" : ") {
+                Some(pair) => pair,
+                None => continue,
+            }
+        } else if let Some(rest) = line.strip_prefix("##INFO=<ID=") {
+            let key = rest.split(',').next().unwrap_or_default();
+            let description = rest.rsplit("Description=\"").next().unwrap_or_default();
+            (key, description)
+        } else {
+            continue;
+        };
+        if describes_itself(key, description) {
+            dropped.insert(key.to_string());
+        }
+    }
+    let is_dropped = |name: &str| dropped.contains(name);
+    let without_items = |extra: &str| -> String {
+        let kept: Vec<&str> = extra
+            .split(';')
+            .filter(|item| !item.split_once('=').is_some_and(|(key, _)| is_dropped(key)))
+            .collect();
+        if kept.is_empty() {
+            "-".to_string()
+        } else {
+            kept.join(";")
+        }
+    };
+    let mut out: Vec<String> = Vec::new();
+    match format {
+        "default" | "tab" => {
+            let mut dropped_columns: Vec<usize> = Vec::new();
+            for line in text.lines() {
+                if let Some(rest) = line.strip_prefix("## ") {
+                    if rest
+                        .split_once(" : ")
+                        .is_some_and(|(key, _)| is_dropped(key))
+                    {
+                        continue;
+                    }
+                    out.push(line.to_string());
+                } else if line.starts_with('#') {
+                    let columns: Vec<&str> = line.split('\t').collect();
+                    dropped_columns = (0..columns.len())
+                        .filter(|&i| is_dropped(columns[i]))
+                        .collect();
+                    out.push(without_positions(&columns, &dropped_columns).join("\t"));
+                } else if dropped_columns.is_empty() {
+                    // The default format's column line names no dropped column: its
+                    // SOURCE is an item of the Extra column.
+                    let mut columns: Vec<String> = line.split('\t').map(str::to_string).collect();
+                    if let Some(extra) = columns.last_mut() {
+                        *extra = without_items(extra);
+                    }
+                    out.push(columns.join("\t"));
+                } else {
+                    let columns: Vec<&str> = line.split('\t').collect();
+                    out.push(without_positions(&columns, &dropped_columns).join("\t"));
+                }
+            }
+        }
+        "vcf" => {
+            let mut dropped_fields: Vec<usize> = Vec::new();
+            let info_prefix = format!("##INFO=<ID={info_field},");
+            let entry_prefix = format!("{info_field}=");
+            for line in text.lines() {
+                if let Some((head, fields)) = line
+                    .strip_prefix(&info_prefix)
+                    .and_then(|rest| rest.split_once("Format: "))
+                {
+                    let names: Vec<&str> = fields.trim_end_matches("\">").split('|').collect();
+                    dropped_fields = (0..names.len()).filter(|&i| is_dropped(names[i])).collect();
+                    let kept = without_positions(&names, &dropped_fields).join("|");
+                    out.push(format!("{info_prefix}{head}Format: {kept}\">"));
+                } else if let Some(rest) = line.strip_prefix("##INFO=<ID=") {
+                    if is_dropped(rest.split(',').next().unwrap_or_default()) {
+                        continue;
+                    }
+                    out.push(line.to_string());
+                } else if line.starts_with('#') || dropped_fields.is_empty() {
+                    out.push(line.to_string());
+                } else {
+                    let mut columns: Vec<String> = line.split('\t').map(str::to_string).collect();
+                    if let Some(info) = columns.get_mut(7) {
+                        let mut items: Vec<String> = info.split(';').map(str::to_string).collect();
+                        if let Some(at) = items
+                            .iter()
+                            .rposition(|item| item.starts_with(&entry_prefix))
+                        {
+                            let entries = &items[at][entry_prefix.len()..];
+                            items[at] = format!(
+                                "{entry_prefix}{}",
+                                without_fields(entries, &dropped_fields)
+                            );
+                            *info = items.join(";");
+                        }
+                    }
+                    out.push(columns.join("\t"));
+                }
+            }
+        }
+        _ => {
+            for line in text.lines() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let mut object: serde_json::Value = serde_json::from_str(line)
+                    .unwrap_or_else(|e| panic!("a JSON reference line does not parse: {e}"));
+                if let Some(consequences) = object
+                    .get_mut("transcript_consequences")
+                    .and_then(|v| v.as_array_mut())
+                {
+                    for consequence in consequences.iter_mut() {
+                        if let Some(map) = consequence.as_object_mut() {
+                            map.remove("source");
+                        }
+                    }
+                }
+                out.push(object.to_string());
+            }
+        }
+    }
+    let mut joined = out.join("\n");
+    if text.ends_with('\n') {
+        joined.push('\n');
+    }
+    joined
+}
+
+/// `items` without the elements at `positions`.
+fn without_positions<T: Clone>(items: &[T], positions: &[usize]) -> Vec<T> {
+    items
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !positions.contains(i))
+        .map(|(_, item)| item.clone())
+        .collect()
 }
 
 /// Rewrites every `NEAREST` value (the default, tab and VCF field, the JSON
@@ -736,18 +1283,60 @@ fn assert_warning_texts(label: &str, list: &serde_json::Value) {
     );
 }
 
-/// The manifest's own run.
+/// The placeholder a flag word or a `runs[].argv` token carries for the corpus directory.
+const CORPUS_PLACEHOLDER: &str = "{corpus}";
+/// The placeholder for the plugin directory each engine reads: the corpus's
+/// `plugin_data` here, Ensembl VEP's plugin modules in the reference run.
+const PLUGINS_PLACEHOLDER: &str = "{plugins}";
+
+/// A flag word or `argv` token with `{corpus}` and `{plugins}` replaced.
+fn expand_corpus_placeholders(corpus: &Corpus, word: &str) -> String {
+    word.replace(CORPUS_PLACEHOLDER, &corpus.dir.display().to_string())
+        .replace(
+            PLUGINS_PLACEHOLDER,
+            &corpus.dir.join("plugin_data").display().to_string(),
+        )
+}
+
+/// A `flags` list of the manifest or of a flag set, with `{corpus}` and
+/// `{plugins}` inside any word replaced ([`expand_corpus_placeholders`]).
+fn corpus_flags(corpus: &Corpus, value: &serde_json::Value) -> Vec<String> {
+    strings(value)
+        .iter()
+        .map(|flag| expand_corpus_placeholders(corpus, flag))
+        .collect()
+}
+
+/// The `perl_mode` of a manifest or flag set object, one of [`PERL_MODES`];
+/// `fallback` when the object names none.
+fn perl_mode_of(label: &str, object: &serde_json::Value, fallback: &str) -> String {
+    let mode = match object.get("perl_mode") {
+        None => fallback,
+        Some(serde_json::Value::String(mode)) => mode.as_str(),
+        Some(_) => panic!("{label}: perl_mode is not of its type"),
+    };
+    assert!(
+        PERL_MODES.contains(&mode),
+        "{label}: perl_mode is one of {}, not {mode:?}",
+        PERL_MODES.join(", ")
+    );
+    mode.to_string()
+}
+
+/// The manifest's own run. Its `perl_mode` is the manifest's (`offline` when
+/// it names none), which a flag set inherits unless it names its own.
 pub fn default_run(corpus: &Corpus) -> Run<'_> {
+    let label = format!("{}/{}", corpus.release, corpus.name);
     Run {
         corpus,
         name: "default".to_string(),
-        flags: strings(&corpus.manifest["flags"]),
+        flags: corpus_flags(corpus, &corpus.manifest["flags"]),
         input: "variants.vcf".to_string(),
         stdin: false,
         formats: ALL_FORMATS.iter().map(|f| f.to_string()).collect(),
         expected_dir: "expected".to_string(),
         unordered: false,
-        perl_mode: "offline".to_string(),
+        perl_mode: perl_mode_of(&label, &corpus.manifest, "offline"),
         masks: corpus.masks(),
         documented: &corpus.manifest,
         entry: &corpus.manifest,
@@ -833,11 +1422,7 @@ pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
         } else {
             corpus.masks()
         };
-        let perl_mode = set["perl_mode"].as_str().unwrap_or("offline").to_string();
-        assert!(
-            matches!(perl_mode.as_str(), "offline" | "database"),
-            "{label} flag set {name}: perl_mode is offline or database, not {perl_mode:?}"
-        );
+        let perl_mode = perl_mode_of(&set_label, set, &out[0].perl_mode);
         let formats = if set["formats"].is_array() {
             strings(&set["formats"])
         } else {
@@ -864,7 +1449,7 @@ pub fn runs(corpus: &Corpus) -> Vec<Run<'_>> {
                 "{label} flag set {name}: {path:?} is not a path inside the corpus"
             );
         }
-        let flags = strings(&set["flags"]);
+        let flags = corpus_flags(corpus, &set["flags"]);
         let stdin = set["stdin"].as_bool().unwrap_or(false);
         assert!(
             !stdin
@@ -913,7 +1498,7 @@ fn staged_fasta_dir(corpus: &Corpus, out_dir: &Path) -> PathBuf {
     let dir = out_dir.join(format!("{}-fasta_dir", corpus.name));
     let fasta = committed_fasta(corpus);
     let name = fasta.file_name().unwrap().to_string_lossy().into_owned();
-    let staged = dir.join(format!("homo_sapiens.{}.{name}", corpus.assembly));
+    let staged = dir.join(format!("{}.{}.{name}", corpus.species, corpus.assembly));
     if !staged.is_file() {
         fs::create_dir_all(&dir).unwrap();
         link_or_copy_indexed_fasta(&fasta, &staged);
@@ -921,16 +1506,106 @@ fn staged_fasta_dir(corpus: &Corpus, out_dir: &Path) -> PathBuf {
     dir
 }
 
+/// The placeholder a flag word or a `runs[].argv` token carries for the
+/// directory the manifest's `generated` step writes ([`generated_dir`]).
+const GENERATED_PLACEHOLDER: &str = "{generated}";
+
+/// The directory the corpus's `generated` step writes, built once per corpus
+/// under `out_dir` and reused by every later run in it. The manifest's
+/// `generated` block names the `command` (its words, `{generated}` and
+/// `{corpus}` expanded, run from the repository root) and the `sha256` of every
+/// file it must write, each path relative to the directory: a fixture a corpus
+/// does not commit (a matrix set a seeded generator reproduces) is written here
+/// before the run and checked against the digests the reference was generated
+/// over, so a generator whose output moved fails here, never as a comparison
+/// against a reference built from the old output.
+fn generated_dir(corpus: &Corpus, out_dir: &Path) -> PathBuf {
+    let label = format!("{}/{}", corpus.release, corpus.name);
+    let block = &corpus.manifest["generated"];
+    assert!(
+        block.is_object(),
+        "{label}: a flag names {GENERATED_PLACEHOLDER} but the manifest has no `generated` block"
+    );
+    let dir = out_dir.join(format!("{}-generated", corpus.name));
+    let marker = dir.join(".generated");
+    if marker.is_file() {
+        return dir;
+    }
+    fs::create_dir_all(&dir).unwrap();
+    let words: Vec<String> = strings(&block["command"])
+        .into_iter()
+        .map(|word| {
+            word.replace(GENERATED_PLACEHOLDER, &dir.display().to_string())
+                .replace(CORPUS_PLACEHOLDER, &corpus.dir.display().to_string())
+        })
+        .collect();
+    assert!(
+        !words.is_empty(),
+        "{label}: the `generated` block names no command"
+    );
+    let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output = Command::new(&words[0])
+        .args(&words[1..])
+        .current_dir(repository)
+        .stdin(Stdio::null())
+        .output()
+        .unwrap_or_else(|e| panic!("{label}: `{}` does not start: {e}", words.join(" ")));
+    assert!(
+        output.status.success(),
+        "{label}: `{}` failed:\n{}",
+        words.join(" "),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let digests = block["sha256"]
+        .as_object()
+        .unwrap_or_else(|| panic!("{label}: the `generated` block has no `sha256` map"));
+    assert!(
+        !digests.is_empty(),
+        "{label}: the `generated` block's `sha256` map is empty"
+    );
+    for (name, expected) in digests {
+        let path = dir.join(name);
+        let digest = vep_core::cache_manifest::file_digest(&path)
+            .unwrap_or_else(|e| panic!("{label}: generated file {name} cannot be read: {e}"));
+        let actual: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+        assert_eq!(
+            Some(actual.as_str()),
+            expected.as_str(),
+            "{label}: generated file {name} does not hash as the manifest records"
+        );
+    }
+    fs::write(marker, b"").unwrap();
+    dir
+}
+
+/// `words` with `{generated}` inside any word replaced by the corpus's
+/// [`generated_dir`], built on the first word that names it.
+fn expand_generated(corpus: &Corpus, words: &[String], out_dir: &Path) -> Vec<String> {
+    let mut generated: Option<String> = None;
+    words
+        .iter()
+        .map(|word| {
+            if !word.contains(GENERATED_PLACEHOLDER) {
+                return word.clone();
+            }
+            let dir = generated
+                .get_or_insert_with(|| generated_dir(corpus, out_dir).display().to_string());
+            word.replace(GENERATED_PLACEHOLDER, dir)
+        })
+        .collect()
+}
+
 /// The arguments every run of a corpus starts from, after `-i <input>`: the
 /// corpus cache (the staged copy under `out_dir` for a `fasta_in_cache` corpus),
-/// the fixed arguments, the run's `flags` and the corpus `fasta`. A run whose
-/// flags carry `--grch37` names its assembly through that flag alone, so the
-/// option set, not `--assembly`, selects it.
+/// the fixed arguments, the run's `flags` (a word naming `{generated}` reads the
+/// directory the manifest's `generated` step writes under `out_dir`) and the
+/// corpus `fasta`. A run whose flags carry `--grch37` names its assembly through
+/// that flag alone, so the option set, not `--assembly`, selects it.
 fn base_args(run: &Run, out_dir: &Path) -> Vec<String> {
     let corpus = run.corpus;
     let mut args = vec!["--offline".to_string()];
     args.extend(corpus.run_cache_args(out_dir));
-    args.extend(["--species".to_string(), "homo_sapiens".to_string()]);
+    args.extend(["--species".to_string(), corpus.species.clone()]);
     if !run.flags.iter().any(|f| f == "--grch37") {
         args.extend(["--assembly".to_string(), corpus.assembly.clone()]);
     }
@@ -944,7 +1619,7 @@ fn base_args(run: &Run, out_dir: &Path) -> Vec<String> {
         ]
         .map(str::to_string),
     );
-    args.extend(run.flags.iter().cloned());
+    args.extend(expand_generated(corpus, &run.flags, out_dir));
     if let Some(fasta) = corpus_fasta(corpus) {
         args.extend(["--fasta".to_string(), fasta.display().to_string()]);
     }
@@ -958,6 +1633,31 @@ fn base_args(run: &Run, out_dir: &Path) -> Vec<String> {
 /// record of that chromosome.
 pub fn regulatory_cache(dir: &Path) -> PathBuf {
     regulatory_cache_with(dir, include_bytes!("../fixtures/regulatory/1-1000000.json"))
+}
+
+/// The `info.json` of a cache holding regulatory shards in the fixtures' shape:
+/// the regulatory marker, the shard schema and the fixtures' cell-type list,
+/// which every fixture feature's activity string is aligned to.
+pub fn regulatory_info_json() -> String {
+    let cell_types: serde_json::Value =
+        serde_json::from_slice(include_bytes!("../fixtures/regulatory/cell_types.json")).unwrap();
+    serde_json::json!({
+        "assembly": "GRCh38",
+        "regulatory": true,
+        "regulatory_schema": 1,
+        "cell_types": cell_types,
+    })
+    .to_string()
+}
+
+/// Writes the fixtures' binding matrices table into `cache`'s regulatory tree.
+pub fn write_regulatory_matrices(cache: &Path) {
+    fs::create_dir_all(cache.join("regulatory")).unwrap();
+    fs::write(
+        cache.join("regulatory/binding_matrices.json"),
+        include_bytes!("../fixtures/regulatory/binding_matrices.json"),
+    )
+    .unwrap();
 }
 
 /// [`regulatory_cache`] over the slice of the converted chromosome 21 cache
@@ -978,20 +1678,20 @@ fn regulatory_cache_with(dir: &Path, shard: &[u8]) -> PathBuf {
     fs::write(cache.join("transcripts/21/1-1000000.json"), "[]").unwrap();
     fs::write(cache.join("regulatory/21/1-50000000.json"), shard).unwrap();
     fs::write(cache.join("regulatory/22/1-1000000.json"), "[").unwrap();
-    fs::write(
-        cache.join("info.json"),
-        r#"{"assembly":"GRCh38","regulatory":true}"#,
-    )
-    .unwrap();
+    write_regulatory_matrices(&cache);
+    fs::write(cache.join("info.json"), regulatory_info_json()).unwrap();
     cache
 }
 
 /// The binary with no `VEP_*` variable and no `vep.ini` of the machine's own
-/// reaching it: every `VEP_*` variable is removed and `HOME` is an empty
-/// directory under `out_dir`, so a run reads only the flags the test gives.
+/// reaching it: every `VEP_*` variable is removed and `HOME` is a directory
+/// under `out_dir` holding an empty `.vep/Plugins`, so a run reads only the
+/// flags the test gives and its default plugins directory exists, as the one
+/// the reference's Ensembl VEP image names does, so a `--plugin` run warns of
+/// no missing directory.
 pub fn isolated_vep(out_dir: &Path) -> Command {
     let home = out_dir.join("home");
-    fs::create_dir_all(&home).unwrap();
+    fs::create_dir_all(home.join(".vep").join("Plugins")).unwrap();
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_vep"));
     for (key, _) in std::env::vars_os() {
         if key.to_string_lossy().starts_with("VEP_") {
@@ -1015,10 +1715,14 @@ pub fn isolated_vep_anywhere() -> Command {
 /// it through [`run_output`], which pipes the input when the run says so. The
 /// process runs in the corpus directory, so a relative path inside a flag (a
 /// `--transcript_filter` list file beside the manifest) names a corpus file.
+/// `VEP_DIR_PLUGINS` names the corpus directory, as the reference's container
+/// names an existing plugin directory through that variable, so a run under
+/// `--plugin` warns of no missing directory under the isolated home.
 pub fn vep_command(run: &Run, out_dir: &Path) -> Command {
     let corpus = run.corpus;
     let mut cmd = isolated_vep(out_dir);
     cmd.current_dir(&corpus.dir);
+    cmd.env("VEP_DIR_PLUGINS", &corpus.dir);
     cmd.arg("-i");
     if run.stdin {
         cmd.arg("STDIN").stdin(Stdio::piped());
@@ -1220,13 +1924,19 @@ pub fn parse_tab(text: &str) -> Vec<Entry> {
     parse_default(text)
 }
 
-/// The corpus input records by identity, for mapping an output record back to
-/// its ordinal. Output formats that omit a skipped record (VEP writes no VCF
-/// line and no JSON object for one) keep every later record aligned this way,
-/// where an output ordinal would not. Identical input lines are matched in
-/// order of appearance.
+/// The corpus input records, for mapping an output record back to its ordinal:
+/// by identity where the output format carries one, so that a format which
+/// omits a skipped record (VEP writes no VCF line and no JSON object for one)
+/// keeps every later record aligned, identical input lines matched in order
+/// of appearance; in turn where it carries none (the VCF output of an input
+/// that is not a VCF), which holds only while the output has one record per
+/// input record, so [`InputIndex::records_in_turn`] is checked against the
+/// line count once the output is read.
 struct InputIndex {
     unmatched: HashMap<String, VecDeque<usize>>,
+    /// The next ordinal and the record count of an index pairing output
+    /// records with the input records in turn, whatever identity they carry.
+    in_order: Option<(usize, usize)>,
 }
 
 impl InputIndex {
@@ -1236,12 +1946,41 @@ impl InputIndex {
         for (i, line) in inputs.iter().enumerate() {
             unmatched.entry(key(line)).or_default().push_back(i);
         }
-        InputIndex { unmatched }
+        InputIndex {
+            unmatched,
+            in_order: None,
+        }
     }
 
-    /// The ordinal of the next unmatched input record with this identity.
+    /// An index pairing each output record with the next of `records` input
+    /// records in turn, for an input whose lines the output format carries no
+    /// identity of: the VCF output of an Ensembl-format, region or HGVS input,
+    /// where both engines write one line per input record in input order.
+    fn in_order(records: usize) -> Self {
+        InputIndex {
+            unmatched: HashMap::new(),
+            in_order: Some((0, records)),
+        }
+    }
+
+    /// The ordinal of the next unmatched input record with this identity; in
+    /// turn, the next record, none once every record is paired.
     fn record(&mut self, key: &str) -> Option<usize> {
+        if let Some((next, records)) = self.in_order.as_mut() {
+            if *next >= *records {
+                return None;
+            }
+            *next += 1;
+            return Some(*next - 1);
+        }
         self.unmatched.get_mut(key)?.pop_front()
+    }
+
+    /// In turn, the input record count the output's must equal, since a
+    /// shorter or longer output is a misalignment the pairing cannot tell from
+    /// an exact match. `None` by identity.
+    fn records_in_turn(&self) -> Option<usize> {
+        self.in_order.map(|(_, records)| records)
     }
 }
 
@@ -1266,11 +2005,21 @@ pub fn parse_vcf(text: &str, inputs: &[String]) -> Vec<Entry> {
 /// annotation this run wrote); an earlier entry kept by `--keep_csq`, and the
 /// earlier header lines, stay in `INFO_without_CSQ` and the header comparison.
 pub fn parse_vcf_info(text: &str, inputs: &[String], info_field: &str) -> Vec<Entry> {
+    parse_vcf_entries(text, InputIndex::new(inputs, vcf_line_key), info_field)
+}
+
+/// [`parse_vcf_info`] for the VCF output of an input that is not a VCF: its
+/// lines carry no input line to match, so each is the next of `inputs` in
+/// turn, and the output must hold one line per input record.
+pub fn parse_vcf_info_in_order(text: &str, inputs: &[String], info_field: &str) -> Vec<Entry> {
+    parse_vcf_entries(text, InputIndex::in_order(inputs.len()), info_field)
+}
+
+fn parse_vcf_entries(text: &str, mut index: InputIndex, info_field: &str) -> Vec<Entry> {
     let info_header = format!("##INFO=<ID={info_field},");
     let info_key = format!("{info_field}=");
     let mut csq_fields: Vec<String> = Vec::new();
     let mut entries = Vec::new();
-    let mut index = InputIndex::new(inputs, vcf_line_key);
     let mut lines_seen = 0usize;
     for line in text.lines() {
         if line.starts_with(&info_header) {
@@ -1350,6 +2099,14 @@ pub fn parse_vcf_info(text: &str, inputs: &[String], info_field: &str) -> Vec<En
             }
         }
     }
+    if let Some(records) = index.records_in_turn() {
+        assert_eq!(
+            lines_seen, records,
+            "an output of an input that is not a VCF pairs its lines with the \
+             input records in turn, so it needs one line per record: {lines_seen} \
+             data lines against {records} records"
+        );
+    }
     dedup_keys(&mut entries);
     entries
 }
@@ -1364,15 +2121,38 @@ fn json_scalar(v: &serde_json::Value) -> String {
     }
 }
 
+/// The JSON arrays of consequence objects, each an entry of its own: the array,
+/// the entry kind and the key naming the feature (none for the intergenic row).
+const JSON_CONSEQUENCE_ARRAYS: [(&str, &str, Option<&str>); 4] = [
+    (
+        "transcript_consequences",
+        "transcript",
+        Some("transcript_id"),
+    ),
+    (
+        "regulatory_feature_consequences",
+        "regulatory",
+        Some("regulatory_feature_id"),
+    ),
+    (
+        "motif_feature_consequences",
+        "motif",
+        Some("motif_feature_id"),
+    ),
+    ("intergenic_consequences", "intergenic", None),
+];
+
 /// Parses the JSON format: one record-level entry per object (top-level
 /// scalars, keyed by the corpus record the `input` line names, the vep-rs
 /// identity key set aside for [`compare_json_identity`]) and one entry per
-/// `transcript_consequences` / `intergenic_consequences` element. An object
-/// names its record by the first five columns of its `input`, as a VCF line
-/// does: Ensembl VEP stores a structural record's line with QUAL, FILTER and
-/// INFO filled (Parser/VCF.pm:464-466), so the whole `input` may differ from
-/// the line as written. An object whose `input` matches no record is keyed by
-/// its output ordinal.
+/// element of the four consequence arrays ([`JSON_CONSEQUENCE_ARRAYS`]), the
+/// regulatory and motif ones keyed by their feature id as the transcript ones
+/// are, so a documented field divergence on a motif row applies to its JSON
+/// object. An object names its record by the first five columns of its
+/// `input`, as a VCF line does: Ensembl VEP stores a structural record's line
+/// with QUAL, FILTER and INFO filled (Parser/VCF.pm:464-466), so the whole
+/// `input` may differ from the line as written. An object whose `input` matches
+/// no record is keyed by its output ordinal.
 pub fn parse_json(text: &str, inputs: &[String]) -> Vec<Entry> {
     let mut index = InputIndex::new(inputs, vcf_line_key);
     let mut entries = Vec::new();
@@ -1388,8 +2168,9 @@ pub fn parse_json(text: &str, inputs: &[String]) -> Vec<Entry> {
             .unwrap_or(format!("obj{n}"));
         let mut fields = BTreeMap::new();
         for (k, v) in obj.as_object().unwrap() {
-            if k == "transcript_consequences"
-                || k == "intergenic_consequences"
+            if JSON_CONSEQUENCE_ARRAYS
+                .iter()
+                .any(|(array, _, _)| array == k)
                 || k == "input"
                 || k == "vep_rs_version"
             {
@@ -1406,10 +2187,7 @@ pub fn parse_json(text: &str, inputs: &[String]) -> Vec<Entry> {
             consequence: String::new(),
             fields,
         });
-        for (list, kind) in [
-            ("transcript_consequences", "transcript"),
-            ("intergenic_consequences", "intergenic"),
-        ] {
+        for (list, kind, feature_key) in JSON_CONSEQUENCE_ARRAYS {
             let Some(items) = obj.get(list).and_then(|v| v.as_array()) else {
                 continue;
             };
@@ -1421,11 +2199,7 @@ pub fn parse_json(text: &str, inputs: &[String]) -> Vec<Entry> {
                     .map(|(k, v)| (k.clone(), json_scalar(v)))
                     .collect();
                 let get = |c: &str| fields.get(c).cloned().unwrap_or_default();
-                let feature = if kind == "transcript" {
-                    get("transcript_id")
-                } else {
-                    String::new()
-                };
+                let feature = feature_key.map(get).unwrap_or_default();
                 entries.push(Entry {
                     key: format!("{rec_label}|{}|{}|{kind}", get("variant_allele"), feature),
                     record,
@@ -1442,6 +2216,95 @@ pub fn parse_json(text: &str, inputs: &[String]) -> Vec<Entry> {
     entries
 }
 
+/// Whether a run with the argument words `words` over the cache directory
+/// `cache_dir` has a reference sequence, as the binary settles it
+/// (`fasta_source` of `runner.rs`): the file `--fasta_dir` holds for the
+/// corpus's species and assembly, else a `--fasta` word (or `--fa`), else,
+/// unless `--no_fasta` is given, the first indexed `.fa` or `.fa.gz` of the
+/// cache directory, which a `fasta_in_cache` corpus stages there.
+pub fn has_reference_sequence(words: &[String], cache_dir: &Path, corpus: &Corpus) -> bool {
+    let named = |flag: &str| {
+        words
+            .iter()
+            .any(|w| w == flag || w.starts_with(&format!("{flag}=")))
+    };
+    let value = |flag: &str| {
+        let prefix = format!("{flag}=");
+        words.iter().enumerate().find_map(|(i, w)| {
+            if let Some(value) = w.strip_prefix(&prefix) {
+                Some(value)
+            } else if w == flag {
+                words.get(i + 1).map(String::as_str)
+            } else {
+                None
+            }
+        })
+    };
+    let in_fasta_dir = value("--fasta_dir").is_some_and(|dir| {
+        matches!(
+            vep_fasta::fasta_dir_match(Path::new(dir), &corpus.species, Some(&corpus.assembly)),
+            Ok(Some(_))
+        )
+    });
+    in_fasta_dir
+        || named("--fasta")
+        || named("--fa")
+        || (!named("--no_fasta") && vep_fasta::first_indexed_fasta(cache_dir).is_some())
+}
+
+/// The key under which a `divergences` item states vep-rs's consequence sets
+/// in a run that has a reference sequence.
+pub const WITH_REFERENCE_SETS: &str = "vep_rs_consequence_sets_with_reference_sequence";
+
+/// The sets a `divergences` item states under [`WITH_REFERENCE_SETS`], `None`
+/// for an item without the key. The key is a non-empty list of distinct sets
+/// in sorted order, each spelt as [`consequence_set`] spells it and other than
+/// the item's `vep_rs_consequence_sets` as a whole; a list that holds VEP's set
+/// (`vep_consequence_set`) holds nothing else. Any other shape fails the test
+/// that reads it, whatever the run's setting.
+fn with_reference_sets(item: &serde_json::Value) -> Option<Vec<String>> {
+    let value = item.get(WITH_REFERENCE_SETS)?;
+    let key = format!(
+        "{} {} {}",
+        item["location"].as_str().unwrap_or(""),
+        item["allele"].as_str().unwrap_or(""),
+        item["feature"].as_str().unwrap_or("")
+    );
+    fn refuse(key: &str, reason: &str) -> ! {
+        panic!("the item on {key}: {WITH_REFERENCE_SETS} {reason}")
+    }
+    let sets: Vec<String> = match value.as_array() {
+        Some(list) if !list.is_empty() => list
+            .iter()
+            .map(|s| match s.as_str() {
+                Some(s) if !s.is_empty() && consequence_set(s) == s => s.to_string(),
+                _ => refuse(
+                    &key,
+                    "holds an item that is not a sorted, comma-joined set of terms",
+                ),
+            })
+            .collect(),
+        _ => refuse(&key, "is not a non-empty list"),
+    };
+    if !sets.windows(2).all(|pair| pair[0] < pair[1]) {
+        refuse(&key, "is not a sorted list of distinct sets");
+    }
+    let without: Option<Vec<&str>> = item["vep_rs_consequence_sets"]
+        .as_array()
+        .map(|list| list.iter().filter_map(|s| s.as_str()).collect());
+    if without.is_some_and(|without| without == sets) {
+        refuse(
+            &key,
+            "repeats vep_rs_consequence_sets and states no second outcome",
+        );
+    }
+    let vep = consequence_set(item["vep_consequence_set"].as_str().unwrap_or(""));
+    if sets.len() > 1 && sets.contains(&vep) {
+        refuse(&key, "names VEP's set beside another");
+    }
+    Some(sets)
+}
+
 // --------------------------------------------------------------------------
 // Documented divergences.
 
@@ -1456,12 +2319,15 @@ pub struct Documented {
     /// Keys only vep-rs emits.
     extra_by_location: BTreeSet<(String, String, String)>,
     extra_by_record: BTreeSet<(usize, String, String)>,
-    /// (Location, Allele, Feature) -> field name -> the value vep-rs is
-    /// documented to print where VEP prints another.
-    fields_by_location: HashMap<(String, String, String), BTreeMap<String, String>>,
-    fields_by_record: HashMap<(usize, String, String), BTreeMap<String, String>>,
-    /// Records the reference dropped before annotation: those a
-    /// `vep_rs_only_tuples` entry classed `reference_skipped_record` names.
+    /// (Location, Allele, Feature, consequence set) -> field name -> the value
+    /// vep-rs is documented to print where VEP prints another. The consequence
+    /// set tells apart two records that share a Location and Allele (an
+    /// insertion and a substitution of the same bases), one of whose rows on
+    /// the feature carries the field and the other not.
+    fields_by_location: HashMap<(String, String, String, String), BTreeMap<String, String>>,
+    fields_by_record: HashMap<(usize, String, String, String), BTreeMap<String, String>>,
+    /// Records the reference wrote nothing for: those a `vep_rs_only_tuples`
+    /// entry of a class in [`RECORD_DROPPING_CLASSES`] names.
     skipped_records: BTreeSet<usize>,
 }
 
@@ -1469,8 +2335,32 @@ pub struct Documented {
 /// is one the reference dropped before annotation.
 pub const REFERENCE_SKIPPED_RECORD: &str = "reference_skipped_record";
 
+/// The classes under which a `vep_rs_only_tuples` entry documents a record
+/// the reference wrote nothing for: one it dropped before annotation, and one
+/// its `--check_frequency` filter left out where vep-rs keeps it (a frequency
+/// of exactly 0 read as none, or the input allele's own key read before the
+/// matched allele's). The record's VCF line and JSON object are counted, not
+/// compared, while every consequence entry on it must still be a documented
+/// vep-rs-only key.
+pub const RECORD_DROPPING_CLASSES: &[&str] = &[
+    REFERENCE_SKIPPED_RECORD,
+    "frequency_filter_zero_value",
+    "frequency_filter_allele_key_order",
+];
+
 impl Documented {
+    /// The documented keys of a run without a reference sequence.
     pub fn from_manifest(manifest: &serde_json::Value) -> Self {
+        Self::for_run(manifest, false)
+    }
+
+    /// The documented keys of a run, `with_reference` saying whether the binary
+    /// has a reference sequence in it. A `divergences` item documents its
+    /// `vep_rs_consequence_sets`; in a run with a reference sequence an item that
+    /// carries [`WITH_REFERENCE_SETS`] documents those sets instead, and where
+    /// they are VEP's own set it documents nothing: its key is compared like any
+    /// other.
+    pub fn for_run(manifest: &serde_json::Value, with_reference: bool) -> Self {
         let mut d = Documented {
             by_location: HashMap::new(),
             by_record: HashMap::new(),
@@ -1484,12 +2374,22 @@ impl Documented {
             v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string()
         };
         for item in manifest["divergences"].as_array().into_iter().flatten() {
-            let sets: Vec<String> = item["vep_rs_consequence_sets"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|x| x.as_str().map(str::to_string))
-                .collect();
+            let stated = with_reference_sets(item);
+            let sets: Vec<String> = match stated {
+                Some(stated) if with_reference => {
+                    let vep = consequence_set(item["vep_consequence_set"].as_str().unwrap_or(""));
+                    if stated == [vep] {
+                        continue;
+                    }
+                    stated
+                }
+                _ => item["vep_rs_consequence_sets"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|x| x.as_str().map(str::to_string))
+                    .collect(),
+            };
             d.by_location
                 .entry((s(item, "location"), s(item, "allele"), s(item, "feature")))
                 .or_default()
@@ -1513,8 +2413,9 @@ impl Documented {
                 s(item, "allele"),
                 s(item, "feature"),
             ));
-            let reference_skipped =
-                item["expected_divergence"].as_str() == Some(REFERENCE_SKIPPED_RECORD);
+            let reference_skipped = item["expected_divergence"]
+                .as_str()
+                .is_some_and(|class| RECORD_DROPPING_CLASSES.contains(&class));
             for r in item["record_indices"].as_array().into_iter().flatten() {
                 if let Some(r) = r.as_u64() {
                     d.extra_by_record
@@ -1531,14 +2432,25 @@ impl Documented {
             .flatten()
         {
             let (field, value) = (s(item, "field"), s(item, "vep_rs"));
+            let terms = consequence_set(&s(item, "consequence_set"));
             d.fields_by_location
-                .entry((s(item, "location"), s(item, "allele"), s(item, "feature")))
+                .entry((
+                    s(item, "location"),
+                    s(item, "allele"),
+                    s(item, "feature"),
+                    terms.clone(),
+                ))
                 .or_default()
                 .insert(field.clone(), value.clone());
             for r in item["record_indices"].as_array().into_iter().flatten() {
                 if let Some(r) = r.as_u64() {
                     d.fields_by_record
-                        .entry((r as usize, s(item, "allele"), s(item, "feature")))
+                        .entry((
+                            r as usize,
+                            s(item, "allele"),
+                            s(item, "feature"),
+                            terms.clone(),
+                        ))
                         .or_default()
                         .insert(field.clone(), value.clone());
                 }
@@ -1551,16 +2463,19 @@ impl Documented {
     /// when it has one and that key is documented, else those under its record.
     fn divergent_fields(&self, e: &Entry) -> Option<&BTreeMap<String, String>> {
         let (allele, feature) = (dash(&e.allele), dash(&e.feature));
+        let terms = consequence_set(&e.consequence);
         if let Some(loc) = &e.location {
-            if let Some(m) =
-                self.fields_by_location
-                    .get(&(loc.clone(), allele.clone(), feature.clone()))
-            {
+            if let Some(m) = self.fields_by_location.get(&(
+                loc.clone(),
+                allele.clone(),
+                feature.clone(),
+                terms.clone(),
+            )) {
                 return Some(m);
             }
         }
         let record = e.record?;
-        self.fields_by_record.get(&(record, allele, feature))
+        self.fields_by_record.get(&(record, allele, feature, terms))
     }
 
     /// The documented vep-rs value of `field` for an entry, when the field is
@@ -1659,14 +2574,41 @@ fn dash(s: &str) -> String {
 const ABSENT: &str = "<absent>";
 
 /// A documented field value compares across formats on the default format's
-/// spelling of absence: `-`, an empty VCF value and a key the default or JSON
-/// format leaves out are one value.
+/// spelling of absence and of a comma: `-`, an empty VCF value and a key the
+/// default or JSON format leaves out are one value, and the `&` the VCF format
+/// writes for every comma of a value (`OutputFactory/VCF.pm:401`), between the
+/// items of a list and inside a name alike, is the default format's `,`.
 fn documented_form(s: &str) -> String {
     if s == ABSENT {
         "-".to_string()
     } else {
-        dash(&decode_extra(s))
+        dash(&decode_extra(s).replace('&', ","))
     }
+}
+
+/// Whether a printed field value is the documented one: the two
+/// [`documented_form`]s equal, or the printed value equal to the documented
+/// one with its trailing fractional zeros dropped, the form the JSON format
+/// gives a numeric plugin value (`1311092.0000` is written `1311092`, `0.2010`
+/// is `0.201`). No other spelling of the number is admitted.
+fn is_documented_value(actual: &str, documented: &str) -> bool {
+    let (actual, documented) = (documented_form(actual), documented_form(documented));
+    actual == documented || actual == without_trailing_zeros(&documented)
+}
+
+/// A decimal number (`-12.3400`) with the trailing zeros of its fractional
+/// part dropped, and the point when nothing follows it; any other text, a
+/// dotted name or an exponent form among them, is returned as it is.
+fn without_trailing_zeros(text: &str) -> &str {
+    let digits = text.strip_prefix('-').unwrap_or(text);
+    let Some((whole, fraction)) = digits.split_once('.') else {
+        return text;
+    };
+    let decimal = |part: &str| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit());
+    if !decimal(whole) || !decimal(fraction) {
+        return text;
+    }
+    text.trim_end_matches('0').trim_end_matches('.')
 }
 
 /// Consequence terms normalised to a sorted, comma-joined set for comparison
@@ -1718,7 +2660,12 @@ pub fn compare_entries(
                 )),
                 Some(a) => {
                     let got = consequence_set(&a.consequence);
-                    if !sets.iter().any(|s| consequence_set(s) == got) {
+                    // The JSON record object prints no consequence set of its own, so
+                    // a record-level row another format documents for the record (the
+                    // one row of a `--summary` run) has nothing to observe on it.
+                    let record_object =
+                        e.key.ends_with("|record") && e.consequence.is_empty() && got.is_empty();
+                    if !record_object && !sets.iter().any(|s| consequence_set(s) == got) {
                         stale_divergences.push(format!(
                             "{}: documented vep-rs sets {:?}, vep-rs now emits {:?} (VEP: {:?})",
                             e.key, sets, a.consequence, e.consequence
@@ -1753,7 +2700,7 @@ pub fn compare_entries(
                 // The field is documented to differ: vep-rs must print the documented
                 // value (compared after the Extra/CSQ percent-encoding of `=` and `;`
                 // is undone), or the documentation is stale.
-                if documented_form(av) != documented_form(documented_value) {
+                if !is_documented_value(av, documented_value) {
                     stale_divergences.push(format!(
                         "{}: field {name} documented as {:?}, vep-rs now prints {:?} (VEP: {:?})",
                         e.key, documented_value, av, ev
@@ -1994,7 +2941,7 @@ pub fn compare_tab_headers(expected: &str, actual: &str) -> String {
                     i + 1
                 );
             }
-        } else if *a != with_unknown_db_version(e) {
+        } else if description_masked(a) != description_masked(&with_unknown_db_version(e)) {
             return format!("header line {}: expected {e:?}, got {a:?}", i + 1);
         }
         ai += 1;
@@ -2007,6 +2954,29 @@ pub fn compare_tab_headers(expected: &str, actual: &str) -> String {
         );
     }
     String::new()
+}
+
+/// A header line with the paths in a plugin's field description masked
+/// ([`mask_paths`]): a plugin that names its data file in the description
+/// (`## AA : Ancestral allele from <file>`, `##AA=Ancestral allele from <file>`)
+/// names the path each engine was given, the reference's inside its container
+/// and vep-rs's on the host, so the two compare as the warnings files do; so
+/// does a source version line whose value is a file (`## regulatory_gff version
+/// <file>`, the first file of `--regulatory_gff`). Every other header line is
+/// returned as it is.
+fn description_masked(line: &str) -> String {
+    let plugin_description = line.contains(" : ")
+        || (line.starts_with("## ") && line.contains(" version "))
+        || (line.starts_with("##")
+            && !line.starts_with("##INFO=")
+            && !line.starts_with("##fileformat=")
+            && !line.starts_with("##VEP")
+            && line.contains('='));
+    if plugin_description {
+        mask_paths(line)
+    } else {
+        line.to_string()
+    }
 }
 
 /// Compares the column descriptions (`## <field> : <text>`, with the two lines
@@ -2032,7 +3002,7 @@ pub fn compare_column_descriptions(expected: &str, actual: &str) -> String {
     }
     act.retain(|l| described(l));
     for (i, (e, a)) in exp.iter().zip(act.iter()).enumerate() {
-        if a != e {
+        if description_masked(a) != description_masked(e) {
             return format!("header line {}: expected {e:?}, got {a:?}", i + 1);
         }
     }
@@ -2088,12 +3058,15 @@ fn compare_vcf_headers_of(expected: &str, actual: &str, database: bool) -> Strin
                 (&after[..sp], &after[sp..])
             };
             // `db` names the database a reference generated with a connection
-            // read; an offline run writes no such token, nor does vep-rs.
+            // read; an offline run writes no such token, nor does vep-rs. A
+            // value that is a path (`regulatory_gff`, the first file of
+            // `--regulatory_gff`) names each engine's own copy of the file, the
+            // reference's inside its container, so it compares masked.
             let drop = matches!(key, "time" | "cache" | "db")
                 || key == "ensembl"
                 || key.starts_with("ensembl-");
             if !drop {
-                tokens.push(format!("{key}={value}"));
+                tokens.push(format!("{key}={}", mask_paths(value)));
             }
             rest = remainder;
         }
@@ -2133,7 +3106,7 @@ fn compare_vcf_headers_of(expected: &str, actual: &str, database: bool) -> Strin
             if !a.starts_with("##VEP-command-line=") {
                 return format!("header line {}: expected a command line, got {a:?}", i + 1);
             }
-        } else if a != e {
+        } else if description_masked(a) != description_masked(e) {
             return format!("header line {}: expected {e:?}, got {a:?}", i + 1);
         }
     }
@@ -2178,8 +3151,19 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
         "json" => "json.jsonl",
         other => panic!("unknown format {other}"),
     });
+    let expected = if run.transcript_source_reference() {
+        assert!(
+            masks_name(&run.masks, FILE_CACHE_WRITES_NO_SOURCE_FIELD),
+            "{}: a reference read from a GTF or GFF names {FILE_CACHE_WRITES_NO_SOURCE_FIELD} in masks",
+            run.label()
+        );
+        without_transcript_source(format, &expected, run.vcf_info_field())
+    } else {
+        expected
+    };
+    let expected = masked_reference_text(&run.masks, expected);
     let actual = run_vep(run, format, out_dir, &[]);
-    let documented = run.documented();
+    let documented = run.documented(out_dir);
     if format != "json" && run.has_flag("--no_headers") {
         assert!(
             documented.is_empty(),
@@ -2193,7 +3177,8 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
     let parse = |text: &str| -> Vec<Entry> {
         match format {
             "default" | "tab" => parse_default(text),
-            "vcf" => parse_vcf_info(text, &inputs, info_field),
+            "vcf" if run.reads_vcf() => parse_vcf_info(text, &inputs, info_field),
+            "vcf" => parse_vcf_info_in_order(text, &inputs, info_field),
             _ => parse_json(text, &inputs),
         }
     };
@@ -2211,11 +3196,11 @@ pub fn compare_run(run: &Run, format: &str, out_dir: &Path) -> (String, String) 
         nearest_as_coordinates(&mut actual_entries, &sites);
     }
     let headers = match format {
-        "default" | "tab" if run.perl_mode == "database" => {
+        "default" | "tab" if run.headers_by_descriptions() => {
             compare_column_descriptions(&expected, &actual)
         }
         "default" | "tab" => compare_tab_headers(&expected, &actual),
-        "vcf" if run.perl_mode == "database" => compare_database_vcf_headers(&expected, &actual),
+        "vcf" if run.headers_by_descriptions() => compare_database_vcf_headers(&expected, &actual),
         "vcf" => compare_vcf_headers(&expected, &actual),
         _ => compare_json_identity(&actual),
     };
@@ -2258,6 +3243,16 @@ fn mask_paths(description: &str) -> String {
         .join(" ")
         .trim()
         .to_string()
+}
+
+/// The plugin a run-time plugin warning of `run_plugins` names: `Plugin '<Name>'
+/// did not return a hashref, output ignored!` (OutputFactory.pm:2235) or
+/// `Plugin '<Name>' went wrong: <reason>` (`:2244`); `None` for any other text.
+fn plugin_run_warning_name(description: &str) -> Option<String> {
+    let rest = description.strip_prefix("Plugin '")?;
+    let (name, tail) = rest.split_once('\'')?;
+    (tail == " did not return a hashref, output ignored!" || tail.starts_with(" went wrong: "))
+        .then(|| name.to_string())
 }
 
 /// The entries of a warnings file or a skipped-variants file, one per line
@@ -2332,6 +3327,332 @@ pub fn compare_warning_sets(expected: &str, actual: &str) -> String {
         report.push_str(&format!(
             "  UNEXPECTED in vep-rs: line {number:?}: {description}\n"
         ));
+    }
+    report
+}
+
+// --------------------------------------------------------------------------
+// Statistics reports (`--stats_text`).
+
+/// The three sections a statistics report opens with (Stats.pm:806-823), whose
+/// rows compare in order; every later section is a chart.
+const SUMMARY_TABULAR_SECTIONS: [&str; 3] =
+    ["VEP run statistics", "Data version", "General statistics"];
+
+/// The `[VEP run statistics]` rows whose values no second run reproduces
+/// (Stats.pm:645-663): the engine's own command line, times and paths. They
+/// compare by key alone, as `scripts/concordance/compare_vep_stats.py` compares
+/// them.
+const VOLATILE_SUMMARY_ROWS: [&str; 7] = [
+    "Command line options",
+    "Start time",
+    "End time",
+    "Run time",
+    "Input file",
+    "Input data",
+    "Output file",
+];
+
+/// The row naming the cache directory and the custom sources (Stats.pm:666-677),
+/// whose paths are masked before the values compare.
+const SUMMARY_PATH_ROW: &str = "Annotation sources";
+
+/// One `[title]` section of a statistics report: its title and its `(key, value)`
+/// rows in file order.
+type SummarySection = (String, Vec<(String, String)>);
+
+/// The sections of a statistics report (Stats.pm:806-831): each `[title]` line
+/// opens one, and every non-blank line under it is a `key<TAB>value` row (a line
+/// without a tab is a key with an empty value). Text before the first section
+/// header is reported as a section of its own, titled by the line.
+fn summary_sections(text: &str) -> Vec<SummarySection> {
+    let mut sections: Vec<SummarySection> = Vec::new();
+    for line in text.lines().map(str::trim_end) {
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(title) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            sections.push((title.to_string(), Vec::new()));
+            continue;
+        }
+        if sections.is_empty() {
+            sections.push((format!("text before the first section: {line}"), Vec::new()));
+            continue;
+        }
+        let (key, value) = line.split_once('\t').unwrap_or((line, ""));
+        sections
+            .last_mut()
+            .unwrap()
+            .1
+            .push((key.to_string(), value.to_string()));
+    }
+    sections
+}
+
+/// A value of `[VEP run statistics]` as it compares: a volatile row's value set
+/// aside, every path of `Annotation sources` (a token carrying `/`, up to a blank
+/// or the `;` joining two sources) replaced by `[PATH]`, any other value as is.
+fn masked_summary_value(key: &str, value: &str) -> String {
+    if VOLATILE_SUMMARY_ROWS.contains(&key) {
+        return "<masked>".to_string();
+    }
+    if key != SUMMARY_PATH_ROW {
+        return value.to_string();
+    }
+    value
+        .split(' ')
+        .map(|token| {
+            let (body, tail) = match token.strip_suffix(';') {
+                Some(body) => (body, ";"),
+                None => (token, ""),
+            };
+            if body.contains('/') {
+                format!("[PATH]{tail}")
+            } else {
+                token.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Compares two `--stats_text` reports as `scripts/concordance/compare_vep_stats.py`
+/// does and returns a report of every difference, or an empty string: the same
+/// sections in the same order; a tabular section row by row, the same keys in
+/// the same order and every value equal once [`masked_summary_value`] has set the
+/// volatile values aside; a chart section as a set of `(key, count)` pairs, since
+/// `sort_keys` (Stats.pm:760-790) breaks ties in hash order; a key printed twice
+/// in a section is a difference on its side.
+pub fn compare_summary_sections(expected: &str, actual: &str) -> String {
+    let expected = summary_sections(expected);
+    let actual = summary_sections(actual);
+    let mut report = String::new();
+    let titles = |sections: &[SummarySection]| -> Vec<String> {
+        sections.iter().map(|(title, _)| title.clone()).collect()
+    };
+    let (expected_titles, actual_titles) = (titles(&expected), titles(&actual));
+    for (side, titles) in [
+        ("the reference", &expected_titles),
+        ("vep-rs", &actual_titles),
+    ] {
+        let mut seen = BTreeSet::new();
+        for title in titles.iter().filter(|t| !seen.insert(*t)) {
+            report.push_str(&format!("  section [{title}] appears twice in {side}\n"));
+        }
+    }
+    for title in expected_titles
+        .iter()
+        .filter(|t| !actual_titles.contains(t))
+    {
+        report.push_str(&format!("  MISSING in vep-rs: section [{title}]\n"));
+    }
+    for title in actual_titles
+        .iter()
+        .filter(|t| !expected_titles.contains(t))
+    {
+        report.push_str(&format!("  UNEXPECTED in vep-rs: section [{title}]\n"));
+    }
+    // The shared titles once each, in each file's order: a repeated title is reported
+    // above, not again as an order difference.
+    let shared = |titles: &[String], other: &[String]| -> Vec<String> {
+        let mut seen = BTreeSet::new();
+        titles
+            .iter()
+            .filter(|t| other.contains(t) && seen.insert((*t).clone()))
+            .cloned()
+            .collect()
+    };
+    let shared_expected = shared(&expected_titles, &actual_titles);
+    let shared_actual = shared(&actual_titles, &expected_titles);
+    if shared_expected != shared_actual {
+        report.push_str(&format!(
+            "  sections in another order: expected {shared_expected:?}, vep-rs {shared_actual:?}\n"
+        ));
+    }
+    for (title, expected_rows) in &expected {
+        let Some((_, actual_rows)) = actual.iter().find(|(t, _)| t == title) else {
+            continue;
+        };
+        // A key printed twice keeps its first value, as the Python comparator keeps it.
+        let mut keyed = |rows: &[(String, String)], side: &str| -> IndexMap<String, String> {
+            let mut map = IndexMap::new();
+            for (key, value) in rows {
+                if map.contains_key(key) {
+                    report.push_str(&format!("  [{title}]: {key} printed twice in {side}\n"));
+                } else {
+                    map.insert(key.clone(), value.clone());
+                }
+            }
+            map
+        };
+        let expected_keyed = keyed(expected_rows, "the reference");
+        let actual_keyed = keyed(actual_rows, "vep-rs");
+        if SUMMARY_TABULAR_SECTIONS.contains(&title.as_str()) {
+            for (key, value) in expected_rows
+                .iter()
+                .filter(|(k, _)| !actual_keyed.contains_key(k))
+            {
+                report.push_str(&format!("  [{title}]: MISSING in vep-rs: {key}\t{value}\n"));
+            }
+            for (key, value) in actual_rows
+                .iter()
+                .filter(|(k, _)| !expected_keyed.contains_key(k))
+            {
+                report.push_str(&format!(
+                    "  [{title}]: UNEXPECTED in vep-rs: {key}\t{value}\n"
+                ));
+            }
+            let order = |rows: &IndexMap<String, String>, other: &IndexMap<String, String>| {
+                rows.keys()
+                    .filter(|key| other.contains_key(*key))
+                    .cloned()
+                    .collect::<Vec<String>>()
+            };
+            let expected_order = order(&expected_keyed, &actual_keyed);
+            let actual_order = order(&actual_keyed, &expected_keyed);
+            if expected_order != actual_order {
+                report.push_str(&format!(
+                    "  [{title}]: rows in another order: expected {expected_order:?}, vep-rs {actual_order:?}\n"
+                ));
+            }
+            for key in expected_order {
+                let expected_value = masked_summary_value(&key, &expected_keyed[&key]);
+                let actual_value = masked_summary_value(&key, &actual_keyed[&key]);
+                if expected_value != actual_value {
+                    report.push_str(&format!(
+                        "  [{title}]: {key}: expected {expected_value:?}, vep-rs {actual_value:?}\n"
+                    ));
+                }
+            }
+        } else {
+            let pairs = |rows: &[(String, String)]| -> BTreeSet<(String, String)> {
+                rows.iter().cloned().collect()
+            };
+            let (expected_pairs, actual_pairs) = (pairs(expected_rows), pairs(actual_rows));
+            for (key, count) in expected_pairs.difference(&actual_pairs) {
+                report.push_str(&format!("  [{title}]: MISSING in vep-rs: {key}\t{count}\n"));
+            }
+            for (key, count) in actual_pairs.difference(&expected_pairs) {
+                report.push_str(&format!(
+                    "  [{title}]: UNEXPECTED in vep-rs: {key}\t{count}\n"
+                ));
+            }
+        }
+    }
+    report
+}
+
+/// A report's path from the `--stats_file` value, or from the default root
+/// `<output>_summary` (BaseRunner.pm:254-271): an extension equal to the
+/// report's (`txt` or `html`) is kept, the other of the two is swapped for it,
+/// and any other extension, or none, gets the report's appended. The extension
+/// is whatever follows the last dot, so a dot in a directory name counts when
+/// the file name has none, as it does there.
+fn stats_file_of(root: &str, extension: &str) -> PathBuf {
+    let name = match root.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => {
+            match ext.to_ascii_lowercase().as_str() {
+                ext if ext == extension => root.to_string(),
+                "txt" | "html" => format!("{stem}.{extension}"),
+                _ => format!("{root}.{extension}"),
+            }
+        }
+        _ => format!("{root}.{extension}"),
+    };
+    PathBuf::from(name)
+}
+
+/// The text report's path from its root ([`stats_file_of`] with `txt`).
+pub fn stats_text_file(root: &str) -> PathBuf {
+    stats_file_of(root, "txt")
+}
+
+/// The HTML report's path from its root ([`stats_file_of`] with `html`).
+pub fn stats_html_file(root: &str) -> PathBuf {
+    stats_file_of(root, "html")
+}
+
+/// The root the statistics reports of a manifest run are named from: the
+/// `--stats_file` (or `--sf`) value, else `<output>_summary`, where the output is
+/// the `-o` value as spelled for a run writing to standard output
+/// (`STDOUT_summary` in the working directory, since BaseRunner.pm:254 reads
+/// `output_file` as given) and the `{out}` path otherwise.
+fn stats_root(argv: &[String], out: &Path, out_dir: &Path) -> String {
+    let named = ["--stats_file", "--sf"]
+        .iter()
+        .find_map(|flag| value_after(argv, flag));
+    match named {
+        Some(root) => root.to_string(),
+        None => {
+            let spelled = ["-o", "--output_file"]
+                .iter()
+                .find_map(|flag| value_after(argv, flag));
+            match spelled {
+                Some(name) if name.eq_ignore_ascii_case("stdout") => out_dir
+                    .join(format!("{name}_summary"))
+                    .display()
+                    .to_string(),
+                _ => format!("{}_summary", out.display()),
+            }
+        }
+    }
+}
+
+/// The text statistics report a manifest run writes ([`stats_root`] through
+/// [`stats_text_file`]).
+pub fn stats_report_path(argv: &[String], out: &Path, out_dir: &Path) -> PathBuf {
+    stats_text_file(&stats_root(argv, out, out_dir))
+}
+
+/// The HTML statistics report a manifest run writes ([`stats_root`] through
+/// [`stats_html_file`]).
+pub fn stats_html_report_path(argv: &[String], out: &Path, out_dir: &Path) -> PathBuf {
+    stats_html_file(&stats_root(argv, out, out_dir))
+}
+
+/// The element ids every HTML statistics report carries (Stats.pm:875-896 and
+/// the four charts of every run, :898-909, each with its chart element and its
+/// table).
+pub const HTML_REPORT_IDS: [&str; 16] = [
+    "masthead",
+    "run_stats",
+    "data_version",
+    "gen_stats",
+    "var_class",
+    "var_class_pie",
+    "var_class_table",
+    "var_cons",
+    "var_cons_pie",
+    "var_cons_table",
+    "consequences",
+    "consequences_pie",
+    "consequences_table",
+    "coding",
+    "coding_pie",
+    "coding_table",
+];
+
+/// What `html` lacks of a self-contained HTML statistics report: the page
+/// opening, the title, every id of [`HTML_REPORT_IDS`]; and what it must not
+/// hold: a script or a remote (`http`) resource. Empty when it is one.
+pub fn check_html_report(html: &str) -> String {
+    let mut report = String::new();
+    if !html.starts_with("<html>") {
+        report.push_str("  the page does not open with <html>\n");
+    }
+    if !html.contains("<title>VEP summary</title>") {
+        report.push_str("  no <title>VEP summary</title>\n");
+    }
+    for id in HTML_REPORT_IDS {
+        if !html.contains(&format!(" id=\"{id}\"")) {
+            report.push_str(&format!("  no element with id {id}\n"));
+        }
+    }
+    if html.contains("<script") {
+        report.push_str("  the page holds a <script element\n");
+    }
+    if html.contains("http://") || html.contains("https://") {
+        report.push_str("  the page names a remote resource\n");
     }
     report
 }
@@ -2414,6 +3735,33 @@ pub fn compare_warnings(run: &Run, out_dir: &Path) -> String {
             ));
         }
     }
+    if run.masks_unloaded_module_plugin() {
+        let unloaded: BTreeSet<String> = expected
+            .iter()
+            .filter_map(|(_, description)| plugin_run_warning_name(description))
+            .collect();
+        if unloaded.is_empty() {
+            report.push_str(&format!(
+                "{}: {UNLOADED_MODULE_PLUGIN} is named but the reference warns about no plugin\n",
+                run.label()
+            ));
+        }
+        expected.retain(|(_, description)| plugin_run_warning_name(description).is_none());
+        for name in unloaded {
+            let load_failure = format!("Failed to load plugin {name}: ");
+            let before = actual.len();
+            actual.retain(|(_, description)| !description.starts_with(&load_failure));
+            let removed = before - actual.len();
+            if removed != 1 {
+                report.push_str(&format!(
+                    "{}: {removed} lines of {} report that the plugin module {name} failed to \
+                     load, where one was expected\n",
+                    run.label(),
+                    path.display()
+                ));
+            }
+        }
+    }
     for (number, description) in expected.difference(&actual) {
         report.push_str(&format!(
             "{}: reference warning missing from {}: line {number:?}: {description}\n",
@@ -2445,7 +3793,8 @@ fn value_after<'a>(argv: &'a [String], flag: &str) -> Option<&'a str> {
 pub struct Expect {
     pub exit: i32,
     /// An expected output file (under `expected/`) the run's output is compared
-    /// with as the default run's is: the file the run wrote at `{out}`, or its
+    /// with as the default run's is: the file the run wrote at `{out}`,
+    /// decompressed when the command line names `--compress_output`, or its
     /// standard output when the command line names no `{out}`.
     pub output: Option<String>,
     /// The format `output` is compared in: `default`, `tab`, `vcf` or `json`.
@@ -2460,6 +3809,16 @@ pub struct Expect {
     /// An expected skipped-variants file (under `expected/`) compared the same
     /// way with the file the run's `--skipped_variants_file` names.
     pub skipped_file: Option<String>,
+    /// An expected statistics report (under `expected/`, the `--stats_text`
+    /// output of the reference run) compared with the run's, the file its
+    /// `--stats_file` names or `{out}_summary.txt`, section by section
+    /// ([`compare_summary_sections`]).
+    pub stats_file: Option<String>,
+    /// Whether the run writes the HTML statistics report, the file its
+    /// `--stats_file` names through the HTML name or `{out}_summary.html`
+    /// (`STDOUT_summary.html` as spelled, in the working directory), checked as
+    /// [`check_html_report`] checks one.
+    pub stats_html: bool,
 }
 
 /// One entry of a manifest's `runs` list.
@@ -2474,7 +3833,7 @@ pub struct ManifestRun {
 }
 
 /// The keys an `expect` block may carry.
-const EXPECT_KEYS: [&str; 8] = [
+const EXPECT_KEYS: [&str; 10] = [
     "exit",
     "output",
     "format",
@@ -2483,17 +3842,24 @@ const EXPECT_KEYS: [&str; 8] = [
     "stderr_contains",
     "warnings_file",
     "skipped_file",
+    "stats_file",
+    "stats_html",
 ];
 const RUN_KEYS: [&str; 5] = ["name", "argv", "env", "stdin", "expect"];
 
 /// The manifest's `runs`, each held to one shape: a plain unique name, `argv` a
 /// list of strings, `env` an object of strings, `stdin` a file inside the
 /// corpus, and an `expect` block with an integer `exit` and at least one of
-/// `output`, `warnings_file` and `skipped_file` (files under `expected/`),
-/// `stdout_starts_with`, `stdout_contains` and `stderr_contains`, each a
-/// non-empty string, so an entry that expects nothing cannot certify the rows
-/// the manifest covers; a `skipped_file` needs `--skipped_variants_file` in the
-/// argv. An unknown key anywhere is refused rather than ignored.
+/// `output`, `warnings_file`, `skipped_file` and `stats_file` (files under
+/// `expected/`), `stdout_starts_with`, `stdout_contains` and `stderr_contains`,
+/// each a non-empty string, or `stats_html` true, so an entry that expects
+/// nothing cannot certify the rows the manifest covers; a `skipped_file` needs
+/// `--skipped_variants_file` in the argv, a `stats_file` needs `--stats_text`
+/// there and no `--no_stats` or `{golden}`, which carries it ([`base_args`]),
+/// since a run under `--no_stats` writes no report, and `stats_html` needs no
+/// `--no_stats` or `{golden}` and `--stats_html` beside any `--stats_text`,
+/// which alone turns the HTML report off. An unknown key anywhere is refused
+/// rather than ignored.
 pub fn manifest_runs(corpus: &Corpus) -> Vec<ManifestRun> {
     let label = format!("{}/{}", corpus.release, corpus.name);
     let mut out: Vec<ManifestRun> = Vec::new();
@@ -2588,6 +3954,26 @@ pub fn manifest_runs(corpus: &Corpus) -> Vec<ManifestRun> {
             skipped_file.is_none() || argv.iter().any(|t| t == "--skipped_variants_file"),
             "{label} run {name}: skipped_file needs --skipped_variants_file in argv"
         );
+        let stats_file = expected_file("stats_file");
+        assert!(
+            stats_file.is_none()
+                || (argv.iter().any(|t| t == "--stats_text")
+                    && !argv.iter().any(|t| t == "--no_stats" || t == "{golden}")),
+            "{label} run {name}: stats_file needs --stats_text and no --no_stats or {{golden}} in argv"
+        );
+        let stats_html = match expect.get("stats_html") {
+            None | Some(serde_json::Value::Null) => false,
+            Some(v) => v
+                .as_bool()
+                .unwrap_or_else(|| panic!("{label} run {name}: expect.stats_html is a boolean")),
+        };
+        assert!(
+            !stats_html
+                || (!argv.iter().any(|t| t == "--no_stats" || t == "{golden}")
+                    && (argv.iter().any(|t| t == "--stats_html")
+                        || !argv.iter().any(|t| t == "--stats_text"))),
+            "{label} run {name}: stats_html needs no --no_stats or {{golden}} in argv, and --stats_html beside --stats_text"
+        );
         let format = text("format").unwrap_or_else(|| "default".to_string());
         assert!(
             ALL_FORMATS.contains(&format.as_str()),
@@ -2602,7 +3988,9 @@ pub fn manifest_runs(corpus: &Corpus) -> Vec<ManifestRun> {
                 || stdout_contains.is_some()
                 || stderr_contains.is_some()
                 || warnings_file.is_some()
-                || skipped_file.is_some(),
+                || skipped_file.is_some()
+                || stats_file.is_some()
+                || stats_html,
             "{label} run {name}: expects nothing beyond the exit status"
         );
         out.push(ManifestRun {
@@ -2619,6 +4007,8 @@ pub fn manifest_runs(corpus: &Corpus) -> Vec<ManifestRun> {
                 stderr_contains,
                 warnings_file,
                 skipped_file,
+                stats_file,
+                stats_html,
             },
         });
     }
@@ -2629,18 +4019,19 @@ pub fn manifest_runs(corpus: &Corpus) -> Vec<ManifestRun> {
 /// arguments (`-i <input>` and [`base_args`]), `{flags}` the manifest's own
 /// flags; inside a token `{input}` is the corpus input path, `{cache}` the
 /// corpus cache directory itself, `{cache_root}` the root of the Ensembl layout,
-/// `{corpus}` the corpus directory, `{fasta_dir}` the [`staged_fasta_dir`] under
-/// `out_dir`, `{assembly}` the assembly and `{out}` the output path the caller
-/// chose.
+/// `{corpus}` the corpus directory, `{plugins}` its `plugin_data` directory,
+/// `{fasta_dir}` the [`staged_fasta_dir`] under `out_dir`, `{generated}` the
+/// [`generated_dir`] under `out_dir`, `{assembly}` the assembly and `{out}` the
+/// output path the caller chose.
 pub fn expand_argv(corpus: &Corpus, argv: &[String], out: &Path, out_dir: &Path) -> Vec<String> {
     let default = default_run(corpus);
     let input = corpus.dir.join("variants.vcf").display().to_string();
     let cache = corpus.run_cache_dir(out_dir).display().to_string();
     let cache_root = corpus.cache_root().display().to_string();
-    let corpus_dir = corpus.dir.display().to_string();
     let out = out.display().to_string();
+    let argv = expand_generated(corpus, argv, out_dir);
     let mut expanded = Vec::new();
-    for token in argv {
+    for token in &argv {
         match token.as_str() {
             "{golden}" => {
                 expanded.push("-i".to_string());
@@ -2657,15 +4048,15 @@ pub fn expand_argv(corpus: &Corpus, argv: &[String], out: &Path, out_dir: &Path)
                 } else {
                     token.clone()
                 };
-                expanded.push(
-                    token
+                expanded.push(expand_corpus_placeholders(
+                    corpus,
+                    &token
                         .replace("{input}", &input)
                         .replace("{cache_root}", &cache_root)
                         .replace("{cache}", &cache)
-                        .replace("{corpus}", &corpus_dir)
                         .replace("{assembly}", &corpus.assembly)
                         .replace("{out}", &out),
-                )
+                ))
             }
         }
     }
@@ -2759,17 +4150,82 @@ pub fn execute_manifest_run(corpus: &Corpus, run: &ManifestRun, out_dir: &Path) 
             ));
         }
     }
+    if let Some(expected_name) = &run.expect.stats_file {
+        let path = stats_report_path(&argv, &out, out_dir);
+        let actual = fs::read_to_string(&path).unwrap_or_else(|e| {
+            report.push_str(&format!(
+                "{label}: no statistics report at {}: {e}\n",
+                path.display()
+            ));
+            String::new()
+        });
+        let differences =
+            compare_summary_sections(&read_expected(&corpus.dir, expected_name), &actual);
+        if !differences.is_empty() {
+            report.push_str(&format!(
+                "{label}: statistics report {} differs from {expected_name}\n{differences}",
+                path.display()
+            ));
+        }
+    }
+    if run.expect.stats_html {
+        let path = stats_html_report_path(&argv, &out, out_dir);
+        match fs::read_to_string(&path) {
+            Ok(html) => {
+                let lacks = check_html_report(&html);
+                if !lacks.is_empty() {
+                    report.push_str(&format!(
+                        "{label}: HTML statistics report {} is not self-contained\n{lacks}",
+                        path.display()
+                    ));
+                }
+            }
+            Err(e) => report.push_str(&format!(
+                "{label}: no HTML statistics report at {}: {e}\n",
+                path.display()
+            )),
+        }
+    }
     if let Some(expected_name) = &run.expect.output {
         let actual = if run.argv.iter().any(|t| t.contains("{out}")) {
-            fs::read_to_string(&out).unwrap_or_else(|e| {
-                report.push_str(&format!("{label}: no output at {}: {e}\n", out.display()));
-                String::new()
-            })
+            match fs::read(&out) {
+                Err(e) => {
+                    report.push_str(&format!("{label}: no output at {}: {e}\n", out.display()));
+                    String::new()
+                }
+                Ok(bytes)
+                    if argv.iter().any(|t| {
+                        t == "--compress_output" || t.starts_with("--compress_output=")
+                    }) =>
+                {
+                    let mut text = String::new();
+                    if !bytes.starts_with(&[0x1f, 0x8b]) {
+                        report.push_str(&format!(
+                            "{label}: --compress_output wrote no gzip stream\n"
+                        ));
+                    } else if let Err(e) =
+                        flate2::read::MultiGzDecoder::new(&bytes[..]).read_to_string(&mut text)
+                    {
+                        report.push_str(&format!(
+                            "{label}: {} does not decompress: {e}\n",
+                            out.display()
+                        ));
+                    }
+                    text
+                }
+                Ok(bytes) => String::from_utf8(bytes).unwrap_or_else(|e| {
+                    report.push_str(&format!("{label}: {} is not UTF-8: {e}\n", out.display()));
+                    String::new()
+                }),
+            }
         } else {
             stdout.clone()
         };
         let expected = read_expected(&corpus.dir, expected_name);
-        let documented = Documented::from_manifest(&corpus.manifest);
+        let documented = Documented::for_run(
+            &corpus.manifest,
+            has_reference_sequence(&argv, &corpus.run_cache_dir(out_dir), corpus),
+        );
         let inputs = input_records(corpus);
         let format = run.expect.format.as_str();
         let parse = |text: &str| -> Vec<Entry> {

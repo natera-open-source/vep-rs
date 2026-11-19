@@ -1,0 +1,2286 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "included_records": {
+  "gnomadc": [
+   "rs1258005577",
+   "rs1280472312",
+   "rs1311362461",
+   "rs1344590079",
+   "rs1391930189",
+   "rs1392062079",
+   "rs1460677935",
+   "rs2032950535",
+   "rs2042341561",
+   "rs35442370",
+   "rs564579936",
+   "rs967312417",
+   "rs980597155",
+   "rs988209446"
+  ]
+ },
+ "max_span": 1000000,
+ "cache_cost_flank": 5000,
+ "flags": [
+  "--dir_plugins",
+  "{plugins}",
+  "--plugin",
+  "gnomADc,plugin_data/gnomad.coverage.tsv.gz"
+ ],
+ "covers": [
+  "gnomADc"
+ ],
+ "suites": {
+  "gnomadc": {
+   "reference": "cand.vep.txt",
+   "input": "cand.vcf",
+   "rows": 195,
+   "combinations": 11
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 42,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 2
+  },
+  "5_prime_UTR_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 3
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 6
+  },
+  "inframe_deletion": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 23,
+   "exemplar_records": 4
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 7
+  },
+  "missense_variant": {
+   "observed_rows": 14,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 5
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 74,
+   "exemplar_records": 8
+  }
+ },
+ "variant_classes": {
+  "deletion": 64,
+  "insertion": 28,
+  "snv": 103
+ },
+ "records": [
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t13826644\trs1258005577\tAAAG\tA\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t14011314\trs564579936\tC\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t18486439\trs1344590079\tGTAT\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t24811606\trs980597155\tG\tA\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t25769399\trs1391930189\tC\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t26924283\trs1311362461\tACTT\tA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "inframe_deletion",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t30806881\trs35442370\tG\tGAAA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t32699959\trs2042341561\tG\tA\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t33324525\trs967312417\tCGGA\tC\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t36170554\trs1280472312\tC\tCCA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t39212646\trs1460677935\tAACC\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t39217042\trs2032950535\tT\tTAA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t43332022\trs1392062079\tT\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gnomadc",
+   "vcf": "21\t45073962\trs988209446\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "plugin_files": {
+  "gnomADc": [
+   "plugin_data/gnomad.coverage.tsv.gz",
+   "plugin_data/gnomad.coverage.tsv.gz.tbi"
+  ]
+ },
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "flag_sets": [
+  {
+   "name": "minimal",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "gnomADc,{corpus}/plugin_data/gnomad.coverage.tsv.gz",
+    "--minimal",
+    "--allele_number"
+   ],
+   "input": "minimal.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_minimal",
+   "covers": [
+    "gnomADc",
+    "minimal"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "gnomAD_mean_cov",
+    "gnomAD_median_approx_cov",
+    "gnomAD_total_DP_cov",
+    "gnomAD_1x_cov",
+    "gnomAD_5x_cov",
+    "gnomAD_10x_cov",
+    "gnomAD_15x_cov",
+    "gnomAD_20x_cov",
+    "gnomAD_25x_cov",
+    "gnomAD_30x_cov",
+    "gnomAD_50x_cov",
+    "gnomAD_100x_cov"
+   ],
+   "field_divergences": [
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000399151",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "1.7938",
+     "vep_rs": "1.7937",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000399151",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "1311160.0000",
+     "vep_rs": "1311092.0000",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000399151",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.1564",
+     "vep_rs": "0.1563",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000437106",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "upstream_gene_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "1.7938",
+     "vep_rs": "1.7937",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000437106",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "upstream_gene_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "1311160.0000",
+     "vep_rs": "1311092.0000",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000437106",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "upstream_gene_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.1564",
+     "vep_rs": "0.1563",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000492760",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "1.7938",
+     "vep_rs": "1.7937",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000492760",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "1311160.0000",
+     "vep_rs": "1311092.0000",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000492760",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.1564",
+     "vep_rs": "0.1563",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000624080",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "non_coding_transcript_exon_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "1.7938",
+     "vep_rs": "1.7937",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000624080",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "non_coding_transcript_exon_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "1311160.0000",
+     "vep_rs": "1311092.0000",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000624080",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "non_coding_transcript_exon_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.1564",
+     "vep_rs": "0.1563",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000685394",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "1.7938",
+     "vep_rs": "1.7937",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000685394",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "1311160.0000",
+     "vep_rs": "1311092.0000",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000685394",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.1564",
+     "vep_rs": "0.1563",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000691173",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "1.7938",
+     "vep_rs": "1.7937",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000691173",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "1311160.0000",
+     "vep_rs": "1311092.0000",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000691173",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.1564",
+     "vep_rs": "0.1563",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000693273",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "1.7938",
+     "vep_rs": "1.7937",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000693273",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "1311160.0000",
+     "vep_rs": "1311092.0000",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000693273",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.1564",
+     "vep_rs": "0.1563",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000903972",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "1.7938",
+     "vep_rs": "1.7937",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000903972",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "1311160.0000",
+     "vep_rs": "1311092.0000",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000903972",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.1564",
+     "vep_rs": "0.1563",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000937467",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "1.7938",
+     "vep_rs": "1.7937",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000937467",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "1311160.0000",
+     "vep_rs": "1311092.0000",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000937467",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.1564",
+     "vep_rs": "0.1563",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000943075",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "1.7938",
+     "vep_rs": "1.7937",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000943075",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "1311160.0000",
+     "vep_rs": "1311092.0000",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000943075",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.1564",
+     "vep_rs": "0.1563",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000943076",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "1.7938",
+     "vep_rs": "1.7937",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000943076",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "1311160.0000",
+     "vep_rs": "1311092.0000",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00000943076",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.1564",
+     "vep_rs": "0.1563",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00001107020",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "1.7938",
+     "vep_rs": "1.7937",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00001107020",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "1311160.0000",
+     "vep_rs": "1311092.0000",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00001107020",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.1564",
+     "vep_rs": "0.1563",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00001131628",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "1.7938",
+     "vep_rs": "1.7937",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00001131628",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "1311160.0000",
+     "vep_rs": "1311092.0000",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:36170554",
+     "allele": "CA",
+     "feature": "ENST00001131628",
+     "feature_type": "Transcript",
+     "record_indices": [
+      9
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.1564",
+     "vep_rs": "0.1563",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000333229",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "23.8358",
+     "vep_rs": "23.9087",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000333229",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "17422687.7500",
+     "vep_rs": "17476059.3333",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000333229",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.9927",
+     "vep_rs": "0.9929",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000333229",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_10x_cov",
+     "vep": "0.9460",
+     "vep_rs": "0.9473",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000333229",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_15x_cov",
+     "vep": "0.8544",
+     "vep_rs": "0.8571",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000333229",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_20x_cov",
+     "vep": "0.7133",
+     "vep_rs": "0.7181",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000333229",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_25x_cov",
+     "vep": "0.5222",
+     "vep_rs": "0.5269",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000333229",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_30x_cov",
+     "vep": "0.2001",
+     "vep_rs": "0.2010",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000342449",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "23.8358",
+     "vep_rs": "23.9087",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000342449",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "17422687.7500",
+     "vep_rs": "17476059.3333",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000342449",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.9927",
+     "vep_rs": "0.9929",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000342449",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_10x_cov",
+     "vep": "0.9460",
+     "vep_rs": "0.9473",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000342449",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_15x_cov",
+     "vep": "0.8544",
+     "vep_rs": "0.8571",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000342449",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_20x_cov",
+     "vep": "0.7133",
+     "vep_rs": "0.7181",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000342449",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_25x_cov",
+     "vep": "0.5222",
+     "vep_rs": "0.5269",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000342449",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_30x_cov",
+     "vep": "0.2001",
+     "vep_rs": "0.2010",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000380800",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "23.8358",
+     "vep_rs": "23.9087",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000380800",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "17422687.7500",
+     "vep_rs": "17476059.3333",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000380800",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.9927",
+     "vep_rs": "0.9929",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000380800",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_10x_cov",
+     "vep": "0.9460",
+     "vep_rs": "0.9473",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000380800",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_15x_cov",
+     "vep": "0.8544",
+     "vep_rs": "0.8571",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000380800",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_20x_cov",
+     "vep": "0.7133",
+     "vep_rs": "0.7181",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000380800",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_25x_cov",
+     "vep": "0.5222",
+     "vep_rs": "0.5269",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000380800",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_30x_cov",
+     "vep": "0.2001",
+     "vep_rs": "0.2010",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000419324",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "upstream_gene_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "23.8358",
+     "vep_rs": "23.9087",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000419324",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "upstream_gene_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "17422687.7500",
+     "vep_rs": "17476059.3333",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000419324",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "upstream_gene_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.9927",
+     "vep_rs": "0.9929",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000419324",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "upstream_gene_variant",
+     "field": "gnomAD_10x_cov",
+     "vep": "0.9460",
+     "vep_rs": "0.9473",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000419324",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "upstream_gene_variant",
+     "field": "gnomAD_15x_cov",
+     "vep": "0.8544",
+     "vep_rs": "0.8571",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000419324",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "upstream_gene_variant",
+     "field": "gnomAD_20x_cov",
+     "vep": "0.7133",
+     "vep_rs": "0.7181",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000419324",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "upstream_gene_variant",
+     "field": "gnomAD_25x_cov",
+     "vep": "0.5222",
+     "vep_rs": "0.5269",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000419324",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "upstream_gene_variant",
+     "field": "gnomAD_30x_cov",
+     "vep": "0.2001",
+     "vep_rs": "0.2010",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000424441",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "23.8358",
+     "vep_rs": "23.9087",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000424441",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "17422687.7500",
+     "vep_rs": "17476059.3333",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000424441",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.9927",
+     "vep_rs": "0.9929",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000424441",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_10x_cov",
+     "vep": "0.9460",
+     "vep_rs": "0.9473",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000424441",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_15x_cov",
+     "vep": "0.8544",
+     "vep_rs": "0.8571",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000424441",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_20x_cov",
+     "vep": "0.7133",
+     "vep_rs": "0.7181",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000424441",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_25x_cov",
+     "vep": "0.5222",
+     "vep_rs": "0.5269",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000424441",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_30x_cov",
+     "vep": "0.2001",
+     "vep_rs": "0.2010",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000435608",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "downstream_gene_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "23.8358",
+     "vep_rs": "23.9087",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000435608",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "downstream_gene_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "17422687.7500",
+     "vep_rs": "17476059.3333",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000435608",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "downstream_gene_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.9927",
+     "vep_rs": "0.9929",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000435608",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "downstream_gene_variant",
+     "field": "gnomAD_10x_cov",
+     "vep": "0.9460",
+     "vep_rs": "0.9473",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000435608",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "downstream_gene_variant",
+     "field": "gnomAD_15x_cov",
+     "vep": "0.8544",
+     "vep_rs": "0.8571",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000435608",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "downstream_gene_variant",
+     "field": "gnomAD_20x_cov",
+     "vep": "0.7133",
+     "vep_rs": "0.7181",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000435608",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "downstream_gene_variant",
+     "field": "gnomAD_25x_cov",
+     "vep": "0.5222",
+     "vep_rs": "0.5269",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000435608",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "downstream_gene_variant",
+     "field": "gnomAD_30x_cov",
+     "vep": "0.2001",
+     "vep_rs": "0.2010",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000446924",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "23.8358",
+     "vep_rs": "23.9087",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000446924",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "17422687.7500",
+     "vep_rs": "17476059.3333",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000446924",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.9927",
+     "vep_rs": "0.9929",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000446924",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_10x_cov",
+     "vep": "0.9460",
+     "vep_rs": "0.9473",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000446924",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_15x_cov",
+     "vep": "0.8544",
+     "vep_rs": "0.8571",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000446924",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_20x_cov",
+     "vep": "0.7133",
+     "vep_rs": "0.7181",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000446924",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_25x_cov",
+     "vep": "0.5222",
+     "vep_rs": "0.5269",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000446924",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_30x_cov",
+     "vep": "0.2001",
+     "vep_rs": "0.2010",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000473813",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "23.8358",
+     "vep_rs": "23.9087",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000473813",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "17422687.7500",
+     "vep_rs": "17476059.3333",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000473813",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.9927",
+     "vep_rs": "0.9929",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000473813",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_10x_cov",
+     "vep": "0.9460",
+     "vep_rs": "0.9473",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000473813",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_15x_cov",
+     "vep": "0.8544",
+     "vep_rs": "0.8571",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000473813",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_20x_cov",
+     "vep": "0.7133",
+     "vep_rs": "0.7181",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000473813",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_25x_cov",
+     "vep": "0.5222",
+     "vep_rs": "0.5269",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000473813",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_30x_cov",
+     "vep": "0.2001",
+     "vep_rs": "0.2010",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000751567",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "23.8358",
+     "vep_rs": "23.9087",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000751567",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "17422687.7500",
+     "vep_rs": "17476059.3333",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000751567",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.9927",
+     "vep_rs": "0.9929",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000751567",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_10x_cov",
+     "vep": "0.9460",
+     "vep_rs": "0.9473",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000751567",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_15x_cov",
+     "vep": "0.8544",
+     "vep_rs": "0.8571",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000751567",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_20x_cov",
+     "vep": "0.7133",
+     "vep_rs": "0.7181",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000751567",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_25x_cov",
+     "vep": "0.5222",
+     "vep_rs": "0.5269",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000751567",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant,non_coding_transcript_variant",
+     "field": "gnomAD_30x_cov",
+     "vep": "0.2001",
+     "vep_rs": "0.2010",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938703",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "23.8358",
+     "vep_rs": "23.9087",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938703",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "17422687.7500",
+     "vep_rs": "17476059.3333",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938703",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.9927",
+     "vep_rs": "0.9929",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938703",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_10x_cov",
+     "vep": "0.9460",
+     "vep_rs": "0.9473",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938703",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_15x_cov",
+     "vep": "0.8544",
+     "vep_rs": "0.8571",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938703",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_20x_cov",
+     "vep": "0.7133",
+     "vep_rs": "0.7181",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938703",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_25x_cov",
+     "vep": "0.5222",
+     "vep_rs": "0.5269",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938703",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_30x_cov",
+     "vep": "0.2001",
+     "vep_rs": "0.2010",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938704",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "23.8358",
+     "vep_rs": "23.9087",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938704",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "17422687.7500",
+     "vep_rs": "17476059.3333",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938704",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.9927",
+     "vep_rs": "0.9929",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938704",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_10x_cov",
+     "vep": "0.9460",
+     "vep_rs": "0.9473",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938704",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_15x_cov",
+     "vep": "0.8544",
+     "vep_rs": "0.8571",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938704",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_20x_cov",
+     "vep": "0.7133",
+     "vep_rs": "0.7181",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938704",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_25x_cov",
+     "vep": "0.5222",
+     "vep_rs": "0.5269",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00000938704",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_30x_cov",
+     "vep": "0.2001",
+     "vep_rs": "0.2010",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001010147",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "23.8358",
+     "vep_rs": "23.9087",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001010147",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "17422687.7500",
+     "vep_rs": "17476059.3333",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001010147",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.9927",
+     "vep_rs": "0.9929",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001010147",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_10x_cov",
+     "vep": "0.9460",
+     "vep_rs": "0.9473",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001010147",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_15x_cov",
+     "vep": "0.8544",
+     "vep_rs": "0.8571",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001010147",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_20x_cov",
+     "vep": "0.7133",
+     "vep_rs": "0.7181",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001010147",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_25x_cov",
+     "vep": "0.5222",
+     "vep_rs": "0.5269",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001010147",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "NMD_transcript_variant,intron_variant",
+     "field": "gnomAD_30x_cov",
+     "vep": "0.2001",
+     "vep_rs": "0.2010",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001131888",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_mean_cov",
+     "vep": "23.8358",
+     "vep_rs": "23.9087",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001131888",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_total_DP_cov",
+     "vep": "17422687.7500",
+     "vep_rs": "17476059.3333",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001131888",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_5x_cov",
+     "vep": "0.9927",
+     "vep_rs": "0.9929",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001131888",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_10x_cov",
+     "vep": "0.9460",
+     "vep_rs": "0.9473",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001131888",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_15x_cov",
+     "vep": "0.8544",
+     "vep_rs": "0.8571",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001131888",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_20x_cov",
+     "vep": "0.7133",
+     "vep_rs": "0.7181",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001131888",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_25x_cov",
+     "vep": "0.5222",
+     "vep_rs": "0.5269",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    },
+    {
+     "location": "21:39212646-39212649",
+     "allele": "-",
+     "feature": "ENST00001131888",
+     "feature_type": "Transcript",
+     "record_indices": [
+      10
+     ],
+     "consequence_set": "intron_variant",
+     "field": "gnomAD_30x_cov",
+     "vep": "0.2001",
+     "vep_rs": "0.2010",
+     "expected_divergence": "minimal_plugin_sees_the_rejoined_record"
+    }
+   ],
+   "field_divergence_summary": {
+    "minimal_plugin_sees_the_rejoined_record": 143
+   }
+  }
+ ]
+}

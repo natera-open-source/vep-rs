@@ -8,7 +8,7 @@ build:
 
 # Lint and format check
 check:
-    cargo clippy --workspace -- -D warnings
+    cargo clippy --workspace --features vep-cli/bench -- -D warnings
     cargo fmt --all -- --check
 
 # Build release and run a small benchmark on the committed golden corpus

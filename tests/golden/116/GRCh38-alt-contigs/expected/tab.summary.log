@@ -1,0 +1,125 @@
+[VEP run statistics]
+VEP version (API)	 116.2 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh38
+Species	homo_sapiens
+Command line options	vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --offline --output_file [PATH]/tab.txt --quiet --stats_text --tab
+Start time	2026-10-28 17:24:10
+End time	2026-10-28 17:24:13
+Run time	3 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/tab.txt
+
+[Data version]
+1000genomes	phase3
+COSMIC	102
+ClinVar	202509
+HGMD-PUBLIC	20204
+assembly	GRCh38.p14
+dbSNP	156
+gencode	GENCODE 50
+genebuild	GENCODE50
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.3
+regbuild	1.0
+sift	6.2.1
+
+[General statistics]
+Lines of input read	134
+Variants processed	134
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	34
+Overlapped transcripts	180
+Overlapped regulatory features	-
+
+[Variant classes]
+SNV	17
+substitution	24
+deletion	45
+insertion	48
+
+[Consequences (most severe)]
+splice_acceptor_variant	15
+splice_donor_variant	11
+stop_gained	12
+frameshift_variant	14
+stop_lost	8
+start_lost	9
+inframe_insertion	10
+inframe_deletion	6
+missense_variant	7
+protein_altering_variant	4
+splice_donor_5th_base_variant	3
+splice_region_variant	18
+splice_donor_region_variant	3
+splice_polypyrimidine_tract_variant	3
+stop_retained_variant	2
+synonymous_variant	2
+coding_sequence_variant	3
+5_prime_UTR_variant	1
+3_prime_UTR_variant	1
+non_coding_transcript_exon_variant	1
+intron_variant	1
+
+[Consequences (all)]
+splice_acceptor_variant	99
+splice_donor_variant	59
+stop_gained	59
+frameshift_variant	77
+stop_lost	17
+start_lost	100
+inframe_insertion	45
+inframe_deletion	108
+missense_variant	48
+protein_altering_variant	21
+splice_donor_5th_base_variant	19
+splice_region_variant	309
+splice_donor_region_variant	23
+splice_polypyrimidine_tract_variant	55
+incomplete_terminal_codon_variant	4
+start_retained_variant	39
+stop_retained_variant	14
+synonymous_variant	15
+coding_sequence_variant	38
+5_prime_UTR_variant	159
+3_prime_UTR_variant	129
+non_coding_transcript_exon_variant	121
+intron_variant	237
+NMD_transcript_variant	330
+non_coding_transcript_variant	81
+upstream_gene_variant	160
+downstream_gene_variant	130
+
+[Coding consequences]
+stop_gained	59
+frameshift_variant	77
+stop_lost	17
+start_lost	100
+inframe_insertion	45
+inframe_deletion	108
+missense_variant	48
+protein_altering_variant	21
+incomplete_terminal_codon_variant	4
+start_retained_variant	39
+stop_retained_variant	14
+synonymous_variant	15
+coding_sequence_variant	38
+
+[Variants by chromosome]
+HG1012_PATCH	75
+HSCHR17_1_CTG1	16
+KI270728.1	32
+LRG_1	11
+
+[Position in protein]
+00-10%	94
+10-20%	14
+20-30%	17
+30-40%	5
+40-50%	12
+50-60%	31
+60-70%	35
+70-80%	53
+80-90%	50
+90-100%	90

@@ -17,58 +17,9 @@ pub use registry::PluginRegistry;
 use vep_core::consequence::TranscriptConsequence;
 use vep_core::variant::InputVariant;
 
-/// Feature types that a plugin can annotate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FeatureType {
-    Transcript,
-    RegulatoryFeature,
-    MotifFeature,
-}
-
-impl FeatureType {
-    /// The feature types a plugin declares, from the comma-separated list its
-    /// `vep_plugin_feature_types` symbol returns: the words Ensembl VEP's
-    /// `feature_types` takes (`BaseVepPlugin.pm` `_check_types`), where
-    /// `Feature` is every feature class and `Intergenic` names the rows that
-    /// have no feature, which the host hands to no plugin. Any other word is a
-    /// load error.
-    pub fn parse_list(text: &str) -> Result<Vec<Self>, PluginError> {
-        let mut types = Vec::new();
-        for word in text.split(',').map(str::trim).filter(|w| !w.is_empty()) {
-            let declared: &[Self] = match word {
-                "Transcript" => &[Self::Transcript],
-                "RegulatoryFeature" => &[Self::RegulatoryFeature],
-                "MotifFeature" => &[Self::MotifFeature],
-                "Feature" => &[
-                    Self::Transcript,
-                    Self::RegulatoryFeature,
-                    Self::MotifFeature,
-                ],
-                "Intergenic" => &[],
-                other => {
-                    return Err(PluginError::Load(format!(
-                        "unknown feature type {other:?} in vep_plugin_feature_types"
-                    )))
-                }
-            };
-            for kind in declared {
-                if !types.contains(kind) {
-                    types.push(*kind);
-                }
-            }
-        }
-        Ok(types)
-    }
-
-    /// The row kind this feature type annotates.
-    pub fn row_kind(self) -> vep_core::consequence::FeatureType {
-        match self {
-            Self::Transcript => vep_core::consequence::FeatureType::Transcript,
-            Self::RegulatoryFeature => vep_core::consequence::FeatureType::RegulatoryFeature,
-            Self::MotifFeature => vep_core::consequence::FeatureType::MotifFeature,
-        }
-    }
-}
+/// The kind of row a plugin runs on: vep-core's `RowKind`, which the built-in
+/// plugins' `feature_types` return as well.
+pub use vep_core::consequence::RowKind as FeatureType;
 
 /// Errors from plugin execution.
 #[derive(Debug, thiserror::Error)]
@@ -99,5 +50,36 @@ pub trait VepPlugin: Send + Sync {
     }
     fn finish(&mut self) -> Result<(), PluginError> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn feature_type_names_round_trip_and_reject_any_other_string() {
+        for kind in [
+            FeatureType::Transcript,
+            FeatureType::RegulatoryFeature,
+            FeatureType::MotifFeature,
+            FeatureType::Intergenic,
+        ] {
+            assert_eq!(FeatureType::parse(kind.as_str()), Some(kind));
+        }
+        assert_eq!(FeatureType::parse("transcript"), None);
+        assert_eq!(FeatureType::parse("Gene"), None);
+    }
+
+    #[test]
+    fn a_consequence_feature_type_maps_to_the_plugin_kind_of_the_same_name() {
+        use vep_core::consequence::FeatureType as Core;
+        for core in [
+            Core::Transcript,
+            Core::RegulatoryFeature,
+            Core::MotifFeature,
+        ] {
+            assert_eq!(FeatureType::from(core).as_str(), core.as_str());
+        }
     }
 }

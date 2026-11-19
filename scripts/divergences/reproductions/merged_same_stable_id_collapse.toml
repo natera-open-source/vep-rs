@@ -1,0 +1,36 @@
+entry = "merged_same_stable_id_collapse"
+page = "docs/cache-conversion.md#a-transcript-model-the-cache-carries-at-two-loci-under---refseq-or---merged"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 38 of 77,601 cache transcripts · 1 flag set, 1 corpus"
+notes = "The merged cache carries compmerge.264.Heart.chr21 twice, on the reverse strand at 21:32601667-32612845 and on the forward strand at 21:39451905-39515506; the two records load both copies into one buffer, and only --all_refseq admits the model."
+
+[input]
+format = "vcf"
+text = """
+21	32612111	rs1036535345	A	C	.	.	.
+21	39462549	rs745798146	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "merged"
+json_cache = "tests/golden/116/GRCh38-merged/json_cache"
+fasta = "tests/golden/116/GRCh38-merged/reference.fa.gz"
+
+[run]
+flags = ["--merged", "--all_refseq"]
+
+[compare]
+kind = "rows"
+where = { feature = "compmerge.264.Heart.chr21" }
+columns = ["Location", "Allele", "Feature", "Consequence", "STRAND"]
+
+[expected]
+ensembl_vep = ["21:32612111 | C | compmerge.264.Heart.chr21 | non_coding_transcript_exon_variant | -1"]
+vep_rs = [
+  "21:32612111 | C | compmerge.264.Heart.chr21 | non_coding_transcript_exon_variant | -1",
+  "21:39462549 | T | compmerge.264.Heart.chr21 | non_coding_transcript_exon_variant | 1",
+]

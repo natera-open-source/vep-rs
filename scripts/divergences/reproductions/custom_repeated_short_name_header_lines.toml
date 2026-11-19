@@ -1,0 +1,43 @@
+entry = "custom_repeated_short_name_header_lines"
+page = "docs/divergences/pc-description-text.md#2-the-header-line-that-receives-a-repeated-custom-short-names-file"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the short_name option of --custom, any string without commas, with no rule that two sources take different names (Ensembl VEP documentation, \"Custom annotations\", Options, short_name); not seen in the measured datasets"
+notes = "The shared short name SITES holds no lowercase o, so Ensembl VEP appends the second source's file to the first custom header line, the BED source cons, once for SITES and once for SITES_AF; the rows agree. With the shared name spelt solo both engines print the same header lines."
+
+[input]
+format = "vcf"
+text = """
+21	5028997	.	TCA	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+
+[run]
+flags = [
+  "--custom", "file={corpus}/custom/regions.bed.gz,short_name=cons,format=bed,type=overlap",
+  "--custom", "file={corpus}/custom/sites.vcf.gz,short_name=SITES,format=vcf,type=exact,fields=AF",
+  "--custom", "file={corpus}/custom/clinvar_source.vcf.gz,short_name=SITES,format=vcf,type=exact,fields=AF",
+]
+format = "default"
+
+[compare]
+kind = "header"
+pattern = "^## (cons|SITES|SITES_AF) : "
+mask_paths = false
+
+[expected]
+ensembl_vep = [
+  "## cons : [PATH]/regions.bed.gz,[PATH]/clinvar_source.vcf.gz,[PATH]/clinvar_source.vcf.gz",
+  "## SITES : [PATH]/sites.vcf.gz",
+  "## SITES_AF : Allele frequency, one value per alternate allele. AF field from [PATH]/sites.vcf.gz",
+]
+vep_rs = [
+  "## cons : [PATH]/regions.bed.gz",
+  "## SITES : [PATH]/sites.vcf.gz,[PATH]/clinvar_source.vcf.gz",
+  "## SITES_AF : Allele frequency, one value per alternate allele. AF field from [PATH]/sites.vcf.gz,[PATH]/clinvar_source.vcf.gz",
+]

@@ -8,10 +8,19 @@ name: Docker
 # host of their architecture meets. The measured archives, the binaries the
 # release page's figures were taken on, go out as the single-platform tags of
 # the rows of role `tag`. Each platform builds on a runner of its own
-# architecture, never under emulation. `workflow_dispatch` packages any
+# architecture, never under emulation. `workflow_dispatch` packages a
 # published tag that carries every archive of the matrix and pushes only when
-# asked, from main. A pull request touching the image builds and smoke-tests
-# the newest release and pushes nothing. Every image is pushed by digest alone
+# asked, from main; a tag older than the first release this image fits is
+# refused by name before it is checked out or staged, since its `vep`
+# needs the `duckdb` CLI for Parquet output and the image carries none
+# (scripts/docker/image_source.sh). Both events run in the job `image`, the
+# only one that packages a release and the only one whose rows push. A pull
+# request touching the image runs in the job `tree`, which can read the
+# repository and nothing else: it builds the three binaries from its own tree
+# for every row by release.yml's recipe, glibc floor included
+# (scripts/docker/stage_tree.sh), and builds and smoke-tests the image around
+# them, which holds the tree's Dockerfile and smoke test to the binaries a
+# release of that tree ships. Every image is pushed by digest alone
 # and smoke-tested as pulled; the tags are created last, by the publish job,
 # once every row has passed, so a tag never names an image that failed its
 # smoke test and a failed row leaves the release untagged. The platform
@@ -49,14 +58,110 @@ concurrency:
 env:
   IMAGE: ghcr.io/natera-open-source/vep-rs
   BUILDKIT_IMAGE: moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
-  # The archives the matrix rows below package, one per row: a release or
-  # dispatch run needs them all before any row pushes.
+  HADOLINT_IMAGE: hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
+  # The archives the matrix rows of both image jobs package, one per row: a
+  # release or dispatch run needs them all before any row pushes.
   ARCHIVES: x86_64-unknown-linux-gnu-v2 x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu-generic aarch64-unknown-linux-gnu
 
 jobs:
+  # A pull request's rows: the code it brings is compiled and run here, where
+  # the token reads the repository and nothing can be pushed, attested or
+  # uploaded.
+  tree:
+    name: Build and smoke-test the tree's ${{ matrix.archive }}
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      # The rows of the job `image`: archive, platform and runner.
+      matrix:
+        include:
+          - archive: x86_64-unknown-linux-gnu-v2
+            platform: linux/amd64
+            os: ubuntu-latest
+          - archive: x86_64-unknown-linux-gnu
+            platform: linux/amd64
+            os: ubuntu-latest
+          - archive: aarch64-unknown-linux-gnu-generic
+            platform: linux/arm64
+            os: ubuntu-24.04-arm
+          - archive: aarch64-unknown-linux-gnu
+            platform: linux/arm64
+            os: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Lint the Dockerfile
+        run: docker run --rm -i "$HADOLINT_IMAGE" < docker/Dockerfile
+
+      # The version of the workspace manifest, which the image is labelled
+      # with and `vep --version` must print.
+      - name: Resolve the tree's version
+        id: meta
+        env:
+          EVENT: ${{ github.event_name }}
+        run: scripts/docker/image_source.sh >> "$GITHUB_OUTPUT"
+
+      # The toolchain and target release.yml builds the row's archive with.
+      - name: Read the release recipe of the archive
+        id: recipe
+        run: scripts/docker/release_recipe.sh "${{ matrix.archive }}" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        with:
+          toolchain: ${{ steps.recipe.outputs.toolchain }}
+          targets: ${{ steps.recipe.outputs.target }}
+
+      - name: Build the tree's binaries as a release builds them and stage them
+        run: scripts/docker/stage_tree.sh "${{ matrix.archive }}" "$RUNNER_TEMP/context" "$RUNNER_TEMP/tools"
+
+      # Release directories coexist while an older release is kept; the newest
+      # is the current corpus.
+      - name: Locate the tree's GRCh37 corpus
+        id: corpus
+        run: |
+          corpus="$(find tests/golden -mindepth 2 -maxdepth 2 -type d -name GRCh37 | sort -V | tail -n 1)"
+          [[ -n "$corpus" && -f "$corpus/variants.vcf" ]] ||
+            { echo "ERROR: [docker] no tests/golden/<release>/GRCh37 corpus in the tree" >&2; exit 1; }
+          echo "path=$corpus" >> "$GITHUB_OUTPUT"
+          echo "smoke-test corpus $corpus"
+
+      # The builder and the build of a release row that does not push.
+      - name: Create the builder
+        run: docker buildx create --name vep-rs --driver docker-container --driver-opt "image=$BUILDKIT_IMAGE" --use
+
+      - name: Build
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          args=(--platform "$PLATFORM" --provenance=false --sbom=false --file docker/Dockerfile
+                --build-arg "VERSION=$VERSION" "$RUNNER_TEMP/context")
+          docker buildx build "${args[@]}" --load --tag vep-rs:smoke
+
+      # The tree carries the corpus and the example every check reads, so a
+      # check the smoke test skips fails the row.
+      - name: Smoke test
+        run: |
+          docker run --rm \
+            -v "$PWD/scripts/docker:/smoke:ro" \
+            -v "$PWD/${{ steps.corpus.outputs.path }}:/corpus:ro" \
+            -v "$PWD/examples:/examples:ro" \
+            vep-rs:smoke bash /smoke/smoke_test.sh "${{ steps.meta.outputs.version }}" | tee "$RUNNER_TEMP/smoke.log"
+          if grep '^  skip ' "$RUNNER_TEMP/smoke.log"; then
+            echo "ERROR: [docker] the smoke test skipped a check on the tree" >&2
+            exit 1
+          fi
+
+  # A release's or a dispatch's rows, the only ones that push: each packages
+  # the attested archive of a published release and never builds a tree.
   image:
     name: Build and smoke-test ${{ matrix.archive }}
-    if: github.event_name != 'release' || !github.event.release.prerelease
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && !github.event.release.prerelease)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -102,40 +207,27 @@ jobs:
           persist-credentials: false
 
       - name: Lint the Dockerfile
-        run: docker run --rm -i hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d < docker/Dockerfile
+        run: docker run --rm -i "$HADOLINT_IMAGE" < docker/Dockerfile
 
-      - name: Resolve the tag and whether to push
+      # The tag a release names or a dispatch is given, and whether the run
+      # pushes. A dispatch of a tag older than the first release the image
+      # fits ends here.
+      - name: Resolve what to package and whether to push
         id: meta
         env:
           EVENT: ${{ github.event_name }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           INPUT_TAG: ${{ inputs.tag }}
           INPUT_PUSH: ${{ inputs.push }}
-        run: |
-          case "$EVENT" in
-            release) tag="$RELEASE_TAG"; push=true ;;
-            workflow_dispatch) tag="$INPUT_TAG"; push="$INPUT_PUSH" ;;
-            *) tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"; push=false ;;
-          esac
-          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "ERROR: [docker] tag '$tag' is not vX.Y.Z" >&2; exit 1; }
-          if [[ "$push" == true && "$GITHUB_REF" != refs/heads/main && "$EVENT" == workflow_dispatch ]]; then
-            echo "ERROR: [docker] push=true is allowed only from main, not $GITHUB_REF" >&2; exit 1
-          fi
-          { echo "tag=$tag"; echo "version=${tag#v}"; echo "push=$push"; } >> "$GITHUB_OUTPUT"
-          echo "packaging $tag (push=$push)"
+        run: scripts/docker/image_source.sh >> "$GITHUB_OUTPUT"
 
-      # A release or dispatch run packages a release only when it carries
-      # every archive of the matrix, so no row pushes an image of a release
-      # another row cannot package. A pull request packages the newest
-      # published release, which may carry only the measured archives: a row
-      # whose archive the release lacks has nothing to build and says so.
+      # A release is packaged only when it carries every archive of the
+      # matrix, so no row pushes an image of a release another row cannot
+      # package.
       - name: Check that the release carries the archives
-        id: asset
         env:
-          EVENT: ${{ github.event_name }}
           TAG: ${{ steps.meta.outputs.tag }}
           VERSION: ${{ steps.meta.outputs.version }}
-          ARCHIVE: ${{ matrix.archive }}
         run: |
           assets="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
           missing=()
@@ -143,54 +235,45 @@ jobs:
             file="vep-$VERSION-$archive.tar.gz"
             grep -qxF "$file" <<<"$assets" || missing+=("$file")
           done
-          own="vep-$VERSION-$ARCHIVE.tar.gz"
-          if [[ "${#missing[@]}" -eq 0 ]]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          elif [[ "$EVENT" != pull_request ]]; then
-            echo "ERROR: [docker] release $TAG lacks ${missing[*]}" >&2; exit 1
-          elif grep -qxF "$own" <<<"$assets"; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::release $TAG has no $own; this row builds nothing"
-            echo "present=false" >> "$GITHUB_OUTPUT"
-          fi
+          [[ "${#missing[@]}" -eq 0 ]] || { echo "ERROR: [docker] release $TAG lacks ${missing[*]}" >&2; exit 1; }
 
-      # The smoke test runs the release's own corpus, so an older binary is
-      # never handed a cache format newer than it reads.
-      - name: Check out the release's golden corpora
-        if: steps.asset.outputs.present == 'true'
+      # The smoke test runs the corpus and bundled example of the tree the
+      # binaries were built from, the release's tag, so an older binary is
+      # never handed a cache format newer than it reads. A release tree without
+      # an examples directory mounts an empty one and the smoke test skips the
+      # example check by name.
+      - name: Check out the golden corpora and examples of the packaged tree
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.meta.outputs.tag }}
           path: release-src
-          sparse-checkout: tests/golden
+          sparse-checkout: |
+            tests/golden
+            examples
           persist-credentials: false
 
       # Release directories coexist while an older release is kept; the newest
       # is the current corpus.
-      - name: Locate the release's GRCh37 corpus
-        if: steps.asset.outputs.present == 'true'
+      - name: Locate the packaged tree's GRCh37 corpus
         id: corpus
         env:
           TAG: ${{ steps.meta.outputs.tag }}
         run: |
           corpus="$(find release-src/tests/golden -mindepth 2 -maxdepth 2 -type d -name GRCh37 | sort -V | tail -n 1)"
           [[ -n "$corpus" && -f "$corpus/variants.vcf" ]] ||
-            { echo "ERROR: [docker] no tests/golden/<release>/GRCh37 corpus in the $TAG tree" >&2; exit 1; }
+            { echo "ERROR: [docker] no tests/golden/<release>/GRCh37 corpus in the ${TAG:-checked-out} tree" >&2; exit 1; }
           echo "path=$corpus" >> "$GITHUB_OUTPUT"
           echo "smoke-test corpus $corpus"
 
       - name: Stage the verified release binaries
-        if: steps.asset.outputs.present == 'true'
         run: scripts/docker/stage_release.sh "${{ steps.meta.outputs.tag }}" "${{ matrix.archive }}" "$RUNNER_TEMP/context"
 
       # A container-driver builder: the only one that pushes by digest.
       - name: Create the builder
-        if: steps.asset.outputs.present == 'true'
         run: docker buildx create --name vep-rs --driver docker-container --driver-opt "image=$BUILDKIT_IMAGE" --use
 
       - name: Log in to GHCR
-        if: steps.asset.outputs.present == 'true' && steps.meta.outputs.push == 'true'
+        if: steps.meta.outputs.push == 'true'
         env:
           ACTOR: ${{ github.actor }}
         run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
@@ -200,7 +283,6 @@ jobs:
       # bytes the smoke test runs are the bytes in the registry.
       - name: Build
         id: build
-        if: steps.asset.outputs.present == 'true'
         env:
           PLATFORM: ${{ matrix.platform }}
           VERSION: ${{ steps.meta.outputs.version }}
@@ -224,15 +306,16 @@ jobs:
           { echo "ref=$ref"; echo "digest=$digest"; } >> "$GITHUB_OUTPUT"
 
       - name: Smoke test
-        if: steps.asset.outputs.present == 'true'
-        run: >-
-          docker run --rm
-          -v "$PWD/scripts/docker:/smoke:ro"
-          -v "$PWD/${{ steps.corpus.outputs.path }}:/corpus:ro"
-          "${{ steps.build.outputs.ref }}" bash /smoke/smoke_test.sh "${{ steps.meta.outputs.version }}"
+        run: |
+          mkdir -p release-src/examples
+          docker run --rm \
+            -v "$PWD/scripts/docker:/smoke:ro" \
+            -v "$PWD/${{ steps.corpus.outputs.path }}:/corpus:ro" \
+            -v "$PWD/release-src/examples:/examples:ro" \
+            "${{ steps.build.outputs.ref }}" bash /smoke/smoke_test.sh "${{ steps.meta.outputs.version }}"
 
       - name: Attest the pushed image
-        if: steps.asset.outputs.present == 'true' && steps.meta.outputs.push == 'true'
+        if: steps.meta.outputs.push == 'true'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ env.IMAGE }}
@@ -242,7 +325,7 @@ jobs:
       # The row's digest, platform, role and tag go to the publish job, which
       # tags once every row has passed.
       - name: Record the image
-        if: steps.asset.outputs.present == 'true' && steps.meta.outputs.push == 'true'
+        if: steps.meta.outputs.push == 'true'
         env:
           ARCHIVE: ${{ matrix.archive }}
           PLATFORM: ${{ matrix.platform }}
@@ -254,17 +337,20 @@ jobs:
           echo "$DIGEST $PLATFORM $ROLE $TAG" > "$RUNNER_TEMP/images/$ARCHIVE"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: steps.asset.outputs.present == 'true' && steps.meta.outputs.push == 'true'
+        if: steps.meta.outputs.push == 'true'
         with:
           name: image-${{ matrix.archive }}
           path: ${{ runner.temp }}/images/*
           if-no-files-found: error
 
-  # The one check the branch rules can name: it fails when any image did, and
-  # with a push it creates every tag from the images the rows pushed.
+  # The one check the branch rules can name: it fails unless every row of the
+  # job the event owes succeeded, and with a push it creates every tag from the
+  # images the rows pushed. `push` is an output of the job `image`, which a
+  # pull request skips, so on a pull request the requirement is the only step
+  # that runs and nothing here checks out or runs the tree.
   publish:
     name: Build, smoke-test and publish
-    needs: image
+    needs: [tree, image]
     if: always() && (github.event_name != 'release' || !github.event.release.prerelease)
     runs-on: ubuntu-latest
     permissions:
@@ -276,12 +362,30 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
+      # The body of scripts/docker/require_images.sh, which states the rule;
+      # its test holds this copy to it. No tree is checked out before this
+      # step, and on a pull request none after it.
       - name: Require every image
         env:
-          RESULT: ${{ needs.image.result }}
+          EVENT: ${{ github.event_name }}
+          TREE_RESULT: ${{ needs.tree.result }}
+          IMAGE_RESULT: ${{ needs.image.result }}
         run: |
-          [[ "$RESULT" == success ]] || { echo "ERROR: [docker] an image job ended $RESULT" >&2; exit 1; }
-          echo "every image row succeeded"
+          set -euo pipefail
+
+          fail() {
+              echo "ERROR: [require_images] $*" >&2
+              exit 1
+          }
+
+          case "${EVENT:-}" in
+              pull_request) owed=tree owed_result="${TREE_RESULT:-}" other=image other_result="${IMAGE_RESULT:-}" ;;
+              release | workflow_dispatch) owed=image owed_result="${IMAGE_RESULT:-}" other=tree other_result="${TREE_RESULT:-}" ;;
+              *) fail "event '${EVENT:-}' is not one the workflow builds an image for" ;;
+          esac
+          [[ "$owed_result" == success ]] || fail "the job '$owed', which a $EVENT owes, ended '$owed_result'"
+          [[ "$other_result" == skipped ]] || fail "the job '$other', which a $EVENT leaves out, ended '$other_result'"
+          echo "every image row of the job '$owed' succeeded"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: needs.image.outputs.push == 'true'

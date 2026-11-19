@@ -207,6 +207,150 @@ fn af_gnomad_without_gnomade_column_is_ensembl_error() {
     assert_refused_without_gnomade(&declared_only);
 }
 
+/// On a cache whose `info.json` declares no `variation_cols` neither refusal
+/// of the frequency flags arises: Ensembl VEP builds its variation source,
+/// with the gnomAD check and the population check inside it, only where the
+/// cache declares variation columns (CacheDir.pm:179-207 and
+/// BaseCacheVariation.pm:93, 271-289 at release/116.2). `--af_gnomad` declares
+/// the gnomAD exome columns and leaves every cell empty, every `--freq_pop`
+/// name is accepted, among them one no cache declares and one Perl reads as
+/// false, and `--check_frequency` keeps every record under `--freq_filter
+/// include` and `exclude` alike, with `FREQS` empty on every row. The cache is
+/// the committed one built from a GTF, which declares none.
+#[test]
+fn frequency_flags_on_a_cache_without_variation_columns_refuse_and_drop_nothing() {
+    /// The column names of a `--tab` output and its rows split into cells.
+    fn table(text: &str) -> (Vec<&str>, Vec<Vec<&str>>) {
+        let columns = text
+            .lines()
+            .find(|line| line.starts_with("#Uploaded_variation"))
+            .expect("a --tab output carries its column header")
+            .trim_start_matches('#')
+            .split('\t')
+            .collect();
+        let rows = text
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .map(|line| line.split('\t').collect())
+            .collect();
+        (columns, rows)
+    }
+
+    let corpus = golden("GRCh38-gtf-builder");
+    let cache = corpus.join("json_cache");
+    let info: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(cache.join("info.json")).unwrap()).unwrap();
+    assert!(
+        info.get("variation_cols").is_none(),
+        "the corpus cache declares no variation columns"
+    );
+    let input = corpus.join("variants.vcf");
+    let dir = tempfile::tempdir().unwrap();
+    let annotate = |flags: &[&str]| {
+        let output = run_on(dir.path(), &input, &cache, flags);
+        let err = stderr(&output);
+        assert_eq!(output.status.code(), Some(0), "{flags:?}: {err}");
+        assert!(!err.contains("ERROR:"), "{flags:?}: {err}");
+        std::fs::read_to_string(dir.path().join("out.txt")).unwrap()
+    };
+
+    let control = annotate(&["--tab"]);
+    let (control_columns, control_rows) = table(&control);
+    let records = std::fs::read_to_string(&input)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .count();
+    let annotated: std::collections::BTreeSet<&str> =
+        control_rows.iter().map(|row| row[0]).collect();
+    assert!(records > 0, "the corpus input holds records");
+    assert_eq!(annotated.len(), records, "the control writes every record");
+
+    // `text` holds the control's rows under the control's columns, and each of
+    // `added` as a described column whose every cell is empty.
+    let assert_every_record_kept = |text: &str, added: &[&str], what: &str| {
+        let (columns, rows) = table(text);
+        let at = |name: &str| {
+            columns
+                .iter()
+                .position(|column| *column == name)
+                .unwrap_or_else(|| panic!("{what}: the column header names {name}"))
+        };
+        let shared: Vec<usize> = control_columns.iter().map(|&name| at(name)).collect();
+        let kept: Vec<Vec<&str>> = rows
+            .iter()
+            .map(|row| shared.iter().map(|&cell| row[cell]).collect())
+            .collect();
+        assert!(
+            kept == control_rows,
+            "{what}: the {} rows written differ from the control's {} under its columns",
+            rows.len(),
+            control_rows.len()
+        );
+        for field in added {
+            assert!(
+                text.lines()
+                    .any(|line| line.starts_with(&format!("## {field} : "))),
+                "{what}: the header describes {field}"
+            );
+            let cell = at(field);
+            assert!(
+                rows.iter().all(|row| row[cell] == "-"),
+                "{what}: {field} is empty on every row"
+            );
+        }
+    };
+
+    let gnomad_exome = [
+        "gnomADe_AF",
+        "gnomADe_AFR_AF",
+        "gnomADe_AMR_AF",
+        "gnomADe_ASJ_AF",
+        "gnomADe_EAS_AF",
+        "gnomADe_FIN_AF",
+        "gnomADe_MID_AF",
+        "gnomADe_NFE_AF",
+        "gnomADe_REMAINING_AF",
+        "gnomADe_SAS_AF",
+    ];
+    assert_every_record_kept(
+        &annotate(&["--af_gnomad", "--tab"]),
+        &gnomad_exome,
+        "--af_gnomad",
+    );
+
+    // Where a cache declares columns the population check passes 1KG_ALL,
+    // passes gnomADe_NFE if that column is declared, refuses NOSUCH_POP as
+    // undeclared and refuses 0, which Perl reads as no population
+    // (BaseCacheVariation.pm:274, 285).
+    for population in ["1KG_ALL", "gnomADe_NFE", "NOSUCH_POP", "0"] {
+        let named = annotate(&["--freq_pop", population, "--tab"]);
+        assert!(
+            table(&named) == table(&control),
+            "--freq_pop {population} alone adds no column and drops no row"
+        );
+        for filter in ["include", "exclude"] {
+            let filtered = annotate(&[
+                "--check_frequency",
+                "--freq_pop",
+                population,
+                "--freq_freq",
+                "0.01",
+                "--freq_gt_lt",
+                "gt",
+                "--freq_filter",
+                filter,
+                "--tab",
+            ]);
+            assert_every_record_kept(
+                &filtered,
+                &["FREQS"],
+                &format!("--freq_pop {population} --freq_filter {filter}"),
+            );
+        }
+    }
+}
+
 /// A region file whose second line is one byte over the line cap ends the run
 /// under the `cache` component as the variant's region is read, naming the
 /// file and the line; nothing is written past the header. The same file with
@@ -253,6 +397,149 @@ fn a_variation_line_past_the_cap_ends_the_run_under_cache() {
     let written = std::fs::read_to_string(dir.path().join("out.txt")).unwrap();
     let row = written.lines().find(|l| !l.starts_with('#')).unwrap();
     assert!(row.contains("rs1") && row.contains("rs2"), "{row}");
+}
+
+/// A cache whose `var_type` contradicts the variation files a chromosome
+/// directory holds is refused as the variation source opens, before any record
+/// is annotated, under the `cache` component, naming the directory, the form it
+/// holds and the key's value (`VariationSource::open`): region files under
+/// `var_type tabix`, and `all_vars.gz` under no `var_type`. A `variation_cols`
+/// naming columns but no `start`, and under `var_type tabix` one not beginning
+/// with `chr`, the first column of an `all_vars.gz` record, are refused there
+/// too, in that order before the file check. Ensembl VEP selects its reader by the key
+/// (CacheDir.pm:184-186), that reader opens the one file name it knows only
+/// `if -e $file` (VariationTabix.pm:156 and 270, Variation.pm:104), and it zips
+/// each record's fields with the column list as written
+/// (BaseCacheVariation.pm:119-124), so it writes every record on such a
+/// chromosome without a co-located variant, exit 0. The source opens only for a
+/// run that reads co-located variants: the same cache without
+/// `--check_existing` annotates the record.
+#[test]
+fn var_type_contradicting_the_variation_files_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let region_cache = variation_cache(dir.path(), "region_under_tabix", &["AF"]);
+    let info_path = region_cache.join("info.json");
+    let mut info: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&info_path).unwrap()).unwrap();
+    info["var_type"] = "tabix".into();
+    std::fs::write(&info_path, serde_json::to_string(&info).unwrap()).unwrap();
+    // The column list is checked before the files: the key alone, over a list
+    // without `chr`, meets the column refusal.
+    let refused = run(dir.path(), &region_cache, &["--check_existing"]);
+    let err = stderr(&refused);
+    assert_eq!(refused.status.code(), Some(1), "{err}");
+    let error_lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
+    assert_eq!(
+        error_lines,
+        [format!(
+            "ERROR: [cache] variation_cols of {} does not begin with chr, the first column of an all_vars.gz record",
+            info_path.display()
+        )],
+        "{err}"
+    );
+
+    info["variation_cols"]
+        .as_array_mut()
+        .unwrap()
+        .insert(0, "chr".into());
+    std::fs::write(&info_path, serde_json::to_string(&info).unwrap()).unwrap();
+    let refused = run(dir.path(), &region_cache, &["--check_existing"]);
+    let err = stderr(&refused);
+    assert_eq!(refused.status.code(), Some(1), "{err}");
+    let error_lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
+    assert_eq!(
+        error_lines,
+        [format!(
+            "ERROR: [cache] {} holds region files (<start>-<end>_var.gz) while {} says var_type tabix",
+            region_cache.join("variations").join("21").display(),
+            info_path.display()
+        )],
+        "{err}"
+    );
+    assert!(
+        !dir.path().join("out.txt").exists(),
+        "no output for a refused run"
+    );
+
+    let all_vars_cache = dir.path().join("all_vars_under_no_var_type");
+    copy_tree(
+        &golden("GRCh38-colocated").join("json_cache"),
+        &all_vars_cache,
+    );
+    std::fs::remove_file(all_vars_cache.join("CHECKSUMS.sha256")).unwrap();
+    let info_path = all_vars_cache.join("info.json");
+    let mut info: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&info_path).unwrap()).unwrap();
+    assert_eq!(info["var_type"], "tabix");
+    let columns = info["variation_cols"].as_array_mut().unwrap();
+    assert_eq!(columns.remove(0), "chr");
+    let start = columns.iter().position(|c| c == "start").unwrap();
+    columns[start] = "pos".into();
+    std::fs::write(&info_path, serde_json::to_string(&info).unwrap()).unwrap();
+    // `start` is checked before `chr`: both missing, the start refusal speaks.
+    let refused = run(dir.path(), &all_vars_cache, &["--check_existing"]);
+    let err = stderr(&refused);
+    assert_eq!(refused.status.code(), Some(1), "{err}");
+    let error_lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
+    assert_eq!(
+        error_lines,
+        [format!(
+            "ERROR: [cache] variation_cols of {} names no start column",
+            info_path.display()
+        )],
+        "{err}"
+    );
+    assert!(
+        !dir.path().join("out.txt").exists(),
+        "no output for a refused run"
+    );
+
+    info["variation_cols"][start] = "start".into();
+    std::fs::write(&info_path, serde_json::to_string(&info).unwrap()).unwrap();
+    let refused = run(dir.path(), &all_vars_cache, &["--check_existing"]);
+    let err = stderr(&refused);
+    assert_eq!(refused.status.code(), Some(1), "{err}");
+    let error_lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
+    assert_eq!(
+        error_lines,
+        [format!(
+            "ERROR: [cache] variation_cols of {} does not begin with chr, the first column of an all_vars.gz record",
+            info_path.display()
+        )],
+        "{err}"
+    );
+    assert!(
+        !dir.path().join("out.txt").exists(),
+        "no output for a refused run"
+    );
+
+    info.as_object_mut().unwrap().remove("var_type");
+    std::fs::write(&info_path, serde_json::to_string(&info).unwrap()).unwrap();
+    let refused = run(dir.path(), &all_vars_cache, &["--check_existing"]);
+    let err = stderr(&refused);
+    assert_eq!(refused.status.code(), Some(1), "{err}");
+    let error_lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
+    assert_eq!(
+        error_lines,
+        [format!(
+            "ERROR: [cache] {} holds all_vars.gz while {} says var_type (unset)",
+            all_vars_cache.join("variations").join("21").display(),
+            info_path.display()
+        )],
+        "{err}"
+    );
+    assert!(
+        !dir.path().join("out.txt").exists(),
+        "no output for a refused run"
+    );
+
+    let annotated = run(dir.path(), &region_cache, &[]);
+    let err = stderr(&annotated);
+    assert_eq!(annotated.status.code(), Some(0), "{err}");
+    assert!(!err.contains("ERROR:"), "{err}");
+    let written = std::fs::read_to_string(dir.path().join("out.txt")).unwrap();
+    let row = written.lines().find(|l| !l.starts_with('#')).unwrap();
+    assert!(row.contains("intergenic_variant"), "{row}");
 }
 
 /// A transcript shard the cache cannot read ends a VCF run under the `cache`

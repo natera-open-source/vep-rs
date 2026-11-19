@@ -1,0 +1,33 @@
+entry = "gene_score_zero_value"
+page = "docs/plugins/flat-file.md#5-loftool-and-pli-a-score-of-0"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the scores file the LoFtool plugin's header describes and the values file the pLI plugin's header describes, neither of which excludes a score of 0; not seen in the measured datasets"
+notes = "LoFtool, the first plugin the entry names; the corpus table with SOD1's percentile written 0.00E+00."
+prepare = [
+  "sed 's/1\\.26E-01/0.00E+00/' \"$CORPUS/plugin_data/LoFtool_scores.txt\" > \"$STAGE/LoFtool_scores_zero.txt\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	31667290	14766	A	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-loftool/json_cache"
+
+[run]
+flags = ["--plugin", "LoFtool,{stage}/LoFtool_scores_zero.txt"]
+
+[compare]
+kind = "field"
+field = "LoFtool"
+where = { record = "14766", feature = "ENST00000270142" }
+
+[expected]
+ensembl_vep = ["-"]
+vep_rs = ["0"]

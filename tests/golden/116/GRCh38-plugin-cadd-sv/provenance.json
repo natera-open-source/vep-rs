@@ -1,0 +1,118 @@
+{
+ "plugin_fixtures": {
+  "1000G_phase3_SVs_synthetic.tsv.gz": {
+   "generator": "scripts/fixtures/plugin_score_fixtures.py",
+   "shape": "cadd_sv",
+   "seed": 37,
+   "chr_style": "bare",
+   "misses": [
+    "21:5033000"
+   ],
+   "variants_vcf_sha256": "622663b6235708a044e7daafb9cfc5caff621b39294cc82ee64fb9ccfe2d209e",
+   "rows": {
+    "sv": 5,
+    "decoy": 10,
+    "miss": 1
+   },
+   "files": {
+    "plugin_data/1000G_phase3_SVs_synthetic.tsv.gz": "cc35918da1d873835648b210dccb4cd810b6bcf5c7241422446c37afeb9a35aa",
+    "plugin_data/1000G_phase3_SVs_synthetic.tsv.gz.tbi": "21f897bf5ea5685c12a2edccd1a00c3e1d5b3e5757f00bc45fc9cfe36d04d05d"
+   },
+   "tools": {
+    "bgzip": "bgzip (htslib) 1.22.1",
+    "tabix": "tabix (htslib) 1.22.1"
+   },
+   "assembly": "GRCh38"
+  },
+  "whole_genome_SNVs_synthetic.tsv.gz": {
+   "generator": "scripts/fixtures/plugin_score_fixtures.py",
+   "shape": "cadd_snv",
+   "seed": 38,
+   "chr_style": "bare",
+   "misses": [],
+   "variants_vcf_sha256": "622663b6235708a044e7daafb9cfc5caff621b39294cc82ee64fb9ccfe2d209e",
+   "rows": {
+    "snv": 21,
+    "non_snv": 0,
+    "miss": 0
+   },
+   "files": {
+    "plugin_data/whole_genome_SNVs_synthetic.tsv.gz": "290ad4058784f4f542102c55fe96454ac1e1443a26cafe9400462a38f16f54a9",
+    "plugin_data/whole_genome_SNVs_synthetic.tsv.gz.tbi": "e39ea9d4212c2b6336c21b9b043e1fe81ca40e625606c81426ca504d26151060"
+   },
+   "tools": {
+    "bgzip": "bgzip (htslib) 1.22.1",
+    "tabix": "tabix (htslib) 1.22.1"
+   },
+   "assembly": "GRCh38"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin CADD,sv={corpus}/plugin_data/1000G_phase3_SVs_synthetic.tsv.gz [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "21 hand-built VCF records on chromosome 21 of the release-116 GRCh38 cache: the sequence variants around a symbolic deletion's anchor, start and end (deletions, insertions, SNVs, two with two alternate alleles), the deletion itself, a duplication and an insertion inside its span and a deletion the CADD-SV fixture leaves out, a deletion and a duplication over transcripts, and, where no CADD-SV row lies, an inversion and a tandem duplication, classes the fixture does not score, beside an intronic SNV with two alternate alleles",
+ "sha256": {
+  "default.txt": "96730bb51aaebcd42eea3406abc2898c56a5947ccd16e92f98226eeaa85ab979",
+  "tab.txt": "cbd87cf1a74e9e6e478dcfe31a29299b3917d68bf287826e49b5056107482be8",
+  "vcf.vcf": "50f6012ddf83226303742a5f813d4acebbd993d8d7bd769a27b2d1a7d9e50e7c",
+  "json.jsonl": "af3bc92060c39457b1eb2529b07ba2de465efe057bb5d74c85adb66bf5caff82",
+  "default.summary.log": "993ce16023c814c3eb411116ed27c1b71de5aa44cfa2ba623ab8c9963e03611e",
+  "tab.summary.log": "a0a33c845fdd84a9498edcd487829379322561c21f60d66f1c1362c28cb2d0c1",
+  "vcf.summary.log": "1c56c311f9db7aeebb0d4cdea1a4b144beee2d78719bc236560848f30ab0888d",
+  "json.summary.log": "9d4e74e305e8470e8084708ffbea36ca4cd3413ea77159823bf42fd4c3e0852c"
+ },
+ "variants_vcf_sha256": "622663b6235708a044e7daafb9cfc5caff621b39294cc82ee64fb9ccfe2d209e",
+ "plugin_files": {
+  "plugin_data/1000G_phase3_SVs_synthetic.tsv.gz": "cc35918da1d873835648b210dccb4cd810b6bcf5c7241422446c37afeb9a35aa",
+  "plugin_data/1000G_phase3_SVs_synthetic.tsv.gz.tbi": "21f897bf5ea5685c12a2edccd1a00c3e1d5b3e5757f00bc45fc9cfe36d04d05d",
+  "plugin_data/whole_genome_SNVs_synthetic.tsv.gz": "290ad4058784f4f542102c55fe96454ac1e1443a26cafe9400462a38f16f54a9",
+  "plugin_data/whole_genome_SNVs_synthetic.tsv.gz.tbi": "e39ea9d4212c2b6336c21b9b043e1fe81ca40e625606c81426ca504d26151060"
+ },
+ "flag_sets": {
+  "cadd-sv-and-snv": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin CADD,sv={corpus}/plugin_data/1000G_phase3_SVs_synthetic.tsv.gz,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_cadd-sv-and-snv",
+   "sha256": {
+    "default.txt": "656175834e6ef1658d14c2ed3674c309a007502357c22a823c2cb6e6923d7d70",
+    "default.summary.log": "5cbc25ec5a81bad11e21c01e8dbc78b7c71e2187b4f3aa51e1587fbf4d7303cc",
+    "tab.txt": "9353a679bc9ee2682aacc84cc66f0a5fa7d58c9fceb8b8adbf2a395672a882c4",
+    "tab.summary.log": "c5279ae3da6c0b3e4e2d425c0cade4fc94299478d36465e49fb3d8148e187bc2",
+    "vcf.vcf": "5d0c4c9359f106946a6e85b35acae0cb2032a1b2f1311d88db601420bbecfc88",
+    "vcf.summary.log": "880d17fe903c19838737fb0228ec8a11763d388dffc4324acb71f627861e057f",
+    "json.jsonl": "1d525507948d346df0ac7072993aa75cad946316249e125fea2392ec7f683c08",
+    "json.summary.log": "e0d0f15b83d0edb952b63078b23ab0242cd88e27ca5cc921833ae695c58de607"
+   }
+  },
+  "cadd-sv-and-snv-forced": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin CADD,sv={corpus}/plugin_data/1000G_phase3_SVs_synthetic.tsv.gz,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,force_annotate=1 [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_cadd-sv-and-snv-forced",
+   "sha256": {
+    "default.txt": "f22518aba39a9c7c91a94baaa0cd0ef13729f2a114a1eb1bf71382cedf6be641",
+    "default.summary.log": "7501389a009c8bc4919fdbde969b05ad6e70a3c20751b993bc7a48030de6abe1",
+    "tab.txt": "e4edeec92905893d58fca171d95ff9e73e5a98308d3d6e7db8c6c6eb91b1f5e0",
+    "tab.summary.log": "f9c84acac2b43409d362ee1a972211066a93398aaa8bcc63f01a4adf269a9bac",
+    "vcf.vcf": "13de48dc7e4adf420c693116779c9662a2e72a93c7408fdf6d08ac2ae7d4f248",
+    "vcf.summary.log": "6eea932e2fa21daa08d7ce501746d8daf1ae97c4c03c2e615fbbeb67308e314f",
+    "json.jsonl": "2a12538f909aab305854447f2ceb68558cbc1380610918fd5faa398ae225dcb2",
+    "json.summary.log": "27dca6c186941793f93109a123517fdd29d93e2c244f2e6e2e70f123496c60f2"
+   }
+  }
+ },
+ "generator": "plugin_data/1000G_phase3_SVs_synthetic.tsv.gz: scripts/fixtures/plugin_score_fixtures.py from variants.vcf, the generator's CADD-SV layout (one row per <DEL>, <INS> or <DUP> record at its VCF position beside two decoys, the span under another type and the type one base along; none at the missed record), bgzip and tabix -0 -s 1 -b 2 -e 3; plugin_data/whole_genome_SNVs_synthetic.tsv.gz: the same tool's CADD SNV layout, bgzip and tabix -s 1 -b 2 -e 2 (seeds and digests under plugin_fixtures); both files are made up, their scores fabricated from the recorded seeds, and their names are the names the plugin's documentation gives (CADD.pm:31-32), with the word `synthetic` added before the extension to say that the files are made up; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh38 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> for the manifest's run, and one Ensembl VEP 116.2 container run per format for each flag set (cadd-sv-and-snv, cadd-sv-and-snv-forced) from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus and Ensembl VEP's CADD plugin read from the VEP_plugins release/116 checkout mounted at /work/plugins; manifest: scripts/golden/build_golden_corpus.py select --include for every record, flag-set, then classify for the manifest's run and each flag set against the committed tree's binary"
+}

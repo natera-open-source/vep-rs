@@ -30,4 +30,9 @@ pub enum IoError {
     /// text as the whole message.
     #[error("{0}")]
     SkippedLine(String),
+
+    /// A Parquet file that cannot be written or read, with the encoder's or
+    /// decoder's reason.
+    #[error("Parquet: {0}")]
+    Parquet(String),
 }

@@ -1,6 +1,6 @@
 # A repeated alternate allele the looked-up reference equals
 
-A difference in which rows are written under `--lookup_ref --minimal` for a VCF record that repeats an alternate allele; nothing is set aside, since no measured dataset runs the flags.
+A difference in which rows are written under `--lookup_ref --minimal` for a VCF record that repeats an alternate allele; nothing is set aside, since no measured dataset runs the flags. Under `--process_ref_homs`, where the looked-up reference equals an allele written twice, Ensembl VEP writes two `-` rows per transcript; vep-rs reads the repeat as one allele where the written alleles do not trim, and writes one.
 
 Ensembl VEP reads a record's alternate alleles as written. It replaces the record's reference with the FASTA's bases under `--lookup_ref` (`Parser.pm` lines 635-646) and splits the record afterwards (`InputBuffer.pm` lines 638-718). A record whose repeated alternate allele the looked-up reference equals therefore splits into one feature per repeat, each `-/-`. Every feature builds its reference allele (`VariationFeatureOverlap.pm` lines 469-474), so under `--process_ref_homs` each repeat writes a `-` reference row numbered 0. Alleles after the first that trim to one allele string share an output key in Ensembl VEP, the later replacing the earlier ([two alleles that trim alike](minimal-same-trimmed-allele.md)); every record below repeats its first alternate allele once. At a site whose reference base is `A`, the record
 

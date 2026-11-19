@@ -76,6 +76,15 @@ struct PrefetchedChromosome {
 
 type ParsedRegion = (PathBuf, Arc<Vec<CachedVariation>>);
 
+/// One batch's read-ahead, fetched ([`VariationSource::fetch`]) and held until
+/// [`VariationSource::install`] makes it the one the lookups answer from: the
+/// indexed layout's windows and records per chromosome, or the region layout's
+/// parsed region files.
+pub struct Prefetch {
+    indexed: FxHashMap<String, PrefetchedChromosome>,
+    regions: Vec<ParsedRegion>,
+}
+
 /// The parsed region files of the region layout: the ones the current batch's
 /// prefetch loaded, kept until the next batch as Ensembl VEP keeps the regions
 /// its buffer touches (`AnnotationSource.pm:109-145`, `clean_cache` at
@@ -295,18 +304,28 @@ impl VariationSource {
 
     /// Reads ahead the records every variant of a batch (`(chr, start, end)`
     /// per variant) can reach, so that the batch's lookups are answered from
-    /// memory, and releases the previous batch's. On the indexed layout the
-    /// batch's merged start windows are swept in file order, one run of
-    /// windows per thread: a bin of the index covers 16 kb of genome and a
-    /// query reads its whole chunk, so one variant's lookup costs as much as a
-    /// batch's when the batch's variants share bins. On the region layout the
-    /// region files the batch touches are parsed once and kept until the next
-    /// batch, as Ensembl VEP keeps the regions its buffer touches
-    /// (`AnnotationSource.pm:109-145`, `:392-411`).
+    /// memory, and releases the previous batch's: [`Self::fetch`] then
+    /// [`Self::install`].
     pub fn prefetch<'a>(
         &self,
         spans: impl IntoIterator<Item = (&'a str, u64, u64)>,
     ) -> anyhow::Result<()> {
+        self.install(self.fetch(spans)?);
+        Ok(())
+    }
+
+    /// Reads the records every variant of a batch (`(chr, start, end)` per
+    /// variant) can reach, leaving the lookups on the batch installed before.
+    /// On the indexed layout the batch's merged start windows are swept in file
+    /// order, one run of windows per thread of the current rayon pool: a bin of
+    /// the index covers 16 kb of genome and a query reads its whole chunk, so
+    /// one variant's lookup costs as much as a batch's when the batch's
+    /// variants share bins. On the region layout the region files the batch
+    /// touches are parsed once, the ones already held reused.
+    pub fn fetch<'a>(
+        &self,
+        spans: impl IntoIterator<Item = (&'a str, u64, u64)>,
+    ) -> anyhow::Result<Prefetch> {
         let mut windows_by_chr: FxHashMap<&str, Vec<(u64, u64)>> = FxHashMap::default();
         for (chr, start, end) in spans {
             let window = if self.tabix {
@@ -317,7 +336,10 @@ impl VariationSource {
             windows_by_chr.entry(chr).or_default().push(window);
         }
         if !self.tabix {
-            return self.prefetch_regions(&windows_by_chr);
+            return Ok(Prefetch {
+                indexed: FxHashMap::default(),
+                regions: self.fetch_regions(&windows_by_chr)?,
+            });
         }
         let mut prefetched = FxHashMap::default();
         for (chr, mut windows) in windows_by_chr {
@@ -345,16 +367,35 @@ impl VariationSource {
                 BatchQueryResult::from_records(HashMap::from([(chr.to_string(), by_start)]));
             prefetched.insert(chr.to_string(), PrefetchedChromosome { windows, records });
         }
-        *self.prefetched.write().unwrap() = prefetched;
-        Ok(())
+        Ok(Prefetch {
+            indexed: prefetched,
+            regions: Vec::new(),
+        })
     }
 
-    /// The region-layout half of `prefetch`: the region files whose span meets
-    /// a window of the batch, parsed once, replace the kept set.
-    fn prefetch_regions(
+    /// Makes `prefetch` the read-ahead the lookups answer from, releasing the
+    /// previous batch's: on the region layout the files it holds replace the
+    /// kept set, as Ensembl VEP keeps the regions its buffer touches
+    /// (`AnnotationSource.pm:109-145`, `:392-411`).
+    pub fn install(&self, prefetch: Prefetch) {
+        let Prefetch { indexed, regions } = prefetch;
+        if self.tabix {
+            *self.prefetched.write().unwrap() = indexed;
+        } else {
+            let mut kept = self.regions.lock().unwrap();
+            kept.prefetched = regions;
+            kept.extra.clear();
+        }
+    }
+
+    /// The region-layout half of `fetch`: the region files whose span meets a
+    /// window of the batch, the ones already held taken as they are and the
+    /// others parsed with no lock held, so the lookups on the batch installed
+    /// before run on.
+    fn fetch_regions(
         &self,
         windows_by_chr: &FxHashMap<&str, Vec<(u64, u64)>>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<ParsedRegion>> {
         let mut wanted: Vec<(&str, &Path)> = Vec::new();
         for (chr, windows) in windows_by_chr {
             let Some(files) = self.chromosomes.get(*chr) else {
@@ -369,18 +410,19 @@ impl VariationSource {
                 }
             }
         }
-        let mut regions = self.regions.lock().unwrap();
+        let held: Vec<Option<Arc<Vec<CachedVariation>>>> = {
+            let regions = self.regions.lock().unwrap();
+            wanted.iter().map(|(_, path)| regions.get(path)).collect()
+        };
         let mut prefetched = Vec::with_capacity(wanted.len());
-        for (chr, path) in wanted {
-            let records = match regions.get(path) {
+        for ((chr, path), held) in wanted.into_iter().zip(held) {
+            let records = match held {
                 Some(records) => records,
                 None => Arc::new(self.parse_region(chr, path)?),
             };
             prefetched.push((path.to_path_buf(), records));
         }
-        regions.prefetched = prefetched;
-        regions.extra.clear();
-        Ok(())
+        Ok(prefetched)
     }
 
     /// The known variants Ensembl VEP reads for a variant at `start..=end` of
@@ -403,46 +445,89 @@ impl VariationSource {
             return Ok(Vec::new());
         };
         if self.tabix {
-            let Some(path) = &files.all_vars else {
-                return Ok(Vec::new());
-            };
             let (low, high) = start_window(start, end);
-            let prefetched = self.prefetched.read().unwrap();
-            if let Some(chromosome) = prefetched.get(chr) {
-                let covered = chromosome
-                    .windows
-                    .iter()
-                    .any(|&(window_low, window_high)| window_low <= low && high <= window_high);
-                if covered {
-                    return Ok(self.parse_tabix_records(chromosome.records.lookup(chr, low, high)));
-                }
-            }
-            drop(prefetched);
-            let handle = self.handle(chr, path)?;
-            let records = handle
-                .query(chr, low, high)
-                .map_err(|error| cache_file_error(error, format!("reading {}", path.display())))?;
-            Ok(self.parse_tabix_records(records.iter()))
+            self.tabix_records_starting_within(chr, files, low, high)
         } else {
             let (low, high) = region_window(start, end);
-            let mut found = Vec::new();
-            for (region_start, region_end, path) in &files.regions {
-                if *region_start > high || *region_end < low {
-                    continue;
-                }
-                let records = self.region(chr, path)?;
-                found.extend(
-                    records
-                        .iter()
-                        .filter(|r| {
-                            let (r_low, r_high) = (r.start.min(r.end), r.start.max(r.end));
-                            end >= r_low && start <= r_high
-                        })
-                        .cloned(),
-                );
-            }
-            Ok(found)
+            self.region_records(chr, files, low, high, |r| {
+                let (r_low, r_high) = (r.start.min(r.end), r.start.max(r.end));
+                end >= r_low && start <= r_high
+            })
         }
+    }
+
+    /// The known variants of `chr` whose start lies in `low..=high`, failed ones
+    /// included, in file order: the rows a database-backed Ensembl VEP reads for
+    /// a region (`Database/Variation.pm:167-179` selects a region's rows by
+    /// their start) before keeping the ones whose span overlaps a variant. On
+    /// the region layout these are the records of the regions covering
+    /// `low..=high` whose start lies in it.
+    pub fn records_starting_within(
+        &self,
+        chr: &str,
+        low: u64,
+        high: u64,
+    ) -> anyhow::Result<Vec<CachedVariation>> {
+        let Some(files) = self.chromosomes.get(chr) else {
+            return Ok(Vec::new());
+        };
+        if self.tabix {
+            self.tabix_records_starting_within(chr, files, low, high)
+        } else {
+            self.region_records(chr, files, low, high, |r| low <= r.start && r.start <= high)
+        }
+    }
+
+    /// The records of the region files of `chr` whose span meets `low..=high`,
+    /// each file parsed on first use, in file order, kept when `keep` accepts
+    /// them.
+    fn region_records(
+        &self,
+        chr: &str,
+        files: &ChromosomeFiles,
+        low: u64,
+        high: u64,
+        keep: impl Fn(&CachedVariation) -> bool,
+    ) -> anyhow::Result<Vec<CachedVariation>> {
+        let mut found = Vec::new();
+        for (region_start, region_end, path) in &files.regions {
+            if *region_start > high || *region_end < low {
+                continue;
+            }
+            let records = self.region(chr, path)?;
+            found.extend(records.iter().filter(|r| keep(r)).cloned());
+        }
+        Ok(found)
+    }
+
+    /// The records of the start-indexed file of `chr` whose start lies in
+    /// `low..=high`, from the prefetched window that covers it when there is one.
+    fn tabix_records_starting_within(
+        &self,
+        chr: &str,
+        files: &ChromosomeFiles,
+        low: u64,
+        high: u64,
+    ) -> anyhow::Result<Vec<CachedVariation>> {
+        let Some(path) = &files.all_vars else {
+            return Ok(Vec::new());
+        };
+        let prefetched = self.prefetched.read().unwrap();
+        if let Some(chromosome) = prefetched.get(chr) {
+            let covered = chromosome
+                .windows
+                .iter()
+                .any(|&(window_low, window_high)| window_low <= low && high <= window_high);
+            if covered {
+                return Ok(self.parse_tabix_records(chromosome.records.lookup(chr, low, high)));
+            }
+        }
+        drop(prefetched);
+        let handle = self.handle(chr, path)?;
+        let records = handle
+            .query(chr, low, high)
+            .map_err(|error| cache_file_error(error, format!("reading {}", path.display())))?;
+        Ok(self.parse_tabix_records(records.iter()))
     }
 
     /// The variants of a chromosome file's records, in the records' order.
@@ -737,7 +822,7 @@ fn enumerate(dir: &Path) -> anyhow::Result<FxHashMap<String, ChromosomeFiles>> {
 
 /// A chromosome name's place in karyotype order: the numbered chromosomes
 /// ascending, then `X`, `Y` and `MT`, then every other contig by name.
-fn karyotype_rank(chr: &str) -> (u8, u64, &str) {
+pub(crate) fn karyotype_rank(chr: &str) -> (u8, u64, &str) {
     match chr.parse::<u64>() {
         Ok(number) => (0, number, ""),
         Err(_) => match chr {
@@ -1302,6 +1387,101 @@ mod tests {
                     .unwrap()
             ),
             ["rs4"]
+        );
+    }
+
+    /// `records_starting_within` keeps a record by its start alone, on both
+    /// layouts: a deletion spanning the window from before it is read by the
+    /// overlap lookup and not by the start lookup, a window ending at a region
+    /// boundary names the record starting there and not the one starting in
+    /// the next region, and a window reaching into that region names both.
+    #[test]
+    fn records_starting_within_reads_by_start_on_both_layouts() {
+        let regions = tempfile::tempdir().unwrap();
+        let cols = GRCH38_COLS.strip_prefix("chr,").unwrap();
+        write_region(
+            regions.path(),
+            "21",
+            1,
+            1_000_000,
+            &[
+                "rs_span   999990 1000005 ACGTACGTACGTACGT/A",
+                "rs1   999999  A/G",
+            ],
+        );
+        write_region(
+            regions.path(),
+            "21",
+            1_000_001,
+            2_000_000,
+            &["rs2   1000001  C/T"],
+        );
+        let source = open_unchecked(regions.path(), &info(cols, None), false)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            names(
+                &source
+                    .records_overlapping("21", 999_999, 1_000_000)
+                    .unwrap()
+            ),
+            ["rs_span", "rs1"]
+        );
+        assert_eq!(
+            names(
+                &source
+                    .records_starting_within("21", 999_999, 1_000_000)
+                    .unwrap()
+            ),
+            ["rs1"]
+        );
+        assert_eq!(
+            names(
+                &source
+                    .records_starting_within("21", 999_999, 1_000_001)
+                    .unwrap()
+            ),
+            ["rs1", "rs2"]
+        );
+        assert_eq!(
+            names(
+                &source
+                    .records_starting_within("21", 999_990, 999_990)
+                    .unwrap()
+            ),
+            ["rs_span"]
+        );
+        assert!(source
+            .records_starting_within("22", 1, 2_000_000)
+            .unwrap()
+            .is_empty());
+
+        let indexed = tempfile::tempdir().unwrap();
+        write_all_vars(indexed.path(), "21", 4, &CHR21_RECORDS);
+        let source = open_unchecked(indexed.path(), &info(GRCH38_COLS, Some("tabix")), false)
+            .unwrap()
+            .unwrap();
+        // rs759281545 spans 44293150-44293157: named by a window holding its
+        // start, not by one inside its span.
+        assert!(source
+            .records_starting_within("21", 44293151, 44293160)
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            names(
+                &source
+                    .records_starting_within("21", 44293150, 44293160)
+                    .unwrap()
+            ),
+            ["rs759281545"]
+        );
+        assert_eq!(
+            names(
+                &source
+                    .records_starting_within("21", 44195140, 44265596)
+                    .unwrap()
+            ),
+            ["rs2838519", "rs142566111", "rs1555869995"]
         );
     }
 

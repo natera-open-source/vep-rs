@@ -1,0 +1,75 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --merged [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens_merged/116_GRCh38",
+ "fasta": "GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 76 chromosome 21 records of gnomAD v4.1 genomes and the 1000 Genomes high-coverage call set, chromosome 21, sites only, each an exemplar of a consequence-set combination or of a stratum of the family key REFSEQ_MATCH=,SOURCE=,BAM_EDIT=,GIVEN_REF/USED_REF in Ensembl VEP's output over the candidate records (the RefSeq models' columns, with --hgvs for REFSEQ_OFFSET); records inside the genomic bases an RNA edit deletes from a model and records whose alternate allele is the base an RNA edit substitutes (Ensembl VEP spells their HGVSc as a change of a base to itself) are left out",
+ "sha256": {
+  "default.txt": "b6e8062feabd30931cf35af28e80d4c493aef582aaaa0bbf7323788152dc4e89",
+  "tab.txt": "453243b3540479b9cc35c6d5a0af156ef5522da81600b94f7acd08ad4dfa7ec8",
+  "vcf.vcf": "704626813b44a84390e6afa1203aa6427c4bfd970e2ad0671a55dfc0c5fd56da",
+  "json.jsonl": "dcb541e6d473a08760aebe62b3c8c9b557a7c546f0df741a589f1f20d50901c6",
+  "default.summary.log": "9779b4cd815c30b56b8b5f4f8b9c3515c7cc474a80cdace6bdc6d17c1e11f155",
+  "tab.summary.log": "5154e93b48cc8a7886e7dcbea24e58c62ceceaa18bef31d82cf9900d6e4f5edb",
+  "vcf.summary.log": "7d60f3077052e08a0e74125120544e8a9d2635a9c17b98c121a4c5d1f0162143",
+  "json.summary.log": "004586405a96dedfae9e0d2cdf12c8fb3630636a7cdda6ee63f7e09564990680"
+ },
+ "variants_vcf_sha256": "3ccfff30e1d5162ad97b008411fa593acd73a6b271f07232b58c042ebeb6f78a",
+ "flag_sets": {
+  "pick": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --merged --pick [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens_merged/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "d7928351a63296fccfc336fc5147c340d457930a7c7ebdc037a8f2377fb5bbe9",
+    "tab.txt": "89ed712e623b606f22afc3b2d441073e4d42b1277b78eca370ccf65c2c55c607",
+    "vcf.vcf": "1c282e48bae4abf3034f96dd011e4d1116789ef7fefd85b9d2a96043bdca990f",
+    "json.jsonl": "79ab0e8be8054aa6e4749c8177ab50f81d1c1cd9363756a69ae2c7e760fea8ce",
+    "default.summary.log": "a7769719ef29e7de0eb01a061c6bac982f2d352ff7824a8ef89780eabfd888c8",
+    "tab.summary.log": "b27dbda89f910b58e1b7def323b436d8fe9139246234bf84050fe83882b4f5f1",
+    "vcf.summary.log": "351d415bb1dc6dc7108f6b59b4e6de7a586ad4753398e5e8d33191a25d8633a5",
+    "json.summary.log": "1b89ccf19cf531cab58b0caa9dda5f2149ff1ccd4e47a02bc20b2e2b13a3d9db"
+   },
+   "flags": [
+    "--merged",
+    "--pick"
+   ],
+   "expected_dir": "expected_pick"
+  }
+ },
+ "source_cache": {
+  "tarball": "homo_sapiens_merged_vep_116_GRCh38.tar.gz under pub/release-116/variation/indexed_vep_cache/ of the Ensembl FTP site",
+  "source_type": "merged",
+  "bam": "GCF_000001405.40_GRCh38.p14_knownrefseq_alns.bam",
+  "refseq_annotation": "GCF_000001405.40-RS_2025_08 - GCF_000001405.40_GRCh38.p14_genomic.gff",
+  "converter": {
+   "script": "scripts/data/storable_to_json.pl",
+   "repository": "github.com/natera-open-source/vep-rs",
+   "image": "ensemblorg/ensembl-vep:release_116.2",
+   "image_digest": "sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+  },
+  "chromosome_21_models": {
+   "bam_edit_status": {
+    "absent": 14863,
+    "ok": 108
+   }
+  },
+  "rseq_attributes": "none: no model of the release 116 RefSeq or merged cache carries an rseq_* attribute, so REFSEQ_MATCH is empty on every row of both engines"
+ },
+ "pruned_cache": {
+  "layout": "json_cache",
+  "transcripts": 1913,
+  "shards": 27,
+  "method": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --flank 5000 over the converted chromosome 21 of the source cache, the same-symbol HGNC donors of the reached RefSeq models kept (hgnc_donors); info.json is the converted cache's own (source_type, bam and the source versions)",
+  "hgnc_donors": 1
+ },
+ "generator": "Ensembl VEP 116.2 over the candidate records under --merged; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite <id>=<reference>=<candidates> (two datasets) --k 1 --seed 1 --multi-allelic-per-suite 1 --max-span 1000000 --cache <converted cache> --flank 5000 --family-columns REFSEQ_MATCH=,SOURCE=,BAM_EDIT=,GIVEN_REF/USED_REF --covers ... --matrix tests/parity/matrix.tsv --flag=--merged --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py (see pruned_cache); the FASTA masked as scripts/fixtures/cut_plugin_regions.py masks a reference; scripts/golden/build_golden_corpus.py flag-set (one per set: pick (--merged --pick)); scripts/concordance/generate_reference_output.sh --corpus (the manifest's run and --flag-set <name> for each set); scripts/golden/build_golden_corpus.py classify (the manifest's run and each set)"
+}

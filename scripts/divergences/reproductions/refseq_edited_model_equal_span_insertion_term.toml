@@ -1,0 +1,46 @@
+entry = "refseq_edited_model_equal_span_insertion_term"
+page = "docs/divergences/refseq-edited-model-equal-span-insertion-term.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "seen in the ClinVar GRCh38 records annotated on the RefSeq cache: 1 of the 146 rows vep-rs writes for the 32 insertions that reach such bases, record 551063 on NM_015120.4"
+notes = "ClinVar record 551063 inserts three bases between 2:73385942 and 2:73385943, where the forward-strand model NM_015120.4 carries the insertion edit `186 185` of three bases. Both engines print the span of those bases, CDS 75-77 in the codons of residues 25 and 26. Three bases standing on three keep the length and change one residue: Ensembl VEP classes the allele by its genomic span as a longer one, does not ask missense_variant of it and writes the default term, and vep-rs writes missense_variant. ClinVar record 1167157, two bases at the same point, is frameshift_variant on both engines. No committed cache holds a model with such bases inside its coding sequence, so the prepare step copies the one region file of the Ensembl VEP RefSeq cache that holds the model and converts it with the Perl of the image, which the run therefore needs; --use_given_ref lets both engines read the edited cache without a FASTA."
+# The region file 2/73000001-74000000 of the Ensembl VEP RefSeq cache, converted into the cache vep-rs reads.
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the region file is converted with the Perl of the image: pass --image" >&2; exit 1; }
+mkdir -p "$STAGE/perl-cut/2" "$STAGE/json-cache"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$STAGE/perl-cut/"
+cp "$PERL_CACHE/2/73000001-74000000.gz" "$STAGE/perl-cut/2/"
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$STAGE/perl-cut:/input:ro" -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE/json-cache:/output" "$IMAGE" perl /scripts/storable_to_json.pl /input /output 2 > "$STAGE/convert.log" 2>&1''',
+]
+
+[input]
+format = "vcf"
+text = """
+2	73385942	551063	A	AGGC	.	.	.
+2	73385942	1167157	A	AGG	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "refseq"
+json_cache = "{stage}/json-cache"
+
+[run]
+flags = ["--refseq", "--use_given_ref"]
+
+[compare]
+kind = "rows"
+where = { record = ["551063", "1167157"], feature = "NM_015120.4" }
+columns = ["Uploaded_variation", "Consequence", "cDNA_position", "CDS_position", "Protein_position", "IMPACT", "BAM_EDIT"]
+
+[expected]
+ensembl_vep = [
+  "1167157 | frameshift_variant | 186-188 | 75-77 | 25-26 | HIGH | OK",
+  "551063 | intergenic_variant | 186-188 | 75-77 | 25-26 | MODIFIER | OK",
+]
+vep_rs = [
+  "1167157 | frameshift_variant | 186-188 | 75-77 | 25-26 | HIGH | OK",
+  "551063 | missense_variant | 186-188 | 75-77 | 25-26 | MODERATE | OK",
+]

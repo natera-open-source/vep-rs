@@ -1,0 +1,62 @@
+[VEP run statistics]
+VEP version (API)	 116.2 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh38
+Species	homo_sapiens
+Command line options	vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir [PATH]/vepdir --dir_cache [PATH]/cache --dir_plugins [PATH]/plugins --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --offline --output_file [PATH]/tab.txt --plugin GWAS,file=[PATH]/gwas_catalog_slice.tsv --quiet --stats_text --tab
+Start time	2026-10-28 23:50:06
+End time	2026-10-28 23:50:06
+Run time	0 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/tab.txt
+
+[Data version]
+1000genomes	phase3
+COSMIC	102
+ClinVar	202509
+HGMD-PUBLIC	20204
+assembly	GRCh38.p14
+dbSNP	156
+gencode	GENCODE 50
+genebuild	GENCODE50
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.3
+regbuild	1.0
+sift	6.2.1
+
+[General statistics]
+Lines of input read	36
+Variants processed	36
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	40
+Overlapped transcripts	359
+Overlapped regulatory features	-
+
+[Variant classes]
+insertion	1
+deletion	2
+SNV	33
+
+[Consequences (most severe)]
+5_prime_UTR_variant	2
+non_coding_transcript_exon_variant	2
+intron_variant	19
+upstream_gene_variant	2
+downstream_gene_variant	3
+intergenic_variant	8
+
+[Consequences (all)]
+5_prime_UTR_variant	6
+non_coding_transcript_exon_variant	16
+intron_variant	303
+NMD_transcript_variant	37
+non_coding_transcript_variant	137
+upstream_gene_variant	28
+downstream_gene_variant	86
+intergenic_variant	8
+
+[Coding consequences]
+
+[Variants by chromosome]
+21	36

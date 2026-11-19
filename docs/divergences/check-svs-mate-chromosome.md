@@ -1,6 +1,6 @@
 # A breakend mate on another chromosome under `--check_svs`
 
-A difference in the text of the `SV` field, on a breakend whose bracket mate names another chromosome, under a flag no measured run names; nothing is set aside.
+A difference in the text of the `SV` field, on a breakend whose bracket mate names another chromosome, under a flag no measured run names; nothing is set aside. Ensembl VEP also lists a fetched variant whose span holds the mate's position number, whatever chromosome the variant lies on; vep-rs matches the mate on the mate's own chromosome at the mate's position.
 
 Under `--check_svs` Ensembl VEP marks each record with the structural variants of its database that overlap it. The variants fetched for a buffer are those overlapping its records' window on their chromosome and, for a bracket breakend, those overlapping the mate's position on the mate's chromosome (`AnnotationSource.pm` lines 249-257 add the mate's chromosome and position to the regions fetched).
 

@@ -1,0 +1,49 @@
+entry = "gff_parent_list_with_an_empty_field"
+page = "docs/divergences/gff-parent-list-with-an-empty-field.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the GFF3 specification, \"Description of the Format\", column 9, which separates the values of a Parent list with commas and states no rule for an empty one; not seen in the measured datasets"
+notes = "The GRCh38 release-116 GFF3 lines of TMPRSS3 and ENST00001113783 with the transcript's Parent rewritten `,gene:ENSG00000160183`. Ensembl VEP files the transcript under the gene (BaseGXF.pm:391) and keeps it at the top level too (:432), visits it twice in _create_transcripts (:320) and keeps the gene of the last visit (:336), by hash order: under PERL_HASH_SEED=11 the gene is lost and the Gene and SYMBOL columns are empty, under seed 0 they are the gene's. vep-rs makes the transcript the gene's once."
+prepare = [
+  '''cat > "$STAGE/tmprss3_parent.gff3" <<'GFF'
+##gff-version 3
+21	ensembl_havana	gene	42371840	42396122	.	-	.	ID=gene:ENSG00000160183;Name=TMPRSS3;biotype=protein_coding;description=transmembrane serine protease 3 [Source:HGNC Symbol%3BAcc:HGNC:11877];gene_id=ENSG00000160183;logic_name=ensembl_havana_gene_homo_sapiens;version=19
+21	havana_tagene	mRNA	42393803	42396122	.	-	.	ID=transcript:ENST00001113783;Parent=,gene:ENSG00000160183;Name=TMPRSS3-224;biotype=protein_coding;tag=gencode_basic;transcript_id=ENST00001113783;version=1
+21	havana_tagene	exon	42393803	42395084	.	-	.	Parent=transcript:ENST00001113783;Name=ENSE00004748399;constitutive=0;ensembl_end_phase=-1;ensembl_phase=1;exon_id=ENSE00004748399;rank=3;version=1
+21	havana_tagene	CDS	42394915	42395084	.	-	2	ID=CDS:ENSP00000783588;Parent=transcript:ENST00001113783;protein_id=ENSP00000783588;version=1
+21	havana_tagene	CDS	42395324	42395417	.	-	0	ID=CDS:ENSP00000783588;Parent=transcript:ENST00001113783;protein_id=ENSP00000783588;version=1
+21	havana_tagene	exon	42395324	42395468	.	-	.	Parent=transcript:ENST00001113783;Name=ENSE00003591562;constitutive=0;ensembl_end_phase=1;ensembl_phase=-1;exon_id=ENSE00003591562;rank=2;version=1
+21	havana_tagene	exon	42395942	42396122	.	-	.	Parent=transcript:ENST00001113783;Name=ENSE00004778870;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00004778870;rank=1;version=1
+GFF''',
+  "bgzip -c \"$STAGE/tmprss3_parent.gff3\" > \"$STAGE/tmprss3_parent.gff3.gz\" && tabix -p gff \"$STAGE/tmprss3_parent.gff3.gz\"",
+  "\"$VEP_CACHE_BUILDER\" --species homo_sapiens --assembly GRCh38 --release 116 --gff3 \"$STAGE/tmprss3_parent.gff3\" --genome-fasta \"$CORPUS/reference.fa.gz\" --output-dir \"$STAGE/json_cache\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	42395417	1995820	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json_cache"
+corpus = "tests/golden/116/GRCh38-gtf-builder"
+gxf = "{stage}/tmprss3_parent.gff3.gz"
+gxf_kind = "gff"
+fasta = "tests/golden/116/GRCh38-gtf-builder/reference.fa.gz"
+
+[run]
+flags = ["--symbol", "--gene_version"]
+perl_hash_seed = "11"
+
+[compare]
+kind = "rows"
+where = { record = "1995820", feature = "ENST00001113783" }
+columns = ["Location", "Allele", "Gene", "SYMBOL", "Consequence"]
+
+[expected]
+ensembl_vep = ["21:42395417 | C | - | - | start_lost"]
+vep_rs = ["21:42395417 | C | ENSG00000160183.19 | TMPRSS3 | start_lost"]

@@ -18,20 +18,20 @@
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --allele_number --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
  "fasta": "none on either side",
- "input": "hand-built records at chromosome 21 sites of the GRCh38-release116 corpus's cache and one on chrM: the overlap-allele rules (an ALT equal to the reference, repeated ALTs, `*`, `<DEL:*>`, a `*` beside an allele under a true INFO/SVTYPE), the anchor chop and minimisation, the ID column, gVCF alleles, structural spans and breakends, the incomplete deletion, a tandem repeat whose SVLEN list ends in a comma, a structural record written with five columns in the short twin and a structural record whose QUAL is `0`, chromosome spellings, a contig no cache carries and POS 0; twins of the same records at five columns (one line with three trailing empty columns), with CRLF line ends, with a Latin-1 header and sample column, and on standard input",
+ "input": "hand-built records at chromosome 21 sites of the GRCh38-release116 corpus's cache and one on chrM: the overlap-allele rules (an ALT equal to the reference, repeated ALTs, `*`, `<DEL:*>`, a `*` beside an allele under a true INFO/SVTYPE), the anchor chop and minimisation, the ID column (a semicolon-joined list, a list whose first element is empty or `0`, an empty column, a multi-allelic record whose ID is `0`), gVCF alleles, structural spans and breakends, the incomplete deletion, a tandem repeat whose SVLEN list ends in a comma, a structural record written with five columns in the short twin and a structural record whose QUAL is `0`, chromosome spellings, a contig no cache carries and POS 0; twins of the same records at five columns (one line with three trailing empty columns), with CRLF line ends, with a Latin-1 header and sample column, and on standard input",
  "generator": "json_cache: the GRCh38-release116 corpus's pruned cache plus the GRCh38-native-builder corpus's MT shard and the chromosome 21 and MT lines of the Ensembl cache's chr_synonyms.txt; expected outputs: one Ensembl VEP 116.2 container run per format per input; manifest: the records' consequence sets and skip warnings from the default output, scripts/golden/build_golden_corpus.py flag-set and classify (the manifest's run and every flag set)",
  "sha256": {
-  "default.txt": "dd38ff189e820fe702136f5bdfc27c379fe184454ac91112d1f824b2ce0b11be",
-  "tab.txt": "4ab1d3957c525d1a8e87f474198da414a72b993828c5b8c196145765922a5f78",
-  "vcf.vcf": "5b741051036fc1d0748d8c90b19c408cb98ad7c2b23d3a33fb8dc9cfee58cb46",
-  "json.jsonl": "17afd1be19803cc95d2852f9c0fc5b8cd3918c01ea9b197e76b60ea3002037c1"
+  "default.txt": "cf30c85f9955ecfa326f989e5331a3e36b435881e8464d21f5c24dcf44c86812",
+  "tab.txt": "d30170c88d2c0bd261ecc3b983e9a300ec2c9e0d257ef15db00a826e7d02a5c9",
+  "vcf.vcf": "c36f2853e09dd39ba3492ee084b2c97eae64f29db3b554dca086c91c707895db",
+  "json.jsonl": "9eb73a3372f4855290064958c0813bd5901a96a032900df0f6329c3a4fb501df"
  },
- "variants_vcf_sha256": "bb079cfb84adff8e9fc1c2ea2073a45ef7035eae70316ee60ff89226769d98a9",
+ "variants_vcf_sha256": "e0dc72fcabf0f2d5cf2d3b059cd7224e70c77d79b22d3d9af3435142f324616e",
  "inputs_sha256": {
-  "variants.vcf": "bb079cfb84adff8e9fc1c2ea2073a45ef7035eae70316ee60ff89226769d98a9",
-  "variants.short.vcf": "8421de130bcc8f7e94d70990c845029d70defb6ad3f808cebffc32efa629e6e4",
-  "variants.crlf.vcf": "38545d5eb2086d1743fe9525f633c7c05fd876e3704fd12503558b856d811e2a",
-  "variants.latin1.vcf": "00fd0657277ea9885012aadd835a6bf001278d262ad1c951a9dae291e49d173a"
+  "variants.vcf": "e0dc72fcabf0f2d5cf2d3b059cd7224e70c77d79b22d3d9af3435142f324616e",
+  "variants.short.vcf": "6dd5e122c6402c3a3b07c8dca7a8f3b4cc52aaed1b33d5e7de5edc797c69c182",
+  "variants.crlf.vcf": "ec9cb6621c4fdd94f08f991150800d45907c8df39fdf784e70f8ee8e669a9630",
+  "variants.latin1.vcf": "e5664f1fab8c6c04160d9f3df9a374b19597bf1786041418f71298f75d22a42d"
  },
  "pruned_cache": {
   "transcripts_per_chromosome": {
@@ -55,9 +55,9 @@
    "expected_dir": "expected",
    "reference_run": "the manifest's run: the twin carries the same records, so expected/ is its reference; a container run on the twin wrote the same default, tab and VCF outputs and the same warning descriptions, each quoting the line as the twin spells it",
    "sha256": {
-    "default.txt": "dd38ff189e820fe702136f5bdfc27c379fe184454ac91112d1f824b2ce0b11be",
-    "tab.txt": "4ab1d3957c525d1a8e87f474198da414a72b993828c5b8c196145765922a5f78",
-    "vcf.vcf": "5b741051036fc1d0748d8c90b19c408cb98ad7c2b23d3a33fb8dc9cfee58cb46"
+    "default.txt": "cf30c85f9955ecfa326f989e5331a3e36b435881e8464d21f5c24dcf44c86812",
+    "tab.txt": "d30170c88d2c0bd261ecc3b983e9a300ec2c9e0d257ef15db00a826e7d02a5c9",
+    "vcf.vcf": "c36f2853e09dd39ba3492ee084b2c97eae64f29db3b554dca086c91c707895db"
    }
   },
   "crlf": {
@@ -72,10 +72,10 @@
    "expected_dir": "expected",
    "reference_run": "the manifest's run: the twin carries the same records, so expected/ is its reference; a container run on the twin wrote the same default, tab and VCF outputs and the same warning descriptions, each quoting the line as the twin spells it",
    "sha256": {
-    "default.txt": "dd38ff189e820fe702136f5bdfc27c379fe184454ac91112d1f824b2ce0b11be",
-    "tab.txt": "4ab1d3957c525d1a8e87f474198da414a72b993828c5b8c196145765922a5f78",
-    "vcf.vcf": "5b741051036fc1d0748d8c90b19c408cb98ad7c2b23d3a33fb8dc9cfee58cb46",
-    "json.jsonl": "17afd1be19803cc95d2852f9c0fc5b8cd3918c01ea9b197e76b60ea3002037c1"
+    "default.txt": "cf30c85f9955ecfa326f989e5331a3e36b435881e8464d21f5c24dcf44c86812",
+    "tab.txt": "d30170c88d2c0bd261ecc3b983e9a300ec2c9e0d257ef15db00a826e7d02a5c9",
+    "vcf.vcf": "c36f2853e09dd39ba3492ee084b2c97eae64f29db3b554dca086c91c707895db",
+    "json.jsonl": "9eb73a3372f4855290064958c0813bd5901a96a032900df0f6329c3a4fb501df"
    }
   },
   "latin1": {
@@ -89,8 +89,8 @@
    "input": "variants.latin1.vcf",
    "expected_dir": "expected_latin1",
    "sha256": {
-    "default.txt": "e212e3ff8fe82080a43777fce580840b8dff0de86f0f5ecbf1324944dbc385ea",
-    "tab.txt": "f25af6662da71c946191e232675a2ab2ddbd7ebf8e834190aa4eb689f33a476c"
+    "default.txt": "6cdca627550a67a0f908aa360da7f4d36dbc78e29542214620daeeb6010ee475",
+    "tab.txt": "d5051b5c7bef8917c7af882ba66aaa912fc4230b426f6b8b282273a4ad0c316f"
    },
    "formats_compared": [
     "default",
@@ -110,10 +110,10 @@
    "expected_dir": "expected",
    "reference_run": "the manifest's run: the same file piped on standard input",
    "sha256": {
-    "default.txt": "dd38ff189e820fe702136f5bdfc27c379fe184454ac91112d1f824b2ce0b11be",
-    "tab.txt": "4ab1d3957c525d1a8e87f474198da414a72b993828c5b8c196145765922a5f78",
-    "vcf.vcf": "5b741051036fc1d0748d8c90b19c408cb98ad7c2b23d3a33fb8dc9cfee58cb46",
-    "json.jsonl": "17afd1be19803cc95d2852f9c0fc5b8cd3918c01ea9b197e76b60ea3002037c1"
+    "default.txt": "cf30c85f9955ecfa326f989e5331a3e36b435881e8464d21f5c24dcf44c86812",
+    "tab.txt": "d30170c88d2c0bd261ecc3b983e9a300ec2c9e0d257ef15db00a826e7d02a5c9",
+    "vcf.vcf": "c36f2853e09dd39ba3492ee084b2c97eae64f29db3b554dca086c91c707895db",
+    "json.jsonl": "9eb73a3372f4855290064958c0813bd5901a96a032900df0f6329c3a4fb501df"
    }
   }
  }

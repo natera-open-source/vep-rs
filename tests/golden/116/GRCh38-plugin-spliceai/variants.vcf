@@ -1,0 +1,26 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	15073000	snv_intergenic	A	G	.	.	.
+21	16719000	snv_transcript_without_symbol	A	G	.	.	.
+21	17619500	snv_two_genes	A	G	.	.	.
+21	17619600	snv_two_genes_line_twice	A	G	.	.	.
+21	17619700	snv_two_genes_record_per_gene	A	G	.	.	.
+21	17619800	snv_two_genes_line_thrice	A	G	.	.	.
+21	17619900	snv_two_genes_lines_differ	G	A	.	.	.
+21	17620000	del_two_genes	CTT	C	.	.	.
+21	18022500	snv_two_genes_one_scored	G	A	.	.	.
+21	18279000	snv_missense_rev	A	G	.	.	.
+21	18313000	snv_symbol_mismatch	C	T	.	.	.
+21	18326500	snv_unscored	G	A	.	.	.
+21	18341500	snv_lowercase	c	t	.	.	.
+21	18353000	del_1_rev	CT	C	.	.	.
+21	18353100	multi_deletion_unanchored	TG	T,AG	.	.	.
+21	21324500	snv_splice_region_fwd	G	A	.	.	.
+21	21338500	ins_1_fwd	C	CA	.	.	.
+21	21338600	multi_insertion_unanchored	A	G,AC	.	.	.
+21	21374000	del_4_fwd	CCTTG	C	.	.	.
+21	21418500	snv_missense_fwd	G	A	.	.	.
+21	21509000	mnv_two_bases	AA	TT	.	.	.
+21	26387000	snv_splice_acceptor_noncoding	G	A	.	.	.
+21	26965500	snv_two_alts	C	A,G	.	.	.
+21	26966000	ins_1_rev	A	AC	.	.	.

@@ -8,7 +8,7 @@ homepage.workspace = true
 rust-version.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Core types for Ensembl VEP: variants, transcripts, consequences, coordinates"
+description = "Data model of vep-rs, a Rust reimplementation of Ensembl VEP: variant, transcript, consequence and coordinate types"
 
 [dependencies]
 thiserror = { workspace = true }
@@ -19,4 +19,5 @@ smallvec = { workspace = true }
 sha2 = { workspace = true }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 tempfile = { workspace = true }

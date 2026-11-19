@@ -59,3 +59,7 @@ GL000999.1	100	unknown_contig	A	G	.	.	.	GT	0/1
 21	0	pos0_snv	A	G	.	.	.	GT	0/1
 21	0	pos0_ins	A	AT	.	.	.	GT	0/1
 21	0	pos0_del	AT	A	.	.	.	GT	0/1
+21	30289183	;rs2	C	G	.	.	.	GT	0/1
+21	30289183	0;rs2	C	T	.	.	.	GT	0/1
+21	30396602		TTGA	T	.	.	.	GT	0/1
+21	30396602	0	TTGA	T,TTGATC	.	.	.	GT	0/1

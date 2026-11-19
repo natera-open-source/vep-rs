@@ -1,6 +1,6 @@
 # A symbolic record with two or more ALTs under `--minimal`
 
-A difference in the span, the marks and the rows written under `--minimal` for a structural record with more than one symbolic ALT; nothing is set aside, since no measured dataset runs the flag.
+A difference in the span, the marks and the rows written under `--minimal` for a structural record with more than one symbolic ALT. Ensembl VEP trims the ALT names of such a record as sequences; vep-rs minimises sequence records alone and annotates a structural record as written. The format comparator sets aside the keys a manifest documents under the class `minimal_symbolic_alleles`, both engines' rows of such a record, as the oracle's population cases under `--minimal` do; nothing is set aside in the concordance figures, since no measured dataset runs the flag.
 
 Under `--minimal`, Ensembl VEP's parser minimises every feature it builds (`Parser.pm` line 852, `minimise_alleles` at lines 964-1019). A structural record's feature carries its ALTs joined by `/` as its allele string (`Parser/VCF.pm` lines 469 and 572), not a reference and its alternates. A record with one symbolic ALT has no `/` in that string and is left alone.
 

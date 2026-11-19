@@ -21,7 +21,7 @@ use crate::sv_span::{
     deletion_looks_incomplete, perl_numeric_f64, structural_end, structural_start, svlen_values,
     SpanClass, SpanError,
 };
-use crate::variant::{InputVariant, VariantClass};
+use crate::variant::{InputVariant, VariantClass, WrittenEnd};
 use crate::vcf_info::InfoFields;
 
 /// Ensembl VEP's default `--max_sv_size` (`Config.pm:315`), in bases.
@@ -121,6 +121,7 @@ pub fn structural_variants(
     let end_text = info.value_written("END");
     let ci_pos = parse_ci_field(info.value("CIPOS"));
     let ci_end = parse_ci_field(info.value("CIEND"));
+    let imprecise = info.field("IMPRECISE").is_some();
 
     for (k, &(allele_idx, alt, sv_class)) in classes.iter().enumerate() {
         // SVLEN=0 or END=POS leaves the pair `start = POS + 1, end = POS` Perl carries
@@ -159,6 +160,8 @@ pub fn structural_variants(
         variant.sv_len = svlen_text.and_then(|text| svlen_values(text).first().copied());
         variant.ci_pos = ci_pos;
         variant.ci_end = ci_end;
+        variant.imprecise = imprecise;
+        variant.written_end = WrittenEnd::of(end_text, pos, sv_end_val);
         variant.allele_index = allele_idx;
         // ALLELE_NUM numbers the parts of Ensembl VEP's allele string from 1
         // (StructuralVariationOverlap.pm:67-76), so a breakpoint record's reference
@@ -186,7 +189,7 @@ pub fn structural_variants(
                 if k == 0 {
                     mark_paired_breakend_record(&mut variant, chr, info, id);
                     variant.allele_num = Some(0);
-                    variants.push(own_breakend(&variant, ref_allele, &record.own));
+                    variants.push(own_breakend(&variant, ref_allele, record));
                     for (number, mate) in (1..).zip(&record.mates) {
                         let mut variant = variant.clone();
                         variant.allele_num = Some(number);
@@ -217,15 +220,21 @@ pub fn structural_variants(
     Ok(variants)
 }
 
-/// The record's own breakend: a copy of `variant` whose only allele is `single_alt`
-/// (`t.` or `.t`) over `ref_str`, flagged single, with no mate coordinates.
-fn own_breakend(variant: &InputVariant, ref_str: &str, single_alt: &str) -> InputVariant {
+/// The record's own breakend: a copy of `variant` whose only allele is the
+/// record's own (`t.` or `.t`) over `ref_str`, flagged single, with no mate
+/// coordinates of its own and the record's mates listed for the feature match.
+fn own_breakend(variant: &InputVariant, ref_str: &str, record: &BreakendRecord) -> InputVariant {
     let mut own = variant.clone();
-    own.alt_alleles = vec![single_alt.as_bytes().to_vec()];
-    own.allele_string = format!("{ref_str}/{single_alt}");
+    own.alt_alleles = vec![record.own.as_bytes().to_vec()];
+    own.allele_string = format!("{ref_str}/{}", record.own);
     own.mate_chr = None;
     own.mate_pos = None;
     own.is_single_breakend = true;
+    own.breakend_mates = record
+        .mates
+        .iter()
+        .map(|mate| (mate.chromosome.clone(), mate.position))
+        .collect();
     own
 }
 
@@ -581,8 +590,10 @@ mod tests {
         assert_eq!(bracket.len(), 2);
         assert_eq!(bracket[0].chr, "21");
         assert!(bracket[0].mate_chr.is_none());
+        assert_eq!(bracket[0].breakend_mates, [("chrM".to_string(), 100)]);
         assert_eq!(bracket[1].mate_chr.as_deref(), Some("chrM"));
         assert_eq!(bracket[1].mate_pos, Some(100));
+        assert!(bracket[1].breakend_mates.is_empty());
         let chr2 = structural_variants(
             "21",
             30425600,

@@ -1,6 +1,6 @@
 # Defect H: a gVCF variant site is dropped with its real allele
 
-**The defect in one sentence.** Ensembl VEP drops a gVCF variant site such as `A G,<NON_REF>` whole as an unsupported type, the real allele with it.
+**The defect in one sentence.** Ensembl VEP drops a gVCF variant site such as `A G,<NON_REF>` whole as an unsupported type, the real allele with it. vep-rs annotates the real alleles, numbered as they stand in the ALT column.
 
 A gVCF writes `<NON_REF>` beside the real alleles of every variant site. Ensembl VEP's parser sends a line to its structural-variant path whenever an ALT carries an angle-bracket token, so the site is read as a structural variant of type `G/<NON_REF>`, which has no Sequence Ontology term.
 

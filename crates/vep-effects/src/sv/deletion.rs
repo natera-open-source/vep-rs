@@ -11,12 +11,14 @@
 //! (`Bio/EnsEMBL/Variation/...`).
 
 use super::{
-    bnd_breakend_within_transcript, is_mature_mirna_sv, overlaps_any_exon as sv_overlaps_any_exon,
+    bnd_breakend_within_transcript, frameshift_intron_span, is_mature_mirna_sv,
+    overlaps_any_exon as sv_overlaps_any_exon,
     overlaps_any_intron_trimmed as sv_overlaps_any_intron_trimmed, overlaps_cds_exon,
     overlaps_five_prime_utr, overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
     perl_coding_pre_predicate, perl_partial_codon,
 };
 use smallvec::SmallVec;
+use std::sync::Arc;
 use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
@@ -31,7 +33,7 @@ use vep_core::variant::{InputVariant, VariantClass};
 /// overlap extent. `start_lost` needs both deletion ends in exons and no `cds_start_NF`.
 pub fn calculate(
     variant: &InputVariant,
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
@@ -118,9 +120,13 @@ pub fn calculate(
     // `within_cdna` and gets NO `feature_truncation`.
     //
     // `within_cdna`'s second arm also returns `within_transcript` for a variant in
-    // a frameshift intron (12 bp or less, `:687-691`); there is no
-    // frameshift-intron fallback here, so that narrow case is under-called.
+    // a frameshift intron (`:687-691`), so a deletion wholly inside one carries
+    // `feature_truncation` beside the other terms of `frameshift_intron_span`. A
+    // `chromosome_breakpoint` span there takes those other terms alone: the arm
+    // sits behind `copy_number_loss or deletion`.
     let is_chromosome_breakpoint = variant.variant_class == VariantClass::Translocation;
+    let frameshift_intron = frameshift_intron_span(transcript, del_start, del_end);
+    let truncating_frameshift_intron = frameshift_intron.is_some() && !is_chromosome_breakpoint;
     // Which Ensembl allele this tuple represents decides how `feature_truncation` is tested,
     // and the allele string in the output is what distinguishes them. Ensembl builds one
     // allele per entry of `($vf, @{$vf->get_breakends})`, each constructed with
@@ -145,7 +151,8 @@ pub fn calculate(
             let truncates = if is_paired_breakend {
                 bnd_breakend_within_transcript(variant, transcript)
             } else {
-                has_exon_overlap && (extends_beyond || complete_within)
+                (has_exon_overlap || truncating_frameshift_intron)
+                    && (extends_beyond || complete_within)
             };
 
             if truncates {
@@ -192,7 +199,9 @@ pub fn calculate(
             if inframe_deletion {
                 consequences.push(Consequence::InframeDeletion);
             }
-            if within_cds_exon && !frameshift && !inframe_deletion {
+            if (within_cds_exon && !frameshift && !inframe_deletion)
+                || frameshift_intron.is_some_and(|span| span.coding)
+            {
                 consequences.push(Consequence::CodingSequenceVariant);
             }
 
@@ -242,10 +251,14 @@ pub fn calculate(
                 push_unique(&mut consequences, Consequence::StartLost);
             }
 
-            if overlaps_five_prime_utr(transcript, del_start, del_end) {
+            if overlaps_five_prime_utr(transcript, del_start, del_end)
+                || frameshift_intron.is_some_and(|span| span.five_prime_utr)
+            {
                 push_unique(&mut consequences, Consequence::FivePrimeUtrVariant);
             }
-            if overlaps_three_prime_utr(transcript, del_start, del_end) {
+            if overlaps_three_prime_utr(transcript, del_start, del_end)
+                || frameshift_intron.is_some_and(|span| span.three_prime_utr)
+            {
                 push_unique(&mut consequences, Consequence::ThreePrimeUtrVariant);
             }
         } else {
@@ -254,7 +267,8 @@ pub fn calculate(
             let truncates_noc = if is_paired_breakend {
                 bnd_breakend_within_transcript(variant, transcript)
             } else {
-                has_exon_overlap_noc && (extends_beyond || complete_within)
+                (has_exon_overlap_noc || truncating_frameshift_intron)
+                    && (extends_beyond || complete_within)
             };
             if truncates_noc {
                 consequences.push(Consequence::FeatureTruncation);
@@ -271,7 +285,8 @@ pub fn calculate(
         let truncates_nc = if is_paired_breakend {
             bnd_breakend_within_transcript(variant, transcript)
         } else {
-            has_exon_overlap_nc && (extends_beyond || complete_within)
+            (has_exon_overlap_nc || truncating_frameshift_intron)
+                && (extends_beyond || complete_within)
         };
         if truncates_nc {
             consequences.push(Consequence::FeatureTruncation);
@@ -279,7 +294,7 @@ pub fn calculate(
                 consequences.push(Consequence::NonCodingTranscriptVariant);
             }
         }
-        // No mature-miRNA arm here: the caller returns on `is_mature_mirna_sv` before
+        // No mature-miRNA arm here: this function returns on `is_mature_mirna_sv` above, before
         // any tier-3 term is reached, and a second copy of that test could drift.
         if has_exon_overlap_nc {
             push_unique(
@@ -319,12 +334,10 @@ pub fn calculate(
         push_unique(&mut consequences, Consequence::NmdTranscriptVariant);
     }
 
+    // A row no predicate claims carries Ensembl VEP's default term,
+    // `intergenic_variant` (`BaseVariationFeatureOverlapAllele.pm:285`).
     if consequences.is_empty() {
-        if is_coding {
-            consequences.push(Consequence::CodingTranscriptVariant);
-        } else {
-            consequences.push(Consequence::NonCodingTranscriptVariant);
-        }
+        consequences.push(Consequence::IntergenicVariant);
     }
 
     consequences.sort();
@@ -353,7 +366,7 @@ fn distance_to_transcript(span_start: u64, span_end: u64, transcript: &Transcrip
 /// Build the `TranscriptConsequence` from accumulated data, with the impact of
 /// the most severe consequence.
 fn build_consequence(
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     consequences: ConsequenceList,
     distance: Option<u64>,
 ) -> TranscriptConsequence {
@@ -370,11 +383,91 @@ fn build_consequence(
     }
 }
 
+/// `make_test_transcript()` with three frameshift introns cut into its exons: 5 bases
+/// in the 5' UTR (25_000_021-25_000_025), 9 bases in the coding region
+/// (25_002_101-25_002_109) and 13 bases in the 3' UTR (25_005_001-25_005_013). The
+/// coordinate mapper follows the six exons, so the coding region 25_000_050-25_004_299
+/// is cDNA 46-886.
+#[cfg(test)]
+pub(super) fn frameshift_intron_test_transcript() -> Transcript {
+    use vep_core::transcript::{Exon, ExonCoordMapper, Intron, MapperPair};
+    let mut tx = crate::test_helpers::make_test_transcript();
+    let spans = [
+        (25_000_000, 25_000_020),
+        (25_000_026, 25_000_299),
+        (25_002_000, 25_002_100),
+        (25_002_110, 25_002_299),
+        (25_004_000, 25_005_000),
+        (25_005_014, 25_006_000),
+    ];
+    tx.exons = spans
+        .iter()
+        .zip(1..)
+        .map(|(&(start, end), rank)| Exon {
+            start,
+            end,
+            rank,
+            phase: 0,
+            end_phase: 0,
+        })
+        .collect();
+    tx.introns = spans
+        .windows(2)
+        .zip(1..)
+        .map(|(pair, rank)| Intron {
+            start: pair[0].1 + 1,
+            end: pair[1].0 - 1,
+            rank,
+        })
+        .collect();
+    tx.cdna_coding_start = Some(46);
+    tx.cdna_coding_end = Some(886);
+    let vefc = tx.vefc.as_mut().expect("test transcript has a vefc");
+    vefc.introns = tx.introns.clone();
+    vefc.sorted_exons = tx.exons.clone();
+    let mapper = vefc.mapper.as_mut().expect("test transcript has a mapper");
+    mapper.cdna_coding_start = 46;
+    mapper.cdna_coding_end = 886;
+    let mut cdna_end = 0;
+    let pairs = spans
+        .iter()
+        .map(|&(start, end)| {
+            let from_start = cdna_end + 1;
+            cdna_end += end - start + 1;
+            MapperPair {
+                from_start,
+                from_end: cdna_end,
+                to_start: start,
+                to_end: end,
+                ori: 1,
+            }
+        })
+        .collect();
+    mapper.exon_coord_mapper = ExonCoordMapper::new(pairs);
+    tx
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use vep_core::consequence::FeatureType;
     use vep_core::variant::{InputVariant, VariantClass};
+
+    /// [`super::calculate`] on a transcript the test owns: the row shares a copy of
+    /// it, as the index shares its handle.
+    fn calculate(
+        variant: &InputVariant,
+        transcript: &Transcript,
+        upstream_distance: u64,
+        downstream_distance: u64,
+    ) -> Option<TranscriptConsequence> {
+        super::calculate(
+            variant,
+            &Arc::new(transcript.clone()),
+            upstream_distance,
+            downstream_distance,
+        )
+    }
 
     /// Helper to build a structural deletion variant.
     fn make_del(chr: &str, start: u64, end: u64) -> InputVariant {
@@ -476,7 +569,6 @@ mod tests {
         let mut t = tx();
         t.exons = vec![
             Exon {
-                stable_id: Some("ENSE00000000001".into()),
                 start: 25_000_500,
                 end: 25_000_799,
                 rank: 1,
@@ -484,7 +576,6 @@ mod tests {
                 end_phase: 0,
             },
             Exon {
-                stable_id: Some("ENSE00000000002".into()),
                 start: 25_002_000,
                 end: 25_002_299,
                 rank: 2,
@@ -492,7 +583,6 @@ mod tests {
                 end_phase: 0,
             },
             Exon {
-                stable_id: Some("ENSE00000000003".into()),
                 start: 25_004_000,
                 end: 25_006_000,
                 rank: 3,
@@ -537,7 +627,6 @@ mod tests {
         let mut t = tx();
         t.exons = vec![
             Exon {
-                stable_id: Some("ENSE00000000001".into()),
                 start: 25_000_500,
                 end: 25_000_799,
                 rank: 1,
@@ -545,7 +634,6 @@ mod tests {
                 end_phase: 0,
             },
             Exon {
-                stable_id: Some("ENSE00000000002".into()),
                 start: 25_002_000,
                 end: 25_002_299,
                 rank: 2,
@@ -553,7 +641,6 @@ mod tests {
                 end_phase: 0,
             },
             Exon {
-                stable_id: Some("ENSE00000000003".into()),
                 start: 25_004_000,
                 end: 25_006_000,
                 rank: 3,
@@ -684,9 +771,9 @@ mod tests {
     fn test_start_lost_for_structural_deletion_with_both_ends_exonic() {
         // Perl's SV arm of `start_lost` is a genomic overlap with the start codon
         // once `_overlaps_start_codon` holds (both deletion ends in exons). The
-        // 21 bp span from 5' UTR into the CDS is not inside the coding part of the
-        // exon, so it is neither an inframe_deletion nor a frameshift and keeps
-        // coding_sequence_variant.
+        // 21 bp span from 5' UTR into the CDS is a multiple of three, so no
+        // frameshift, and is not inside the coding part of the exon, so no
+        // inframe_deletion; it keeps coding_sequence_variant.
         let v = make_del("21", 25_000_040, 25_000_060);
         let result = calculate(&v, &tx(), 5000, 5000).unwrap();
         crate::test_helpers::assert_consequence_set_eq(
@@ -801,10 +888,10 @@ mod tests {
         );
     }
 
-    /// OverlapPC is `100 * ($overlap_length / $feature_length)` (OutputFactory.pm:2091)
-    /// printed with `%.2f` (`:2094`): a 23-bp and a 49-bp deletion inside a 160-bp
-    /// transcript print `14.37` and `30.63`, the quotient-first roundings of the
-    /// ties 14.375 and 30.625.
+    /// OverlapPC is `100 * ($overlap_length / $feature_length)` (ensembl-vep
+    /// `OutputFactory.pm:2091` at release/116.2) printed with `%.2f` (`:2094`): a
+    /// 23-bp and a 49-bp deletion inside a 160-bp transcript print `14.37` and
+    /// `30.63`, the quotient-first roundings of the ties 14.375 and 30.625.
     #[test]
     fn test_overlap_pc_rounds_a_two_decimal_tie_as_perl_does() {
         let cds = format!("ATG{}TAA", "GCT".repeat(31));
@@ -892,12 +979,12 @@ mod tests {
     fn test_transcript_metadata_populated() {
         let v = make_del("21", 24_999_000, 25_007_000);
         let result = calculate(&v, &tx(), 5000, 5000).unwrap();
-        assert_eq!(&*result.transcript_id, "ENST00000000001");
-        assert_eq!(&*result.gene_id, "ENSG00000000001");
-        assert_eq!(result.gene_symbol, Some("TEST1".into()));
-        assert_eq!(result.gene_symbol_source, Some("HGNC".into()));
-        assert_eq!(result.hgnc_id, Some("HGNC:0001".into()));
-        assert_eq!(result.biotype, Some("protein_coding".into()));
+        assert_eq!(result.transcript_id(), "ENST00000000001");
+        assert_eq!(result.gene_id(), "ENSG00000000001");
+        assert_eq!(result.gene_symbol(), Some("TEST1"));
+        assert_eq!(result.gene_symbol_source(), Some("HGNC"));
+        assert_eq!(result.hgnc_id(), Some("HGNC:0001"));
+        assert_eq!(result.biotype(), Some("protein_coding"));
         assert!(result.canonical);
         assert_eq!(result.strand, 1);
         assert_eq!(result.feature_type, FeatureType::Transcript);
@@ -909,10 +996,10 @@ mod tests {
     #[test]
     fn test_gencode_primary_carried_from_transcript() {
         let v = make_del("21", 24_999_000, 25_007_000);
-        assert!(!calculate(&v, &tx(), 5000, 5000).unwrap().gencode_primary);
+        assert!(!calculate(&v, &tx(), 5000, 5000).unwrap().gencode_primary());
         let mut t = tx();
         t.gencode_primary = true;
-        assert!(calculate(&v, &t, 5000, 5000).unwrap().gencode_primary);
+        assert!(calculate(&v, &t, 5000, 5000).unwrap().gencode_primary());
     }
 
     #[test]
@@ -1052,7 +1139,7 @@ mod tests {
             tc.consequences.to_vec(),
             vec![Consequence::TranscriptAblation]
         );
-        assert_eq!(tc.protein_id.as_deref(), Some("ENSP00000000001"));
+        assert_eq!(tc.protein_id().as_deref(), Some("ENSP00000000001"));
     }
 
     /// A transcript without a translation prints no ENSP on any row.
@@ -1062,7 +1149,7 @@ mod tests {
         transcript.protein_id = None;
         let v = make_del("21", 24_000_000, 26_000_000);
         let tc = calculate(&v, &transcript, 5000, 5000).unwrap();
-        assert_eq!(tc.protein_id, None);
+        assert_eq!(tc.protein_id(), None);
     }
 
     /// Ensembl VEP 116.2 on a `<DEL>` clipping the last base of TRDD3
@@ -1269,5 +1356,81 @@ mod tests {
         let v = make_del("21", 39_999_000, 40_000_020);
         let result = calculate(&v, &t, 5000, 5000).unwrap();
         crate::test_helpers::assert_consequence_set_eq(&result, &expected);
+    }
+
+    /// The sorted term names of a deletion over `start..=end` on `tx`.
+    fn deletion_terms(tx: &Transcript, start: u64, end: u64) -> Vec<String> {
+        let result = calculate(&make_del("21", start, end), tx, 5000, 5000).unwrap();
+        let mut terms: Vec<String> = result.consequences.iter().map(|c| c.to_string()).collect();
+        terms.sort();
+        terms
+    }
+
+    /// A `<DEL>` wholly inside a frameshift intron. Ensembl VEP 116.2 writes
+    /// `feature_truncation,coding_sequence_variant` for GRCh37 `21:38600094-38600097`
+    /// and `21:38600643-38600644` on ENST00000288304 (a 4-base and a 2-base intron
+    /// inside its coding region) and `intron_variant` for `21:38600300-38600303`, in
+    /// an ordinary intron of the same transcript.
+    #[test]
+    fn a_deletion_inside_a_frameshift_intron_is_a_truncation() {
+        let tx = frameshift_intron_test_transcript();
+        // The 9-base intron of the coding region, whole and in part.
+        for (start, end) in [(25_002_101, 25_002_109), (25_002_103, 25_002_107)] {
+            assert_eq!(
+                deletion_terms(&tx, start, end),
+                ["coding_sequence_variant", "feature_truncation"],
+                "{start}-{end}"
+            );
+        }
+        // `_before_coding` and `_after_coding` name the UTR on the forward strand.
+        assert_eq!(
+            deletion_terms(&tx, 25_000_021, 25_000_025),
+            ["5_prime_UTR_variant", "feature_truncation"]
+        );
+        assert_eq!(
+            deletion_terms(&tx, 25_005_001, 25_005_013),
+            ["3_prime_UTR_variant", "feature_truncation"]
+        );
+        // The same two spans on the reverse strand swap their UTR.
+        let mut reverse = tx.clone();
+        reverse.strand = Strand::Reverse;
+        assert_eq!(
+            deletion_terms(&reverse, 25_000_021, 25_000_025),
+            ["3_prime_UTR_variant", "feature_truncation"]
+        );
+        assert_eq!(
+            deletion_terms(&reverse, 25_005_001, 25_005_013),
+            ["5_prime_UTR_variant", "feature_truncation"]
+        );
+        // Nine bases inside an ordinary intron keep the intronic reading.
+        assert_eq!(
+            deletion_terms(&tx, 25_001_000, 25_001_008),
+            ["intron_variant"]
+        );
+    }
+
+    /// The same on a transcript without a translation: Ensembl VEP 116.2 writes
+    /// `feature_truncation,non_coding_transcript_variant` for GRCh38
+    /// `21:6358575-6358576` on ENST00000624847, a 2-base intron of a lncRNA, and
+    /// `intron_variant,non_coding_transcript_variant` in its ordinary intron.
+    #[test]
+    fn a_deletion_inside_a_frameshift_intron_of_a_non_coding_transcript() {
+        let mut tx = frameshift_intron_test_transcript();
+        tx.biotype = "lncRNA".into();
+        tx.coding_region_start = None;
+        tx.coding_region_end = None;
+        tx.translation = None;
+        if let Some(mapper) = tx.vefc.as_mut().and_then(|v| v.mapper.as_mut()) {
+            mapper.cdna_coding_start = 0;
+            mapper.cdna_coding_end = 0;
+        }
+        assert_eq!(
+            deletion_terms(&tx, 25_002_101, 25_002_109),
+            ["feature_truncation", "non_coding_transcript_variant"]
+        );
+        assert_eq!(
+            deletion_terms(&tx, 25_001_000, 25_001_008),
+            ["intron_variant", "non_coding_transcript_variant"]
+        );
     }
 }

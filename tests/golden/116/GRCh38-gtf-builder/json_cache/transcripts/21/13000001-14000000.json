@@ -1,0 +1,544 @@
+[
+  {
+    "stable_id": "ENST00000451052",
+    "version": 1,
+    "gene_stable_id": "ENSG00000175302",
+    "start": 13384249,
+    "end": 13427773,
+    "strand": -1,
+    "biotype": "unprocessed_pseudogene",
+    "source": "havana",
+    "gene_symbol": "ANKRD30BP1",
+    "is_canonical": 1,
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00001690047",
+        "start": 13427745,
+        "end": 13427773,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001739693",
+        "start": 13427580,
+        "end": 13427652,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001609482",
+        "start": 13426312,
+        "end": 13426340,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001792240",
+        "start": 13426146,
+        "end": 13426218,
+        "rank": 4,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001618910",
+        "start": 13423127,
+        "end": 13423188,
+        "rank": 5,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001719067",
+        "start": 13421600,
+        "end": 13421690,
+        "rank": 6,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001633226",
+        "start": 13413762,
+        "end": 13413790,
+        "rank": 7,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001724949",
+        "start": 13413596,
+        "end": 13413668,
+        "rank": 8,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001761712",
+        "start": 13408320,
+        "end": 13408350,
+        "rank": 9,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001798958",
+        "start": 13405181,
+        "end": 13405253,
+        "rank": 10,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001632321",
+        "start": 13399357,
+        "end": 13399435,
+        "rank": 11,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001696843",
+        "start": 13398970,
+        "end": 13399031,
+        "rank": 12,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001702645",
+        "start": 13395968,
+        "end": 13396057,
+        "rank": 13,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001676284",
+        "start": 13393717,
+        "end": 13393745,
+        "rank": 14,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001625429",
+        "start": 13393546,
+        "end": 13393618,
+        "rank": 15,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001597354",
+        "start": 13387723,
+        "end": 13387936,
+        "rank": 16,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001751390",
+        "start": 13386282,
+        "end": 13386445,
+        "rank": 17,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003684284",
+        "start": 13384249,
+        "end": 13385160,
+        "rank": 18,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "value": "GENCODE basic"
+      },
+      {
+        "code": "gencode_primary",
+        "value": "GENCODE primary"
+      },
+      {
+        "code": "TSL",
+        "value": "tslNA"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 13427653,
+          "end": 13427744,
+          "rank": 1
+        },
+        {
+          "start": 13426341,
+          "end": 13427579,
+          "rank": 2
+        },
+        {
+          "start": 13426219,
+          "end": 13426311,
+          "rank": 3
+        },
+        {
+          "start": 13423189,
+          "end": 13426145,
+          "rank": 4
+        },
+        {
+          "start": 13421691,
+          "end": 13423126,
+          "rank": 5
+        },
+        {
+          "start": 13413791,
+          "end": 13421599,
+          "rank": 6
+        },
+        {
+          "start": 13413669,
+          "end": 13413761,
+          "rank": 7
+        },
+        {
+          "start": 13408351,
+          "end": 13413595,
+          "rank": 8
+        },
+        {
+          "start": 13405254,
+          "end": 13408319,
+          "rank": 9
+        },
+        {
+          "start": 13399436,
+          "end": 13405180,
+          "rank": 10
+        },
+        {
+          "start": 13399032,
+          "end": 13399356,
+          "rank": 11
+        },
+        {
+          "start": 13396058,
+          "end": 13398969,
+          "rank": 12
+        },
+        {
+          "start": 13393746,
+          "end": 13395967,
+          "rank": 13
+        },
+        {
+          "start": 13393619,
+          "end": 13393716,
+          "rank": 14
+        },
+        {
+          "start": 13387937,
+          "end": 13393545,
+          "rank": 15
+        },
+        {
+          "start": 13386446,
+          "end": 13387722,
+          "rank": 16
+        },
+        {
+          "start": 13385161,
+          "end": 13386281,
+          "rank": 17
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 29,
+            "to_start": 13427745,
+            "to_end": 13427773,
+            "ori": -1
+          },
+          {
+            "from_start": 30,
+            "from_end": 102,
+            "to_start": 13427580,
+            "to_end": 13427652,
+            "ori": -1
+          },
+          {
+            "from_start": 103,
+            "from_end": 131,
+            "to_start": 13426312,
+            "to_end": 13426340,
+            "ori": -1
+          },
+          {
+            "from_start": 132,
+            "from_end": 204,
+            "to_start": 13426146,
+            "to_end": 13426218,
+            "ori": -1
+          },
+          {
+            "from_start": 205,
+            "from_end": 266,
+            "to_start": 13423127,
+            "to_end": 13423188,
+            "ori": -1
+          },
+          {
+            "from_start": 267,
+            "from_end": 357,
+            "to_start": 13421600,
+            "to_end": 13421690,
+            "ori": -1
+          },
+          {
+            "from_start": 358,
+            "from_end": 386,
+            "to_start": 13413762,
+            "to_end": 13413790,
+            "ori": -1
+          },
+          {
+            "from_start": 387,
+            "from_end": 459,
+            "to_start": 13413596,
+            "to_end": 13413668,
+            "ori": -1
+          },
+          {
+            "from_start": 460,
+            "from_end": 490,
+            "to_start": 13408320,
+            "to_end": 13408350,
+            "ori": -1
+          },
+          {
+            "from_start": 491,
+            "from_end": 563,
+            "to_start": 13405181,
+            "to_end": 13405253,
+            "ori": -1
+          },
+          {
+            "from_start": 564,
+            "from_end": 642,
+            "to_start": 13399357,
+            "to_end": 13399435,
+            "ori": -1
+          },
+          {
+            "from_start": 643,
+            "from_end": 704,
+            "to_start": 13398970,
+            "to_end": 13399031,
+            "ori": -1
+          },
+          {
+            "from_start": 705,
+            "from_end": 794,
+            "to_start": 13395968,
+            "to_end": 13396057,
+            "ori": -1
+          },
+          {
+            "from_start": 795,
+            "from_end": 823,
+            "to_start": 13393717,
+            "to_end": 13393745,
+            "ori": -1
+          },
+          {
+            "from_start": 824,
+            "from_end": 896,
+            "to_start": 13393546,
+            "to_end": 13393618,
+            "ori": -1
+          },
+          {
+            "from_start": 897,
+            "from_end": 1110,
+            "to_start": 13387723,
+            "to_end": 13387936,
+            "ori": -1
+          },
+          {
+            "from_start": 1111,
+            "from_end": 1274,
+            "to_start": 13386282,
+            "to_end": 13386445,
+            "ori": -1
+          },
+          {
+            "from_start": 1275,
+            "from_end": 2186,
+            "to_start": 13384249,
+            "to_end": 13385160,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00003684284",
+          "start": 13384249,
+          "end": 13385160,
+          "rank": 18,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001751390",
+          "start": 13386282,
+          "end": 13386445,
+          "rank": 17,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001597354",
+          "start": 13387723,
+          "end": 13387936,
+          "rank": 16,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001625429",
+          "start": 13393546,
+          "end": 13393618,
+          "rank": 15,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001676284",
+          "start": 13393717,
+          "end": 13393745,
+          "rank": 14,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001702645",
+          "start": 13395968,
+          "end": 13396057,
+          "rank": 13,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001696843",
+          "start": 13398970,
+          "end": 13399031,
+          "rank": 12,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001632321",
+          "start": 13399357,
+          "end": 13399435,
+          "rank": 11,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001798958",
+          "start": 13405181,
+          "end": 13405253,
+          "rank": 10,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001761712",
+          "start": 13408320,
+          "end": 13408350,
+          "rank": 9,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001724949",
+          "start": 13413596,
+          "end": 13413668,
+          "rank": 8,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001633226",
+          "start": 13413762,
+          "end": 13413790,
+          "rank": 7,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001719067",
+          "start": 13421600,
+          "end": 13421690,
+          "rank": 6,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001618910",
+          "start": 13423127,
+          "end": 13423188,
+          "rank": 5,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001792240",
+          "start": 13426146,
+          "end": 13426218,
+          "rank": 4,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001609482",
+          "start": 13426312,
+          "end": 13426340,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001739693",
+          "start": 13427580,
+          "end": 13427652,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001690047",
+          "start": 13427745,
+          "end": 13427773,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  }
+]

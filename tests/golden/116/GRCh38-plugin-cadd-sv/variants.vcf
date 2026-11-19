@@ -1,0 +1,23 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	5028997	deletion_before_sv	TCA	T	.	.	.
+21	5028998	deletion_at_anchor	CAT	C	.	.	.
+21	5028999	insertion_at_anchor	A	AT	.	.	.
+21	5028999	snv_at_anchor	A	G	.	.	.
+21	5029000	deletion_sv	T	<DEL>	.	.	SVTYPE=DEL;END=5047000
+21	5029000	snv_at_sv_start	T	C	.	.	.
+21	5029000	insertion_at_sv_start	T	TG	.	.	.
+21	5030100	duplication_sv	C	<DUP>	.	.	SVTYPE=DUP;END=5035000
+21	5030192	snv_inside_sv	A	G	.	.	.
+21	5030602	snv_inside_sv_two_alts	A	C,T	.	.	.
+21	5031000	insertion_sv	A	<INS>	.	.	SVTYPE=INS
+21	5033000	unscored_deletion_sv	G	<DEL>	.	.	SVTYPE=DEL;END=5034000
+21	5047000	snv_at_sv_end	T	A	.	.	.
+21	5047000	snv_and_insertion_at_sv_end	T	A,TG	.	.	.
+21	5047000	insertion_and_snv_at_sv_end	T	TG,A	.	.	.
+21	5047001	snv_after_sv	T	A	.	.	.
+21	30282000	transcript_duplication_sv	A	<DUP>	.	.	SVTYPE=DUP;END=30283000
+21	30396000	transcript_deletion_sv	A	<DEL>	.	.	SVTYPE=DEL;END=30397000
+21	44195000	inversion_sv	C	<INV>	.	.	SVTYPE=INV;END=44195100
+21	44195140	snv_two_alts	G	A,C	.	.	.
+21	44195200	tandem_duplication_sv	C	<DUP:TANDEM>	.	.	SVTYPE=DUP;END=44195300

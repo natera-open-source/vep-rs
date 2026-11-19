@@ -17,12 +17,11 @@
 //!
 //! Perl citations name modules of ensembl-vep release/116.2 (`Bio/EnsEMBL/VEP/...`).
 
-use std::cmp::Ordering;
-
 use smallvec::SmallVec;
 use vep_core::consequence::{
     Consequence, ConsequenceList, FeatureType, SourceCache, TranscriptConsequence,
 };
+use vep_core::pick::{pick_by_categories, Rank};
 use vep_core::variant::InputVariant;
 
 use crate::row_filter::{self, RowFilters};
@@ -177,21 +176,48 @@ impl FilterConfig {
 
 /// Applies the record-level steps to every record of an annotated batch laid
 /// out in record order (every allele of a record adjacent to the others, as the
-/// pipeline lays them out).
+/// pipeline lays them out). A warning a record draws goes to the run's sink.
 pub fn apply_to_batch(batch: &mut [InputVariant], config: &FilterConfig) {
+    apply_to_batch_reporting(batch, config, &mut |_, text| {
+        crate::warnings::global().warn(&text)
+    });
+}
+
+/// [`apply_to_batch`] with the warning a record draws handed to `warn` with the
+/// index in `batch` of the record's first variant, for the caller to report in
+/// record order.
+pub(crate) fn apply_to_batch_reporting(
+    batch: &mut [InputVariant],
+    config: &FilterConfig,
+    warn: &mut dyn FnMut(usize, String),
+) {
     if !config.any_active() {
         return;
     }
+    let mut first = 0usize;
     for record in batch.chunk_by_mut(InputVariant::same_record) {
-        apply_to_record(record, config);
+        apply_to_record_reporting(record, config, &mut |text| warn(first, text));
+        first += record.len();
     }
 }
 
 /// Applies the record-level steps to the alleles of one input record in Ensembl
 /// VEP's order (`OutputFactory.pm:477-516`, then `:387`): the row filters
 /// (`:482`, `:490-502`), the pick family over the rows they leave (`:514`),
-/// then the summary of the rows left.
+/// then the summary of the rows left. A warning the record draws goes to the
+/// run's sink.
 pub fn apply_to_record(record: &mut [InputVariant], config: &FilterConfig) {
+    apply_to_record_reporting(record, config, &mut |text| {
+        crate::warnings::global().warn(&text)
+    });
+}
+
+/// [`apply_to_record`] with the warning the record draws handed to `warn`.
+pub(crate) fn apply_to_record_reporting(
+    record: &mut [InputVariant],
+    config: &FilterConfig,
+    warn: &mut dyn FnMut(String),
+) {
     if !config.any_active() {
         return;
     }
@@ -200,7 +226,7 @@ pub fn apply_to_record(record: &mut [InputVariant], config: &FilterConfig) {
     if config.most_severe || config.summary {
         // `summary_only` tests `summary` before `most_severe` (`:436`, `:446`), so
         // the pair `--safe` lets through lists every term.
-        summarise(record, config.most_severe && !config.summary);
+        summarise(record, config.most_severe && !config.summary, warn);
     }
 }
 
@@ -229,12 +255,20 @@ impl Row {
 /// (each feature lists its reference allele's row under `--process_ref_homs`
 /// and then its alternate allele); then the intergenic row of every allele that
 /// overlaps no transcript, whether it carries regulatory and motif rows or
-/// none. A feature's key is its stable id; the rejoin of a `--minimal` split
-/// stores every allele after the first under `<its allele string>_<stable id>`
+/// none. A feature's key is a transcript's stable id with `_` and its database
+/// id, a regulatory feature's stable id or a motif's database id
+/// ([`TranscriptConsequence::ensembl_vep_key`]); the rejoin of a `--minimal`
+/// split stores every allele after the first under `<its allele string>_<key>`
 /// (`OutputFactory.pm:2316`), so such an allele's feature sorts by its allele
-/// string against the first allele's bare stable id, before it when the string
-/// starts with a `-`, a digit or a letter below the id's first. An allele whose
-/// chromosome has no transcripts has no row.
+/// string against the first allele's bare key, before it when the string starts
+/// with a byte below the key's first. A structural variant's regulatory and
+/// motif rows stand in the order the features were met instead
+/// ([`TranscriptConsequence::structural_feature_order`]):
+/// `pick_worst_VariationFeatureOverlapAllele` ranks the overlap list
+/// `get_all_StructuralVariationOverlaps` returns as pushed
+/// (`OutputFactory.pm:556-560`, `StructuralVariationFeature.pm:495-509`), so
+/// a full tie falls to the first feature met. An allele whose chromosome has
+/// no transcripts has no row.
 fn record_rows(record: &[InputVariant]) -> Vec<Row> {
     let mut feature_rows: Vec<(usize, usize)> = Vec::new();
     for (allele, variant) in record.iter().enumerate() {
@@ -249,13 +283,20 @@ fn record_rows(record: &[InputVariant]) -> Vec<Row> {
             .as_deref()
             .unwrap_or("")
             .bytes()
-            .chain(feature(row).transcript_id.bytes())
+            .chain(feature(row).ensembl_vep_key())
+    };
+    let same_kind_order = |a: &(usize, usize), b: &(usize, usize)| {
+        if record[a.0].is_structural && feature(a).feature_type != FeatureType::Transcript {
+            feature(a).structural_feature_order(feature(b))
+        } else {
+            feature_key(a).cmp(feature_key(b))
+        }
     };
     feature_rows.sort_by(|a, b| {
         feature(a)
             .feature_type
             .cmp(&feature(b).feature_type)
-            .then_with(|| feature_key(a).cmp(feature_key(b)))
+            .then_with(|| same_kind_order(a, b))
             .then_with(|| {
                 record[b.0]
                     .reference_allele_row
@@ -292,14 +333,15 @@ fn intergenic_row_terms(variant: &InputVariant) -> &[Consequence] {
 
 /// The values `pick_worst_VariationFeatureOverlapAllele` ranks one row by, each
 /// lower when better (`OutputFactory.pm:712-768`): the defaults for a row that is
-/// not against a transcript, the transcript's attributes otherwise.
+/// not against a transcript, the transcript's attributes otherwise. Every value
+/// is a number but the TSL, the attribute's digit run as text (`:753`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PickInfo {
+struct PickInfo<'a> {
     mane_select: i64,
     mane_plus_clinical: i64,
     canonical: i64,
     appris: i64,
-    tsl: i64,
+    tsl: Rank<'a>,
     biotype: i64,
     ccds: i64,
     rank: i64,
@@ -308,7 +350,7 @@ struct PickInfo {
     refseq: i64,
 }
 
-impl PickInfo {
+impl<'a> PickInfo<'a> {
     /// The defaults of `:712-727`, with the rank of the row's consequences
     /// (`:780-786`; 1000 for a row with none).
     fn defaults(consequences: &[Consequence]) -> Self {
@@ -317,7 +359,7 @@ impl PickInfo {
             mane_plus_clinical: 1,
             canonical: 1,
             appris: 100,
-            tsl: 100,
+            tsl: Rank::Number(100),
             biotype: 1,
             ccds: 1,
             rank: consequences
@@ -332,67 +374,60 @@ impl PickInfo {
     }
 
     /// A transcript row's values (`:729-768`).
-    fn of_transcript(tc: &TranscriptConsequence) -> Self {
+    fn of_transcript(tc: &'a TranscriptConsequence) -> Self {
         let mut info = PickInfo::defaults(&tc.consequences);
-        info.mane_select = if tc.mane_select.is_some() { 0 } else { 1 };
-        info.mane_plus_clinical = if tc.mane_plus_clinical.is_some() {
+        info.mane_select = if tc.mane_select().is_some() { 0 } else { 1 };
+        info.mane_plus_clinical = if tc.mane_plus_clinical().is_some() {
             0
         } else {
             1
         };
         info.canonical = if tc.canonical { 0 } else { 1 };
-        info.biotype = if tc.biotype.as_deref() == Some("protein_coding") {
+        info.biotype = if tc.biotype() == Some("protein_coding") {
             0
         } else {
             1
         };
         // `$tr->{_ccds} && $tr->{_ccds} ne '-'` (`:740`).
-        info.ccds = match tc.ccds.as_deref() {
+        info.ccds = match tc.ccds() {
             Some(s) if !s.is_empty() && s != "-" => 0,
             _ => 1,
         };
-        match tc.source_cache {
-            Some(SourceCache::Ensembl) => info.ensembl = 0,
-            Some(SourceCache::RefSeq) => info.refseq = 0,
-            None => {}
+        // `$info->{lc($tr->{_source_cache})} = 0` (`:741`): the source's name,
+        // lower-cased, is the criterion it scores, so a custom source counts
+        // only when it is named `ensembl` or `refseq` in any case.
+        if let Some(source) = tc.source_cache().map(SourceCache::column_text) {
+            if source.eq_ignore_ascii_case("ensembl") {
+                info.ensembl = 0;
+            } else if source.eq_ignore_ascii_case("refseq") {
+                info.refseq = 0;
+            }
         }
         // Longer is better, so the length is negated (`:743-748`): the
         // translateable sequence of a translated transcript, else the spliced
         // length.
-        info.length = -i64::from(tc.cds_length.unwrap_or(tc.cdna_length));
-        // `m/tsl(\d+)/` then `$1 if $1` (`:751-755`): a zero stays at the default.
-        if let Some(tsl) = tc.tsl.filter(|t| *t != 0) {
-            info.tsl = i64::from(tsl);
-        }
-        info.appris = i64::from(appris_rank(tc.appris.as_deref()));
+        info.length = -i64::from(tc.cds_length().unwrap_or_else(|| tc.cdna_length()));
+        // `m/tsl(\d+)/` then `$1 if $1` (`:751-755`): the level's digit run
+        // as text, which the loader leaves out for a zero.
+        info.tsl = Rank::tsl(tc.tsl());
+        info.appris = i64::from(appris_rank(tc.appris()));
         info
     }
 
-    fn value(&self, criterion: PickCriterion) -> i64 {
+    fn value(&self, criterion: PickCriterion) -> Rank<'a> {
         match criterion {
-            PickCriterion::ManeSelect => self.mane_select,
-            PickCriterion::ManePlusClinical => self.mane_plus_clinical,
-            PickCriterion::Canonical => self.canonical,
-            PickCriterion::Appris => self.appris,
+            PickCriterion::ManeSelect => Rank::Number(self.mane_select),
+            PickCriterion::ManePlusClinical => Rank::Number(self.mane_plus_clinical),
+            PickCriterion::Canonical => Rank::Number(self.canonical),
+            PickCriterion::Appris => Rank::Number(self.appris),
             PickCriterion::Tsl => self.tsl,
-            PickCriterion::Biotype => self.biotype,
-            PickCriterion::Ccds => self.ccds,
-            PickCriterion::Rank => self.rank,
-            PickCriterion::Length => self.length,
-            PickCriterion::Ensembl => self.ensembl,
-            PickCriterion::RefSeq => self.refseq,
+            PickCriterion::Biotype => Rank::Number(self.biotype),
+            PickCriterion::Ccds => Rank::Number(self.ccds),
+            PickCriterion::Rank => Rank::Number(self.rank),
+            PickCriterion::Length => Rank::Number(self.length),
+            PickCriterion::Ensembl => Rank::Number(self.ensembl),
+            PickCriterion::RefSeq => Rank::Number(self.refseq),
         }
-    }
-
-    /// Lexicographic order over the criteria in `order`.
-    fn compare(&self, other: &Self, order: &[PickCriterion]) -> Ordering {
-        for &criterion in order {
-            match self.value(criterion).cmp(&other.value(criterion)) {
-                Ordering::Equal => {}
-                unequal => return unequal,
-            }
-        }
-        Ordering::Equal
     }
 }
 
@@ -426,17 +461,12 @@ fn appris_rank(appris: Option<&str>) -> u32 {
 }
 
 /// The row `pick_worst_VariationFeatureOverlapAllele` returns from
-/// `candidates` (`OutputFactory.pm:703-811`): the lexicographic minimum over the
-/// criteria in order, which is what the per-category stable sort and shrink of
-/// `:789-806` leaves; on a full tie the first candidate (`:808`).
-fn pick_worst(candidates: &[usize], infos: &[PickInfo], order: &[PickCriterion]) -> usize {
-    let mut best = candidates[0];
-    for &candidate in &candidates[1..] {
-        if infos[candidate].compare(&infos[best], order) == Ordering::Less {
-            best = candidate;
-        }
-    }
-    best
+/// `candidates` (`OutputFactory.pm:703-811`): the per-category stable sort and
+/// shrink of `:789-806`, on a full tie the first candidate (`:808`).
+fn pick_worst(candidates: &[usize], infos: &[PickInfo], order: &[PickCriterion]) -> Option<usize> {
+    pick_by_categories(candidates, order, |candidate, criterion| {
+        infos[candidate].value(criterion)
+    })
 }
 
 /// The candidates grouped by `key`, groups in order of first appearance and
@@ -481,13 +511,11 @@ fn pick_per_gene(
         }
     }
     let gene = |c: usize| match rows[c] {
-        Row::Transcript { allele, tc } => {
-            record[allele].transcript_consequences[tc].gene_id.as_ref()
-        }
+        Row::Transcript { allele, tc } => record[allele].transcript_consequences[tc].gene_id(),
         Row::Intergenic { .. } => unreachable!("only transcript rows are grouped by gene"),
     };
     for group in group_by(&transcript_rows, gene) {
-        picked.push(pick_worst(&group, infos, order));
+        picked.extend(pick_worst(&group, infos, order));
     }
     picked
 }
@@ -550,7 +578,7 @@ fn pick_family(record: &mut [InputVariant], config: &FilterConfig) {
     } else {
         groups
             .iter()
-            .map(|group| pick_worst(group, &infos, order))
+            .filter_map(|group| pick_worst(group, &infos, order))
             .collect()
     };
 
@@ -558,13 +586,21 @@ fn pick_family(record: &mut [InputVariant], config: &FilterConfig) {
         for &c in &picked {
             match rows[c] {
                 Row::Transcript { allele, tc } => {
-                    push_flag(&mut record[allele].transcript_consequences[tc], "PICK")
+                    record[allele].transcript_consequences[tc].picked = true
                 }
                 Row::Intergenic { allele } => record[allele].intergenic_pick = true,
             }
         }
     } else {
         retain_rows(record, &rows, &picked);
+        // The output walks the list `pick_VariationFeatureOverlapAllele_per_gene`
+        // returns (`:838-856`): the rows not against a transcript first, then the
+        // gene picks; the writers read the mark to list the record's rows so.
+        if per_gene {
+            for variant in record.iter_mut() {
+                variant.per_gene_pick = true;
+            }
+        }
     }
 }
 
@@ -600,21 +636,14 @@ fn retain_rows(record: &mut [InputVariant], rows: &[Row], picked: &[usize]) {
     }
 }
 
-/// Appends a flag to a transcript consequence's flags.
-fn push_flag(tc: &mut TranscriptConsequence, flag: &str) {
-    let mut v: Vec<String> = tc.flags.to_vec();
-    v.push(flag.to_string());
-    tc.flags = v.into();
-}
-
 /// `summary_only` (`OutputFactory.pm:426-458`): the consequence terms of the rows
 /// left on the record, sorted by rank, each once (`--summary`) or the first alone
 /// (`--most_severe`), carried by the record's first allele as its one row while
 /// every other allele keeps none. A record with no row keeps its one summary row
-/// with no term and warns `Unable to assign consequence type` (`:454-458` warn
-/// and return the record's hash with no `Consequence`): a reference-homozygous
-/// individual's copy, or a non-variant record.
-fn summarise(record: &mut [InputVariant], most_severe_only: bool) {
+/// with no term and draws `Unable to assign consequence type`, handed to `warn`
+/// (`:454-458` warn and return the record's hash with no `Consequence`): a
+/// reference-homozygous individual's copy, or a non-variant record.
+fn summarise(record: &mut [InputVariant], most_severe_only: bool, warn: &mut dyn FnMut(String)) {
     let mut terms: Vec<Consequence> = Vec::new();
     for row in record_rows(record) {
         let row_terms: &[Consequence] = match row {
@@ -631,7 +660,7 @@ fn summarise(record: &mut [InputVariant], most_severe_only: bool) {
         terms.truncate(1);
     }
     if terms.is_empty() {
-        crate::warnings::global().warn("Unable to assign consequence type");
+        warn("Unable to assign consequence type".to_string());
     }
     for variant in record.iter_mut() {
         variant.transcript_consequences.clear();
@@ -650,8 +679,11 @@ fn summarise(record: &mut [InputVariant], most_severe_only: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runner::{edit_transcript, set_lengths};
     use smallvec::smallvec;
+    use std::sync::Arc;
     use vep_core::consequence::{Consequence, FeatureType, Impact};
+    use vep_core::transcript::Transcript;
     use vep_core::variant::InputVariant;
 
     fn tc(
@@ -664,14 +696,16 @@ mod tests {
             .map(|c| c.impact())
             .unwrap_or(Impact::MODIFIER);
         TranscriptConsequence {
-            transcript_id: transcript_id.into(),
-            gene_id: gene_id.into(),
-            biotype: Some("protein_coding".into()),
+            transcript: Some(Arc::new(Transcript {
+                stable_id: transcript_id.into(),
+                gene_stable_id: gene_id.into(),
+                biotype: "protein_coding".into(),
+                ..Transcript::default()
+            })),
             consequences,
             impact,
             feature_type: FeatureType::Transcript,
             strand: 1,
-            cdna_length: 1000,
             ..Default::default()
         }
     }
@@ -684,7 +718,7 @@ mod tests {
         consequence: Consequence,
     ) -> TranscriptConsequence {
         TranscriptConsequence {
-            transcript_id: id.into(),
+            feature_id: Some(id.into()),
             feature_type,
             consequences: smallvec![consequence],
             ..Default::default()
@@ -711,7 +745,7 @@ mod tests {
         let mut out: Vec<(usize, String)> = Vec::new();
         for v in record {
             for t in &v.transcript_consequences {
-                out.push((v.allele_index, t.transcript_id.to_string()));
+                out.push((v.allele_index, t.transcript_id().to_string()));
             }
             if v.transcript_consequences.is_empty() && v.most_severe_consequence.is_some() {
                 out.push((v.allele_index, "-".to_string()));
@@ -725,8 +759,8 @@ mod tests {
         let mut out: Vec<(usize, String)> = Vec::new();
         for v in record {
             for t in &v.transcript_consequences {
-                if t.flags.iter().any(|f| f == "PICK") {
-                    out.push((v.allele_index, t.transcript_id.to_string()));
+                if t.picked {
+                    out.push((v.allele_index, t.transcript_id().to_string()));
                 }
             }
             if v.intergenic_pick {
@@ -911,18 +945,163 @@ mod tests {
             let ids: Vec<&str> = record[0]
                 .transcript_consequences
                 .iter()
-                .map(|t| t.transcript_id.as_ref())
+                .map(|t| t.transcript_id())
                 .collect();
             assert_eq!(ids, ["ENSR1", "ENSM1", "ENST1"]);
         }
 
         let mut record = build(false);
         apply_to_record(&mut record, &config(|c| c.flag_pick_allele_gene = true));
-        assert!(record[0]
-            .transcript_consequences
-            .iter()
-            .all(|t| t.flags.iter().any(|f| f == "PICK")));
+        assert!(record[0].transcript_consequences.iter().all(|t| t.picked));
         assert!(record[0].intergenic_pick);
+    }
+
+    /// `(Feature_type, Feature)` of the record's rows in the order the writers
+    /// list them.
+    fn written(record: &[InputVariant]) -> Vec<(String, String)> {
+        let refs: Vec<&InputVariant> = record.iter().collect();
+        vep_io::output::fields::record_rows(&refs)
+            .into_iter()
+            .map(|(_, tc)| match tc {
+                Some(tc) => (tc.feature_type.to_string(), tc.transcript_id().to_string()),
+                None => ("-".to_string(), "-".to_string()),
+            })
+            .collect()
+    }
+
+    /// `pick_VariationFeatureOverlapAllele_per_gene` returns the alleles that are
+    /// not against a transcript first and one transcript allele per gene after
+    /// them (`:838-856`), and the output walks that list, so a `--per_gene` or
+    /// `--pick_allele_gene` run writes a record's regulatory row, motif row and
+    /// intergenic row before its gene picks, where the unpicked record lists its
+    /// transcript rows first (`VariationFeature.pm:855-864`); a flagging run
+    /// removes nothing and keeps the overlap-list order.
+    #[test]
+    fn per_gene_passes_regulatory_motif_and_intergenic_rows_through() {
+        let build = || {
+            let mut v = allele(
+                b"G",
+                0,
+                vec![
+                    tc("ENST1", "G1", smallvec![Consequence::MissenseVariant]),
+                    tc("ENST2", "G1", smallvec![Consequence::SynonymousVariant]),
+                    tc("ENST3", "G2", smallvec![Consequence::IntronVariant]),
+                    feature(
+                        "ENSR1",
+                        FeatureType::RegulatoryFeature,
+                        Consequence::RegulatoryRegionVariant,
+                    ),
+                    feature(
+                        "ENSM1",
+                        FeatureType::MotifFeature,
+                        Consequence::TfBindingSiteVariant,
+                    ),
+                ],
+            );
+            v.most_severe_consequence = Some(Consequence::MissenseVariant);
+            vec![v]
+        };
+        let row = |kind: &str, id: &str| (kind.to_string(), id.to_string());
+        let record = build();
+        assert_eq!(
+            written(&record),
+            [
+                row("Transcript", "ENST1"),
+                row("Transcript", "ENST2"),
+                row("Transcript", "ENST3"),
+                row("RegulatoryFeature", "ENSR1"),
+                row("MotifFeature", "ENSM1"),
+            ]
+        );
+        for set in [
+            |c: &mut FilterConfig| c.per_gene = true,
+            |c: &mut FilterConfig| c.pick_allele_gene = true,
+        ] {
+            let mut record = build();
+            apply_to_record(&mut record, &config(set));
+            assert!(record[0].per_gene_pick);
+            assert_eq!(
+                written(&record),
+                [
+                    row("RegulatoryFeature", "ENSR1"),
+                    row("MotifFeature", "ENSM1"),
+                    row("Transcript", "ENST1"),
+                    row("Transcript", "ENST3"),
+                ]
+            );
+        }
+        let mut record = build();
+        apply_to_record(&mut record, &config(|c| c.flag_pick_allele_gene = true));
+        assert!(!record[0].per_gene_pick);
+        assert_eq!(written(&record).len(), 5);
+        assert_eq!(written(&record)[0], row("Transcript", "ENST1"));
+
+        let mut record = build();
+        apply_to_record(&mut record, &config(|c| c.pick = true));
+        assert!(!record[0].per_gene_pick);
+        assert_eq!(written(&record), [row("Transcript", "ENST1")]);
+
+        let mut no_transcript = build();
+        no_transcript[0].transcript_consequences.drain(..3);
+        no_transcript[0].intergenic_overlap = true;
+        apply_to_record(&mut no_transcript, &config(|c| c.per_gene = true));
+        assert_eq!(
+            written(&no_transcript),
+            [
+                row("RegulatoryFeature", "ENSR1"),
+                row("MotifFeature", "ENSM1"),
+                row("-", "-"),
+            ]
+        );
+    }
+
+    /// `--flag_pick_allele_gene` flags everything the per-gene pick returns
+    /// (`:623-626`), the pass-through regulatory and motif rows included, beside
+    /// one transcript row per gene; `--flag_pick` and `--flag_pick_allele` flag the
+    /// one worst row of the record, which a canonical transcript's row wins.
+    #[test]
+    fn flag_pick_allele_gene_flags_regulatory_rows() {
+        let build = || {
+            let mut canonical = tc("ENST1", "G1", smallvec![Consequence::IntronVariant]);
+            canonical.canonical = true;
+            vec![allele(
+                b"G",
+                0,
+                vec![
+                    canonical,
+                    tc("ENST2", "G1", smallvec![Consequence::MissenseVariant]),
+                    feature(
+                        "ENSR1",
+                        FeatureType::RegulatoryFeature,
+                        Consequence::RegulatoryRegionVariant,
+                    ),
+                    feature(
+                        "ENSM1",
+                        FeatureType::MotifFeature,
+                        Consequence::TfBindingSiteVariant,
+                    ),
+                ],
+            )]
+        };
+        let mut record = build();
+        apply_to_record(&mut record, &config(|c| c.flag_pick_allele_gene = true));
+        assert_eq!(
+            flagged(&record),
+            [
+                (0, "ENST1".to_string()),
+                (0, "ENSR1".to_string()),
+                (0, "ENSM1".to_string())
+            ]
+        );
+        assert_eq!(kept(&record).len(), 4, "flagging removes nothing");
+        for set in [
+            |c: &mut FilterConfig| c.flag_pick = true,
+            |c: &mut FilterConfig| c.flag_pick_allele = true,
+        ] {
+            let mut record = build();
+            apply_to_record(&mut record, &config(set));
+            assert_eq!(flagged(&record), [(0, "ENST1".to_string())]);
+        }
     }
 
     /// `--pick_allele_gene` groups on the allele first (`:601-605`), so each
@@ -1030,11 +1209,9 @@ mod tests {
     #[test]
     fn length_prefers_the_longer_cds_then_cdna() {
         let mut short_cds = tc("ENST1", "G1", smallvec![Consequence::MissenseVariant]);
-        short_cds.cds_length = Some(300);
-        short_cds.cdna_length = 5000;
+        edit_transcript(&mut short_cds, |t| set_lengths(t, Some(300), 5000));
         let mut long_cds = tc("ENST2", "G1", smallvec![Consequence::MissenseVariant]);
-        long_cds.cds_length = Some(600);
-        long_cds.cdna_length = 1000;
+        edit_transcript(&mut long_cds, |t| set_lengths(t, Some(600), 1000));
         let mut record = vec![allele(b"G", 0, vec![short_cds, long_cds])];
         apply_to_record(&mut record, &config(|c| c.pick = true));
         assert_eq!(
@@ -1044,11 +1221,15 @@ mod tests {
         );
 
         let mut short = tc("ENST1", "G1", smallvec![Consequence::IntronVariant]);
-        short.biotype = Some("lncRNA".into());
-        short.cdna_length = 800;
+        edit_transcript(&mut short, |transcript| {
+            transcript.biotype = "lncRNA".into();
+            set_lengths(transcript, None, 800);
+        });
         let mut long = tc("ENST2", "G1", smallvec![Consequence::IntronVariant]);
-        long.biotype = Some("lncRNA".into());
-        long.cdna_length = 2400;
+        edit_transcript(&mut long, |transcript| {
+            transcript.biotype = "lncRNA".into();
+            set_lengths(transcript, None, 2400);
+        });
         let mut record = vec![allele(b"G", 0, vec![short, long])];
         apply_to_record(&mut record, &config(|c| c.pick = true));
         assert_eq!(kept(&record), vec![(0, "ENST2".to_string())]);
@@ -1061,7 +1242,7 @@ mod tests {
     fn ensembl_and_refseq_tie_on_a_single_source_cache() {
         let a = tc("ENST2", "G1", smallvec![Consequence::MissenseVariant]);
         let b = tc("ENST1", "G1", smallvec![Consequence::MissenseVariant]);
-        assert_eq!(a.source_cache, None);
+        assert_eq!(a.source_cache(), None);
         let info = PickInfo::of_transcript(&a);
         assert_eq!((info.ensembl, info.refseq), (1, 1));
         let mut record = vec![allele(b"G", 0, vec![a, b])];
@@ -1076,17 +1257,92 @@ mod tests {
             "a full tie falls to the first row in stable-id order"
         );
         let mut refseq = tc("ENST2", "G1", smallvec![Consequence::MissenseVariant]);
-        refseq.source_cache = Some(SourceCache::RefSeq);
+        edit_transcript(&mut refseq, |t| t.source_cache = Some(SourceCache::RefSeq));
         let info = PickInfo::of_transcript(&refseq);
         assert_eq!((info.ensembl, info.refseq), (1, 0));
     }
 
-    /// Two rows equal on every criterion: the pick is the first in Ensembl VEP's
-    /// overlap-allele order, the lexicographically first stable id (`:808`
-    /// returns the first of what the stable sorts left; `VariationFeature.pm:666`
-    /// of ensembl-variation sorts the transcript keys).
+    /// The `tsl` criterion is the attribute's digit run as text (`:751-753`),
+    /// sorted as a number (`<=>`, `:789`): `300` loses to `2` and to a row
+    /// without a level (the default 100), and `00` beats `1`. The tie test
+    /// reads the text (`eq`, `:796`): `007` sorts with `7` but is no tie of
+    /// it, so it ends the tied prefix, and only the rows tied as text go on to
+    /// the next criterion.
     #[test]
-    fn full_tie_falls_to_the_lexicographically_first_stable_id() {
+    fn tsl_ranks_the_digit_run_as_a_number_and_ties_it_as_text() {
+        let with_tsl = |id: &str, level: Option<&str>, cdna: u32| {
+            let mut row = tc(id, "G1", smallvec![Consequence::MissenseVariant]);
+            edit_transcript(&mut row, |t| {
+                t.tsl = level.map(str::to_string);
+                set_lengths(t, None, cdna);
+            });
+            row
+        };
+        let tsl_then_length = config(|c| {
+            c.pick = true;
+            c.pick_order = vec![PickCriterion::Tsl, PickCriterion::Length];
+        });
+        let picked = |rows: Vec<TranscriptConsequence>| {
+            let mut record = vec![allele(b"G", 0, rows)];
+            apply_to_record(&mut record, &tsl_then_length);
+            kept(&record)
+        };
+        let one = |id: &str| vec![(0, id.to_string())];
+        assert_eq!(
+            picked(vec![
+                with_tsl("ENST1", Some("300"), 900),
+                with_tsl("ENST2", Some("2"), 100),
+            ]),
+            one("ENST2")
+        );
+        assert_eq!(
+            picked(vec![
+                with_tsl("ENST1", Some("300"), 900),
+                with_tsl("ENST2", None, 100),
+            ]),
+            one("ENST2")
+        );
+        assert_eq!(
+            picked(vec![
+                with_tsl("ENST1", Some("1"), 900),
+                with_tsl("ENST2", Some("00"), 100),
+            ]),
+            one("ENST2")
+        );
+        // Rows are ranked in stable-id order: the `007` second in that order
+        // ends the tie at the first `7`, which is the pick though the shortest;
+        // third, it leaves the two `7`s to the length criterion.
+        assert_eq!(
+            picked(vec![
+                with_tsl("ENST1", Some("7"), 100),
+                with_tsl("ENST2", Some("007"), 900),
+                with_tsl("ENST3", Some("7"), 500),
+            ]),
+            one("ENST1")
+        );
+        assert_eq!(
+            picked(vec![
+                with_tsl("ENST1", Some("7"), 100),
+                with_tsl("ENST2", Some("7"), 500),
+                with_tsl("ENST3", Some("007"), 900),
+            ]),
+            one("ENST2")
+        );
+    }
+
+    /// Two rows equal on every criterion: the pick is the first in Ensembl VEP's
+    /// overlap-allele order (`:808` returns the first of what the stable sorts
+    /// left), the string order of the keys the transcript variations are stored
+    /// under (`VariationFeature.pm:666` of ensembl-variation), each the stable id
+    /// with `_` and the database id (`BaseVariationFeature.pm:310-320`). `_`
+    /// sorts after every digit, so on the TAIR10 record `4 7204233 CA CT,CAAGG`
+    /// under `--pick --pick_order rank`, where the eleven `AAGG` rows of
+    /// AT4G12020 tie on `inframe_insertion`, Ensembl VEP 116.2 keeps
+    /// `AT4G12020.10` (key `AT4G12020.10_118783`), not the bare-id-first
+    /// `AT4G12020.1` (`AT4G12020.1_118785`); `--flag_pick` marks that same row.
+    /// A transcript without a database id keys by its stable id alone.
+    #[test]
+    fn full_tie_falls_to_the_first_transcript_key_with_its_database_id() {
         let later = tc(
             "ENST00000400000",
             "G1",
@@ -1100,6 +1356,277 @@ mod tests {
         let mut record = vec![allele(b"G", 0, vec![later, earlier])];
         apply_to_record(&mut record, &config(|c| c.pick = true));
         assert_eq!(kept(&record), vec![(0, "ENST00000300000".to_string())]);
+
+        let isoforms: [(&str, u64); 11] = [
+            ("AT4G12020.1", 118785),
+            ("AT4G12020.2", 118784),
+            ("AT4G12020.3", 118779),
+            ("AT4G12020.4", 118777),
+            ("AT4G12020.5", 118782),
+            ("AT4G12020.6", 118786),
+            ("AT4G12020.7", 118776),
+            ("AT4G12020.8", 118780),
+            ("AT4G12020.9", 118781),
+            ("AT4G12020.10", 118783),
+            ("AT4G12020.11", 118778),
+        ];
+        let rows = |terms: &ConsequenceList| -> Vec<TranscriptConsequence> {
+            isoforms
+                .iter()
+                .map(|&(id, db_id)| {
+                    let mut row = tc(id, "AT4G12020", terms.clone());
+                    edit_transcript(&mut row, |t| t.db_id = Some(db_id));
+                    row
+                })
+                .collect()
+        };
+        let tair_record = || {
+            vec![
+                allele(
+                    b"T",
+                    0,
+                    rows(&smallvec![
+                        Consequence::SpliceRegionVariant,
+                        Consequence::SynonymousVariant
+                    ]),
+                ),
+                allele(
+                    b"AAGG",
+                    1,
+                    rows(&smallvec![
+                        Consequence::InframeInsertion,
+                        Consequence::SpliceRegionVariant
+                    ]),
+                ),
+            ]
+        };
+        let by_rank = |flag: bool| {
+            config(|c| {
+                c.pick = !flag;
+                c.flag_pick = flag;
+                c.pick_order = vec![PickCriterion::Rank];
+            })
+        };
+        let mut record = tair_record();
+        let ids: Vec<(usize, String)> = record_rows(&record)
+            .iter()
+            .map(|r| match *r {
+                Row::Transcript { allele, tc } => (
+                    allele,
+                    record[allele].transcript_consequences[tc]
+                        .transcript_id()
+                        .to_string(),
+                ),
+                Row::Intergenic { allele } => (allele, "-".to_string()),
+            })
+            .collect();
+        assert_eq!(
+            &ids[..6],
+            [
+                (0, "AT4G12020.10".to_string()),
+                (1, "AT4G12020.10".to_string()),
+                (0, "AT4G12020.11".to_string()),
+                (1, "AT4G12020.11".to_string()),
+                (0, "AT4G12020.1".to_string()),
+                (1, "AT4G12020.1".to_string()),
+            ]
+        );
+        apply_to_record(&mut record, &by_rank(false));
+        assert_eq!(kept(&record), vec![(1, "AT4G12020.10".to_string())]);
+        let mut record = tair_record();
+        apply_to_record(&mut record, &by_rank(true));
+        assert_eq!(flagged(&record), vec![(1, "AT4G12020.10".to_string())]);
+    }
+
+    /// `pick_VariationFeatureOverlapAllele_per_gene` (`OutputFactory.pm:830-859`)
+    /// ranks each gene's rows in the overlap list's order, so a full tie within
+    /// a gene falls to the first transcript key (`:808`): on the TAIR10 record
+    /// `ENSVATH10224189` (`4 9557579 T TAAATT`), whose nineteen AT4G16990
+    /// isoforms are all `upstream_gene_variant` and `protein_coding`, Ensembl
+    /// VEP 116.2 keeps `AT4G16990.10` (key `AT4G16990.10_108373`) under
+    /// `--per_gene --pick_order biotype` and under `--per_gene --pick_order
+    /// rank`, where the bare ids would put `AT4G16990.1` (`AT4G16990.1_108382`)
+    /// first; the default order decides on `canonical`, `AT4G16990.7`.
+    #[test]
+    fn per_gene_full_tie_falls_to_the_first_transcript_key() {
+        let isoforms: [(&str, u64); 19] = [
+            ("AT4G16990.1", 108382),
+            ("AT4G16990.2", 108378),
+            ("AT4G16990.3", 108379),
+            ("AT4G16990.4", 108384),
+            ("AT4G16990.5", 108369),
+            ("AT4G16990.6", 108376),
+            ("AT4G16990.7", 108372),
+            ("AT4G16990.8", 108371),
+            ("AT4G16990.9", 108377),
+            ("AT4G16990.10", 108373),
+            ("AT4G16990.11", 108375),
+            ("AT4G16990.12", 108386),
+            ("AT4G16990.13", 108383),
+            ("AT4G16990.14", 108381),
+            ("AT4G16990.15", 108380),
+            ("AT4G16990.16", 108387),
+            ("AT4G16990.17", 108385),
+            ("AT4G16990.18", 108370),
+            ("AT4G16990.19", 108374),
+        ];
+        let gene_record = || {
+            let rows = isoforms
+                .iter()
+                .map(|&(id, db_id)| {
+                    let mut row = tc(id, "AT4G16990", smallvec![Consequence::UpstreamGeneVariant]);
+                    row.canonical = id == "AT4G16990.7";
+                    edit_transcript(&mut row, |t| t.db_id = Some(db_id));
+                    row
+                })
+                .collect();
+            vec![allele(b"AAATT", 0, rows)]
+        };
+        let per_gene = |order: &[PickCriterion]| {
+            config(|c| {
+                c.per_gene = true;
+                c.pick_order = order.to_vec();
+            })
+        };
+        for criterion in [PickCriterion::Biotype, PickCriterion::Rank] {
+            let mut record = gene_record();
+            apply_to_record(&mut record, &per_gene(&[criterion]));
+            assert_eq!(
+                kept(&record),
+                vec![(0, "AT4G16990.10".to_string())],
+                "{}",
+                criterion.name()
+            );
+        }
+        let mut record = gene_record();
+        apply_to_record(&mut record, &per_gene(&PickCriterion::DEFAULT_ORDER));
+        assert_eq!(kept(&record), vec![(0, "AT4G16990.7".to_string())]);
+    }
+
+    /// Ensembl VEP keys a motif row by the motif's database id
+    /// (`MotifFeatureVariation.pm:70-76`, `VariationFeature.pm:937`) and the
+    /// rejoin of a `--minimal` split stores a later allele's rows under its
+    /// allele string, `_` and that key (`OutputFactory.pm:2316`), so `sort keys`
+    /// (`VariationFeature.pm:750`) lists the first allele's digit-led keys
+    /// before any letter-led prefix and after a `-/` one. On
+    /// `21 6562008 CGA TGA,CGC` under `--regulatory --minimal --pick`, the first
+    /// allele's `C/T` row and the second's `A/C_` row of ENSM00000575394 tie on
+    /// every criterion, and Ensembl VEP 116.2 keeps the first allele's (`575394`
+    /// before `A/C_575394`); with the second allele an insertion keyed `-/G_`
+    /// the second allele's row leads and is kept.
+    #[test]
+    fn prefixed_motif_rows_tie_falls_to_the_first_key_by_database_id() {
+        let motif = || TranscriptConsequence {
+            motif_db_id: Some(575394),
+            ..feature(
+                "ENSM00000575394",
+                FeatureType::MotifFeature,
+                Consequence::TfBindingSiteVariant,
+            )
+        };
+        let split_record = |prefix: &str| {
+            let mut first = allele(b"T", 0, vec![motif()]);
+            first.intergenic_overlap = true;
+            let mut second = allele(b"C", 1, vec![motif()]);
+            second.intergenic_overlap = true;
+            second.rejoin_key_prefix = Some(prefix.into());
+            vec![first, second]
+        };
+        let mut record = split_record("A/C_");
+        let rows: Vec<usize> = record_rows(&record).iter().map(|r| r.allele()).collect();
+        assert_eq!(rows, [0, 1, 0, 1]);
+        apply_to_record(&mut record, &config(|c| c.pick = true));
+        assert_eq!(kept(&record), vec![(0, "ENSM00000575394".to_string())]);
+
+        let mut record = split_record("-/G_");
+        let rows: Vec<usize> = record_rows(&record).iter().map(|r| r.allele()).collect();
+        assert_eq!(rows, [1, 0, 0, 1]);
+        apply_to_record(&mut record, &config(|c| c.pick = true));
+        assert_eq!(kept(&record), vec![(1, "ENSM00000575394".to_string())]);
+    }
+
+    /// A structural variant's regulatory rows stand in the order their
+    /// features were met (`id_rank`, the order the source lists them), not in
+    /// stable-id order, so a full tie between a regulatory file's record and
+    /// the EMAR of the same span falls to the record met first
+    /// (`OutputFactory.pm:556-560` ranks `get_all_StructuralVariationOverlaps`
+    /// as pushed, `:808` returns the first); rows sharing a rank fall back to
+    /// the feature's start and then its stable id, and a sequence variant's
+    /// rows keep the stable-id order.
+    #[test]
+    fn structural_tie_falls_to_the_first_feature_met() {
+        let regulatory = |id: &str, id_rank: u32, start: u64| TranscriptConsequence {
+            id_rank,
+            feature_start: start,
+            feature_end: start + 230,
+            ..feature(
+                id,
+                FeatureType::RegulatoryFeature,
+                Consequence::RegulatoryRegionAblation,
+            )
+        };
+        let structural = |rows: Vec<TranscriptConsequence>| {
+            let mut v = allele(b"<DEL>", 0, rows);
+            v.is_structural = true;
+            v.intergenic_overlap = true;
+            vec![v]
+        };
+        let ids = |record: &[InputVariant]| -> Vec<String> {
+            record_rows(record)
+                .into_iter()
+                .filter_map(|row| match row {
+                    Row::Transcript { allele, tc } => Some(
+                        record[allele].transcript_consequences[tc]
+                            .transcript_id()
+                            .to_string(),
+                    ),
+                    Row::Intergenic { .. } => None,
+                })
+                .collect()
+        };
+        let pick = config(|c| c.pick = true);
+
+        // The EMAR (`ENSR0...`) sorts before the enhancer (`ENSR2...`) by id;
+        // the enhancer was met first.
+        let mut met = structural(vec![
+            regulatory("ENSR00001793149", 517, 5_011_320),
+            regulatory("ENSR21_85ZF5", 1, 5_011_320),
+        ]);
+        assert_eq!(ids(&met), ["ENSR21_85ZF5", "ENSR00001793149"]);
+        apply_to_record(&mut met, &pick);
+        assert_eq!(kept(&met), vec![(0, "ENSR21_85ZF5".to_string())]);
+
+        // One shared rank: the earlier start wins, then the stable id.
+        let mut by_start = structural(vec![
+            regulatory("ENSR21_B", 0, 200),
+            regulatory("ENSR21_A", 0, 300),
+            regulatory("ENSR00000001", 0, 300),
+        ]);
+        assert_eq!(ids(&by_start), ["ENSR21_B", "ENSR00000001", "ENSR21_A"]);
+        apply_to_record(&mut by_start, &pick);
+        assert_eq!(kept(&by_start), vec![(0, "ENSR21_B".to_string())]);
+
+        // The order is total: a lower rank sorts before a higher one whatever
+        // the starts.
+        let mixed = structural(vec![
+            regulatory("ENSR21_A", 0, 300),
+            regulatory("ENSR21_B", 7, 100),
+        ]);
+        assert_eq!(ids(&mixed), ["ENSR21_A", "ENSR21_B"]);
+
+        // A sequence variant's rows keep the stable-id order whatever their rank.
+        let mut sequence = vec![allele(
+            b"C",
+            0,
+            vec![
+                regulatory("ENSR21_85ZF5", 1, 5_011_320),
+                regulatory("ENSR00001793149", 517, 5_011_320),
+            ],
+        )];
+        sequence[0].intergenic_overlap = true;
+        assert_eq!(ids(&sequence), ["ENSR00001793149", "ENSR21_85ZF5"]);
+        apply_to_record(&mut sequence, &pick);
+        assert_eq!(kept(&sequence), vec![(0, "ENSR00001793149".to_string())]);
     }
 
     /// A full tie falls to the first row of Ensembl VEP's overlap list (`:808`),
@@ -1494,14 +2021,15 @@ mod tests {
     #[test]
     fn pick_info_reads_every_criterion() {
         let mut t = tc("ENST1", "G1", smallvec![Consequence::MissenseVariant]);
-        t.mane_select = Some("NM_1.1".into());
-        t.mane_plus_clinical = Some("NM_2.1".into());
         t.canonical = true;
-        t.appris = Some("alternative2".into());
-        t.tsl = Some(3);
-        t.ccds = Some("CCDS1.1".into());
-        t.cds_length = Some(900);
-        t.cdna_length = 2000;
+        edit_transcript(&mut t, |transcript| {
+            transcript.mane_select = Some("NM_1.1".into());
+            transcript.mane_plus_clinical = Some("NM_2.1".into());
+            transcript.appris = Some("alternative2".into());
+            transcript.tsl = Some("3".into());
+            transcript.ccds = Some("CCDS1.1".into());
+            set_lengths(transcript, Some(900), 2000);
+        });
         let info = PickInfo::of_transcript(&t);
         assert_eq!(
             info,
@@ -1510,7 +2038,7 @@ mod tests {
                 mane_plus_clinical: 0,
                 canonical: 0,
                 appris: 12,
-                tsl: 3,
+                tsl: Rank::Text("3"),
                 biotype: 0,
                 ccds: 0,
                 rank: i64::from(Consequence::MissenseVariant.rank()),
@@ -1520,10 +2048,12 @@ mod tests {
             }
         );
         let mut bare = tc("ENST2", "G1", smallvec![Consequence::IntronVariant]);
-        bare.biotype = Some("lncRNA".into());
-        bare.ccds = Some("-".into());
-        bare.tsl = Some(0);
-        bare.cdna_length = 700;
+        edit_transcript(&mut bare, |transcript| {
+            transcript.biotype = "lncRNA".into();
+            transcript.ccds = Some("-".into());
+            transcript.tsl = None;
+            set_lengths(transcript, None, 700);
+        });
         let info = PickInfo::of_transcript(&bare);
         assert_eq!(
             info,
@@ -1532,7 +2062,7 @@ mod tests {
                 mane_plus_clinical: 1,
                 canonical: 1,
                 appris: 100,
-                tsl: 100,
+                tsl: Rank::Number(100),
                 biotype: 1,
                 ccds: 1,
                 rank: i64::from(Consequence::IntronVariant.rank()),
@@ -1548,7 +2078,7 @@ mod tests {
                 mane_plus_clinical: 1,
                 canonical: 1,
                 appris: 100,
-                tsl: 100,
+                tsl: Rank::Number(100),
                 biotype: 1,
                 ccds: 1,
                 rank: 1000,

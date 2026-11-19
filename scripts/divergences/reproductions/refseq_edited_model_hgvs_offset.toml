@@ -1,0 +1,32 @@
+entry = "refseq_edited_model_hgvs_offset"
+page = "docs/divergences/refseq-edited-model-hgvs-offset.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 59 of 77,601 cache transcripts · 1 flag set, 4 corpora"
+notes = "A 21-base duplication in the single exon of the edited model NM_198689.3 (KRTAP10-7, forward strand), beside two TSPEAR models on the reverse strand whose zero shift is computed first."
+
+[input]
+format = "vcf"
+text = """
+21	46021521	rs782070127	T	TGCGCCCCCACCTCCTCCTGCC	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+source = "refseq"
+json_cache = "tests/golden/116/GRCh37-refseq/cache_root/homo_sapiens_refseq/116_GRCh37"
+fasta = "tests/golden/116/GRCh37-refseq/reference.fa.gz"
+
+[run]
+flags = ["--refseq", "--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = "rs782070127", feature = "NM_198689.3" }
+columns = ["Consequence", "BAM_EDIT", "HGVSc", "HGVS_OFFSET"]
+
+[expected]
+ensembl_vep = ["inframe_insertion | OK | NM_198689.3:c.986_1006dup | -"]
+vep_rs = ["inframe_insertion | OK | NM_198689.3:c.986_1006dup | 21"]

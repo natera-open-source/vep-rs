@@ -1,0 +1,43 @@
+entry = "regulatory_structural_row_order"
+page = "docs/divergences/regulatory-structural-rows.md#1-a-structural-variants-rows-in-the-order-its-input-reaches-each-1-mb-region"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 0.83 per million · 25 flag sets, 8 corpora"
+notes = "A deletion over the 6 Mb boundary of chromosome 21 behind a breakend whose mate lies past it: the mate puts the later 1 Mb region on the buffer's list first, so Ensembl VEP lists the later region's regulatory rows before the earlier region's; vep-rs writes the files' order. The four rows are compared in the order written."
+
+[input]
+format = "vcf"
+text = """
+21	4500000	bnd_mate_in_region6	N	N[21:6500000[	.	.	SVTYPE=BND
+21	5972900	sv_del_over_6mb	N	<DEL>	.	.	SVTYPE=DEL;END=6016000
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-regulatory-gff/json_cache"
+fasta = "tests/golden/116/GRCh38-regulatory-gff/reference.fa.gz"
+
+[run]
+flags = ["--regulatory_gff", "file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz"]
+
+[compare]
+kind = "rows"
+where = { record = "sv_del_over_6mb", feature_type = "RegulatoryFeature" }
+columns = ["Location", "Allele", "Feature", "Consequence", "OverlapBP"]
+sorted = false
+
+[expected]
+ensembl_vep = [
+  "21:5972901-6016000 | deletion | ENSR21_94DGM | regulatory_region_ablation,regulatory_region_variant | 404",
+  "21:5972901-6016000 | deletion | ENSR21_94D2C | regulatory_region_ablation,regulatory_region_variant | 493",
+  "21:5972901-6016000 | deletion | ENSR00001793257 | regulatory_region_ablation,regulatory_region_variant | 404",
+  "21:5972901-6016000 | deletion | ENSR00001793255 | regulatory_region_ablation,regulatory_region_variant | 493",
+]
+vep_rs = [
+  "21:5972901-6016000 | deletion | ENSR21_94D2C | regulatory_region_ablation,regulatory_region_variant | 493",
+  "21:5972901-6016000 | deletion | ENSR21_94DGM | regulatory_region_ablation,regulatory_region_variant | 404",
+  "21:5972901-6016000 | deletion | ENSR00001793255 | regulatory_region_ablation,regulatory_region_variant | 493",
+  "21:5972901-6016000 | deletion | ENSR00001793257 | regulatory_region_ablation,regulatory_region_variant | 404",
+]

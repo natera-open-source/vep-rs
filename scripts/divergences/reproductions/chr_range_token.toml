@@ -1,0 +1,31 @@
+entry = "chr_range_token"
+page = "docs/divergences/chr-range.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the documented value of --chr, a comma-separated list in which \"-\" characters represent an interval (Ensembl VEP documentation, \"Running Ensembl VEP\", --chr); not seen in the measured datasets"
+notes = "Under --chr 1-5,21 the token 1-5 matches a chromosome named 1-5 in Ensembl VEP, so only the chromosome 21 record is annotated; vep-rs reads it as chromosomes 1 to 5 and annotates the chromosome 2 record too."
+
+[input]
+format = "vcf"
+text = """
+2	29694897	1765616	T	C	.	.	.
+21	9376344	rs1244414369	C	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38/json_cache"
+
+[run]
+flags = ["--chr", "1-5,21"]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = "1765616", feature = "ENST00000389048" }
+
+[expected]
+ensembl_vep = []
+vep_rs = ["2:29694897 | C | ENST00000389048 | missense_variant"]

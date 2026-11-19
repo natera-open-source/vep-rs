@@ -1,0 +1,29 @@
+fastvep_column	part	vep_field	source	kind	note	list_separator	reference_set
+FV_ALPHAMISSENSE	1	am_pathogenicity	AlphaMissense	number	pathogenicity score	-	-
+FV_ALPHAMISSENSE	2	am_class	AlphaMissense	text	class word of the source file	-	-
+FV_REVEL	1	REVEL	REVEL	number	score	-	-
+FV_GNOMAD_GENE	1	pLI_gene_value	pLI	number	gene-level; a database holds one table, so a run names this field or LOEUF in --fields	-	-
+FV_GNOMAD_GENE	2	LOEUF	LOEUF	number	gene-level; a database holds one table, so a run names this field or pLI_gene_value in --fields	-	-
+SpliceAI	1-9	SpliceAI_pred	SpliceAI	text	symbol, four delta scores and four delta positions, joined as the default format joins them	-	expected
+FV_PRIMATEAI	1	PrimateAI	PrimateAI	number	score	-	expected_primateai
+FV_DBNSFP	1.score	SIFT_score	dbNSFP	number	score half of the first transcript value; the word half has no row	-	expected_dbnsfp
+FV_DBNSFP	2.score	Polyphen2_HDIV_score	dbNSFP	number	score half of the first transcript value; the word half has no row	-	expected_dbnsfp
+FV_CLINVAR	1	ClinVar_CLNSIG	ClinVar	text	--custom short name ClinVar, INFO key CLNSIG	|	-
+FV_CLINVAR	2	ClinVar_CLNREVSTAT	ClinVar	text	INFO key CLNREVSTAT	-	-
+FV_CLINVAR	3	ClinVar_CLNDN	ClinVar	text	INFO key CLNDN; the column omits not_provided entries	|	-
+FV_CLINVAR	4	ClinVar_CLNVC	ClinVar	text	INFO key CLNVC	-	-
+FV_CLINVAR	5	ClinVar_CLNVCSO	ClinVar	text	INFO key CLNVCSO	-	-
+FV_GNOMAD	1	gnomAD_AF	gnomAD	number	--custom short name gnomAD, INFO key AF	-	-
+FV_GNOMAD	2	gnomAD_AC	gnomAD	number	INFO key AC	-	-
+FV_GNOMAD	3	gnomAD_AN	gnomAD	number	INFO key AN	-	-
+FV_GNOMAD	4	gnomAD_nhomalt	gnomAD	number	INFO key nhomalt	-	-
+FV_GNOMAD	5	gnomAD_AF_afr	gnomAD	number	INFO key AF_afr	-	-
+FV_GNOMAD	6	gnomAD_AF_amr	gnomAD	number	INFO key AF_amr	-	-
+FV_GNOMAD	7	gnomAD_AF_asj	gnomAD	number	INFO key AF_asj	-	-
+FV_GNOMAD	8	gnomAD_AF_eas	gnomAD	number	INFO key AF_eas	-	-
+FV_GNOMAD	9	gnomAD_AF_fin	gnomAD	number	INFO key AF_fin	-	-
+FV_GNOMAD	10	gnomAD_AF_mid	gnomAD	number	INFO key AF_mid	-	-
+FV_GNOMAD	11	gnomAD_AF_nfe	gnomAD	number	INFO key AF_nfe	-	-
+FV_GNOMAD	12	gnomAD_AF_oth	gnomAD	number	INFO key AF_oth	-	-
+FV_GNOMAD	13	gnomAD_AF_remaining	gnomAD	number	INFO key AF_remaining	-	-
+FV_GNOMAD	14	gnomAD_AF_sas	gnomAD	number	INFO key AF_sas	-	-

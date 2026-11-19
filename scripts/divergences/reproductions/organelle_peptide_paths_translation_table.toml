@@ -1,0 +1,31 @@
+entry = "organelle_peptide_paths_translation_table"
+page = "docs/divergences/organelle-peptide-translation-table.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 247 of 487 MT records · 23 flag sets, 7 corpora"
+notes = "The frameshift path, the first of the entry's four: deleting the eighth base of MT-ND1 turns codon 3 into AGG, a stop under the vertebrate mitochondrial code (table 2) and arginine under the standard one."
+
+[input]
+format = "vcf"
+text = """
+MT	3313	mt_nd1_c8del	AT	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-input-hgvs/json_cache"
+fasta = "tests/golden/116/GRCh38-input-hgvs/reference.fa.gz"
+
+[run]
+flags = ["--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = "mt_nd1_c8del", feature = "ENST00000361390" }
+columns = ["Consequence", "Protein_position", "Amino_acids", "Codons", "HGVSp"]
+
+[expected]
+ensembl_vep = ["frameshift_variant | 3 | M/X | aTg/ag | ENSP00000354687.2:p.Met3ArgfsTer12"]
+vep_rs = ["frameshift_variant | 3 | M/X | aTg/ag | ENSP00000354687.2:p.Met3Ter"]

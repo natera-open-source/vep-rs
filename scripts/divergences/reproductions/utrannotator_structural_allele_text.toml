@@ -1,0 +1,32 @@
+entry = "utrannotator_structural_allele_text"
+page = "docs/output/structural-variants.md#utrannotator-on-a-symbolic-allele-the-text-del-scored-as-a-five-base-deletion"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 48.3 per million · 4 flag sets, 28 corpora"
+notes = "The record deletes 40 bases inside one exon of the 5' UTR of ENST00000427445, from three bases past a uORF's ATG; Ensembl VEP removes the five characters of `<DEL>` and reports a uORF frameshift with the alternative ORF 39 bases long, the 40 deleted bases unread; vep-rs removes the 40 bases and reports the frameshift with the alternative ORF 66 bases long. Both engines write the same `5UTR_consequence`, `Existing_*` counts and `Allele` `deletion`."
+
+[input]
+format = "vcf"
+header = ["##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the variant described in this record\">"]
+text = """
+21	10524588	sv_del_40	N	<DEL>	.	.	END=10524628
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-utr-annotator/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-utr-annotator/reference.fa.gz"
+
+[run]
+flags = ["--plugin", "UTRAnnotator,file={corpus}/data/uORF_5UTR_GRCh38_PUBLIC.chr21.txt"]
+
+[compare]
+kind = "field"
+field = "5UTR_annotation"
+where = { record = "sv_del_40", feature = "ENST00000427445" }
+
+[expected]
+ensembl_vep = ["alt_type_length=39:KozakContext=AGAATGT:KozakStrength=Moderate:ref_type_length=51:ref_type=uORF:alt_type=uORF:Evidence=False:ref_StartDistanceToCDS=207"]
+vep_rs = ["Evidence=False:KozakContext=AGAATGT:KozakStrength=Moderate:alt_type=uORF:alt_type_length=66:ref_StartDistanceToCDS=207:ref_type=uORF:ref_type_length=51"]

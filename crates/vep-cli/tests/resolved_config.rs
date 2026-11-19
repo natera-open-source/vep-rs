@@ -1,8 +1,9 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! `--resolved_config` prints the runtime knobs (the thread counts resolved, the
-//! pipeline and writer knobs as configured) and the input's shape, one
+//! `--resolved_config` prints the runtime knobs (the thread counts resolved from
+//! the input's shape as the run resolves them, the parse-pool, pipeline, writer,
+//! reader-core and prewarm knobs as configured) and the input's shape, one
 //! `<name>\t<value>` line each, then exits 0 without opening the output or
 //! annotating; a named input file that is not there is refused as a run refuses
 //! it.
@@ -12,8 +13,10 @@ mod common;
 use std::path::Path;
 
 use vep_cli::config::{
-    host_parallelism, reported_parallelism, resolve_fork, DECOMPRESSION_THREADS_AUTO_CAP,
+    host_parallelism, reported_parallelism, resolve_fork, DecompressionThreads,
+    COMPRESSION_THREADS_AUTO_CAP, DECOMPRESSION_THREADS_AUTO_CAP,
 };
+use vep_cli::input_shape::physical_cores;
 
 use common::{corpora, isolated_vep_anywhere, Corpus};
 
@@ -52,6 +55,12 @@ fn reported_parallelism_line() -> String {
     reported_parallelism().map_or("-".to_string(), |n| n.to_string())
 }
 
+/// The `physical_cores` value the probe prints on this host: the count, or `-`
+/// where the host has no topology files.
+fn physical_cores_line() -> String {
+    physical_cores().map_or("-".to_string(), |n| n.to_string())
+}
+
 /// The compressed-input corpus: its BGZF twin `variants.vcf.gz` has a tabix
 /// index beside it, so it is the one committed input with a shape.
 fn indexed_corpus() -> Corpus {
@@ -81,6 +90,8 @@ fn resolved_config_prints_the_knobs_and_exits_without_annotating() {
             "77",
             "--decompression_threads",
             "1",
+            "--compression_threads",
+            "2",
             "--pipeline_mode",
             "batched",
             "--pipeline_depth",
@@ -91,6 +102,12 @@ fn resolved_config_prints_the_knobs_and_exits_without_annotating() {
             "vectored",
             "--output_buffer_size",
             "1234",
+            "--reader_core",
+            "none",
+            "--parse_threads",
+            "5",
+            "--prewarm_ahead",
+            "all",
         ],
     );
     assert!(success, "{stderr}");
@@ -100,29 +117,36 @@ fn resolved_config_prints_the_knobs_and_exits_without_annotating() {
             "fork\t3\n\
              buffer_size\t77\n\
              decompression_threads\t1\n\
+             compression_threads\t2\n\
+             parse_threads\t5\n\
              pipeline_mode\tbatched\n\
              pipeline_depth\t4\n\
              render_task_records\t9\n\
              writer_strategy\tvectored\n\
              output_buffer_size\t1234\n\
+             reader_core\tnone\n\
+             prewarm_ahead\tall\n\
              input_shape\tunknown\n\
              inflated_bytes_per_record\t-\n\
              records_estimate\t-\n\
-             available_parallelism\t{}\n",
-            reported_parallelism_line()
+             available_parallelism\t{}\n\
+             physical_cores\t{}\n",
+            reported_parallelism_line(),
+            physical_cores_line()
         )
     );
     assert!(!out.exists(), "--resolved_config wrote the output file");
 }
 
 /// Every knob the command line leaves alone prints its built-in value, and the
-/// committed bgzipped, indexed input prints its shape with the thread count
-/// `auto` resolves from it: the corpus's records inflate to 55 bytes on
-/// average, under the inflation threshold, so `auto` is the `0` rule, the
-/// host's parallelism capped at `DECOMPRESSION_THREADS_AUTO_CAP`. The one block
-/// holds every data line whole, so the bytes per record are the data lines'
-/// mean exactly; the record estimate is the data line count plus the
-/// end-of-file block's share of the file.
+/// committed bgzipped, indexed input prints its shape with the thread counts
+/// the defaults resolve from it: the corpus's records inflate to 55 bytes on
+/// average, under the inflation threshold, so the absent `--decompression_threads`
+/// (`auto` on an aarch64 host, `0` elsewhere) is the `0` rule, the host's
+/// parallelism capped at `DECOMPRESSION_THREADS_AUTO_CAP`, and the absent
+/// `--fork` is the host's rule. The one block holds every data line whole, so
+/// the bytes per record are the data lines' mean exactly; the record estimate
+/// is the data line count plus the end-of-file block's share of the file.
 #[test]
 fn resolved_config_prints_the_defaults_and_an_indexed_input_shape() {
     let tmp = tempfile::tempdir().unwrap();
@@ -133,9 +157,17 @@ fn resolved_config_prints_the_defaults_and_an_indexed_input_shape() {
         &corpus.dir.join("variants.vcf.gz"),
         &corpus.cache_dir(),
         &out,
-        &["--decompression_threads", "auto"],
+        &[],
     );
     assert!(success, "{stderr}");
+    assert_eq!(
+        DecompressionThreads::default(),
+        if cfg!(target_arch = "aarch64") {
+            DecompressionThreads::Auto
+        } else {
+            DecompressionThreads::HostCapped
+        }
+    );
     let lines: Vec<(&str, &str)> = stdout
         .lines()
         .map(|l| {
@@ -153,26 +185,38 @@ fn resolved_config_prints_the_defaults_and_an_indexed_input_shape() {
             "fork",
             "buffer_size",
             "decompression_threads",
+            "compression_threads",
+            "parse_threads",
             "pipeline_mode",
             "pipeline_depth",
             "render_task_records",
             "writer_strategy",
             "output_buffer_size",
+            "reader_core",
+            "prewarm_ahead",
             "input_shape",
             "inflated_bytes_per_record",
             "records_estimate",
             "available_parallelism",
+            "physical_cores",
         ]
     );
     let value = |name: &str| lines.iter().find(|(n, _)| *n == name).unwrap().1;
     assert_eq!(value("fork"), fork);
     assert_eq!(value("buffer_size"), "5000");
     assert_eq!(value("decompression_threads"), threads);
+    assert_eq!(
+        value("compression_threads"),
+        cpus.min(COMPRESSION_THREADS_AUTO_CAP).to_string()
+    );
+    assert_eq!(value("parse_threads"), "0");
     assert_eq!(value("pipeline_mode"), "streaming");
     assert_eq!(value("pipeline_depth"), "2");
     assert_eq!(value("render_task_records"), "0");
     assert_eq!(value("writer_strategy"), "buffered");
     assert_eq!(value("output_buffer_size"), "4194304");
+    assert_eq!(value("reader_core"), "auto");
+    assert_eq!(value("prewarm_ahead"), "1");
     assert_eq!(value("input_shape"), "indexed");
     let data_lines: Vec<String> = std::fs::read_to_string(corpus.dir.join("variants.vcf"))
         .unwrap()
@@ -190,6 +234,7 @@ fn resolved_config_prints_the_defaults_and_an_indexed_input_shape() {
         "{records} records estimated against {count}"
     );
     assert_eq!(value("available_parallelism"), reported_parallelism_line());
+    assert_eq!(value("physical_cores"), physical_cores_line());
     assert!(!out.exists());
 }
 

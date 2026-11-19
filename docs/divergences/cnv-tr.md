@@ -1,6 +1,6 @@
 # A representation difference, not a defect: `<CNV:TR>`
 
-**In one sentence.** A `<CNV:TR>` record describes a change in the copy number of a tandem repeat without spelling the alternate allele out, and there are two equally faithful ways to read it. Each engine gives the same reading on the same input; the class pairs the readings of two runs that read the record differently.
+**In one sentence.** A `<CNV:TR>` record describes a change in the copy number of a tandem repeat without spelling the alternate allele out, and there are two equally faithful ways to read it. With a FASTA both engines annotate the record as an ordinary insertion or deletion of bases; without one both keep the allele symbolic and annotate the run's span as a gain. Each engine gives the same reading on the same input; the class pairs the readings of two runs that read the record differently.
 
 **The two readings.** With a FASTA, both engines materialise the allele: they repeat the unit the stated number of times, read the run's reference bases from the FASTA and annotate the difference as an ordinary insertion or deletion of bases. Without a FASTA, both keep the allele symbolic, as a copy-number change of the run, and annotate the run's span as a gain whatever the stated count. Both give the symbolic reading when the expanded allele would exceed `--max_sv_size`.
 
@@ -43,7 +43,7 @@ The terms involved are:
 - `coding_sequence_variant` (SO:0001580): "a sequence variant that changes the coding sequence".
 - `inframe_insertion` (SO:0001821): "an inframe non synonymous variant that inserts bases into in the coding sequence".
 
-Both engines follow Ensembl's rule for a span allele (a deletion, duplication, insertion or repeat): `feature_elongation` and `feature_truncation` are written only when the span touches the transcript's exonic sequence. The rule is in `ensembl-variation`, `Utils/VariationEffect.pm` lines 337-348 and 350-373, the `within_cdna` tests at lines 344 and 362. So a run inside an intron gets the region term alone, and a run inside an exon gets the region term plus the direction term. A breakend's `feature_truncation` is a different test, the breakpoint falling anywhere inside the transcript, intron included (lines 357-358; [class 11](defect-e.md#11-breakend-mate-rows-read-from-the-other-chromosomes-coordinate)).
+Both engines follow Ensembl's rule for a span allele (a deletion, duplication, insertion or repeat): `feature_elongation` and `feature_truncation` are written only when the span touches the transcript's exonic sequence or lies in an intron of at most 13 bases, read as cDNA (lines 687-691). The rule is in `ensembl-variation`, `Utils/VariationEffect.pm` lines 337-348 and 350-373, the `within_cdna` tests at lines 344 and 362. So a run inside a longer intron gets the region term alone, and a run inside an exon gets the region term plus the direction term. A breakend's `feature_truncation` is a different test, the breakpoint falling anywhere inside the transcript, intron included (lines 357-358; [class 11](defect-e.md#11-breakend-mate-rows-read-from-the-other-chromosomes-coordinate)).
 
 ### 12.2 The record
 

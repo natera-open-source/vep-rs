@@ -833,6 +833,32 @@ fn lookup_ref_keeps_a_hom_ref_copys_written_reference_as_an_alternate_row() {
         LOOKUP_REF_HOM_REF_COPY_ROWS.lines().collect::<Vec<_>>()
     );
 
+    // Under `--spdi` the rewritten strings `T/C` and `T/A` list the reference
+    // once, so each written allele's row carries its notation and no reference
+    // row carries one (OutputFactory.pm:1396-1400): the 116.2 rows with
+    // `;SPDI=21:14375817:T:<allele>` closing each `ALLELE_NUM=1` row.
+    let text = run_lookup(
+        "spdi.txt",
+        &[
+            "--process_ref_homs",
+            "--allele_number",
+            "--show_ref_allele",
+            "--uploaded_allele",
+            "--spdi",
+        ],
+    );
+    let with_spdi: Vec<String> = LOOKUP_REF_HOM_REF_COPY_ROWS
+        .lines()
+        .map(|row| {
+            if extra_value(row, "ALLELE_NUM") == Some("1") {
+                format!("{row};SPDI=21:14375817:T:{}", column(row, 2))
+            } else {
+                row.to_string()
+            }
+        })
+        .collect();
+    assert_eq!(body(&text), with_spdi);
+
     let text = run_lookup("out.vcf", &["--process_ref_homs", "--vcf"]);
     let lines = body(&text);
     assert_eq!(lines.len(), 2, "{text}");
@@ -1240,6 +1266,75 @@ fn individual_zyg_reads_a_minimal_trimmed_same_length_record_as_reference_homozy
     }
     assert!(!rows.iter().any(|l| column(l, 2) == "T"));
     assert_eq!(rows.len(), 8);
+}
+
+/// The other direction of the comparison above, a deletion whose chopped
+/// alternate the second trim leaves as the reference: the anchor chop gives
+/// `ATT/AT` as `TT/T` and `ATTGG/ATG` as `TTGG/TG` (Parser/VCF.pm:295-336),
+/// Parser.pm:860-881 pass an indel to `minimise_alleles` whatever the flags, and
+/// `trim_sequences` (a shared prefix, then a shared suffix) leaves `T/-` and
+/// `TG/-`. Ensembl VEP 116.2 takes the minimised `T` or `TG` as `$ref`
+/// (Parser/VCF.pm:691-692) and maps a `1/1` sample's bits to the chopped
+/// alternate, the same string (`:716`), so `grep {$_ ne $ref && $_ !~ /\*/}`
+/// (`:720`) keeps nothing, the sample is marked reference-homozygous
+/// (`:723-729`) and, alone named, prints the reference allele's row with
+/// `ZYG=S1:HOMREF`, `ALLELE_NUM=0` (OutputFactory.pm:506-507, :985). vep-rs
+/// compares chopped with chopped, so the sample is a homozygous carrier and
+/// `zygosity_record` writes the deletion's row, Allele `-`, `ZYG=S1:HOM`,
+/// `ALLELE_NUM=1`, with or without `--minimal`, while a `0/0` sample of the same
+/// record is reference-homozygous (`docs/divergences/individual-trimmable-indel.md`).
+#[test]
+fn individual_zyg_reads_a_homozygous_alternate_sample_of_a_retrimmed_deletion_as_a_carrier() {
+    let dir = tempfile::tempdir().unwrap();
+    let records = "\
+##fileformat=VCFv4.2
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2
+21\t34716420\tdoubled\tATT\tAT\t.\t.\t.\tGT\t1/1\t0/0
+21\t34716420\tsuffix\tATTGG\tATG\t.\t.\t.\tGT\t1/1\t0/0
+";
+    let input = write_input(dir.path(), "in.vcf", records);
+    for minimal in [false, true] {
+        let mut flags = vec!["--individual_zyg", "S1", "--allele_number"];
+        if minimal {
+            flags.push("--minimal");
+        }
+        let (text, stderr, ok) = run(dir.path(), &input, &flags);
+        assert!(ok, "{stderr}");
+        let rows = body(&text);
+        for (id, location) in [
+            ("doubled", "21:34716422"),
+            ("suffix", "21:34716422-34716423"),
+        ] {
+            let record: Vec<&str> = rows
+                .iter()
+                .copied()
+                .filter(|l| column(l, 0) == id)
+                .collect();
+            assert_eq!(record.len(), 4, "{id}: one deletion row per transcript");
+            for row in record {
+                assert_eq!(column(row, 1), location, "{row}");
+                assert_eq!(column(row, 2), "-", "{row}");
+                assert_eq!(extra_value(row, "ZYG"), Some("S1:HOM"), "{row}");
+                assert_eq!(extra_value(row, "ALLELE_NUM"), Some("1"), "{row}");
+                let minimised = if minimal { Some("1") } else { None };
+                assert_eq!(extra_value(row, "MINIMISED"), minimised, "{row}");
+            }
+        }
+        assert_eq!(rows.len(), 8);
+    }
+    let (text, stderr, ok) = run(
+        dir.path(),
+        &input,
+        &["--individual_zyg", "S2", "--allele_number"],
+    );
+    assert!(ok, "{stderr}");
+    let rows = body(&text);
+    assert_eq!(rows.len(), 8);
+    for row in rows {
+        assert_ne!(column(row, 2), "-", "{row}");
+        assert_eq!(extra_value(row, "ZYG"), Some("S2:HOMREF"), "{row}");
+        assert_eq!(extra_value(row, "ALLELE_NUM"), Some("0"), "{row}");
+    }
 }
 
 /// `affects_cds` asks an overlap's alternate alleles alone
@@ -1731,24 +1826,14 @@ fn sample_names_follow_ensembl_ios_header_reading() {
     assert!(body(&text).is_empty());
 }
 
-fn duckdb_available() -> bool {
-    std::process::Command::new("duckdb")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
 /// The Parquet output of a per-individual run carries `IND` and `ZYG` on every
-/// row and keeps two copies of one record apart, so the adapter's tab rows equal
-/// the `--tab` rows of the same run (compared as a multiset: Parquet is sorted by
-/// variant key). Skipped where the duckdb CLI is not installed.
+/// row and keeps two copies of one record apart, so its rows read back through
+/// the cell contract equal the `--tab` rows of the same run (compared as a
+/// multiset: the file's row order is its sort order).
+#[cfg(feature = "parquet")]
 #[test]
 fn parquet_rows_of_a_per_individual_run_equal_the_tab_rows() {
-    if !duckdb_available() {
-        eprintln!("skipping: duckdb CLI not installed");
-        return;
-    }
+    use vep_io::output::parquet::{canonical_tab_text, column_type, tab_rows};
     let dir = tempfile::tempdir().unwrap();
     let input = write_input(dir.path(), "in.vcf", &format!("{HEADER}{RECORDS}"));
     let flags = [
@@ -1785,35 +1870,31 @@ fn parquet_rows_of_a_per_individual_run_equal_the_tab_rows() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let adapter =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/adapters/parquet_to_vep_tab.py");
-    let back = std::process::Command::new("python3")
-        .arg(&adapter)
-        .arg(&parquet_dir)
-        .output()
-        .unwrap();
-    assert!(
-        back.status.success(),
-        "{}",
-        String::from_utf8_lossy(&back.stderr)
-    );
-    let round_trip = String::from_utf8(back.stdout).unwrap();
-    let mut expected: Vec<&str> = tab.lines().filter(|l| !l.starts_with("##")).collect();
-    let mut actual: Vec<&str> = round_trip
+    let columns: Vec<&str> = tab
         .lines()
-        .filter(|l| !l.starts_with("##"))
+        .find(|l| l.starts_with('#') && !l.starts_with("##"))
+        .unwrap()
+        .trim_start_matches('#')
+        .split('\t')
         .collect();
+    let mut expected: Vec<String> = tab
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .map(|line| {
+            line.split('\t')
+                .zip(&columns)
+                .map(|(cell, column)| canonical_tab_text(column_type(column), cell))
+                .collect::<Vec<_>>()
+                .join("\t")
+        })
+        .collect();
+    let mut actual = tab_rows(&parquet_dir).unwrap();
     expected.sort_unstable();
     actual.sort_unstable();
     assert_eq!(expected, actual);
-    let header = expected
-        .iter()
-        .find(|l| l.starts_with('#'))
-        .expect("a header line");
-    assert!(header.contains("\tIND\t") && header.contains("\tZYG\t"));
+    assert!(columns.contains(&"IND") && columns.contains(&"ZYG"));
     let copies = expected
         .iter()
-        .filter(|l| !l.starts_with('#'))
         .filter(|l| l.contains("\tS1\t") || l.contains("\tS2\t"))
         .count();
     assert!(copies >= 2, "{expected:?}");

@@ -8,7 +8,7 @@
 //! chromosome inside a `--buffer_size` batch, where Ensembl VEP 116.2 resets
 //! its input buffer.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 mod common;
@@ -26,9 +26,10 @@ type Shape<'a> = (
     Option<&'a str>,
 );
 
-/// The rows of a default-format run on `input` against the GRCh38-freqfilter
-/// corpus's cache with `extra` flags.
-fn rows(dir: &Path, input: &Path, extra: &[&str]) -> Vec<Row> {
+/// A default-format run on `input` against the GRCh38-freqfilter corpus's
+/// cache with `stats`, the run's statistics flag, and `extra` flags; returns
+/// its output file, `out.txt` in `dir`.
+fn run(dir: &Path, input: &Path, stats: &str, extra: &[&str]) -> PathBuf {
     let corpus = common::corpora()
         .into_iter()
         .find(|corpus| corpus.name == "GRCh38-freqfilter")
@@ -45,7 +46,7 @@ fn rows(dir: &Path, input: &Path, extra: &[&str]) -> Vec<Row> {
             "--assembly",
             &corpus.assembly,
             "--force_overwrite",
-            "--no_stats",
+            stats,
             "--quiet",
         ])
         .args(extra)
@@ -57,6 +58,13 @@ fn rows(dir: &Path, input: &Path, extra: &[&str]) -> Vec<Row> {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+    out
+}
+
+/// The rows of a default-format run on `input` against the GRCh38-freqfilter
+/// corpus's cache with `extra` flags.
+fn rows(dir: &Path, input: &Path, extra: &[&str]) -> Vec<Row> {
+    let out = run(dir, input, "--no_stats", extra);
     std::fs::read_to_string(&out)
         .unwrap()
         .lines()
@@ -212,5 +220,138 @@ fn a_drops_reset_reaches_the_batch_counted_from_the_first_line() {
         &one_batch,
         "21_42029386_GTG/G/GAG",
         &[(reset_a, 34), (deleted_tg, 34)],
+    );
+}
+
+/// The `Variants filtered out` value and the data row count of a `--stats_text`
+/// run on one VCF record with `extra` flags.
+fn filtered_out(dir: &Path, record: &str, extra: &[&str]) -> (String, usize) {
+    let input = dir.join("one.vcf");
+    std::fs::write(
+        &input,
+        format!("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n{record}\n"),
+    )
+    .unwrap();
+    let out = run(dir, &input, "--stats_text", extra);
+    let rows = std::fs::read_to_string(&out)
+        .unwrap()
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .count();
+    let summary = std::fs::read_to_string(dir.join("out.txt_summary.txt")).unwrap();
+    let filtered = summary
+        .lines()
+        .find_map(|line| line.strip_prefix("Variants filtered out\t"))
+        .unwrap_or_else(|| panic!("no Variants filtered out row: {summary}"))
+        .to_string();
+    (filtered, rows)
+}
+
+/// Ensembl VEP 116.2 counts every VariationFeature `frequency_check_buffer` leaves
+/// out of its buffer (BaseCacheVariation.pm:362, `$filtered_count` is the buffer's
+/// features less the ones passed, :373 `increment_filtered_variants`), which the
+/// report prints as `Variants filtered out` (Stats.pm:723). Under
+/// `--minimal` a multi-allelic record whose alleles trim is one feature per
+/// alternate allele (InputBuffer.pm:638-718), a `*` or an allele equal to the
+/// reference once trimmed among them, and such a feature, which writes no row,
+/// matches no known allele, so `include` leaves it out (:322) and counts it. On
+/// the release-116 GRCh38 cache under `--check_frequency --freq_pop AF
+/// --freq_freq 0.0001 --freq_gt_lt gt`: `21 31148973 . GG *,TG` prints `1` under
+/// `include` (the `GG/*` feature; the `G/T` feature, AF 0.1396, stays and writes
+/// 16 rows) and `1` under `exclude` (the `G/T` feature passes and goes, the
+/// `GG/*` feature stays with no row); `GG TG,*` prints `1` under either;
+/// `GG G,*,GG`, whose `*` and `GG` features write no row, prints `2` under
+/// `include` (the `G/-` feature, AF 0.6705, stays) and `1` under `exclude` (it
+/// goes); `GG *,GG`, whose two features are the `*` and `GG` features of
+/// `GG G,*,GG` (the same chop, Parser/VCF.pm:306-320, and the same trim), prints
+/// `2` under `include` and `0` under `exclude`, with no row under either.
+/// `--process_ref_homs` adds a reference row per feature and changes no count.
+/// Without `--minimal` the record is one feature and prints `1` with no row
+/// under `include`.
+#[test]
+fn a_dropped_feature_no_row_stands_for_is_a_filtered_variant() {
+    let dir = tempfile::tempdir().unwrap();
+    let flags = |filter: &'static str, more: &[&'static str]| -> Vec<&'static str> {
+        let mut flags = vec![
+            "--minimal",
+            "--check_frequency",
+            "--freq_pop",
+            "AF",
+            "--freq_freq",
+            "0.0001",
+            "--freq_gt_lt",
+            "gt",
+            "--freq_filter",
+            filter,
+        ];
+        flags.extend_from_slice(more);
+        flags
+    };
+    let star_first = "21\t31148973\t.\tGG\t*,TG\t.\t.\t.";
+    let star_last = "21\t31148973\t.\tGG\tTG,*\t.\t.\t.";
+    let two_rowless = "21\t31148973\t.\tGG\tG,*,GG\t.\t.\t.";
+    let all_rowless = "21\t31148973\t.\tGG\t*,GG\t.\t.\t.";
+
+    let include = flags("include", &[]);
+    assert_eq!(
+        filtered_out(dir.path(), star_first, &include),
+        ("1".to_string(), 16)
+    );
+    assert_eq!(
+        filtered_out(dir.path(), star_last, &include),
+        ("1".to_string(), 16)
+    );
+    assert_eq!(
+        filtered_out(dir.path(), two_rowless, &include),
+        ("2".to_string(), 16)
+    );
+    assert_eq!(
+        filtered_out(dir.path(), all_rowless, &include),
+        ("2".to_string(), 0)
+    );
+    let with_reference_rows = flags("include", &["--process_ref_homs"]);
+    assert_eq!(
+        filtered_out(dir.path(), star_first, &with_reference_rows),
+        ("1".to_string(), 32)
+    );
+    assert_eq!(
+        filtered_out(dir.path(), star_last, &with_reference_rows),
+        ("1".to_string(), 32)
+    );
+    assert_eq!(
+        filtered_out(dir.path(), two_rowless, &with_reference_rows),
+        ("2".to_string(), 32)
+    );
+    assert_eq!(
+        filtered_out(dir.path(), all_rowless, &with_reference_rows),
+        ("2".to_string(), 0)
+    );
+
+    let exclude = flags("exclude", &[]);
+    assert_eq!(
+        filtered_out(dir.path(), star_first, &exclude),
+        ("1".to_string(), 0)
+    );
+    assert_eq!(
+        filtered_out(dir.path(), star_last, &exclude),
+        ("1".to_string(), 0)
+    );
+    assert_eq!(
+        filtered_out(dir.path(), two_rowless, &exclude),
+        ("1".to_string(), 0)
+    );
+    assert_eq!(
+        filtered_out(dir.path(), all_rowless, &exclude),
+        ("0".to_string(), 0)
+    );
+
+    let without_minimal: Vec<&str> = include
+        .iter()
+        .copied()
+        .filter(|flag| *flag != "--minimal")
+        .collect();
+    assert_eq!(
+        filtered_out(dir.path(), star_first, &without_minimal),
+        ("1".to_string(), 0)
     );
 }

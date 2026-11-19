@@ -1,0 +1,63 @@
+{
+  "chr": "21",
+  "original_chr": "chr21",
+  "input_chr": "chrM",
+  "start": 10000,
+  "end": 9999,
+  "strand": "Forward",
+  "ref_allele": [
+    45
+  ],
+  "alt_alleles": [
+    [
+      84,
+      84
+    ]
+  ],
+  "allele_string": "-/TT",
+  "allele_index": 1,
+  "allele_num": 2,
+  "id": "rs1",
+  "variant_class": "Insertion",
+  "transcript_consequences": [],
+  "intergenic_overlap": false,
+  "most_severe_consequence": null,
+  "colocated_variants": [],
+  "hgvsg": "chr21:g.9999_10000insTT",
+  "minimised": true,
+  "original_allele_string": "A/ATT",
+  "original_start": 9999,
+  "original_end": 10000,
+  "rejoin_key_prefix": "-/TT",
+  "raw_input": "chr21\t9999\trs1\tA\tATT,AG",
+  "existing_variation": [
+    "rs1"
+  ],
+  "overlapping_svs": [
+    "esv1"
+  ],
+  "plugin_data": {
+    "CADD_PHRED": "1.5"
+  },
+  "sv_end": 10000,
+  "sv_type": "INS",
+  "sv_len": 2,
+  "is_structural": false,
+  "mate_id": "bnd_1",
+  "mate_chr": "22",
+  "mate_pos": 500,
+  "is_single_breakend": false,
+  "vep_skip": false,
+  "oversize_sv": false,
+  "no_allele": false,
+  "input_record": 0,
+  "uploaded_allele_string": "A/ATT/AG",
+  "record_allele_string_multi": "-/TT/G",
+  "written_case_allele_string": "-/tt",
+  "input_line_name": "chr21_9999_A/ATT/AG",
+  "record_so_term": "insertion",
+  "intergenic_pick": false,
+  "check_ref_failed": false,
+  "hom_ref": false,
+  "reference_allele_row": false
+}

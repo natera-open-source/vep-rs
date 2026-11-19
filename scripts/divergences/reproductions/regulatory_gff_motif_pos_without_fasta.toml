@@ -1,0 +1,31 @@
+entry = "regulatory_gff_motif_pos_without_fasta"
+page = "docs/divergences/regulatory-gff-motif-rows.md#2-motif_pos-omitted-from-a-motif-row-without-a-fasta"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --regulatory_gff option contract, which requires no FASTA: in offline mode --fasta is required for --hgvs and --check_ref (Ensembl VEP documentation, \"Running Ensembl VEP\", --fasta) and the documented --regulatory_gff commands name none (\"Annotation sources\", \"Regulatory annotation from GFF files\"); not seen in the measured datasets"
+notes = "The record of regulatory_gff_motif_row_order run without a FASTA: Ensembl VEP's stand-in slice for the chromosome has no strand, so each motif's start is taken from the slice's end and MOTIF_POS falls outside the matrix and is dropped; vep-rs computes it from the two coordinates. The first mechanism of the entry; the four Use of uninitialized value warnings are not compared."
+
+[input]
+format = "vcf"
+text = """
+21	5014060	motif_9_and_10	G	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-regulatory-gff/json_cache"
+
+[run]
+flags = ["--regulatory_gff", "file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz"]
+
+[compare]
+kind = "field"
+field = "MOTIF_POS"
+with_key = true
+where = { record = "motif_9_and_10", feature_type = "MotifFeature" }
+
+[expected]
+ensembl_vep = ["ENSM00000574660=-", "ENSM00000574661=-"]
+vep_rs = ["ENSM00000574660=3", "ENSM00000574661=13"]

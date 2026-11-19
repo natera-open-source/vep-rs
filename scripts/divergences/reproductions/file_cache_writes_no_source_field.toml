@@ -1,0 +1,33 @@
+entry = "file_cache_writes_no_source_field"
+page = "docs/divergences/file-cache-writes-no-source-field.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 1,082 of 77,675 cache transcripts · 2 flag sets, 3 corpora"
+notes = "The committed GRCh38-gtf-builder corpus: Ensembl VEP reads chr21_genes.gtf.gz through --gtf, a custom source (Config.pm:531-543) whose short name is the file's base name (File.pm:154-158), stamped on every transcript (BaseGXF.pm:635) and printed as SOURCE (OutputFactory.pm:1583; Constants.pm:101 lists the column) beside the source's own empty column and header lines (OutputFactory.pm:2435-2453); vep-rs reads the cache built from the GTF, which names no source, and prints none, as Ensembl VEP prints none from its own cache. The field is on every transcript row of the corpus's two runs."
+
+[input]
+format = "vcf"
+text = """
+21	42395417	1995820	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-gtf-builder/json_cache"
+gxf = "{corpus}/chr21_genes.gtf.gz"
+gxf_kind = "gtf"
+fasta = "tests/golden/116/GRCh38-gtf-builder/reference.fa.gz"
+
+[run]
+flags = ["--symbol", "--biotype", "--canonical", "--mane", "--tsl", "--protein", "--protein_version", "--gene_version", "--transcript_version"]
+
+[compare]
+kind = "field"
+field = "SOURCE"
+where = { record = "1995820", feature = "ENST00000398397.4" }
+
+[expected]
+ensembl_vep = ["chr21_genes.gtf.gz"]
+vep_rs = ["-"]

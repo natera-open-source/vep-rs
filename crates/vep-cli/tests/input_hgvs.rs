@@ -817,7 +817,7 @@ fn a_contig_the_fasta_lacks_gives_no_hgvsc_for_a_substitution_or_deletion() {
         ),
         (
             "stop_ins1_lost_rev ENST00000416044",
-            "ENSP00000398619.1:p.Ter103delinsSerTer",
+            "ENSP00000398619.1:p.Ter103SerextTer9",
         ),
         (
             "stop_del1_kept_rev ENST00000360542",
@@ -825,7 +825,7 @@ fn a_contig_the_fasta_lacks_gives_no_hgvsc_for_a_substitution_or_deletion() {
         ),
         (
             "stop_del2_lost_rev ENST00000334160",
-            "ENSP00000346536.3:p.Ter66%3D",
+            "ENSP00000346536.3:p.Ter66AlaextTer?",
         ),
     ];
     let expected = |coding: [&str; 4]| -> BTreeMap<String, (String, String)> {

@@ -1,0 +1,175 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --refseq [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens_refseq/116_GRCh38",
+ "fasta": "GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 40 chromosome 21 records of gnomAD v4.1 genomes and the 1000 Genomes high-coverage call set, chromosome 21, sites only, each an exemplar of a consequence-set combination or of a stratum of the family key REFSEQ_MATCH=,BAM_EDIT=,REFSEQ_OFFSET,GIVEN_REF/USED_REF in Ensembl VEP's output over the candidate records (the RefSeq models' columns, with --hgvs for REFSEQ_OFFSET); records inside the genomic bases an RNA edit deletes from a model and records whose alternate allele is the base an RNA edit substitutes (Ensembl VEP spells their HGVSc as a change of a base to itself) are left out; the records lie in 1 Mb cache regions no two of which hold distinct aligned-transcript models under one stable id, since Ensembl VEP de-duplicates a buffer's models by stable id (AnnotationType/Transcript.pm:313-343 at release/116.2) and would otherwise drop one of them from the --all_refseq run",
+ "sha256": {
+  "default.txt": "b192342719f9b3a1f6b9efb75b4cda56af0d7b84de43e3bdef1d6e2b9acfd29c",
+  "tab.txt": "3c831c87ae0d9975f6f9510f3aec071a3496f49e23a1a7282b5e70a7c0cc620e",
+  "vcf.vcf": "dd6a4374922fb289a329df16db6ca9c3c4ea3bb90668a17c93d1598cc3941a1e",
+  "json.jsonl": "e7720244cc052a1c6132a1777933b979ba2d68872d0227b34de1a234bb776c00",
+  "default.summary.log": "693e630b6fe70a86d9b77a718c49e506db3d1a981c9062dd6fa54645af06619d",
+  "tab.summary.log": "db4baec8bc2a841727b7fb4aeaeb01f45453f05ab1436a85fe958ba330f151f5",
+  "vcf.summary.log": "6035de1d991c2ce89b87cf443a621fa654b2feed00bf5f312b5e6ceab1d737b8",
+  "json.summary.log": "570ba7202b7487f774966e6c989e57ae384df85349cc1d419ac45fa47b069cb8"
+ },
+ "variants_vcf_sha256": "72c996c74d97eb84d22c8119d8f4f8ae83d1bb9c5015e6d77b955ac17f008488",
+ "flag_sets": {
+  "all-refseq": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --refseq --all_refseq [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens_refseq/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "60f2fed6ae0bdf0dea51f3811f9862d01d4b420f02a930a3ca30b47ea4c274ae",
+    "tab.txt": "1a8968e7b011251746b3b1f60a14a6c7b7ff0f7b422799b6f79b2119547d9e86",
+    "vcf.vcf": "d013b10434a3fde9edbdd7eeb30ec4dd948459d5cbc3c017fa8413177df93829",
+    "json.jsonl": "53011f65a34a214fc0dc252af175148f7f0fceb3ce4517b2973202507f7ae70f",
+    "default.summary.log": "fa107db53503775697ae7fb8f3d437cc060e50c372145d91091b9f188f7f0f29",
+    "tab.summary.log": "ea3549a08ccad526f5949678f511d24c9e4084263b07d3e8ca8f35500849df28",
+    "vcf.summary.log": "749bfe5d88e69f85bb528a6ccbe9ad99f8282f7bb55e84306cba7fe5db5e59d6",
+    "json.summary.log": "3fdf648ec938195eccf34518e530ac9aaa329123c341706d0ecad907b727e497"
+   },
+   "flags": [
+    "--refseq",
+    "--all_refseq"
+   ],
+   "expected_dir": "expected_all-refseq"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --refseq --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens_refseq/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "2bf8778aa9f8f1b909df75cb4ccdd5e2026d8f2fcac987eac2dc3a05671bee7b",
+    "tab.txt": "0dc1000f468d5c83cb385a26ac24f00b3542ce4e427db05c6eeaa6cc034735cf",
+    "vcf.vcf": "8069bd2aa6d5c844f4a49656efd3d1606dba5dfbb5058747214928d559f1b0b1",
+    "json.jsonl": "8addbd647f171363b8c1149dbc710f3c796f3f9c2a94d462df33c6abb3953c44",
+    "default.summary.log": "2306df5daf0f588127079f00b10976313e32cdcf1aed38faabc063df61cbd68e",
+    "tab.summary.log": "c90be3e1c23a5fc574f23a5a4b8673a330a72c711e73e0130f92ac1403d2ce90",
+    "vcf.summary.log": "0d75dfc89e0460e6af18e9f296e765d5a4febb8fc78848e0ed836a24ad6ab3f0",
+    "json.summary.log": "275c5ba06439d896c97a8fd2aa6a0e43c05e0007f703df9466a6a9636e2019d2"
+   },
+   "flags": [
+    "--refseq",
+    "--hgvs"
+   ],
+   "expected_dir": "expected_hgvs"
+  },
+  "exclude-predicted": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --refseq --exclude_predicted [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens_refseq/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "b7ce48857d317e62e49637481a54c38a3e68f91f2746284bc795a220d62e688f",
+    "tab.txt": "c6a560509cac50d715b53e2195c39bc490b1d15b29482ae926b0b62836960604",
+    "vcf.vcf": "53f1733b0f5e372cbc898d675359fa3d69e30e8485b26077c158b28460bb2887",
+    "json.jsonl": "c38484a9364ba18b284fba063ef5fb7de65286c4c2af94afadc48ee6e03ab577",
+    "default.summary.log": "9cda276e3c16f56e7e14c4ab5886d04523dbe0c146789336cd07a5803d657c0b",
+    "tab.summary.log": "47eb13852011a1a5008370d0c9cae6393b0061a78e2f459df7a4d5b3113df783",
+    "vcf.summary.log": "e0b105b40ff93de75ade417acaf1953f71485762e4f255f72987c28a252a041a",
+    "json.summary.log": "bf6e3b65891ccef20f39dab1fe93bb696a51df1ef4c4e3fcbe0e9fc46d2f9a6e"
+   },
+   "flags": [
+    "--refseq",
+    "--exclude_predicted"
+   ],
+   "expected_dir": "expected_exclude-predicted"
+  },
+  "given-ref": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --refseq --use_given_ref [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens_refseq/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "a3c120fb1114813b68b91129ff77e004eb10b1e1257cc655085e4adc30b72008",
+    "tab.txt": "5521c563f9a471d832ee43848b52beca26bc8f8383f4b04889e1842d32e63137",
+    "vcf.vcf": "4dad9fe16d194527f46595abbd44a5e145872d49d759cc0a58f745525f9dc300",
+    "json.jsonl": "27c3ed9b8522f0f979028f33ae25a64759f685bd4741be4e7793edb26920517f",
+    "default.summary.log": "d2e671a544a8a7e622373cf61aab7321c479785090357a45fc480b0acfac4ebb",
+    "tab.summary.log": "cbefa44bd10ca9c6fc76f52542ac9cce29b8cb35ae3bc6e9830f2aa2ef06dad8",
+    "vcf.summary.log": "c17ecec91d99c3537a5e67918c2d3140d6237a3558d80492b0fcfcf7d0b8b432",
+    "json.summary.log": "0d0e07de09b41000e331a23a440560d48bec2aa31bcdb1055fbb3cb853aecdd0"
+   },
+   "flags": [
+    "--refseq",
+    "--use_given_ref"
+   ],
+   "expected_dir": "expected_given-ref"
+  },
+  "gene-symbol-id": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --refseq --transcript_filter _gene_symbol_id [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens_refseq/116_GRCh38",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "5ecaf631ab77628e391de78e28fb312bd893d8fef9fcc88065eb620c1e547dca",
+    "tab.txt": "7067df0c3e692ea5391319831e7c7eb664f97b77491f0ef62d2adbb148c58289",
+    "vcf.vcf": "36babff7deeb9b9ce86bb357a0acdb28df465e8d9d7b632a53186d4969a081f2",
+    "json.jsonl": "ec5cc67921ca4785267ecab8129d948dfcffdd777763d41f2bf81875270663c9",
+    "default.summary.log": "c80edccd64d2f7922c6d10fa35a3b266b20b215554e90591e83eef9fed480d1c",
+    "tab.summary.log": "761b434877a70de7b296e49f2d2b28316b82d30dd6db73f3230aaa893ab51a36",
+    "vcf.summary.log": "43cf1a84b494079c81520623da895b818cc05ecf31e96fa0d3e3c12484402515",
+    "json.summary.log": "b0ec7f5e37ae89713d30a49c4c7bd24444811b357402c8212a23f72f5faa251b"
+   },
+   "flags": [
+    "--refseq",
+    "--transcript_filter",
+    "_gene_symbol_id"
+   ],
+   "expected_dir": "expected_gene-symbol-id"
+  }
+ },
+ "source_cache": {
+  "tarball": "homo_sapiens_refseq_vep_116_GRCh38.tar.gz under pub/release-116/variation/indexed_vep_cache/ of the Ensembl FTP site",
+  "source_type": "refseq",
+  "bam": "GCF_000001405.40_GRCh38.p14_knownrefseq_alns.bam",
+  "refseq_annotation": "GCF_000001405.40-RS_2025_08 - GCF_000001405.40_GRCh38.p14_genomic.gff",
+  "converter": {
+   "script": "scripts/data/storable_to_json.pl",
+   "repository": "github.com/natera-open-source/vep-rs",
+   "image": "ensemblorg/ensembl-vep:release_116.2",
+   "image_digest": "sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+  },
+  "chromosome_21_models": {
+   "bam_edit_status": {
+    "absent": 5748,
+    "ok": 108
+   }
+  },
+  "rseq_attributes": "none: no model of the release 116 RefSeq or merged cache carries an rseq_* attribute, so REFSEQ_MATCH is empty on every row of both engines"
+ },
+ "pruned_cache": {
+  "layout": "cache_root/homo_sapiens_refseq/116_GRCh38",
+  "transcripts": 229,
+  "shards": 14,
+  "method": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --flank 5000 over the converted chromosome 21 of the source cache; info.json is the converted cache's own (source_type, bam and the source versions)"
+ },
+ "generator": "Ensembl VEP 116.2 over the candidate records under --refseq --hgvs; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite <id>=<reference>=<candidates> (two datasets) --k 1 --seed 1 --multi-allelic-per-suite 1 --max-span 1000000 --cache <converted cache> --flank 5000 --family-columns REFSEQ_MATCH=,BAM_EDIT=,REFSEQ_OFFSET,GIVEN_REF/USED_REF --covers ... --matrix tests/parity/matrix.tsv --flag=--refseq --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py (see pruned_cache); the FASTA masked as scripts/fixtures/cut_plugin_regions.py masks a reference; scripts/golden/build_golden_corpus.py flag-set (one per set: all-refseq (--refseq --all_refseq); hgvs (--refseq --hgvs); exclude-predicted (--refseq --exclude_predicted); given-ref (--refseq --use_given_ref); gene-symbol-id (--refseq --transcript_filter _gene_symbol_id)); scripts/concordance/generate_reference_output.sh --corpus (the manifest's run and --flag-set <name> for each set); scripts/golden/build_golden_corpus.py classify (the manifest's run and each set)"
+}

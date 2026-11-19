@@ -1,0 +1,27 @@
+entry = "id_input_cache_resolution"
+page = "docs/divergences/id-input.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the variant identifier input format (Ensembl VEP documentation, \"Data formats\", Variant identifiers); not seen in the measured datasets"
+notes = "The first mechanism of the entry: an identifier list given to both engines offline. Ensembl VEP refuses the format offline (`Cannot use ID format in offline mode`) and writes no row; vep-rs resolves the name from the cache's variation files. The VCF line of a COSMIC or HGMD identifier needs Ensembl VEP's database and is not run here."
+
+[input]
+format = "id"
+text = """
+rs267606642
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-input-id/json_cache"
+
+[compare]
+kind = "rows"
+where = { record = "rs267606642", feature = "ENST00000291582" }
+
+[expected]
+ensembl_vep_exit = 2
+ensembl_vep = []
+vep_rs = ["21:44286663 | G | ENST00000291582 | missense_variant"]

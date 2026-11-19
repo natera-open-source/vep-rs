@@ -1,0 +1,43 @@
+entry = "promoter_window_non_numeric_bound"
+page = "docs/divergences/defect-n.md#27-a-promoter-whose-extended_start-is-not-a-number-is-widened-to-position-0"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "malformed"
+input_class_basis = "the extended_start and extended_end attributes give a promoter's wider region, which is never smaller than the core region (Ensembl VEP documentation, \"Running Ensembl VEP\", --extended_promoters): the promoter's extended_start is text that is not a whole number, which is no boundary of a region"
+notes = "The promoter ENSR21_B34QG spans 21:5553169-5553746 with extended_start=5553154 in the corpus file; the copy writes the attribute as x, so Ensembl VEP's promoter starts at 0 and reaches every record before it."
+# The corpus regulatory file with one promoter's extended_start written x.
+prepare = [
+  "zcat \"$CORPUS/gff/regulatory_features.gff3.gz\" | sed 's/ID=ENSR21_B34QG;extended_start=5553154;/ID=ENSR21_B34QG;extended_start=x;/' | bgzip -c > \"$STAGE/regulatory_features_x.gff3.gz\"",
+  "tabix -p gff \"$STAGE/regulatory_features_x.gff3.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	5553153	promoter_before_extension	G	T	.	.	.
+21	5553154	promoter_extended_start	A	C	.	.	.
+21	5553168	promoter_core_minus_one	C	G	.	.	.
+21	5553169	promoter_core_start	T	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-regulatory-gff/json_cache"
+
+[run]
+flags = ["--regulatory_gff", "file={stage}/regulatory_features_x.gff3.gz", "--extended_promoters"]
+
+[compare]
+kind = "rows"
+where = { feature = "ENSR21_B34QG" }
+columns = ["Uploaded_variation", "Location", "Feature", "Consequence", "BIOTYPE"]
+
+[expected]
+ensembl_vep = [
+  "promoter_before_extension | 21:5553153 | ENSR21_B34QG | regulatory_region_variant | promoter",
+  "promoter_extended_start | 21:5553154 | ENSR21_B34QG | regulatory_region_variant | promoter",
+  "promoter_core_minus_one | 21:5553168 | ENSR21_B34QG | regulatory_region_variant | promoter",
+  "promoter_core_start | 21:5553169 | ENSR21_B34QG | regulatory_region_variant | promoter",
+]
+vep_rs = ["promoter_core_start | 21:5553169 | ENSR21_B34QG | regulatory_region_variant | promoter"]

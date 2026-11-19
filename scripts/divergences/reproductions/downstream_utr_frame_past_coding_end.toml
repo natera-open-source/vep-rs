@@ -1,0 +1,32 @@
+entry = "downstream_utr_frame_past_coding_end"
+page = "docs/divergences/downstream-utr-frame-past-coding-end.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 59,328 per million · 6 flag sets, 97 corpora"
+notes = "The ClinVar record of the page's first example, on GRCh37. On the reverse-strand ENST00000259008 it deletes coding bases 3747 to 3750, the third base of codon 1249 and the stop codon, and leaves 3,746 coding bases. Ensembl VEP's plugin takes its downstream translation from offset 3747 - (3747 % 3) = 3747, one past that end (Downstream.pm:113-115): substr returns nothing, the 3' UTR is read from its first base, a stop codon, and DownstreamProtein is empty. vep-rs reads the two bases left of codon 1249 with the UTR, in frame, and writes three residues. Both engines write p.Lys1249AsnfsTer4 and ProteinLengthChange=2, three residues and a stop. The cache slice and the masked reference are the corpus's; Ensembl VEP reads its own GRCh37 cache, which must hold chromosome 17, and its plugin loads offline only with a FASTA."
+
+[input]
+format = "vcf"
+text = """
+17	59760656	530351	ATTAC	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37-plugin-downstream-coding-end/json_cache"
+fasta = "tests/golden/116/GRCh37-plugin-downstream-coding-end/reference.fa.gz"
+
+[run]
+flags = ["--hgvs", "--plugin", "Downstream"]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = "530351", feature = "ENST00000259008" }
+columns = ["Feature", "Consequence", "CDS_position", "HGVSp", "ProteinLengthChange", "DownstreamProtein"]
+
+[expected]
+ensembl_vep = ["ENST00000259008 | frameshift_variant,stop_lost | 3747-3750 | ENSP00000259008.2:p.Lys1249AsnfsTer4 | 2 |"]
+vep_rs = ["ENST00000259008 | frameshift_variant,stop_lost | 3747-3750 | ENSP00000259008.2:p.Lys1249AsnfsTer4 | 2 | NNT"]

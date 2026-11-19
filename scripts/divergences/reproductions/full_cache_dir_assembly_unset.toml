@@ -1,0 +1,37 @@
+entry = "full_cache_dir_assembly_unset"
+page = "docs/output/json.md#the-record-object"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the option list of Bio::EnsEMBL::VEP::Config, which accepts --full_cache_dir, and the --assembly contract, \"If not specified and you have only 1 assembly version installed, this will be chosen by default\" (Ensembl VEP documentation, \"Running Ensembl VEP\", --assembly); not seen in the measured datasets"
+notes = "Neither engine receives --assembly. Ensembl VEP takes the cache through --full_cache_dir, which skips the directory scan that would set its assembly parameter; vep-rs reads the assembly from the cache's info.json."
+# A hard-link copy of the Ensembl VEP cache under the stage, so --full_cache_dir can name it through {stage}.
+prepare = [
+  'mkdir -p "$STAGE/perl-cache/homo_sapiens" && cp -al "$PERL_CACHE" "$STAGE/perl-cache/homo_sapiens/116_GRCh38"',
+]
+
+[input]
+format = "vcf"
+text = """
+21	43774760	4725737	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-pick-summary/json_cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+assembly_flag = false
+ensembl_vep_flags = ["--full_cache_dir", "{stage}/perl-cache/homo_sapiens/116_GRCh38"]
+format = "json"
+
+[compare]
+kind = "json"
+path = "assembly_name"
+where = { id = "4725737" }
+
+[expected]
+ensembl_vep = ["null"]
+vep_rs = ["GRCh38"]

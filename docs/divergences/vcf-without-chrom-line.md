@@ -1,6 +1,6 @@
 # A VCF input without its `#CHROM` line
 
-A difference in the header of the VCF output, not in any row, on an input shape no measured dataset has: a VCF whose header carries meta lines but not the mandatory `#CHROM` column line; nothing is set aside.
+A difference in the header of the VCF output, not in any row, on an input shape no measured dataset has: a VCF whose header carries meta lines but not the mandatory `#CHROM` column line; nothing is set aside. Ensembl VEP prints the input's last meta line where the column line belongs, and its output has no column line. vep-rs writes the eight-column line there and keeps every meta line in the meta block.
 
 Ensembl VEP's VCF output copies the input's `#` lines into its header and takes the last of them as the column line (`OutputFactory/VCF.pm` line 224), which it prints after the `##VEP-command-line` line. A header without a `#CHROM` line hands its last meta line to that place. For an input whose header is `##fileformat=VCFv4.2` then `##source=probe`, the output's header is:
 

@@ -4,7 +4,16 @@
 
 ## What a run checks
 
-A run reads the manifest once as it resolves the cache and first checks that every listed file is present. It then hashes each cache file it reads whole as it reads it and compares the digest with the entry. Those files are the transcript shards, `info.json`, `chr_synonyms.txt`, each variation index (`.csi` or `.tbi`), each region file (`<start>-<end>_var.gz`), and the `.fai` and `.gzi` of a FASTA found in the cache directory. A file whose digest differs from its entry, and a file the manifest does not list, end the run with exit 1 and one line:
+A run reads the manifest once as it resolves the cache and first checks that every listed file is present. It then hashes each cache file it reads whole as it reads it and compares the digest with the entry. Those files are:
+
+- the transcript shards
+- `info.json`
+- `chr_synonyms.txt`
+- each variation index (`.csi` or `.tbi`)
+- each region file (`<start>-<end>_var.gz`)
+- the `.fai` and `.gzi` of a FASTA found in the cache directory
+
+A file whose digest differs from its entry, and a file the manifest does not list, end the run with exit 1 and one line:
 
 ```
 ERROR: [cache] checksum mismatch for transcripts/21/1-1000000.json.gz in cache
@@ -32,3 +41,8 @@ find -L . -type f ! -name CHECKSUMS.sha256 | sort | xargs sha256sum \
 ```
 
 A FASTA copied into a cache directory that carries a manifest is refused until the manifest lists its files; the command above lists them. A `--fasta` or `--synonyms` file is the user's own, wherever it sits, and is never checked.
+
+## Where next
+
+- [Cache setup](cache-setup.md): the cache directory the manifest covers, and how to build or convert it.
+- [Cache conversion](cache-conversion.md): what a converted Ensembl VEP cache carries.

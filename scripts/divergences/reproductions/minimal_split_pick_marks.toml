@@ -1,0 +1,30 @@
+entry = "minimal_split_pick_marks"
+page = "docs/divergences/minimal-split-hgvsp.md#pick-marks-under-the-flagging-variants"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 156.8 per million · 0 flag sets, 28 corpora"
+notes = "The first mechanism of the entry, --flag_pick: the two insertions trim to the distinct strings T and A, so --minimal splits the record into two features, and Ensembl VEP's first pass marks one row of each before the output pass marks the rejoined record once more; vep-rs marks one row of the record."
+
+[input]
+format = "vcf"
+text = """
+21	43100486	min_gt_ag	G	GT,AG	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-pick-summary/json_cache"
+
+[run]
+flags = ["--minimal", "--allele_number", "--flag_pick"]
+
+[compare]
+kind = "rows"
+where = { record = "min_gt_ag", pattern = "PICK=1" }
+columns = ["Allele", "Feature", "ALLELE_NUM", "PICK"]
+
+[expected]
+ensembl_vep = ["A | ENST00000291552 | 2 | 1", "T | ENST00000291552 | 1 | 1"]
+vep_rs = ["A | ENST00000291552 | 2 | 1"]

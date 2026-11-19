@@ -1,0 +1,30 @@
+entry = "nearest_exon_jb_len_key_collision"
+page = "docs/divergences/nearest-exon-jb-len-key-collision.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "malformed"
+input_class_basis = "max_range is a maximum search range in bp (the NearestExonJB plugin's header, \"max_range : maximum search range in bp (default: 10000)\"): the run passes max_range=len, a word that is not a number of bases"
+notes = "The deletion lies 23 bases into ENSE00001282176 (272 bases) of ENST00000336648; both engines write ENSE00001282176|23|start|272 under the default range. Ensembl VEP's plugin keeps every exon's length under the hash key `len` and tests the range value as a key, so `max_range=len` reports the exon with the word as its distance and the length in the junction place; vep-rs reads the word as 0 and reports no exon."
+
+[input]
+format = "vcf"
+text = """
+21	36896882	1069237	TG	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-computed/json_cache"
+
+[run]
+flags = ["--plugin", "NearestExonJB,max_range=len"]
+
+[compare]
+kind = "field"
+field = "NearestExonJB"
+where = { record = "1069237", feature = "ENST00000336648" }
+
+[expected]
+ensembl_vep = ["ENSE00001282176|len|272|272"]
+vep_rs = ["-"]

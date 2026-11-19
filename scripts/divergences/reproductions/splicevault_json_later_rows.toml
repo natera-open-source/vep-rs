@@ -1,0 +1,31 @@
+entry = "splicevault_json_later_rows"
+page = "docs/plugins/annotation-store-divergences.md#4-splicevault-the-json-object-of-a-records-later-transcript-rows"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 999,950 per million · 2 flag sets, 109 corpora"
+notes = "Ensembl VEP writes the object on the record's first transcript entry, ENST00000299443, alone and warns `Plugin 'SpliceVault' went wrong: Not an ARRAY reference`; in the default format both engines write the seven fields on every row."
+
+[input]
+format = "vcf"
+text = """
+21	13618457	donor_fwd_two_transcripts	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-splicevault-fixture/json_cache"
+
+[run]
+flags = ["--plugin", "SpliceVault,file={corpus}/data/SpliceVault_data_GRCh38_synthetic.tsv.gz,transcript_match=0"]
+format = "json"
+
+[compare]
+kind = "json"
+path = "transcript_consequences[transcript_id=ENST00000620442].splicevault"
+where = { id = "donor_fwd_two_transcripts" }
+
+[expected]
+ensembl_vep = []
+vep_rs = ['{"SpliceVault_SpliceAI_delta":0.51,"SpliceVault_out_of_frame_events":"Frameshift:0/2","SpliceVault_site_max_depth":191,"SpliceVault_site_pos":"chr21:13618451","SpliceVault_site_sample_count":44461,"SpliceVault_site_type":"Acceptor_loss","SpliceVault_top_events":{"Top1":{"frame":"inFrame","percent_of_supporting_samples":"0.493%","site_type":"CA","transcript_impact":449},"Top2":{"frame":"inFrame","percent_of_supporting_samples":"30%","site_type":"CD","transcript_impact":44}}}']

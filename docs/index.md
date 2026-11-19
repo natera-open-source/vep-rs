@@ -1,12 +1,20 @@
 # vep-rs
 
-A Rust reimplementation of the Ensembl Variant Effect Predictor (VEP): the same inputs, flags and output formats, two orders of magnitude faster.
+vep-rs is a drop-in replacement for Ensembl VEP in Rust, with the same flags and output formats: it runs up to 411 times faster than Ensembl VEP and matches Ensembl VEP exactly except for [the documented divergences](intended-divergences.md).
 
-This site describes vep-rs {{vep-rs-ref}}; the latest release is {{vep-rs-release}}.
+It does the work of Ensembl VEP, the Variant Effect Predictor: for each variant of a VCF file it writes the genes and transcripts affected and the consequence on each. [Install](#install) a binary, a container or the source.
 
-{{#include assets/benchmark.svg}}
+## Why vep-rs
 
-Wall time on ARM under the protocol the chart's title names; [Benchmarks](benchmarks/current-release.md) has the x86 figures and the method.
+<div class="home-reasons">
+
+- **Fast on whole genomes.** All of gnomAD v4.1, 759,336,320 variants, annotates in 624 s on one ARM machine.
+- **Scored against Ensembl VEP.** Release 116.2, on six whole-genome datasets.
+- **The same command line.** Ensembl VEP's input files, flag names and output layouts, plus typed Parquet.
+
+</div>
+
+## Install
 
 ```bash
 https://github.com/natera-open-source/vep-rs/releases   # Binary
@@ -14,25 +22,28 @@ docker pull ghcr.io/natera-open-source/vep-rs:latest    # Container
 cargo build --release                                   # Source
 ```
 
-The bundled corpus in `tests/golden/` runs with no download:
+[Installation](getting-started/installation.md) covers the CPU floor, the container tags, the Bioconda recipe and building for your own machine.
+
+## Try it
+
+The bundled example in `examples/` runs against the pruned cache in `tests/golden/` with no download:
 
 ```bash
 target/release/vep \
   --json_cache tests/golden/116/GRCh37/json_cache \
   --assembly GRCh37 \
-  -i tests/golden/116/GRCh37/variants.vcf -o output.txt
+  -i examples/homo_sapiens_GRCh37.vcf -o output.txt
 ```
 
-[Installation](getting-started/installation.md) covers the CPU floor, the container tags, the Bioconda recipe and building for your own machine. The [Quick start](getting-started/quick-start.md) continues with a transcript cache and your own VCF. [What vep-rs does not do](getting-started/what-vep-rs-does-not-do.md) lists the Ensembl VEP features vep-rs does not have, what a run does when asked for one, and which of them the next release, 0.6.0, adds.
+## Where next
 
-| [Getting started](getting-started/installation.md) | [Reference](cli-reference.md) |
-| --- | --- |
-| Install, run the bundled corpus, build a cache, and move over from Ensembl VEP. | Every flag, output format and plugin, one page per group. |
+- [Quick start](getting-started/quick-start.md): a transcript cache, your own data and plugins.
+- [Coming from Ensembl VEP](getting-started/coming-from-ensembl-vep.md): what stays the same and what changes.
+- [CLI reference](cli-reference.md): every flag, output format and plugin.
+- [Benchmarks](benchmarks/current-release.md): the release's speed and concordance tables.
+- [Intended divergences](intended-divergences.md): where the two engines differ, and why.
+- [What vep-rs does not do](getting-started/what-vep-rs-does-not-do.md): the Ensembl VEP features it lacks.
 
-| [Concordance with Ensembl VEP](intended-divergences.md) | [Benchmarks](benchmarks/current-release.md) |
-| --- | --- |
-| Where the two engines' outputs are known to differ, and why each difference is intended. | The current release's speed and concordance figures, measured under the paper's protocol. |
-
-<!-- readme-section: Why vep-rs | fragments: benchmarks/current-release.md -->
+This site describes vep-rs {{vep-rs-ref}}; the latest release is {{vep-rs-release}}.
 
 If you use vep-rs in published work, cite the paper and the software archive as described on the [Citing vep-rs](project/citing.md) page.

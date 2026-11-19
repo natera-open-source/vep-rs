@@ -410,6 +410,13 @@ pub const OWN_RULES: &[OwnRule] = &[
             state.scalar("output_format") == Some("parquet") && state.is_active("compress_output")
         },
     },
+    OwnRule {
+        component: "output",
+        message: "--parquet_partition applies to --output_format parquet",
+        applies: |state| {
+            state.scalar("output_format") != Some("parquet") && state.is_given("parquet_partition")
+        },
+    },
 ];
 
 /// A flag's value as the Perl configuration hash holds it: a scalar, or the

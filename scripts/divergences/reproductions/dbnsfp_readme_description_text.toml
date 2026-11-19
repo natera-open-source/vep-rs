@@ -1,0 +1,39 @@
+entry = "dbnsfp_readme_description_text"
+page = "docs/plugins.md#dbnsfp"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the dbNSFP plugin's header, which says column descriptions are read from the dbNSFP README file found in the data file's directory (dbNSFP.pm:113-115; :485-543 reads it) and states no layout for its lines; not seen in the measured datasets"
+notes = "Two of the mechanisms the entry names: a README line whose colon is not followed by a space, and a line whose text is `0`; the third, one trailing space kept at the end of a header line, is not compared here: the compare keeps the default strip, which removes trailing whitespace from each value. The README is written beside a copy of the corpus table."
+prepare = [
+  "cp \"$CORPUS/plugin_data/dbNSFP4.9a_grch38_synthetic.gz\" \"$CORPUS/plugin_data/dbNSFP4.9a_grch38_synthetic.gz.tbi\" \"$STAGE/\"",
+  "printf '1\\tSIFT_score: a made-up description of the first column.\\n2\\tPolyphen2_HDIV_score:a made-up description of the second column.\\n3\\tSIFT_pred: 0\\n' > \"$STAGE/dbNSFP4.9a_readme.txt\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	29067663	missense_rev_two_changes	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-dbnsfp/json_cache"
+
+[run]
+flags = ["--plugin", "dbNSFP,{stage}/dbNSFP4.9a_grch38_synthetic.gz,SIFT_score,Polyphen2_HDIV_score,SIFT_pred"]
+
+[compare]
+kind = "header"
+pattern = "^## (Polyphen2_HDIV_score|SIFT_pred) :"
+
+[expected]
+ensembl_vep = [
+  "## Polyphen2_HDIV_score : Polyphen2_HDIV_score from dbNSFP file",
+  "## SIFT_pred : SIFT_pred from dbNSFP file",
+]
+vep_rs = [
+  "## Polyphen2_HDIV_score : (from dbNSFP4.9a_grch38_synthetic) a made-up description of the second column.",
+  "## SIFT_pred : (from dbNSFP4.9a_grch38_synthetic) 0",
+]

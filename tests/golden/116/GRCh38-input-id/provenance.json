@@ -5,7 +5,7 @@
  "cache_version": 116,
  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
  "perl_cache": "homo_sapiens/116_GRCh38",
- "fasta": "none on either side",
+ "fasta": "none on the Ensembl VEP side; reference.fa.gz on the vep-rs side, given to every run of this corpus: GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa (scripts/golden/extract_reference.py --contig 21), every base outside 2,000 bases of a record masked to N, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; its bases are the ones the database-mode VCF outputs carry as the anchor base of each indel record; a regeneration of expected/ through the corpus generator gives Ensembl VEP the same file, and the outputs are unchanged because the VCF records carry their reference bases and the identifier runs read theirs from the database",
  "input": "16 identifiers of the release 116 GRCh38 variation cache on chromosome 21, each as a VCF record at its site (variants.vcf) and, record for record in the same order, as one identifier per line (variants.id.txt): substitutions (rs781261918, rs2123538435, rs267606642), multi-allelic substitutions (rs779189159 C/A/G, rs2838519 G/A/C, rs142566111 T/A/G), the insertion rs797045539 (-/T), the deletions rs886039732 (TTTGT/-) and rs398123645 (A/-), three features the cache stores un-minimised, which Ensembl VEP minimises before annotation (rs1601245742 TTTTT/TTTTTT, rs2057997486 GGG/GG, rs759281545 TGTGTGTG/TGTGTG), the multi-allelic indel rs1160505542 it leaves un-minimised, rs2838519 written again in upper case (RS2838519), and two variants whose feature has no alternate allele (rs1979841086 and rs782416306, allele string dbSNP_novariation), for which Ensembl VEP writes no default or tab row, a JSON object whose most_severe_consequence is ? and a VCF line; their VCF twins are substitutions at the same sites. The VCF records carry the reference base before each indel from the GRCh38 primary assembly.",
  "sha256": {
   "default.txt": "e96ff1097c1294d4d883f7c42e13444f25b97d1ac1b97df4b17f9e6e7adf0d17",
@@ -25,12 +25,13 @@
     "port": 3306,
     "db_version": 116
    },
-   "fasta": "none on either side",
+   "fasta": "none on the Ensembl VEP side (to_VCF_record reads the base before an indel from the database's slice); reference.fa.gz on the vep-rs side, which reads the same base from it",
    "input": "variants.id.txt",
    "expected_dir": "expected_id",
    "formats_compared": [
     "default",
     "tab",
+    "vcf",
     "json"
    ],
    "sha256": {
@@ -53,12 +54,13 @@
     "port": 3306,
     "db_version": 116
    },
-   "fasta": "none on either side",
+   "fasta": "none on the Ensembl VEP side (to_VCF_record reads the base before an indel from the database's slice); reference.fa.gz on the vep-rs side, which reads the same base from it",
    "input": "variants.id.txt",
    "expected_dir": "expected_id",
    "formats_compared": [
     "default",
     "tab",
+    "vcf",
     "json"
    ],
    "sha256": {

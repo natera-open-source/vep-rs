@@ -1,0 +1,31 @@
+entry = "regulatory_other_chromosome_mate_row"
+page = "docs/divergences/regulatory-rows.md#5-a-breakend-whose-mate-on-another-chromosome-selects-a-feature-of-its-own-chromosome"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF breakend notation, a bracket breakend whose mate is on another chromosome (VCF 4.2 specification, section 5.4 \"Specifying complex rearrangements with breakends\"); not seen in the measured datasets"
+notes = "A breakend at 21:5038000 whose mate is 1:5040100, with a deletion at 21:5040500-5040600 in the same buffer. The number of the mate's position falls in ENSR21_9422C (21:5039957-5040269), a feature of chromosome 21 the deletion brings into the buffer's span; Ensembl VEP's regulatory lookup names no chromosome, so it lists the breakend for the feature and writes the own allele's intergenic_variant row."
+
+[input]
+format = "vcf"
+text = """
+21	5037999	bnd_x_mate_number	N	N[1:5040100[	.	.	SVTYPE=BND
+21	5040499	anchor_del	N	<DEL>	.	.	END=5040600;SVTYPE=DEL
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-regulatory/json_cache"
+
+[run]
+flags = ["--regulatory"]
+
+[compare]
+kind = "rows"
+where = { record = "bnd_x_mate_number", feature_type = "RegulatoryFeature" }
+columns = ["Location", "Allele", "Feature", "Consequence"]
+
+[expected]
+ensembl_vep = ["21:5038000 | N. | ENSR21_9422C | intergenic_variant"]
+vep_rs = []

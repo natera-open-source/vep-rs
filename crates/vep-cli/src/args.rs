@@ -139,6 +139,11 @@ pub struct Args {
     #[arg(help_heading = "Input", long = "process_ref_homs")]
     pub process_ref_homs: bool,
 
+    /// Skip the Parquet writer's check that the input is sorted by chromosome and position (each
+    /// chromosome's records together, positions as written never decreasing): the rows are then
+    /// written in input order, no row group declares a sort, and the run warns once. Every text
+    /// format annotates an input in any order and ignores the flag; Ensembl VEP aborts after 100
+    /// records more than 100 bp behind their predecessor, whatever the output format
     #[arg(help_heading = "Input", long = "no_check_variants_order")]
     pub no_check_variants_order: bool,
 
@@ -162,8 +167,8 @@ pub struct Args {
     pub lookup_ref: bool,
 
     /// Output file path ("STDOUT" in any case is standard output, as is "-" unless
-    /// --compress_output writes a file, or Parquet a directory, of that name); the last of
-    /// several wins
+    /// --compress_output writes a file of that name or --output_format parquet a directory); the
+    /// last of several wins
     #[arg(
         help_heading = "Output",
         short = 'o',
@@ -173,8 +178,9 @@ pub struct Args {
     )]
     pub output_file: Vec<String>,
 
-    /// Output format, matched in any case; `ensembl` is another name for the default `vep` format. `parquet` is vep-rs's own: it writes a TSV intermediate and post-processes it
-    /// to Parquet through a `duckdb` CLI subprocess; the `duckdb` binary must be on PATH
+    /// Output format, matched in any case; `ensembl` is another name for the default `vep` format. `parquet` is vep-rs's own: a directory of Parquet parts holding typed rows, one row per
+    /// (allele, feature) pair in the `--tab` row order, with the `--tab` columns typed; a part
+    /// closes at 512 MiB and at every chromosome boundary, and `_vep_rs_manifest.json` lists the parts
     #[arg(
         help_heading = "Output",
         long = "output_format",
@@ -184,40 +190,16 @@ pub struct Args {
     )]
     pub output_format: String,
 
-    /// Parquet row shape (only effective when --output_format=parquet).
-    ///   nested (default): one row per variant, CSQ subfields are LIST<T>.
-    ///   flat: one row per (variant × transcript-consequence) tuple, CSQ
-    ///   subfields are scalar.
+    /// Lay the Parquet output out as one `chrom=<name>/` directory per chromosome, as the input
+    /// spells it, each holding that chromosome's parts; `chrom` stays a column of every part.
+    /// Takes `chrom` alone and applies to --output_format parquet alone
     #[arg(
         help_heading = "Output",
-        long = "parquet_shape",
-        default_value = "nested",
-        value_parser = ["nested", "flat"]
+        long = "parquet_partition",
+        value_name = "COLUMN",
+        value_parser = ["chrom"]
     )]
-    pub parquet_shape: String,
-
-    /// Keep the Parquet intermediate TSV after DuckDB finalize succeeds.
-    /// Debug aid: normally the intermediate is deleted once the Parquet
-    /// directory is written.
-    #[arg(
-        help_heading = "Output",
-        long = "keep_intermediate",
-        default_value_t = false,
-        hide = true
-    )]
-    pub keep_intermediate: bool,
-
-    /// Rows per Parquet row group (only effective when --output_format=parquet).
-    /// Rounded up to a multiple of 2,048, DuckDB's vector size, which is also
-    /// the dictionary size limit. Test aid for producing several row groups
-    /// from a small input.
-    #[arg(
-        help_heading = "Output",
-        long = "parquet_row_group_size",
-        default_value_t = 122_880,
-        hide = true
-    )]
-    pub parquet_row_group_size: u64,
+    pub parquet_partition: Option<String>,
 
     /// Shorthand for --output_format vcf; also switches on --symbol, --biotype and --numbers
     #[arg(help_heading = "Output", long)]
@@ -235,7 +217,10 @@ pub struct Args {
     #[arg(help_heading = "Output", long = "compress_output", value_parser = ["gzip", "bgzip"])]
     pub compress_output: Option<String>,
 
-    /// Overwrite output file if it already exists
+    /// Overwrite the output file, the statistics report and the skipped-variants file when
+    /// they exist; without it each existing file is refused before the run. A Parquet output
+    /// directory is replaced once the run has succeeded when it holds only the parts and
+    /// manifest vep-rs wrote, and refused when it holds anything else
     #[arg(
         help_heading = "Output",
         long = "force_overwrite",
@@ -264,7 +249,8 @@ pub struct Args {
     /// input, then one line per record with its line number, the record's first 40
     /// characters and the reason. An existing file is refused before the run without
     /// --force_overwrite, where Ensembl VEP checks when the run ends; both engines write
-    /// the file as the run ends
+    /// the file as the run ends. The statistics report is checked first, then the output
+    /// file, then this file, and the three are created only once every check passes
     #[arg(
         help_heading = "Output",
         long = "skipped_variants_file",
@@ -357,7 +343,7 @@ pub struct Args {
     )]
     pub json_cache: Option<String>,
 
-    /// Print the cache's source versions as sorted key<TAB>value lines and exit
+    /// Print the cache's source versions as sorted key<TAB>value lines and exit; under --regulatory_gff a regulatory_gff line names the first of that flag's file, emars and motifs files
     #[arg(help_heading = "Cache / Offline", long = "show_cache_info")]
     pub show_cache_info: bool,
 
@@ -379,17 +365,18 @@ pub struct Args {
 
     /// Move each insertion or deletion to its most 3' position on the transcript, over
     /// a 1,000-base window of the reference, before its consequence terms, positions,
-    /// codons and amino acids are computed (1), or annotate it where the input placed it
-    /// (0); needs a FASTA and stops the run without one. The HGVS notations shift under
-    /// --shift_hgvs, not this flag. The shift runs along the genome only: a transcript
-    /// whose cached sequence is edited away from the genome is not shifted again along
-    /// its own sequence
+    /// codons and amino acids are computed (1, or any other integer but 0), or annotate
+    /// it where the input placed it (0); needs a FASTA and stops the run without one.
+    /// The HGVS notations shift under --shift_hgvs, not this flag. The shift runs along
+    /// the genome only: a transcript whose cached sequence is edited away from the
+    /// genome is not shifted again along its own sequence
     #[arg(
         help_heading = "Cache / Offline",
         long = "shift_3prime",
-        value_parser = ["0", "1"]
+        allow_hyphen_values = true,
+        value_parser = integer
     )]
-    pub shift_3prime: Option<String>,
+    pub shift_3prime: Option<i64>,
 
     /// Move each insertion or deletion to its most 3' position on the transcript before
     /// its HGVSc and HGVSp are built (1, the default), or describe it where the input
@@ -403,15 +390,16 @@ pub struct Args {
     pub shift_hgvs: Option<String>,
 
     /// Under --shift_3prime 1, print the shifted position in Location and the shifted
-    /// sequence in Allele on every row (1), intergenic rows moving towards higher
-    /// coordinates, or keep the input position (0); without --shift_3prime 1 nothing
-    /// moves
+    /// sequence in Allele on every row (1, or any other integer but 0), intergenic rows
+    /// moving towards higher coordinates, or keep the input position (0); without
+    /// --shift_3prime 1 nothing moves
     #[arg(
         help_heading = "Cache / Offline",
         long = "shift_genomic",
-        value_parser = ["0", "1"]
+        allow_hyphen_values = true,
+        value_parser = integer
     )]
-    pub shift_genomic: Option<String>,
+    pub shift_genomic: Option<i64>,
 
     /// Add the SHIFT_LENGTH column: under --shift_3prime 1, the bases each insertion
     /// or deletion moved along the transcript, 0 on every other transcript row of a
@@ -422,7 +410,7 @@ pub struct Args {
     #[arg(help_heading = "Cache / Offline", long)]
     pub sereal: bool,
 
-    /// Species: names the cache directory under --dir_cache; the Latin name only, with no alias such as human
+    /// Species: names the cache directory under --dir_cache; the Latin name only, with no alias such as human (mus_musculus, drosophila_melanogaster, arabidopsis_thaliana and saccharomyces_cerevisiae are the four genomes beside human compared with Ensembl VEP). The chromosome names of a run are the cache's own: an input name the cache does not hold is looked up through its synonyms file, then with a chr prefix added or removed, so a cache of any species is annotated under its own names
     #[arg(
         help_heading = "Species / Assembly",
         short = 's',
@@ -431,7 +419,7 @@ pub struct Args {
     )]
     pub species: String,
 
-    /// Genome assembly (e.g., GRCh38): chooses among several caches of one version and must equal the cache's own name exactly; hg19 and hg38 are read as GRCh37 and GRCh38
+    /// Genome assembly (e.g., GRCh38): chooses among several caches of one version and must equal the cache's own name exactly; hg19 and hg38 are read as GRCh37 and GRCh38. Any other name is the cache's as given, and every built-in plugin loaded under it warns, as it loads, that it runs without the GRCh37 or GRCh38 hint it would take from this flag
     #[arg(help_heading = "Species / Assembly", short = 'a', long)]
     pub assembly: Option<String>,
 
@@ -507,9 +495,13 @@ pub struct Args {
     /// Number of parallel annotation worker threads (Ensembl VEP forks processes; vep-rs runs threads and is parallel by default).
     /// Default 0 = auto: uses the number of available logical CPUs, capped at
     /// 32 (one reader thread feeds the workers, so extra workers wait at the
-    /// batch barrier). Set to 1 to force single-threaded annotation, or any
-    /// positive value to pin the worker count; user-supplied values are not
-    /// capped.
+    /// batch barrier). On a BGZF input with a .tbi or .csi index beside it
+    /// whose records inflate to at least 8,000 bytes, `auto` leaves the
+    /// decompression threads their CPUs: the workers are the available logical
+    /// CPUs less the decompression thread count, capped at 32 and never fewer
+    /// than half the capped CPU count. Set to 1 to force single-threaded
+    /// annotation, or any positive value to pin the worker count;
+    /// user-supplied values are not capped.
     #[arg(
         help_heading = "Runtime",
         long,
@@ -520,33 +512,95 @@ pub struct Args {
 
     /// Number of BGZF decompression worker threads for a BGZF-compressed input
     /// (a plain gzip input is decompressed on one thread).
-    /// Default 0: uses the number of available logical CPUs, capped at 10.
-    /// `auto` chooses the count from the input's inflated bytes per record: a
-    /// BGZF input with a .tbi or .csi index beside it whose records inflate to
-    /// at least 8,000 bytes gets 32 workers on an aarch64 host, capped at the
-    /// available logical CPUs; any other input, and every input on another
-    /// architecture, gets the 0 rule. `auto` is opt-in, never the default. A
-    /// positive value pins the worker count, e.g. `--decompression_threads=1`
-    /// for single-threaded; a value above the number of available logical CPUs
-    /// is lowered to that number.
+    /// `0`: the number of available logical CPUs, capped at 10. `auto` chooses
+    /// the count from the input's inflated bytes per record: a BGZF input with
+    /// a .tbi or .csi index beside it whose records inflate to at least 8,000
+    /// bytes gets 32 workers on an aarch64 host, capped at the available
+    /// logical CPUs; any other input, and every input on another architecture,
+    /// gets the 0 rule. Without the flag, an aarch64 host uses `auto` and any
+    /// other host `0`. A positive value pins the worker count, e.g.
+    /// `--decompression_threads=1` for single-threaded; a value above the
+    /// number of available logical CPUs is lowered to that number.
     #[arg(
         help_heading = "Runtime",
         long = "decompression_threads",
-        default_value = "0",
         value_parser = crate::config::decompression_threads_text
     )]
-    pub decompression_threads: String,
+    pub decompression_threads: Option<String>,
+
+    /// Number of BGZF deflate worker threads for `--compress_output bgzip`: the
+    /// output's blocks of at most 64 KiB are deflated on this many threads and
+    /// written in order by one more. Default 0: uses the number of available
+    /// logical CPUs, capped at 16. `1` deflates on the thread that writes the
+    /// output, with no worker thread; a value above the number of available
+    /// logical CPUs is lowered to that number. `--compress_output gzip` writes
+    /// its one member on the writing thread whatever this says. Every value
+    /// writes the same bytes
+    #[arg(
+        help_heading = "Runtime",
+        long = "compression_threads",
+        default_value_t = 0,
+        hide = true
+    )]
+    pub compression_threads: usize,
+
+    /// Threads of the pool the cache's transcript shards parse on when a
+    /// chromosome loads, the pool the run's other cache reads outside the
+    /// annotator pool share; at most 1024; 0 is the pool's built-in width, the
+    /// number of available logical CPUs. Every value writes the same bytes
+    #[arg(
+        help_heading = "Runtime",
+        long = "parse_threads",
+        default_value_t = 0,
+        hide = true,
+        value_parser = clap::value_parser!(u64).range(0..=1024)
+    )]
+    pub parse_threads: u64,
+
+    /// Chromosomes the prewarm helper loads ahead of the one the reader has
+    /// reached, in the order of the bgzipped input's index: a count (0 loads
+    /// the reached chromosome alone), or `all` to queue every indexed
+    /// chromosome the cache holds when the reader starts. A plain or unindexed
+    /// input has no order to read ahead in. Every value writes the same bytes
+    #[arg(
+        help_heading = "Runtime",
+        long = "prewarm_ahead",
+        default_value = "1",
+        hide = true,
+        value_parser = crate::config::prewarm_ahead_text
+    )]
+    pub prewarm_ahead: String,
+
+    /// Whether the reader thread, which scans the inflated input text, gets a
+    /// physical core no other thread of the run may use. `auto` reserves one on a
+    /// host whose cores run two or more hardware threads, with at least 8 such
+    /// cores all available to the run and more run threads than cores, once the
+    /// first 4,096 records have read as at least 8,000 inflated bytes each (a
+    /// shorter input runs unpinned); `none` never does; a logical CPU number pins
+    /// the reader there from its first record and reserves that CPU's core
+    /// whatever the records' width. The knob acts on a VCF input; a parsed format
+    /// (Ensembl, HGVS, region, SPDI, ID) is read unpinned. Every value writes the
+    /// same bytes
+    #[arg(
+        help_heading = "Runtime",
+        long = "reader_core",
+        default_value = "auto",
+        hide = true,
+        value_parser = crate::config::reader_core_text
+    )]
+    pub reader_core: String,
 
     /// How the batches move through the pipeline. `streaming` hands each batch to
     /// the worker pool as independent tasks that annotate and render their own
     /// records (and parse them, for a VCF input) and takes the next batch without
     /// waiting for them; the writer puts the rendered output back in input order.
-    /// `batched` parses, annotates and renders each batch on the pool as a whole
-    /// before the next one starts.
-    /// A run with plugins, or one reading known variants from the cache's variation
-    /// files or from the --check_svs file, uses `batched` whatever this says: plugins
-    /// see a whole batch at once, and each of those sources prefetches one batch's
-    /// regions at a time
+    /// `batched` annotates and renders each batch on the pool as a whole before the
+    /// next one starts, while a prefetch stage parses the next batch and reads ahead
+    /// what its sources can read before it is annotated.
+    /// A run with plugins or --custom sources, or one reading known variants from the
+    /// cache's variation files or from the --check_svs file, uses `batched` whatever this
+    /// says: plugins and custom sources see a whole batch at once, and each of those
+    /// sources answers one batch's regions at a time
     #[arg(
         help_heading = "Runtime",
         long = "pipeline_mode",
@@ -616,7 +670,8 @@ pub struct Args {
     /// --numbers, --domains, --regulatory, --canonical, --protein, --biotype, --af, --af_1kg,
     /// --af_gnomade, --af_gnomadg, --max_af, --pubmed, --uniprot, --mane, --tsl, --appris,
     /// --variant_class, --gene_phenotype and --mirna, each overriding an explicit value as in Ensembl VEP.
-    /// Includes cache-backed regulatory and motif rows; motif scores and cell-type activity are omitted
+    /// --regulatory in the set writes the regulatory and motif rows of a cache converted with its regulatory
+    /// features, every motif field included; CELL_TYPE is added by --cell_type beside the set
     #[arg(help_heading = "Output Control", short = 'e', long)]
     pub everything: bool,
 
@@ -642,8 +697,8 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long = "mane_select")]
     pub mane_select: bool,
 
-    /// Add the TSL column: the digit of the transcript's support level, empty for tslNA (the GRCh37
-    /// gene set carries no level)
+    /// Add the TSL column: the digits of the transcript's support level as its TSL attribute spells
+    /// them, empty for tslNA (the GRCh37 gene set carries no level)
     #[arg(help_heading = "Output Control", long)]
     pub tsl: bool,
 
@@ -694,9 +749,14 @@ pub struct Args {
     pub hgvsg: bool,
 
     /// Name the chromosome in HGVSg by its RefSeq accession: the first NC_ name among
-    /// the input name's own synonyms in the chromosome synonyms table (one hop: only a
-    /// line pairing the name as written with the accession renames it); an input name
-    /// with no NC_ synonym keeps its own name, where Ensembl VEP stops with an error
+    /// the input name's own synonyms in the chromosome synonyms table, or else among
+    /// the synonyms of the chromosome the name resolves to, the accession Ensembl VEP
+    /// prints with a database for a human chromosome; on an input name with no NC_
+    /// synonym of its own Ensembl VEP stops with an error offline. A scaffold or patch
+    /// with no NC_ synonym takes its RefSeq name of another prefix (NT_, NW_) the same
+    /// way, and a sequence the table gives no RefSeq name takes the cache's name for
+    /// it. An accession the table lists in more than one form is printed in its
+    /// latest: the highest version, a versioned form over one without a version
     #[arg(help_heading = "Output Control", long = "hgvsg_use_accession")]
     pub hgvsg_use_accession: bool,
 
@@ -713,7 +773,8 @@ pub struct Args {
     /// Add the GA4GH_VRS column: the allele's SPDI as a GA4GH Variation Representation
     /// Specification Allele object on the sequence refseq:<NC_ accession>, the accession
     /// being the first NC_ synonym of the cache's chromosome name in the chromosome
-    /// synonyms table (Ensembl VEP writes the object only where its SPDI is named by an
+    /// synonyms table, in its latest form where the table lists it in more than one
+    /// (Ensembl VEP writes the object only where its SPDI is named by an
     /// NC_ accession: with a database, or on a row overlapping no transcript whose FASTA
     /// record carries that name; a chromosome with no NC_ synonym gets none);
     /// JSON-encoded in the text outputs, nested in the JSON output. Cannot be combined
@@ -783,13 +844,38 @@ pub struct Args {
     #[arg(help_heading = "Output Control", long)]
     pub regulatory: bool,
 
+    /// Report the activity of each regulatory feature in the listed epigenomes, the CELL_TYPE field
+    /// (`<epigenome>:<activity>` per listed epigenome the feature has a record for; empty on a motif row);
+    /// switches on --regulatory. The list is read against the cache's epigenome names, which may contain
+    /// commas (`A549_(m,_58_y),BJ_(m)` names two); a name the cache lacks is an error listing the names
+    #[arg(
+        help_heading = "Output Control",
+        long = "cell_type",
+        value_name = "LIST"
+    )]
+    pub cell_type: Option<String>,
+
+    /// Use regulatory annotation from Ensembl regulatory GFF3 files, instead of data from a
+    /// cache; overrides the cache's regulatory data when both are present. A comma-separated
+    /// list of key=value pairs, in the same style as --custom, providing one or more of: file
+    /// (the regulatory-feature GFF3), motifs (a transcription factor binding motif GFF3) and
+    /// emars (an epigenetically modified accessible region GFF3); a bare file name is the
+    /// file. Each file is bgzip-compressed and tabix-indexed. Features from file and emars have
+    /// a Feature type of RegulatoryFeature with the feature's type under BIOTYPE; features from
+    /// motifs have a Feature type of MotifFeature. HIGH_INF_POS and MOTIF_SCORE_CHANGE require
+    /// the position weight matrix, which the GFF does not carry, and are omitted. --cell_type
+    /// is ignored, with a warning, as a GFF carries no epigenome activity data
     #[arg(
         help_heading = "Output Control",
         long = "regulatory_gff",
-        value_name = "FILE"
+        value_name = "KEY=FILE,..."
     )]
     pub regulatory_gff: Option<String>,
 
+    /// Use the extended boundaries of promoter features when annotating with --regulatory_gff:
+    /// the extended_start and extended_end attributes, which are never inside the core
+    /// region, so the flag only ever adds annotation. Affects promoter features only, and
+    /// changes nothing without --regulatory_gff
     #[arg(help_heading = "Output Control", long = "extended_promoters")]
     pub extended_promoters: bool,
 
@@ -882,7 +968,7 @@ pub struct Args {
     #[arg(help_heading = "Allele Frequencies", long = "af_gnomade")]
     pub af_gnomade: bool,
 
-    /// Add gnomAD exome allele frequencies under the older spelling of --af_gnomade; the two spellings cannot be combined, and this one alone fails on a cache without gnomAD exome data
+    /// Add gnomAD exome allele frequencies under the older spelling of --af_gnomade; the two spellings cannot be combined, and this one alone fails on a cache that declares variation columns without the gnomAD exome column; on a cache that declares no variation columns it is accepted, as Ensembl VEP accepts it: the gnomAD exome columns are declared and every cell is empty
     #[arg(help_heading = "Allele Frequencies", long = "af_gnomad")]
     pub af_gnomad: bool,
 
@@ -906,7 +992,7 @@ pub struct Args {
     #[arg(help_heading = "Allele Frequencies", long = "check_frequency")]
     pub check_frequency: bool,
 
-    /// The population --check_frequency reads: 1KG_ALL (the 1000 Genomes AF column of the cache), a frequency column of the cache in any case (AF, AFR, gnomADe_NFE; the gnomAD genome columns are refused, as Ensembl VEP refuses them), or 1KG_ followed by such a column
+    /// The population --check_frequency reads: 1KG_ALL (the 1000 Genomes AF column of the cache), a frequency column of the cache in any case (AF, AFR, gnomADe_NFE; the gnomAD genome columns are refused, as Ensembl VEP refuses them), or 1KG_ followed by such a column; on a cache that declares no variation columns every name is accepted, as Ensembl VEP checks the name only where the cache declares variation columns
     #[arg(
         help_heading = "Allele Frequencies",
         long = "freq_pop",
@@ -936,7 +1022,7 @@ pub struct Args {
     )]
     pub freq_gt_lt: String,
 
-    /// Whether --check_frequency drops the alleles that pass (exclude) or keeps a record only when every allele passes (include)
+    /// Whether --check_frequency drops the alleles that pass (exclude) or keeps a record only when every allele passes (include); on a cache that declares no variation columns the filter is inactive, as in Ensembl VEP: include and exclude both keep every record and FREQS is empty on every row
     #[arg(
         help_heading = "Allele Frequencies",
         long = "freq_filter",
@@ -993,7 +1079,8 @@ pub struct Args {
 
     /// The criteria the pick family compares, in order, as a comma-separated list; a
     /// shorter list compares its criteria and then keeps the first transcript in
-    /// stable-id order, and an empty value keeps it at once. Default: mane_select,mane_plus_clinical,canonical,appris,tsl,biotype,ccds,rank,length,ensembl,refseq
+    /// Ensembl VEP's row order (the stable id, then `_` and the database id), and an
+    /// empty value keeps it at once. Default: mane_select,mane_plus_clinical,canonical,appris,tsl,biotype,ccds,rank,length,ensembl,refseq
     #[arg(
         help_heading = "Filtering / Picking",
         long = "pick_order",
@@ -1010,13 +1097,18 @@ pub struct Args {
     /// `dbID`, `cdna_coding_start`, `cdna_coding_end`, `_gene_stable_id`,
     /// `_gene_version`, `_gene_symbol`, `_gene_symbol_source`, `_gene_hgnc_id`,
     /// `_ccds`, `_refseq`, `_protein`, `_swissprot`, `_trembl`, `_uniparc`,
-    /// `_uniprot_isoform`, `_gene_phenotype`; the object keys `translation`
+    /// `_uniprot_isoform`, `_gene_phenotype`, `_source_cache` (`Ensembl` or `RefSeq`
+    /// on a merged cache's transcripts, undefined elsewhere, so `_s` is a prefix of
+    /// two keys and names neither), `_gene_symbol_id` (the EntrezGene identifier a
+    /// RefSeq transcript's symbol is taken from, on a RefSeq or merged cache,
+    /// undefined elsewhere, so `_gene_symbol_` is a prefix of two keys),
+    /// `_bam_edit_status` (`ok` or `failed` on a model edited against the cache's
+    /// alignment file, undefined elsewhere); the object keys `translation`
     /// (coding transcripts), `slice`, `attributes`, `_gene`, `_trans_exon_array`,
     /// `_variation_effect_feature_cache` and `_vep_lazy_loaded`, which are defined
     /// and read meaningfully by `exists` and `nex` alone; and `description`,
     /// `coding_region_start` and `coding_region_end`, which the cache leaves
-    /// undefined.
-    /// `_source_cache` is absent, as it is from every cache but a merged one. The
+    /// undefined. The
     /// operators are `is` (`eq`, `=`), `ne` (`!=`), `>`, `<`, `>=`, `<=`, `exists`
     /// (`defined`, the default), `nex`, `match` (`matches`, `regex`, `re`), `nre`,
     /// `in` (a comma-separated list or a file with one value per line) and
@@ -1075,18 +1167,76 @@ pub struct Args {
     #[arg(help_heading = "Plugins", long)]
     pub plugin: Vec<String>,
 
-    /// Custom annotation source(s) (accepted for VEP compatibility; not implemented, sources are not loaded)
+    /// Custom annotation source, as Ensembl VEP reads it: file=<f>,format=<vcf|bed|bigwig|gff>,
+    /// short_name=<n>,type=<overlap|within|surrounding|exact>,coords=<0|1>,fields=<A%B>,
+    /// overlap_cutoff=<pct>,distance=<bp>,same_type=<0|1>,reciprocal=<0|1>,num_records=<N|all>,
+    /// summary_stats=<min%max%mean%count%sum>,gff_type=<transcript|gencode_promoter>, or the
+    /// positional <file>,<short_name>,<format>,<type>,<coords>,<field>,...; a file holding
+    /// ###CHR### stands for one source per chromosome whose file exists. The file is a local
+    /// path (a remote URL is refused), bgzipped and tabix-indexed unless a bigWig. A GFF or GTF
+    /// transcript model is refused with the two-step cache recipe. May be given more than once
     #[arg(help_heading = "Plugins", long)]
     pub custom: Vec<String>,
 
+    /// Shortcut for --custom <FILE>,,bigwig,exact: a bigWig whose value over exactly the variant's
+    /// span prints under the file's name
+    #[arg(help_heading = "Plugins", long, value_name = "FILE")]
+    pub bigwig: Option<String>,
+
+    /// Shortcut for the UCSC phyloP conservation scores of an N-way alignment, read from the local
+    /// mirror --ucsc_data_root names as <root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw
+    /// with --custom ...,phyloP<N>way,bigwig,exact, so the column is phyloP<N>way. Needs
+    /// --ucsc_assembly. May be given more than once
+    #[arg(help_heading = "Plugins", long = "phyloP", value_name = "N")]
+    pub phylo_p: Vec<String>,
+
+    /// Shortcut for the UCSC phastCons conservation scores of an N-way alignment, read from the
+    /// local mirror --ucsc_data_root names as
+    /// <root>/<assembly>/phastCons<N>way/<assembly>.phastCons<N>way.bw with
+    /// --custom ...,phastCons<N>way,bigwig,exact. Needs --ucsc_assembly. May be given more than once
+    #[arg(help_heading = "Plugins", long = "phastCons", value_name = "N")]
+    pub phast_cons: Vec<String>,
+
+    /// The UCSC assembly name --phyloP and --phastCons build their paths from: hg38 for GRCh38,
+    /// hg19 for GRCh37
+    #[arg(help_heading = "Plugins", long = "ucsc_assembly", value_name = "NAME")]
+    pub ucsc_assembly: Option<String>,
+
+    /// The directory --phyloP and --phastCons read their bigWigs from, laid out as UCSC's
+    /// goldenPath tree (<root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw). The default
+    /// is Ensembl VEP's remote root, which is refused: a local mirror must be named
+    #[arg(
+        help_heading = "Plugins",
+        long = "ucsc_data_root",
+        value_name = "DIR",
+        default_value = "http://hgdownload.cse.ucsc.edu/goldenpath/"
+    )]
+    pub ucsc_data_root: String,
+
+    /// Keep a comma-separated INFO value of a --custom VCF source whole on every allele of a
+    /// multi-allelic record; without it a value with one entry per alternate allele is split,
+    /// each allele taking its own entry
+    #[arg(help_heading = "Plugins", long = "custom_multi_allelic")]
+    pub custom_multi_allelic: bool,
+
+    /// Leave the FILTER column of a --custom VCF source out of its records unless the source's
+    /// fields name FILTER; without it every source with fields adds <short_name>_FILTER
     #[arg(help_heading = "Plugins", long = "custom_suppress_filter")]
     pub custom_suppress_filter: bool,
 
-    /// Directory the plugin libraries are looked up in; default <--dir>/Plugins. A
-    /// directory that does not exist is warned about when --plugin names a plugin
-    /// (an error under --safe). A value holding a glob pattern (`*`, `?`, `[...]`,
-    /// `{a,b}`) or a `~user` prefix is read as one literal path; Ensembl VEP expands
-    /// it with `glob`
+    #[arg(help_heading = "Plugins", long, value_name = "FILE")]
+    pub gff: Option<String>,
+
+    #[arg(help_heading = "Plugins", long, value_name = "FILE")]
+    pub gtf: Option<String>,
+
+    /// Directory the plugin libraries are looked up in; default <--dir>/Plugins. The
+    /// value is expanded as Ensembl VEP's `glob` expands it: `*`, `?`, `[...]` and
+    /// `{a,b}` match as in a shell, `~` and `~user` name a home directory, and a
+    /// backslash quotes the character after it. Every match that is a directory is
+    /// searched, the last match first; a match that is not a directory is warned
+    /// about when --plugin names a plugin (an error under --safe). Spaces are part
+    /// of the value, not separators
     #[arg(help_heading = "Plugins", long = "dir_plugins", value_name = "DIR")]
     pub dir_plugins: Option<String>,
 
@@ -1095,13 +1245,34 @@ pub struct Args {
     #[arg(help_heading = "Plugins", long)]
     pub safe: bool,
 
-    /// Reads the cache under the species directory suffixed _refseq (the transcripts annotated are that cache's contents), and resolves an HGVS gene name among the RefSeq transcripts before the Ensembl ones, as Ensembl VEP's --refseq orders its core groups; under --json_cache only that order applies
+    #[arg(help_heading = "Plugins", long)]
+    pub debug: bool,
+
+    /// Annotate against the RefSeq transcript set. The cache is read under the species
+    /// directory suffixed _refseq, or under --json_cache as named, and of its models only
+    /// the RefSeq accessions are kept (a stable id opening with two capitals, an underscore
+    /// and a digit: NM_, NR_, XM_, XR_ and the other prefixes; on MT, a mitochondrial gene
+    /// id) unless --all_refseq keeps every model. An HGVS gene name resolves among the
+    /// RefSeq transcripts before the Ensembl ones. The REFSEQ_MATCH and REFSEQ_OFFSET
+    /// columns are added, and a cache whose models were corrected against an alignment
+    /// file (BAM-edited) switches --use_transcript_ref on with an INFO: line
     #[arg(help_heading = "Transcript Sets", long)]
     pub refseq: bool,
 
-    /// Reads the cache under the species directory suffixed _merged (the transcripts annotated are that cache's contents); no effect under --json_cache
+    /// Annotate against the merged transcript set, Ensembl and RefSeq models together. The
+    /// cache is read under the species directory suffixed _merged, or under --json_cache as
+    /// named; every Ensembl model is kept, and of the RefSeq-sourced models (source_cache
+    /// RefSeq) only the RefSeq accessions, unless --all_refseq keeps every model. The
+    /// REFSEQ_MATCH, SOURCE and REFSEQ_OFFSET columns are added, and a BAM-edited cache
+    /// switches --use_transcript_ref on with an INFO: line
     #[arg(help_heading = "Transcript Sets", long)]
     pub merged: bool,
+
+    /// Keep every model of a RefSeq or merged cache, the CCDS, EST and gene-symbol ids
+    /// among them, instead of the RefSeq accessions alone; changes nothing on an Ensembl
+    /// cache
+    #[arg(help_heading = "Transcript Sets", long = "all_refseq")]
+    pub all_refseq: bool,
 
     /// Annotate against the GENCODE basic transcript set alone: a transcript without a
     /// gencode_basic attribute is dropped as the cache loads, before the transcript index
@@ -1128,25 +1299,52 @@ pub struct Args {
     /// alternate allele equal to the transcript's sequence takes the terms an allele equal to
     /// the reference takes, and the reference row of --process_ref_homs is the transcript's
     /// allele. Needs --fasta, which supplies a non-coding transcript's cDNA; --use_given_ref
-    /// switches it off. Not read: the edited transcript sequences of a BAM-edited (RefSeq)
-    /// cache, which Ensembl VEP reads with this flag switched on by the cache itself
+    /// switches it off. A BAM-edited cache, a RefSeq or merged cache whose models were
+    /// corrected against an alignment file, switches it on by itself with an INFO: line and
+    /// adds BAM_EDIT; an edited transcript's allele is cut from its edited cDNA
     #[arg(help_heading = "Transcript Sets", long = "use_transcript_ref")]
     pub use_transcript_ref: bool,
 
+    /// Keep the input's reference allele: switches --use_transcript_ref off, and keeps it
+    /// off on a BAM-edited cache, which otherwise switches it on with an INFO: line.
+    /// GIVEN_REF and USED_REF are not written; BAM_EDIT stays on an edited transcript's rows
+    /// in the default and JSON formats
     #[arg(help_heading = "Transcript Sets", long = "use_given_ref")]
     pub use_given_ref: bool,
 
-    /// Accepted for VEP compatibility; not implemented (no statistics file is written, with or without it)
+    #[arg(help_heading = "Transcript Sets", long, value_name = "FILE")]
+    pub bam: Option<String>,
+
+    /// Write no statistics report and keep no counts for one, whatever --stats_text, --stats_html
+    /// and --stats_file say; the annotation output is unchanged
     #[arg(help_heading = "Statistics", long = "no_stats")]
     pub no_stats: bool,
 
-    /// Accepted for VEP compatibility; not implemented (no statistics file is written)
+    /// Name of the statistics report; default <output_file>_summary with the report's extension
+    /// (.txt under --stats_text, .html otherwise), so -o out.txt writes out.txt_summary.html and
+    /// -o STDOUT writes STDOUT_summary.html in the working directory. A name ending .txt or .html
+    /// takes the report's extension (x.html names x.txt for the text report); any other extension
+    /// and a bare name gain it (x.foo names x.foo.html). An existing report is refused before the
+    /// run unless --force_overwrite, and is checked before the output file
     #[arg(help_heading = "Statistics", long = "stats_file", visible_alias = "sf")]
     pub stats_file: Option<String>,
 
-    /// Accepted for VEP compatibility; not implemented (no statistics file is written)
+    /// Write the statistics report as plain text, <output_file>_summary.txt. It opens with the
+    /// run's settings and times, the cache's data versions, and the counts of records read,
+    /// annotated and filtered, of known variants, and of the genes, transcripts and regulatory
+    /// features overlapped. The charts follow, each a key and count per line under its bracketed
+    /// title: the variant classes, the consequences (most severe per record, all, coding), the
+    /// SIFT and PolyPhen terms, the records per chromosome, their distribution along each
+    /// chromosome when a FASTA gives the lengths, and the coding variants' position along their
+    /// proteins in deciles. Together with --stats_html both reports are written
     #[arg(help_heading = "Statistics", long = "stats_text")]
     pub stats_text: bool,
+
+    /// Write the statistics report as an HTML page, <output_file>_summary.html, with the sections
+    /// and charts of the text report; the default when neither --stats_text nor --stats_html is
+    /// given
+    #[arg(help_heading = "Statistics", long = "stats_html")]
+    pub stats_html: bool,
 
     /// Verbose output (debug-level logging)
     #[arg(help_heading = "Verbosity", short = 'v', long)]
@@ -1156,6 +1354,11 @@ pub struct Args {
     /// warning; the warnings file is still written
     #[arg(help_heading = "Verbosity", short = 'q', long)]
     pub quiet: bool,
+
+    /// Suppress the progress line, `Processed N variants...` on standard error every 10,000
+    /// variants; the status lines, the summary line and the output are unchanged
+    #[arg(help_heading = "Verbosity", long = "no_progress")]
+    pub no_progress: bool,
 
     /// Keep and annotate a record that fails a validation check (an unknown chromosome, an invalid
     /// allele string, a reference allele --check_ref rejects, a chromosome --chr leaves out) instead of
@@ -1186,6 +1389,13 @@ pub struct Args {
 
     #[arg(help_heading = "Miscellaneous", long, value_name = "DIR")]
     pub tmpdir: Option<String>,
+}
+
+/// An integer as Ensembl VEP's option parser reads one (Getopt::Long `=i`,
+/// [`crate::argv::getopt_integer`]); any other text is refused as the option's
+/// value.
+fn integer(text: &str) -> Result<i64, String> {
+    crate::argv::getopt_integer(text).ok_or_else(|| "number expected".to_string())
 }
 
 /// A real number as Ensembl VEP's option parser reads one (Getopt::Long `=f`,
@@ -1501,13 +1711,16 @@ mod tests {
         let args = Args::parse_from([
             "vep",
             "--plugin",
-            "CADD,/path/to/cadd.tsv.gz",
+            "CADD,/path/to/cadd_synthetic.tsv.gz",
             "--plugin",
-            "dbNSFP,/path/to/dbnsfp.gz",
+            "dbNSFP,/path/to/dbnsfp_synthetic.gz",
         ]);
         assert_eq!(
             args.plugin,
-            ["CADD,/path/to/cadd.tsv.gz", "dbNSFP,/path/to/dbnsfp.gz"]
+            [
+                "CADD,/path/to/cadd_synthetic.tsv.gz",
+                "dbNSFP,/path/to/dbnsfp_synthetic.gz"
+            ]
         );
     }
 
@@ -1883,42 +2096,6 @@ mod tests {
         );
     }
 
-    /// `--regulatory_gff` is refused: regulatory features are read from the cache alone.
-    #[test]
-    fn regulatory_gff_is_refused() {
-        let err = Config::from_argv(["vep", "--regulatory_gff", "reg.gff3.gz"]).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "ERROR: [cli] --regulatory_gff is not supported: it would annotate regulatory features \
-             and motifs from a GFF3 file in place of the cache; regulatory features are read \
-             from the cache alone"
-        );
-    }
-
-    /// `--extended_promoters` is refused: regulatory features are read from the cache alone.
-    #[test]
-    fn extended_promoters_is_refused() {
-        let err = Config::from_argv(["vep", "--extended_promoters"]).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "ERROR: [cli] --extended_promoters is not supported: it would widen the promoters read \
-             with --regulatory_gff to their extended bounds; regulatory features are read from \
-             the cache alone"
-        );
-    }
-
-    /// `--custom_suppress_filter` is refused: custom annotation is not supported.
-    #[test]
-    fn custom_suppress_filter_is_refused() {
-        let err = Config::from_argv(["vep", "--custom_suppress_filter"]).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "ERROR: [cli] --custom_suppress_filter is not supported: it would keep a --custom VCF \
-             source's FILTER column out of the output unless the --custom source's fields \
-             argument names it, and custom annotation is not supported"
-        );
-    }
-
     /// `--transcript_filter` repeats, each value a whole filter string with its
     /// spaces, as Ensembl VEP's `transcript_filter=s@` takes it.
     #[test]
@@ -2014,31 +2191,83 @@ mod tests {
         }
     }
 
-    /// `shift_3prime=i` and `shift_genomic=i` (Config.pm:231-232) take a value as
-    /// `--shift_hgvs` does; the bare `--shift_3prime` is a syntax error, and
+    /// `shift_3prime=i` and `shift_genomic=i` (Config.pm:231-232) take any integer
+    /// as Getopt::Long reads one, a sign, leading zeros and underscores included;
+    /// the bare flag and a text that is no integer are syntax errors, and
     /// `--shift_length` is a plain switch (Config.pm:233).
     #[test]
-    fn shift_3prime_takes_0_or_1() {
+    fn shift_3prime_and_shift_genomic_take_any_integer() {
         let args = Args::parse_from(["vep", "--shift_3prime", "1", "--shift_genomic", "0"]);
-        assert_eq!(args.shift_3prime.as_deref(), Some("1"));
-        assert_eq!(args.shift_genomic.as_deref(), Some("0"));
+        assert_eq!(args.shift_3prime, Some(1));
+        assert_eq!(args.shift_genomic, Some(0));
         assert!(!args.shift_length);
         assert_eq!(
-            Args::parse_from(["vep", "--shift_3prime=0"])
-                .shift_3prime
-                .as_deref(),
-            Some("0")
+            Args::parse_from(["vep", "--shift_3prime=0"]).shift_3prime,
+            Some(0)
         );
         assert!(Args::parse_from(["vep", "--shift_length"]).shift_length);
+        for (text, number) in [
+            ("2", 2),
+            ("10", 10),
+            ("-1", -1),
+            ("+1", 1),
+            ("01", 1),
+            ("1_0", 10),
+            ("_1", 1),
+            ("1_", 1),
+            ("-_1", -1),
+            ("00", 0),
+            ("-0", 0),
+            ("+0", 0),
+            ("0_0", 0),
+            ("2\n", 2),
+            ("9999999999999999999999", i64::MAX),
+            ("-9999999999999999999999", -i64::MAX),
+        ] {
+            let args = Args::parse_from(["vep", "--shift_3prime", text]);
+            assert_eq!(args.shift_3prime, Some(number), "--shift_3prime {text:?}");
+            let args = Args::parse_from(["vep", "--shift_genomic", text]);
+            assert_eq!(args.shift_genomic, Some(number), "--shift_genomic {text:?}");
+        }
         for argv in [
             &["vep", "--shift_3prime"][..],
-            &["vep", "--shift_3prime", "2"][..],
+            &["vep", "--shift_3prime", ""][..],
+            &["vep", "--shift_3prime", "x"][..],
+            &["vep", "--shift_3prime", "1.5"][..],
+            &["vep", "--shift_3prime", "1e3"][..],
+            &["vep", "--shift_3prime", "_"][..],
+            &["vep", "--shift_3prime", "+-1"][..],
+            &["vep", "--shift_3prime", " 1"][..],
+            &["vep", "--shift_3prime", "--shift_length"][..],
             &["vep", "--shift_genomic"][..],
-            &["vep", "--shift_genomic", "-1"][..],
+            &["vep", "--shift_genomic", "yes"][..],
         ] {
             let err = Args::try_parse_from(argv).unwrap_err();
             assert_eq!(err.exit_code(), 2, "{argv:?}: {err}");
         }
+    }
+
+    /// An integer written with an underscore is a syntax error on `--failed`,
+    /// `--clin_sig_allele`, `--fork`, `--cache_version` and `--max_sv_size`,
+    /// where Getopt::Long drops the underscores of an `=i` value
+    /// (Config.pm:119, 147, 151, 154, 239). A flag written with `=` and nothing
+    /// after it carries the empty value, where Getopt::Long leaves the token
+    /// unread and Ensembl VEP refuses it (vep:30).
+    #[test]
+    fn underscored_integers_are_refused_and_an_attached_empty_value_is_read() {
+        for argv in [
+            &["vep", "--failed", "1_0"][..],
+            &["vep", "--clin_sig_allele", "1_0"][..],
+            &["vep", "--fork", "1_0"][..],
+            &["vep", "--cache_version", "11_6"][..],
+            &["vep", "--max_sv_size", "1_0"][..],
+        ] {
+            let err = Args::try_parse_from(argv).unwrap_err();
+            assert_eq!(err.exit_code(), 2, "{argv:?}: {err}");
+        }
+        let args = Args::parse_from(["vep", "--tmpdir=", "--convert="]);
+        assert_eq!(args.tmpdir.as_deref(), Some(""));
+        assert_eq!(args.convert.as_deref(), Some(""));
     }
 
     /// `nearest=s` takes one of `transcript`, `gene` and `symbol` (Config.pm:149,

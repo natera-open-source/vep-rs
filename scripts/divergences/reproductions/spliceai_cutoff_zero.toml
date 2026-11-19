@@ -1,0 +1,35 @@
+entry = "spliceai_cutoff_zero"
+page = "docs/plugins/spliceai.md#spliceai"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the cutoff option of the SpliceAI plugin's header, \"Accepted values are between 0 and 1\" (SpliceAI.pm:61): 0 is an end of that range, and no sentence excludes it; not seen in the measured datasets"
+notes = "Under `cutoff=0` the flag is absent from every Ensembl VEP row and its header line is not written; the same record under `cutoff=0.0` carries `PASS` in both engines."
+
+[input]
+format = "vcf"
+text = """
+21	21418500	snv_missense_fwd	G	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-spliceai/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-spliceai/reference.fa.gz"
+
+[run]
+flags = [
+  "--plugin",
+  "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz,cutoff=0",
+]
+
+[compare]
+kind = "field"
+field = "SpliceAI_cutoff"
+with_key = true
+where = { record = "snv_missense_fwd" }
+
+[expected]
+ensembl_vep = ["ENST00000284894=-", "ENST00000400546=-", "ENST00001131746=-"]
+vep_rs = ["ENST00000284894=PASS", "ENST00000400546=PASS", "ENST00001131746=PASS"]

@@ -1,6 +1,6 @@
 # Defect L: an empty or unchanged `<CNV:TR>` expansion is dropped without a row
 
-**The defect in one sentence.** With a FASTA, Ensembl VEP drops a `<CNV:TR>` record without a row or a warning when its expansion to a literal allele string yields no alternate allele, or one identical to the reference run.
+**The defect in one sentence.** With a FASTA, Ensembl VEP drops a `<CNV:TR>` record without a row or a warning when its expansion to a literal allele string yields no alternate allele, or one identical to the reference run. Without a FASTA vep-rs writes the symbolic `tandem_repeat` rows over the run; with one it follows Ensembl VEP's expansion and writes what Ensembl VEP writes.
 
 The expansion may yield no alternate allele (`RN=.` on the only allele, a `RUC` Perl reads as true that gives zero or fewer repeats: `abc`, `-2`, `0.5`) or an allele identical to the reference run (`RUC` times the unit length equal to `SVLEN`). The record then passes through the parser without a feature to annotate: no row in any format, and no warning.
 
@@ -39,13 +39,13 @@ The run at 30425588-30425596 is three copies of `AGC` in the GRCh38 sequence. Ex
 
 ### 19.3 What each engine writes
 
-Ensembl VEP 116.2 with `--fasta`, two rows for the fifth record and none for the first four, with no warning; one table per row, the differing cells in bold. vep-rs without a FASTA, for each of the five records (the gain's literal reading pairs with the fifth under [class 12](cnv-tr.md#12-cnvtr-read-symbolically-not-expanded)), one row, its ID column left out in the last table; with a FASTA vep-rs writes what Ensembl VEP writes.
+Ensembl VEP 116.2 with `--fasta`, two rows for the fifth record and none for the first four, with no warning; one table per row, the differing cells in bold. vep-rs without a FASTA, for each of the five records (the gain's literal reading pairs with the fifth under [class 12](cnv-tr.md#12-cnvtr-read-symbolically-not-expanded)), two rows, the last table showing the one on ENST00000390690 without its ID column; with a FASTA vep-rs writes what Ensembl VEP writes.
 
-The fifth record, `gain1_ruc`, on ENST00000334068:
+The fifth record, `gain1_ruc`, on ENST00000334068; vep-rs's row on this transcript, `upstream_gene_variant` over the run, is not shown:
 
 | Column | Ensembl VEP | vep-rs |
 | --- | --- | --- |
-| Uploaded_variation | `gain1_ruc` | no row |
+| Uploaded_variation | `gain1_ruc` | not shown |
 | Location | `21:30425596-30425597` |  |
 | Allele | `AGC` |  |
 | Gene | `ENSG00000186971` |  |

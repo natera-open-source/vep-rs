@@ -1,0 +1,34 @@
+entry = "vcf_without_chrom_line"
+page = "docs/divergences/vcf-without-chrom-line.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "malformed"
+input_class_basis = "a VCF \"contains meta-information lines, a header line, and then data lines\" (VCF 4.2 specification, section 1), the header line being mandatory (VCF 4.5 specification, section 1.5 \"Header line syntax\"): the input's header holds meta-information lines and no #CHROM line"
+notes = "A header of two meta lines and no #CHROM line: Ensembl VEP's VCF output takes the last of them, `##source=probe`, as the column line and prints it after `##VEP-command-line`, so the output has no column line; vep-rs keeps the meta line in the meta block and writes the eight-column line. The three header lines are compared in output order, the command line's text masked."
+
+[input]
+format = "vcf"
+text = """
+##fileformat=VCFv4.2
+##source=probe
+21	34716340	probe	G	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-individual/json_cache"
+
+[run]
+flags = []
+format = "vcf"
+
+[compare]
+kind = "header"
+pattern = "^#(CHROM|#source=|#VEP-command-line=)"
+sorted = false
+mask = ["(?<=^##VEP-command-line=).*"]
+
+[expected]
+ensembl_vep = ["##VEP-command-line=<masked>", "##source=probe"]
+vep_rs = ["##source=probe", "##VEP-command-line=<masked>", "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"]

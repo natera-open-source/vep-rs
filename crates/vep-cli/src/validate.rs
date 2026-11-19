@@ -6,19 +6,19 @@
 //!
 //! Ensembl VEP builds one feature per input line and runs the checks on it in a
 //! fixed order, stopping at the first that fails: the `--chr` list, the
-//! coordinates, the `--max_sv_size` bound, the chromosome against the cache, the
-//! allele string (upper-cased first), an insertion's coordinates, the reference
-//! allele's length against the span, then `--check_ref` or `--lookup_ref`
-//! against the reference sequence. A failing record is reported through the
-//! warning sink and dropped, or kept as it stands under `--dont_skip`
-//! (Parser.pm:189, Parser/VCF.pm:199), the checks after the failing one never
-//! run on it. vep-rs holds a record as one [`InputVariant`] per alternate
-//! allele, so the verdict is taken on the first allele and what the checks
-//! change (the upper-casing, a looked-up reference, the failed check mark) is
-//! carried to the record's other alleles.
+//! coordinates, the `--max_sv_size` bound, the chromosome against the
+//! annotation sources, the allele string (upper-cased first), an insertion's
+//! coordinates, the reference allele's length against the span, then
+//! `--check_ref` or `--lookup_ref` against the reference sequence. A failing
+//! record is reported through the warning sink and dropped, or kept as it
+//! stands under `--dont_skip` (Parser.pm:189, Parser/VCF.pm:199), the checks
+//! after the failing one never run on it. vep-rs holds a record as one
+//! [`InputVariant`] per alternate allele, so the verdict is taken on the first
+//! allele and what the checks change (the upper-casing, a looked-up reference,
+//! the failed check mark) is carried to the record's other alleles.
 
 use std::borrow::Cow;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 use vep_core::codon::reverse_complement;
 use vep_core::coordinate::{Strand, MAX_COORD};
@@ -33,10 +33,17 @@ use crate::pipeline::{Reported, SkipSink};
 use crate::transcript_index::LazyTranscriptIndexes;
 use crate::vcf_parser::RecordInfo;
 
-/// The reference-sequence checks of a run and the `--chr` list.
+/// The `--chr` list, the chromosomes the run's other annotation sources list
+/// and the reference-sequence checks of a run.
 pub(crate) struct ReferenceChecks<'a> {
     /// The chromosome names `--chr` admits; `None` without the flag.
     pub chr: Option<&'a ChromosomeList>,
+    /// The chromosomes the annotation sources beside the cache list (every
+    /// `--custom` file's, the `--regulatory_gff` files'), which admit a record
+    /// whose chromosome the cache lacks: Ensembl VEP tests a record against
+    /// the union over every annotation source's valid chromosomes
+    /// (`BaseRunner.pm:444-460`, read by `_have_chr`, Parser.pm:770-802).
+    pub source_chromosomes: &'a BTreeSet<String>,
     /// `--check_ref`: a reference allele that differs from the reference
     /// sequence fails the record.
     pub check_ref: bool,
@@ -58,12 +65,25 @@ impl ReferenceChecks<'_> {
     pub(crate) fn admits(&self, name: &str) -> bool {
         self.chr.is_none_or(|admitted| admitted.admits(name))
     }
+
+    /// Whether an annotation source beside the cache lists the chromosome the
+    /// input spells `name`, read as `_have_chr` reads the sources' union
+    /// (Parser.pm:777-797): the name itself, a synonym of it, its spelling with
+    /// `chr` added or removed, or, for `M`, an `MT` listed or a synonym of one
+    /// (`:794`, read on the union widened with every synonym at `:782`).
+    pub(crate) fn source_lists(&self, name: &str, synonyms: &ChromosomeSynonyms) -> bool {
+        let listed = |candidate: &str| self.source_chromosomes.contains(candidate);
+        let source_name = synonyms.source_chr_name(name, listed);
+        listed(&source_name)
+            || (name == "M" && synonyms.synonyms_of("MT").iter().any(|s| listed(s)))
+    }
 }
 
-/// No list and neither check: every record passes these three.
+/// No list, no other source and neither check: every record passes these.
 #[cfg(test)]
 pub(crate) const NO_CHECKS: ReferenceChecks<'static> = ReferenceChecks {
     chr: None,
+    source_chromosomes: &BTreeSet::new(),
     check_ref: false,
     lookup_ref: false,
     fasta: None,
@@ -313,13 +333,14 @@ impl SkipRules<'_> {
     /// a span over `--max_sv_size` (`:493-500`, warned and in vep-rs still
     /// annotated, unless the span reached the coordinate ceiling, where its SVLEN
     /// or END overflowed and the span is not the record's: that record is
-    /// dropped unless `--dont_skip` keeps it); a chromosome the cache does not
-    /// carry (`:542-546`); then, for a sequence variant, the allele string
-    /// upper-cased (`:554`), an allele string with no `ACGTN-` run (`:556-560`), an
-    /// insertion whose start is not the end plus one (`:564-572`), a reference
-    /// allele whose length is not the span's (`:585-592`), and the reference allele
-    /// against the reference sequence (`--check_ref`, `:596-633`) or replaced by it
-    /// (`--lookup_ref`, `:635-646`).
+    /// dropped unless `--dont_skip` keeps it); a chromosome no annotation source
+    /// carries, the cache's contigs and every other source's chromosomes making
+    /// the set (`:542-546`, `BaseRunner.pm:444-460`); then, for a sequence
+    /// variant, the allele string upper-cased (`:554`), an allele string with no
+    /// `ACGTN-` run (`:556-560`), an insertion whose start is not the end plus
+    /// one (`:564-572`), a reference allele whose length is not the span's
+    /// (`:585-592`), and the reference allele against the reference sequence
+    /// (`--check_ref`, `:596-633`) or replaced by it (`--lookup_ref`, `:635-646`).
     pub(crate) fn validate(
         &self,
         first: &mut InputVariant,
@@ -395,7 +416,9 @@ impl SkipRules<'_> {
             // keeps it as it keeps every refused record.
             return (first.end < MAX_COORD || self.dont_skip, patch);
         }
-        if !self.transcripts.contains_key(&first.chr) {
+        if !self.transcripts.contains_key(&first.chr)
+            && !self.checks.source_lists(input_name, self.synonyms)
+        {
             let chr = &first.original_chr;
             skip(&format!(
                 "Chromosome {chr} not found in annotation sources or synonyms; chromosome {chr} does not overlap any features"
@@ -795,6 +818,7 @@ mod tests {
     fn checks(fasta: &IndexedFasta, check_ref: bool, lookup_ref: bool) -> ReferenceChecks<'_> {
         ReferenceChecks {
             chr: None,
+            source_chromosomes: NO_CHECKS.source_chromosomes,
             check_ref,
             lookup_ref,
             fasta: Some(fasta),
@@ -857,6 +881,7 @@ mod tests {
         let admitted = ChromosomeList::new(&["21".to_string()]);
         let checks = ReferenceChecks {
             chr: Some(&admitted),
+            source_chromosomes: NO_CHECKS.source_chromosomes,
             check_ref: false,
             lookup_ref: false,
             fasta: None,
@@ -1480,6 +1505,65 @@ mod tests {
         assert!(
             !warnings[0].contains("toplevel"),
             "no transform is attempted offline"
+        );
+    }
+
+    /// Ensembl VEP 116.2 tests a record's chromosome against the union over
+    /// every annotation source's valid chromosomes (BaseRunner.pm:451-453),
+    /// a `--custom` file's being its index's sequence names (File.pm:369-372),
+    /// so a record on a chromosome the cache lacks but a custom source lists
+    /// passes `_have_chr` (Parser.pm:777) with no warning, and one no source
+    /// lists is skipped (Parser.pm:542-546). The union is read as `_have_chr`
+    /// reads it: a synonym (`:782-784`) or a `chr` spelling (`:789-792`) of a
+    /// listed name admits the record too.
+    #[test]
+    fn chromosome_listed_by_another_annotation_source_is_admitted() {
+        let dir = tempfile::tempdir().unwrap();
+        let transcripts = transcripts(dir.path());
+        let listed: BTreeSet<String> = ["Z".to_string(), "chrW".to_string()].into();
+        let checks = ReferenceChecks {
+            source_chromosomes: &listed,
+            ..NO_CHECKS
+        };
+        let admitted = rules(&transcripts, &checks, false);
+        for chr in ["Z", "chrZ", "W"] {
+            let mut v = variant(chr, 5, 5, "A", "G");
+            let (kept, warnings, _) = judge(&admitted, &mut v, dir.path());
+            assert!(kept, "{chr}");
+            assert!(warnings.is_empty(), "{chr}: {warnings:?}");
+        }
+        let synonyms = ChromosomeSynonyms::parse("Z\tZED\n");
+        let through_synonym = SkipRules {
+            synonyms: &synonyms,
+            ..rules(&transcripts, &checks, false)
+        };
+        let mut v = variant("ZED", 5, 5, "A", "G");
+        let (kept, warnings, _) = judge(&through_synonym, &mut v, dir.path());
+        assert!(kept && warnings.is_empty(), "{warnings:?}");
+
+        // A bare `M` is admitted by an `MT` the union holds through a synonym
+        // (`:782` widens the union, `:794` tests `MT` on it).
+        let mito = ChromosomeSynonyms::parse("MT\tNC_012920.1\n");
+        let accession: BTreeSet<String> = ["NC_012920.1".to_string()].into();
+        let accession_checks = ReferenceChecks {
+            source_chromosomes: &accession,
+            ..NO_CHECKS
+        };
+        let through_accession = SkipRules {
+            synonyms: &mito,
+            ..rules(&transcripts, &accession_checks, false)
+        };
+        let mut v = variant("M", 5, 5, "A", "G");
+        let (kept, warnings, _) = judge(&through_accession, &mut v, dir.path());
+        assert!(kept && warnings.is_empty(), "{warnings:?}");
+
+        let unlisted = rules(&transcripts, &NO_CHECKS, false);
+        let mut v = variant("Z", 5, 5, "A", "G");
+        let (kept, warnings, _) = judge(&unlisted, &mut v, dir.path());
+        assert!(!kept);
+        assert_eq!(
+            warnings,
+            ["WARNING: line 7 skipped (21 100 r1 A G . . .): Chromosome Z not found in annotation sources or synonyms; chromosome Z does not overlap any features"]
         );
     }
 

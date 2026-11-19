@@ -105,25 +105,15 @@ fn unwritable_output_is_1() {
     }
 }
 
-fn duckdb_available() -> bool {
-    Command::new("duckdb")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
-/// A Parquet run writes its rows to `<output>.tsv.tmp` beside the output file
-/// first, so an output location that cannot be written fails the same way as
-/// a plain output, naming that file, and a run whose output name is empty is
-/// refused before any intermediate is written in the working directory; the
-/// check needs the DuckDB CLI the format converts with.
+/// A Parquet run opens its one output file before it reads any input, so an
+/// output location that cannot be written fails the same way as a plain output,
+/// naming that file, and a run whose output name is empty is refused the same
+/// way without writing anything in the working directory. So is a path under
+/// a regular file, that file named with a trailing separator, a file name
+/// longer than the file system takes, and a path with no final name to write
+/// the output beside.
 #[test]
 fn unwritable_parquet_output_is_1() {
-    if !duckdb_available() {
-        eprintln!("skipping: duckdb CLI not installed");
-        return;
-    }
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("no_such_dir").join("out.parquet");
     let mut args = corpus_args(&out);
@@ -135,7 +125,7 @@ fn unwritable_parquet_output_is_1() {
     assert_eq!(
         lines,
         [format!(
-            "ERROR: [output] Could not write to output file {}.tsv.tmp",
+            "ERROR: [output] Could not write to output file {}",
             out.display()
         )],
         "{err}"
@@ -153,9 +143,41 @@ fn unwritable_parquet_output_is_1() {
         ["ERROR: [output] Could not write to output file "],
         "{err}"
     );
-    assert!(
-        !dir.path().join(".tsv.tmp").exists(),
-        "no intermediate is written for a refused output"
+    assert_eq!(
+        std::fs::read_dir(dir.path()).unwrap().count(),
+        0,
+        "nothing is written for a refused output"
+    );
+
+    let file = dir.path().join("file");
+    std::fs::write(&file, "text\n").unwrap();
+    for out in [
+        file.join("out.parquet"),
+        file.join(""),
+        dir.path().join("n".repeat(300)),
+        PathBuf::from("."),
+        PathBuf::from(".."),
+    ] {
+        let mut args = corpus_args(&out);
+        args.extend(["--output_format".to_string(), "parquet".to_string()]);
+        let output = vep().args(args).current_dir(dir.path()).output().unwrap();
+        let err = stderr(&output);
+        assert_eq!(output.status.code(), Some(1), "{err}");
+        let lines: Vec<&str> = err.lines().filter(|l| l.starts_with("ERROR: [")).collect();
+        assert_eq!(
+            lines,
+            [format!(
+                "ERROR: [output] Could not write to output file {}",
+                out.display()
+            )],
+            "{err}"
+        );
+    }
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "text\n");
+    assert_eq!(
+        std::fs::read_dir(dir.path()).unwrap().count(),
+        1,
+        "nothing is written for a refused output"
     );
 }
 

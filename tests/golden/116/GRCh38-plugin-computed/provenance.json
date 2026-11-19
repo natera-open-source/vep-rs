@@ -1,0 +1,46 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --plugin Blosum62 --plugin Downstream --plugin HGVSIntronOffset --plugin NearestExonJB --plugin TSSDistance [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "reference.fa.gz: GRCh38 chromosome 21 at its full length from Homo_sapiens.GRCh38.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N, written at 60 bases per line and compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; both engines read it as --fasta, Ensembl VEP's Downstream plugin for the 3' UTR and both for the HGVS shift",
+ "input": "47 chromosome 21 records: 44 public ClinVar records chosen from the four genes CBS and HLCS (reverse strand), DYRK1A and PCNT (forward) for what each plugin writes on them: frameshift deletions and insertions on both strands, among them two whose first downstream codon is a stop and two whose lower CDS coordinate ends a codon, missense substitutions scoring -3 to 3, synonymous substitutions, a start-lost substitution and a stop-gained in-frame insertion; intronic substitutions and deletions at the donor and acceptor sides, deep in introns, with unequal start and end offsets, across an exon boundary, in a 5' UTR intron and a 3' UTR exon; exonic variants nearer an exon's start, its end, equidistant from both, at distance 0, and one whose two nearest junctions tie across two exons; upstream substitutions on both strands and downstream ones; plus three hand-built records: a one-base insertion 200 bases upstream of DYRK1A, a symbolic deletion upstream of DYRK1A and a symbolic deletion over a coding exon of CBS",
+ "sha256": {
+  "default.txt": "ccef216793c4a787cfd34e3adc90d8c586879d0bef619ced8de1936aaabbd919",
+  "tab.txt": "dc9b4d987edad42b789dbaf8528a78f71d3bf1ad502f8f5cea59ed2a0e8c15d0",
+  "vcf.vcf": "e87bd95c6ff8126c24940a3dbca8e9f0ea815a35e17853bab1246276663618ed",
+  "json.jsonl": "87d0ac1eb4c36f2af28fb6667e200a836852f5dbe4d63d5d332572c989361918"
+ },
+ "variants_vcf_sha256": "bf8c1f2e31cf7e14f88f5302e7d4b8bc9cdca76bbaba1918314e77934ae5157b",
+ "perl_env": [
+  "PERL_HASH_SEED=0",
+  "PERL_PERTURB_KEYS=0"
+ ],
+ "flag_sets": {
+  "intronic-both-direction": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs --plugin Blosum62 --plugin Downstream --plugin HGVSIntronOffset --plugin NearestExonJB,intronic=1,max_range=50 --plugin TSSDistance,both_direction=1 [--tab|--vcf|--json]",
+   "perl_env": [
+    "PERL_HASH_SEED=0",
+    "PERL_PERTURB_KEYS=0"
+   ],
+   "sha256": {
+    "default.txt": "a080ff907452ac694e926b1cb4841d6ecd680607402c271285f7ca551d3668ca",
+    "tab.txt": "6c694f9086aa06b66efae9b0b9c9612e2c72fb6bca1e42f1da63806b4c8646ad",
+    "vcf.vcf": "7bbc895b4ceda22afee6b9db034f2a3522bea73173f7aac095765387d2027f8b",
+    "json.jsonl": "790e7a82ce6ae8141b01c49a1d3c1208e41bdf0bed1fe56b0db8d8f012385337"
+   }
+  }
+ },
+ "generator": "candidate records chosen from the vep-rs output of ClinVar chromosome 21 under the corpus flags, annotated with Ensembl VEP under the same flags against the full reference; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite computed=<reference>=<candidates> --k 200 --seed 1 --cache <converted slice> --include computed=<each record's ID> --covers Blosum62 --covers Downstream --covers HGVSIntronOffset --covers NearestExonJB --covers TSSDistance --matrix tests/parity/matrix.tsv --fasta-name reference.fa.gz --flag=--hgvs --flag=--plugin --flag=Blosum62 ... --flag=TSSDistance; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh38 cache; the masked reference as described under fasta, written with the functions of scripts/fixtures/cut_plugin_regions.py; build_golden_corpus.py flag-set --name intronic-both-direction; masks order_only (Ensembl VEP lists NearestExonJB's items in hash order); scripts/concordance/generate_reference_output.sh --corpus --perl-env PERL_HASH_SEED=0 --perl-env PERL_PERTURB_KEYS=0 --no-stats for the manifest's run and, with the manifest's flags swapped for the set's, for the flag set; build_golden_corpus.py classify (both runs, --field on the six scalar plugin fields, HGVSc and HGVS_OFFSET)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 188
+  },
+  "shards": 4,
+  "spans_by_chromosome": {
+   "21": 47
+  }
+ }
+}

@@ -6,6 +6,7 @@
 pub mod fields;
 pub mod frequency;
 pub mod json;
+#[cfg(feature = "parquet")]
 pub mod parquet;
 pub mod tab;
 pub mod vcf_output;
@@ -38,7 +39,7 @@ pub trait OutputFormatter: Send {
     }
 
     /// [`Self::format_record`] as bytes, for a format that writes input bytes
-    /// back and so must carry a line that is not UTF-8 as it was read. The
+    /// back and so must carry the bytes of a line that is not UTF-8. The
     /// default is the text lines' bytes.
     fn format_record_bytes(&self, record: &[&InputVariant]) -> Result<Vec<Vec<u8>>, IoError> {
         Ok(self

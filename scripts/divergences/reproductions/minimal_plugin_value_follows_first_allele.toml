@@ -1,0 +1,30 @@
+entry = "minimal_plugin_value_follows_first_allele"
+page = "docs/plugins/ancestral-allele.md#1-the-ancestral-allele-printed-for-a-later-allele-of-a---minimal-split-record"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 90.9 per million · 0 flag sets, 19 corpora"
+notes = "Under --minimal the record is G/-/GT at 21:42750001; the GT allele trims to the insertion of T over an empty span, which the plugin's rule values -."
+
+[input]
+format = "vcf"
+text = """
+21	42750000	anc_multi_indel	TG	T,TGT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-ancestral/json_cache"
+
+[run]
+flags = ["--plugin", "AncestralAllele,{corpus}/ancestral/homo_sapiens_ancestor_21.slice.fa.gz", "--minimal"]
+
+[compare]
+kind = "field"
+field = "AA"
+where = { record = "anc_multi_indel", allele = "T", feature = "ENST00000291539" }
+
+[expected]
+ensembl_vep = ["G"]
+vep_rs = ["-"]

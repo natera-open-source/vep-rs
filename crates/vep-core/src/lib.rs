@@ -9,13 +9,17 @@
 
 pub mod allele;
 pub mod assembly;
+pub mod binding_matrix;
 pub mod cache_info;
 pub mod cache_manifest;
 pub mod codon;
 pub mod consequence;
 pub mod coordinate;
+pub mod custom_annotation;
 pub mod minimal;
+pub mod pick;
 pub mod prediction;
+pub mod regulatory_gff;
 pub mod so_ontology;
 pub mod spdi;
 pub mod sv_record;
@@ -26,6 +30,7 @@ pub mod terms;
 pub mod transcript;
 pub mod variant;
 pub mod variation;
+pub mod vcf_header;
 pub mod vcf_info;
 
 /// VEP version number (matches the Ensembl VEP release).

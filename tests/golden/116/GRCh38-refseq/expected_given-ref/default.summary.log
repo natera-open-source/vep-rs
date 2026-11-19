@@ -1,0 +1,165 @@
+[VEP run statistics]
+VEP version (API)	 116.2 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens_refseq/116_GRCh38
+Species	homo_sapiens
+Command line options	vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --fasta [PATH]/ref.fa --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --offline --output_file [PATH]/default.txt --quiet --refseq --stats_text --use_given_ref
+Start time	2026-10-29 03:57:26
+End time	2026-10-29 03:57:26
+Run time	0 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/default.txt
+
+[Data version]
+1000genomes	phase3
+COSMIC	102
+ClinVar	202509
+HGMD-PUBLIC	20204
+assembly	GRCh38.p14
+dbSNP	156
+gencode	GENCODE 50
+genebuild	GENCODE50
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.3
+refseq	GCF_000001405.40-RS_2025_08 - GCF_000001405.40_GRCh38.p14_genomic.gff
+regbuild	1.0
+sift	6.2.1
+
+[General statistics]
+Lines of input read	40
+Variants processed	40
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	34
+Overlapped transcripts	153
+Overlapped regulatory features	-
+
+[Variant classes]
+duplication	1
+Alu_insertion	1
+insertion	5
+deletion	8
+SNV	25
+
+[Consequences (most severe)]
+splice_acceptor_variant	1
+splice_donor_variant	4
+stop_gained	1
+frameshift_variant	4
+stop_lost	1
+inframe_insertion	1
+inframe_deletion	1
+missense_variant	2
+splice_donor_5th_base_variant	1
+splice_region_variant	6
+splice_donor_region_variant	1
+splice_polypyrimidine_tract_variant	2
+stop_retained_variant	1
+synonymous_variant	1
+5_prime_UTR_variant	1
+3_prime_UTR_variant	2
+non_coding_transcript_exon_variant	1
+intron_variant	4
+upstream_gene_variant	1
+downstream_gene_variant	1
+intergenic_variant	3
+
+[Consequences (all)]
+splice_acceptor_variant	2
+splice_donor_variant	9
+stop_gained	3
+frameshift_variant	20
+stop_lost	1
+inframe_insertion	1
+inframe_deletion	1
+missense_variant	4
+splice_donor_5th_base_variant	9
+splice_region_variant	35
+splice_donor_region_variant	2
+splice_polypyrimidine_tract_variant	22
+stop_retained_variant	3
+synonymous_variant	9
+coding_sequence_variant	3
+5_prime_UTR_variant	14
+3_prime_UTR_variant	10
+non_coding_transcript_exon_variant	8
+intron_variant	109
+non_coding_transcript_variant	26
+upstream_gene_variant	15
+downstream_gene_variant	28
+intergenic_variant	3
+
+[Coding consequences]
+stop_gained	3
+frameshift_variant	20
+stop_lost	1
+inframe_insertion	1
+inframe_deletion	1
+missense_variant	4
+stop_retained_variant	3
+synonymous_variant	9
+coding_sequence_variant	3
+
+[Variants by chromosome]
+21	40
+
+[Distribution of variants on chromosome 21]
+0	0
+1	0
+2	0
+3	0
+4	0
+5	0
+6	0
+7	1
+8	0
+9	3
+10	0
+11	0
+12	0
+13	3
+14	0
+15	0
+16	0
+17	1
+18	2
+19	0
+20	1
+21	0
+22	1
+23	0
+24	0
+25	0
+26	1
+27	1
+28	0
+29	0
+30	3
+31	0
+32	0
+33	0
+34	0
+35	0
+36	0
+37	0
+38	5
+39	0
+40	0
+41	3
+42	8
+43	0
+44	0
+45	7
+46	0
+
+[Position in protein]
+00-10%	9
+10-20%	2
+20-30%	1
+30-40%	0
+40-50%	5
+50-60%	3
+60-70%	4
+70-80%	13
+80-90%	3
+90-100%	5

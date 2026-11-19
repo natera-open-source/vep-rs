@@ -31,6 +31,26 @@
 //! `1KG_ALL` or `ALL` keys (:232), none of which a release-116 cache carries,
 //! so it filters nothing under that population; `docs/intended-divergences.md`
 //! states the difference.
+//!
+//! Two rules of the allele judgement are Ensembl VEP's own corrections of
+//! 116.2, its commits `b172d852`, `6f45fdb7` and `5f67fd83`, released in
+//! 116.3 (`_add_check_freq_data_to_vf` :423-433 there), so the filter diverges
+//! from the 116.2 reference by design and `docs/intended-divergences.md`
+//! documents both classes. A frequency of exactly `0` is a frequency: the
+//! value is read with Perl's `//`, so only a key without a value is `NA`, and
+//! `0` is judged against the threshold (116.2's `|| 'NA'` read a zero as no
+//! frequency). The frequency judged for an input allele is the one of the
+//! known variant's allele it was matched to; the allele's own key is read only
+//! when no match was recorded (`--no_check_alleles`, a known variant with
+//! unknown alleles). 116.2 read the own key first, so a minimised insertion
+//! `-/G` against a known `G/GG` read the reference `G`'s filled-in frequency
+//! of about 1 and `exclude` dropped a variant seen once as common. The matched
+//! allele is turned to the input's strand before the lookup, as the frequency
+//! keys are (:201, :237), so a match on a known variant of the other strand
+//! finds the frequency of the allele it names; Ensembl VEP keeps the match as
+//! the known variant spells it (:208) and reads `NA` for such a variant, or the
+//! frequency of that spelling's reverse complement when the known variant names
+//! it too (a `-` is its own, so a deletion finds its own).
 
 use std::collections::HashMap;
 use std::ops::Range;
@@ -47,7 +67,7 @@ use crate::config::{CliError, Config};
 /// The frequency of an allele as the filter holds it: the cache's text, or the
 /// number `1 - total` of the one allele a record names no frequency for
 /// (`BaseCacheVariation.pm:249-252`). Ensembl VEP keeps both in one hash and
-/// reads them with Perl's truth, number and string rules.
+/// reads them with Perl's number and string rules.
 #[derive(Debug, Clone, PartialEq)]
 enum Frequency {
     Text(String),
@@ -55,12 +75,14 @@ enum Frequency {
 }
 
 impl Frequency {
-    /// Perl's truth of the value (`:419`, `:426`): `0`, `0.0` as a number and the
-    /// empty text are false, so a frequency of zero reads as no frequency.
-    fn is_true(&self) -> bool {
+    /// Whether the value is a frequency: a number, or a text the cache wrote
+    /// after the allele's `:`. Perl's `split` leaves the value of a pair written
+    /// as the allele alone undefined and `//` reads it as `NA` (:431 at
+    /// release/116.3); `0` is a value.
+    fn is_defined(&self) -> bool {
         match self {
-            Frequency::Text(text) => perl_true(text),
-            Frequency::Number(value) => *value != 0.0,
+            Frequency::Text(text) => !text.is_empty(),
+            Frequency::Number(_) => true,
         }
     }
 
@@ -237,8 +259,9 @@ impl FrequencyFilter {
     /// naming an allele winning, each variant's one unnamed allele given the
     /// remainder `1 - total`; and the record allele each input allele was
     /// matched to, the last variant matching it winning. A variant on the other
-    /// strand has its alleles reverse-complemented first. Empty when no variant
-    /// names a frequency and none has a single unnamed allele.
+    /// strand has its alleles reverse-complemented first, the matched record
+    /// alleles with them, so a match is a key of the frequencies. Empty when no
+    /// variant names a frequency and none has a single unnamed allele.
     fn frequency_data(
         &self,
         record: &[InputVariant],
@@ -270,8 +293,11 @@ impl FrequencyFilter {
                     record_alleles.push(allele);
                 }
             }
+            // `%matched_alleles` (:206-210): the record allele turned to the input's
+            // strand so that it keys the frequencies; Perl keeps the known variant's
+            // own spelling (`b_allele`, Sequence.pm:1236).
             for pair in &cv.matched_alleles {
-                matched.insert(pair.input_allele.clone(), pair.record_allele.clone());
+                matched.insert(pair.input_allele.clone(), oriented(&pair.record_allele));
             }
             let mut total = 0.0;
             let column_text = [Some(self.column.as_str()), self.fallback.as_deref()]
@@ -372,23 +398,18 @@ impl FrequencyFilter {
     }
 
     /// One alternate allele's verdict and `FREQS` entry
-    /// (`_add_check_freq_data_to_vf`, :419-440). The frequency judged is the
-    /// allele's own when Perl reads it as true, else the one of the record allele
-    /// it was matched to (`$freq_data->{$alt} || 'NA'`, then the matched allele's
-    /// value, :419-429); an allele with neither lists `NA` and passes nothing.
+    /// (`_add_check_freq_data_to_vf`, :423-438 at release/116.3). The frequency
+    /// judged is the one of the record allele the input allele was matched to,
+    /// the allele's own key only when no match was recorded; an allele whose key
+    /// has no value lists `NA` and passes nothing, and `0` is a value.
     fn judge_allele(
         &self,
         allele: &str,
         frequencies: &HashMap<String, Frequency>,
         matched: &HashMap<String, String>,
     ) -> (bool, String) {
-        let frequency = frequencies.get(allele).filter(|f| f.is_true()).or_else(|| {
-            matched
-                .get(allele)
-                .filter(|record_allele| perl_true(record_allele))
-                .and_then(|record_allele| frequencies.get(record_allele))
-                .filter(|f| f.is_true())
-        });
+        let key = matched.get(allele).map_or(allele, String::as_str);
+        let frequency = frequencies.get(key).filter(|f| f.is_defined());
         let text = frequency.map_or_else(|| "NA".to_string(), Frequency::text);
         let passed = frequency.is_some_and(|f| self.passes(f));
         (passed, format!("{}:{allele}:{text}", self.freqs_key))
@@ -444,24 +465,26 @@ impl FrequencyFilter {
         Some(self.judge_feature(&first))
     }
 
-    /// Whether the filter drops a feature of `record`, a split record, that no
+    /// How many features of `record`, a split record, the filter drops that no
     /// allele of the batch stands for and whose verdict no reference row carries:
-    /// an alternate allele after the first that writes no row
+    /// each alternate allele after the first that writes no row
     /// ([`vep_core::minimal::rowless_alternate_allele`]) matches no known allele
     /// (`get_matched_variant_alleles` keys on the trimmed pair), so its feature has
     /// no frequency data and `include` leaves it out of the buffer (:322), which
-    /// resets the buffer (:365-369) like any other drop. Under `exclude` it stays
-    /// (:341). The first feature is [`Self::judge_rowless_first_feature`]'s.
-    pub fn drops_later_rowless_feature(&self, record: &[InputVariant]) -> bool {
+    /// resets the buffer (:365-369) like any other drop and counts the feature
+    /// among the filtered variants (:362). Under `exclude` each stays (:341). The
+    /// first feature is [`Self::judge_rowless_first_feature`]'s.
+    pub fn later_rowless_features_dropped(&self, record: &[InputVariant]) -> usize {
         if !self.include {
-            return false;
+            return 0;
         }
         let working = record[0].record_allele_string();
         let mut parts = working.split('/');
         let reference = parts.next().unwrap_or("");
         parts
             .skip(1)
-            .any(|alt| rowless_alternate_allele(reference, alt))
+            .filter(|alt| rowless_alternate_allele(reference, alt))
+            .count()
     }
 
     /// Gives every allele of a rejoined `--minimal` split record the `FREQS` of its
@@ -1047,15 +1070,10 @@ mod tests {
         assert_eq!(at("lt"), [true]);
     }
 
-    /// Under `lt` an allele passes at or below the threshold and fails above
-    /// it; a frequency of `0` is no frequency (`$freq_data->{$alt} || 'NA'`,
-    /// :419), so an allele the cache lists at `0` prints `NA` and fails. Ensembl
-    /// VEP 116.2 under `--freq_pop gnomADe_AFR --freq_freq 0.05 --freq_gt_lt lt
-    /// --freq_filter exclude` prints `FREQS=GNOMADE_AFR:C:NA` for `21 5131441 T C`
-    /// (`rs1555830109`, `gnomADe_AFR` `C:0`) and keeps it.
-    #[test]
-    fn lt_passes_at_or_below_threshold() {
-        let f = filter(&[
+    /// The `--freq_pop gnomADe_AFR --freq_freq 0.05 --freq_gt_lt lt --freq_filter
+    /// include` filter.
+    fn lt_include_filter() -> FrequencyFilter {
+        filter(&[
             "--check_frequency",
             "--freq_pop",
             "gnomADe_AFR",
@@ -1065,7 +1083,14 @@ mod tests {
             "lt",
             "--freq_filter",
             "include",
-        ]);
+        ])
+    }
+
+    /// Under `lt` an allele passes at or below the threshold and fails above
+    /// it (`check_pass`, :468).
+    #[test]
+    fn lt_passes_at_or_below_threshold() {
+        let f = lt_include_filter();
         let mut below = one(
             "T",
             "C",
@@ -1090,7 +1115,18 @@ mod tests {
             )],
         );
         assert_eq!(f.filter_record(&mut above), [false]);
+    }
 
+    /// A frequency of exactly `0` is a frequency (`// 'NA'`, :431 at
+    /// release/116.3): `21 5131441 T C` against `rs1555830109` (`gnomADe_AFR`
+    /// `C:0`) under `--freq_pop gnomADe_AFR --freq_freq 0.05 --freq_gt_lt lt
+    /// --freq_filter include` prints `FREQS=GNOMADE_AFR:C:0`, passes and is kept.
+    /// Ensembl VEP 116.2 read the zero as no frequency (`|| 'NA'`, :419), printed
+    /// `FREQS=GNOMADE_AFR:C:NA` and dropped the record; `docs/intended-divergences.md`
+    /// documents the class. A key written with no value is still `NA`.
+    #[test]
+    fn zero_frequency_is_a_frequency() {
+        let f = lt_include_filter();
         let mut zero = one(
             "T",
             "C",
@@ -1101,8 +1137,107 @@ mod tests {
                 &[("C", "C")],
             )],
         );
-        assert_eq!(f.filter_record(&mut zero), [false]);
-        assert_eq!(zero[0].freqs, ["GNOMADE_AFR:C:NA"]);
+        assert_eq!(f.filter_record(&mut zero), [true]);
+        assert_eq!(zero[0].freqs, ["GNOMADE_AFR:C:0"]);
+
+        let mut filled_zero = one(
+            "T",
+            "C",
+            vec![known(
+                "rs1",
+                "T/C",
+                &[("gnomADe_AFR", "T:1")],
+                &[("C", "C")],
+            )],
+        );
+        assert_eq!(f.filter_record(&mut filled_zero), [true]);
+        assert_eq!(filled_zero[0].freqs, ["GNOMADE_AFR:C:0"]);
+
+        let mut no_value = one(
+            "T",
+            "C",
+            vec![known("rs1", "T/C", &[("gnomADe_AFR", "C")], &[("C", "C")])],
+        );
+        assert_eq!(f.filter_record(&mut no_value), [false]);
+        assert_eq!(no_value[0].freqs, ["GNOMADE_AFR:C:NA"]);
+    }
+
+    /// A `-/G` insertion between 21:100 and 21:101 against a known `G/GG` whose
+    /// `gnomADe` column lists `GG:6.365e-06`, matched to the input as the
+    /// `(input, record)` pairs of `matched`.
+    fn minimised_insertion(matched: &[(&str, &str)]) -> Vec<InputVariant> {
+        let mut v = InputVariant::new("21".into(), 101, 100, b"-".to_vec(), b"G".to_vec());
+        v.input_record = 1;
+        v.colocated_variants = vec![known(
+            "rs1",
+            "G/GG",
+            &[("gnomADe", "GG:6.365e-06")],
+            matched,
+        )];
+        vec![v]
+    }
+
+    /// The frequency judged is the matched record allele's (`$match_b` first,
+    /// :423-431 at release/116.3): an insertion minimised to `-/G` against a
+    /// known `G/GG` with `gnomADe` `GG:6.365e-06` reads 6.365e-06 and stays
+    /// under `--freq_freq 0.01 --freq_gt_lt gt --freq_filter exclude`. Ensembl
+    /// VEP 116.2 read the input allele's own key `G` first, the known reference
+    /// allele's filled-in `1 - total` (:249-252), and dropped the record as
+    /// common; `docs/intended-divergences.md` documents the class. A matched
+    /// allele without a value is `NA` even where the own key has one.
+    #[test]
+    fn matched_allele_frequency_wins_over_the_input_key() {
+        let f = filter(&[
+            "--check_frequency",
+            "--freq_pop",
+            "gnomADe",
+            "--freq_freq",
+            "0.01",
+            "--freq_gt_lt",
+            "gt",
+            "--freq_filter",
+            "exclude",
+        ]);
+        let mut rare = minimised_insertion(&[("G", "GG")]);
+        assert_eq!(f.filter_record(&mut rare), [true]);
+        assert_eq!(rare[0].freqs, ["GNOMADE:G:6.365e-06"]);
+
+        let mut unvalued_match = minimised_insertion(&[("G", "GGG")]);
+        assert_eq!(f.filter_record(&mut unvalued_match), [true]);
+        assert_eq!(unvalued_match[0].freqs, ["GNOMADE:G:NA"]);
+    }
+
+    /// Without a recorded match the allele's own key is read (`$freq_data->{$alt}`
+    /// when `$match_b` is undefined, :431 at release/116.3): `compare_existing`
+    /// records no matched alleles under `--no_check_alleles` (Variation.pm:159-166)
+    /// or for a known variant with unknown alleles (:150-157), so the `-/G`
+    /// insertion above reads the known `G`'s filled-in frequency and is dropped as
+    /// common, and an allele the known variant does not spell is `NA`.
+    #[test]
+    fn unmatched_allele_falls_back_to_its_own_key() {
+        let f = filter(&[
+            "--no_check_alleles",
+            "--check_frequency",
+            "--freq_pop",
+            "gnomADe",
+            "--freq_freq",
+            "0.01",
+            "--freq_gt_lt",
+            "gt",
+            "--freq_filter",
+            "exclude",
+        ]);
+        let mut unmatched = minimised_insertion(&[]);
+        assert_eq!(f.filter_record(&mut unmatched), [false]);
+        assert_eq!(unmatched[0].freqs, ["GNOMADE:G:0.999993635"]);
+
+        let mut unspelled = one(
+            "T",
+            "A",
+            vec![known("rs2", "T/C", &[("gnomADe", "C:0.4")], &[])],
+        );
+        assert_eq!(f.filter_record(&mut unspelled), [true]);
+        assert_eq!(unspelled[0].freqs, ["GNOMADE:A:NA"]);
     }
 
     /// `check_frequency_filter` (`BaseCacheVariation.pm:271-289`) accepts
@@ -1258,9 +1393,10 @@ mod tests {
     /// The one allele a record names no frequency for takes `1 - total`
     /// (:249-252), printed as Perl prints the number, and a record allele
     /// matched to an input allele spelled otherwise supplies its value through
-    /// the match (:425-428): a deletion `GG/G` read as `-` finds the record's
-    /// `G`. A record on the other strand is read through its reverse
-    /// complement (:201, :237).
+    /// the match: a deletion `GG/G` read as `-` finds the record's `G`. A record
+    /// on the other strand is read through its reverse complement (:201, :237),
+    /// its matched allele with it: the input `C` matched to the record's `G`
+    /// finds the frequency keyed `C`.
     #[test]
     fn remainder_and_matched_allele_supply_a_frequency() {
         let f = filter(&[
@@ -1465,10 +1601,16 @@ mod tests {
         assert!(rejoined.iter().all(|v| v.freqs.is_empty()));
 
         let star_last = split_alleles("GG/G/TG/*", &[(0, "G"), (1, "TG")]);
-        assert!(include.drops_later_rowless_feature(&star_last));
-        assert!(!exclude.drops_later_rowless_feature(&star_last));
-        assert!(!include.drops_later_rowless_feature(&record));
-        assert!(!include.drops_later_rowless_feature(&split_record()));
+        assert_eq!(include.later_rowless_features_dropped(&star_last), 1);
+        assert_eq!(exclude.later_rowless_features_dropped(&star_last), 0);
+        assert_eq!(include.later_rowless_features_dropped(&record), 0);
+        assert_eq!(include.later_rowless_features_dropped(&split_record()), 0);
+        // `GG G,*,GG` holds two later features no allele stands for, the `*` and
+        // the allele the trim leaves equal to the reference, each a feature of the
+        // buffer `include` leaves out and :362 counts.
+        let two_rowless = split_alleles("GG/G/*/GG", &[(0, "G")]);
+        assert_eq!(include.later_rowless_features_dropped(&two_rowless), 2);
+        assert_eq!(exclude.later_rowless_features_dropped(&two_rowless), 0);
 
         let with_rows = vec![
             vep_core::minimal::split_reference_row(&record[0], 0),

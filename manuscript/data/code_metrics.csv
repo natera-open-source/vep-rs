@@ -1,11 +1,11 @@
 crate,loc,tests,purpose
-vep-builtins,7957,157,Built-in annotation plugins on shared tabix engine
-vep-cache-builder,6546,113,Native GFF3+FASTA+VCF cache builder
-vep-cache-converter,951,14,JSON cache validator + plugin data optimizer
-vep-cli,61278,1180,"Binary, runner, transcript index"
-vep-core,8135,204,"Canonical types, SO terms, prediction decoder"
-vep-effects,26687,808,Consequence engine + 6 SV submodules
-vep-fasta,1864,21,Indexed FASTA wrapper
-vep-io,16036,296,Input parsers + output formatters
-vep-plugin,518,16,C-FFI dynamic library loader
-TOTAL,129972,2809,workspace aggregate
+vep-builtins,45083,767,Built-in annotation plugins on shared tabix engine
+vep-cache-builder,17248,302,Native GFF3+FASTA+VCF cache builder
+vep-cache-converter,3101,47,JSON cache validator + plugin data optimizer
+vep-cli,104781,1761,"Binary, runner, transcript index"
+vep-core,10908,247,"Canonical types, SO terms, prediction decoder"
+vep-effects,30222,882,Consequence engine + 6 SV submodules
+vep-fasta,1972,25,Indexed FASTA wrapper
+vep-io,24143,406,Input parsers + output formatters
+vep-plugin,968,29,C-FFI dynamic library loader
+TOTAL,238426,4466,workspace aggregate

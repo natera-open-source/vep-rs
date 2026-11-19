@@ -1,0 +1,41 @@
+entry = "custom_shared_short_name_statistics"
+page = "docs/custom-annotation.md#2-the-summary-statistics-of-two-custom-sources-sharing-a-short-name"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the short_name and summary_stats options of --custom, any string without commas and a percentage-separated list of min, mean, max, count and sum, with no rule that two sources take different names (Ensembl VEP documentation, \"Custom annotations\", Options); not seen in the measured datasets"
+notes = "Two one-record BED sources under one short name, scores 4 and 9. Ensembl VEP pools min, max and sum over both sources, keeps the second source's count of 1 and divides the pooled sum by it, a mean of 13; vep-rs prints the second source's own figures. Both alleles' rows print the same values."
+# Two BED sources with one record each at the same span, scores 4 and 9.
+prepare = [
+  "printf '21\\t5380279\\t5380280\\tregA\\t4\\t+\\n' | bgzip > \"$STAGE/regA.bed.gz\"",
+  "printf '21\\t5380279\\t5380280\\tregB\\t9\\t+\\n' | bgzip > \"$STAGE/regB.bed.gz\"",
+  "tabix -p bed \"$STAGE/regA.bed.gz\"",
+  "tabix -p bed \"$STAGE/regB.bed.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	5380280	rs1444031311	A	C,G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+
+[run]
+flags = [
+  "--custom", "file={stage}/regA.bed.gz,short_name=regions,format=bed,type=overlap,summary_stats=min%max%count%sum%mean",
+  "--custom", "file={stage}/regB.bed.gz,short_name=regions,format=bed,type=overlap,summary_stats=min%max%count%sum%mean",
+]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = "rs1444031311", allele = "C" }
+columns = ["regions", "regions_min", "regions_max", "regions_sum", "regions_count", "regions_mean"]
+
+[expected]
+ensembl_vep = ["regA,regB | 4 | 9 | 13 | 1 | 13"]
+vep_rs = ["regA,regB | 9 | 9 | 9 | 1 | 9"]

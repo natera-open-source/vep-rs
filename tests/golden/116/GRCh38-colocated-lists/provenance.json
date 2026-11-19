@@ -1,0 +1,170 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --check_existing --af --af_1kg --af_gnomade --af_gnomadg --max_af --pubmed --var_synonyms --clinvar_somatic_classification --failed 1 [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "variants.vcf: 23 chromosome 21 records, 22 single-base substitutions and one with two alternate alleles, each at the position and with the alleles of a record of the GRCh38-minor-allele-columns corpus, so the pruned transcript cache holds every transcript Ensembl VEP reaches from them; each identifier is . and no identifier of any Ensembl VEP cache is carried",
+ "sha256": {
+  "default.txt": "3017eb5e6cb2a7df1a8d5c4a00c0289763ae4510c979c3c2be8079a424f7a33a",
+  "tab.txt": "f91d011df9b1d4e511ec4706672ac2c599a8687332e1a0774c536d8aa3af09d6",
+  "vcf.vcf": "46581975c4df7f1fd946718be2cf7bcedc354fc07bdaf2dabfdc53832e521c4f",
+  "json.jsonl": "cfb376353e4aaddde2ca7cc0fc1e1b262d6df10ed48986f64504fe5e7990d92e",
+  "default.summary.log": "e7f85a7dc7938f92a8df169e4d2c0f50d72d96c654dd2d3ed5649b829208d9ac",
+  "tab.summary.log": "534cbe8e18920f8ba8c7ec1d615b7acfe04bfff8c9c947e7a250e486b35329be",
+  "vcf.summary.log": "feb0884e26713a4090385d7ab287c3d0af75cf4ef3448ba6ead266db3fb3f373",
+  "json.summary.log": "dfed78f2be813981610569ec6eae7b033356cd9314a2d50b76751352a9e4c1b7"
+ },
+ "variants_vcf_sha256": "ab5059346fa8c9571a88de4ce53b11a8bcc92ead0a452cc1f60565f6587d68a7",
+ "generator": "scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite lists=<reference>=<candidates> --k 1 --seed 1 --multi-allelic-per-suite 2 --cache tests/golden/116/GRCh38-release116/json_cache --covers <each name of the manifest's covers> --matrix tests/parity/matrix.tsv --flag=<each flag of the manifest> --include lists=<each record's name>; scripts/golden/prune_json_cache.py --cache tests/golden/116/GRCh38-release116/json_cache --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <the GRCh38 cache's info.txt> --cache-version 116 --variations <a directory holding the slice committed as json_cache/variations/21/all_vars.gz>; scripts/concordance/generate_reference_output.sh --corpus; scripts/golden/build_golden_corpus.py flag-set --name no-check-alleles; scripts/concordance/generate_reference_output.sh --corpus --flag-set no-check-alleles; scripts/golden/build_golden_corpus.py classify, once for the manifest's run and once with --flag-set no-check-alleles",
+ "pruned_cache": {
+  "source": "tests/golden/116/GRCh38-release116/json_cache, cut to the transcripts within 5,000 bases of a record",
+  "transcripts_per_chromosome": {
+   "21": 25
+  },
+  "shards": 5,
+  "spans_by_chromosome": {
+   "21": 23
+  }
+ },
+ "variation_slice": {
+  "source": "fabricated: no record of any Ensembl VEP cache is copied. One known variant per input record, its start and allele string the input record's, and a second known variant at two positions; identifiers rs9930000001 to rs9930000025, above the range of dbSNP build 156; every PubMed id (eight or nine digits, above the range PubMed has assigned), ClinVar accession, significance, classification and frequency invented; composed for this corpus; no script in the repository regenerates it",
+  "columns": "the 42 variation_cols of the GRCh38 cache of Ensembl release 116, tab-separated, an unset column written as .",
+  "list_shapes": {
+   "pubmed of 113 ids in 1,024 characters, the last character a comma: the shape of a list cut at 1,024 characters where the cut falls after a separator": [
+    "rs9930000001"
+   ],
+   "pubmed and clin_sig ending in a comma, clin_sig_allele ending in a semicolon, on a record with two alternate alleles": [
+    "rs9930000002"
+   ],
+   "pubmed ending in a comma, with a second known variant at the position listing one id": [
+    "rs9930000003",
+    "rs9930000004"
+   ],
+   "pubmed opening with a comma": [
+    "rs9930000005"
+   ],
+   "pubmed with an empty middle element": [
+    "rs9930000006"
+   ],
+   "pubmed of commas alone": [
+    "rs9930000007"
+   ],
+   "pubmed 0": [
+    "rs9930000008"
+   ],
+   "pubmed 0,0": [
+    "rs9930000009"
+   ],
+   "clin_sig ending in a comma": [
+    "rs9930000010"
+   ],
+   "clin_sig of a comma alone": [
+    "rs9930000011"
+   ],
+   "clin_sig and pubmed with a space after the comma": [
+    "rs9930000012"
+   ],
+   "var_synonyms ending in --": [
+    "rs9930000013"
+   ],
+   "clin_sig_allele ending in a semicolon": [
+    "rs9930000014"
+   ],
+   "clinical_impact ending in a semicolon": [
+    "rs9930000015"
+   ],
+   "AF, AFR, gnomADe and gnomADg ending in a comma": [
+    "rs9930000016"
+   ],
+   "AFR pair ending in a colon and gnomADe_AFR pair carrying a third field": [
+    "rs9930000017"
+   ],
+   "allele string ending in a slash": [
+    "rs9930000018"
+   ],
+   "pubmed, clin_sig, var_synonyms and AF ending in a comma and clin_sig_allele in a semicolon, on one known variant": [
+    "rs9930000019"
+   ],
+   "no list column set": [
+    "rs9930000020"
+   ],
+   "var_synonyms ending in a comma": [
+    "rs9930000021"
+   ],
+   "allele string opening with a slash and AF ending in a comma, a known variant only the no-check-alleles flag set prints": [
+    "rs9930000022"
+   ],
+   "clin_sig 0 and pubmed of two commas and a 0": [
+    "rs9930000023"
+   ],
+   "a somatic known variant with the phenotype flag and clin_sig ending in a comma, beside a germline one whose pubmed ends in a comma": [
+    "rs9930000024",
+    "rs9930000025"
+   ]
+  },
+  "records_kept": 25,
+  "windows": 21,
+  "sha256": {
+   "all_vars.gz": "ec0c92dec896fb935f733c8ca423d9bcc137db70ebe92ccd12d116667f80f34a",
+   "all_vars.gz.csi": "a8d26c9067c047593bb3723d3699eaa538f097c75496de161f5af130a7c98b14"
+  },
+  "perl_cache": "the whole GRCh38 cache of Ensembl release 116 as published, with this slice in place of 21/all_vars.gz and its .csi; both engines read the same two files"
+ },
+ "divergences_classified_against": {
+  "engine": "vep-rs",
+  "source": "the tree this corpus is committed with",
+  "flags_passed": [
+   "--check_existing",
+   "--af",
+   "--af_1kg",
+   "--af_gnomade",
+   "--af_gnomadg",
+   "--max_af",
+   "--pubmed",
+   "--var_synonyms",
+   "--clinvar_somatic_classification",
+   "--failed",
+   "1"
+  ]
+ },
+ "flag_sets": {
+  "no-check-alleles": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --check_existing --no_check_alleles --af --af_1kg --af_gnomade --af_gnomadg --max_af --pubmed --var_synonyms --clinvar_somatic_classification --failed 1 [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "477d6501601f1de193d2cc97f6a59de151934fb95b63f8a5a4852edb20e2933e",
+    "tab.txt": "57a437d204d87afbcb00ba143c737d3b0e6b74d622fe6b80035d0e8af3d4f52f",
+    "vcf.vcf": "e94987c99273442d71757437a569290dc1d3348295abd836b2a79391dac29d3c",
+    "json.jsonl": "4e95d5c37c7169f2be0171e2aa82cc8de004370cdde1898db9a09fe8ce81bdb5",
+    "default.summary.log": "b2c00f9dc10bc5370dc1e8ec2c779a681eacb5f6093efb75f20cce152ee2eb22",
+    "tab.summary.log": "f458746ff40efe166ecea7d60f44a5ab4f038bc696647d0438cbdfde9d6d7a5c",
+    "vcf.summary.log": "68dd649af97f7091924e9d6f91823a39f6367f540fa3e62d43e0f36388ab8c10",
+    "json.summary.log": "0610f8cbe010dcd22e1ca716e1ec2527d94fa9c32d48d2f18d32fc7bb9d709df"
+   },
+   "flags": [
+    "--check_existing",
+    "--no_check_alleles",
+    "--af",
+    "--af_1kg",
+    "--af_gnomade",
+    "--af_gnomadg",
+    "--max_af",
+    "--pubmed",
+    "--var_synonyms",
+    "--clinvar_somatic_classification",
+    "--failed",
+    "1"
+   ],
+   "expected_dir": "expected_no-check-alleles"
+  }
+ }
+}

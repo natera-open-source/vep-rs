@@ -1,0 +1,12 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	20204701	intron_snv	T	C	.	.	.
+21	30282172	missense_rev	T	C	.	.	.
+21	30396092	synonymous_fwd	C	A	.	.	.
+21	30881493	deletion_rev	GA	G	.	.	.
+21	33447139	missense_splice_region	A	T	.	.	.
+21	42390035	splice_region_two_consequences	C	T	.	.	.
+21	44316522	splice_region_synonymous	C	T	.	.	.
+21	45505528	splice_acceptor	G	A	.	.	.
+21	46126244	splice_region_two_alts	G	A,T	.	.	.
+21	46351541	splice_donor	G	C	.	.	.

@@ -1,6 +1,6 @@
 # The transcripts of a shared start site under `--nearest`
 
-A difference in the text of the `NEAREST` field wherever several protein-coding transcripts start at the winning site; nothing is set aside, since no measured dataset runs the flag.
+A difference in the text of the `NEAREST` field wherever several protein-coding transcripts start at the winning site; nothing is set aside, since no measured dataset runs the flag. Ensembl VEP prints one of those transcripts, or two, and nothing in its source chooses which; vep-rs lists every one of them, in stable-id order.
 
 Under `--nearest`, Ensembl VEP keeps every protein-coding transcript's start site in an interval tree, one point per transcript. The first run on a cache directory writes the table (`AnnotationSource/Cache/Transcript.pm` lines 275-321). Each line is a transcript's start on the forward strand or its end on the reverse (`AnnotationType/Transcript.pm` lines 747-751), inserted as a point (`TranscriptTree.pm` line 165). For each record the tree is asked for one object below the record's end and one above its start (`TranscriptTree.pm` lines 233-236). The nearer of the two is kept, both on a tie (lines 242-253), and the value each object carries is printed once (`AnnotationType/Transcript.pm` lines 707-711).
 

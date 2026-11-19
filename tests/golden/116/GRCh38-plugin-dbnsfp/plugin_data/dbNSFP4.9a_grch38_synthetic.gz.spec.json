@@ -1,0 +1,56 @@
+{
+ "generator": "scripts/fixtures/make_plugin_fixture.py",
+ "layout": "dbnsfp",
+ "assembly": "GRCh38",
+ "seed": 38,
+ "preparation": {
+  "index": "tabix -s 1 -b 2 -e 2",
+  "coordinate_columns": [
+   "chr",
+   "pos(1-based)"
+  ],
+  "other_assembly_columns": [
+   "hg19_chr",
+   "hg19_pos(1-based)"
+  ],
+  "other_assembly_shift": 100000,
+  "line_end": "LF",
+  "columns": 458
+ },
+ "inputs": {
+  "vcf": {
+   "variants.vcf": "033a0f3a22eae5d43ec358ea8540a13b0f7c47c442ba61f504d640d03ef753ac"
+  },
+  "reference": {
+   "expected/default.txt.gz": "427d29a45e4365535db09d12ab91794ec15f8dc10a17240ca3d497544e6c3d49"
+  }
+ },
+ "misses": [
+  "21:30642890"
+ ],
+ "rows": {
+  "own_allele": 19,
+  "fabricated": 37,
+  "planted": 1,
+  "miss": 1
+ },
+ "files": {
+  "dbNSFP4.9a_grch38_synthetic.gz": "26fc75c0322f23b282814dd306ac1b21a60090c9791de53f59a7d54a2dae9fc0",
+  "dbNSFP4.9a_grch38_synthetic.gz.tbi": "dd83a84243acd5876c43d1c716029acddcfd82df5ad122a05a24a38ff11233c2"
+ },
+ "tools": {
+  "bgzip": "bgzip (htslib) 1.22.1",
+  "tabix": "tabix (htslib) 1.22.1"
+ },
+ "planted_row": {
+  "chr": "1",
+  "pos": 1045000,
+  "ref": "A",
+  "alt": "G",
+  "transcripts": [
+   "ENST00000900001",
+   "ENST00000900002"
+  ],
+  "region": "1:1008170-1082927"
+ }
+}

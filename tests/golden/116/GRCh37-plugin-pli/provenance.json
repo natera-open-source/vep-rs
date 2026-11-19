@@ -1,0 +1,102 @@
+{
+ "plugin_fixtures": {
+  "generator": "a cut of the bundled file to the corpus's keys",
+  "cut": "`pLI_values.txt`: the header and the rows of the bundled `pLI_values.txt` (Ensembl VEP_plugins, Apache License 2.0) whose gene symbol a transcript of the pruned cache carries, the symbol SOD1 respelled `Sod1`; `pLI_transcript_values.txt`: the header and the rows of `tests/fixtures/plugins/pLI_transcript_values.txt` (the chromosome 21 transcripts of the ExAC release 0.3 constraint table, the stable id without its version) that the pruned cache carries, SOD1's transcript respelled `enst00000270142`; the respellings exercise the case-insensitive match of both engines, and the manifest's run reads the whole bundled file beside Ensembl VEP's module through `--dir_plugins {plugins}` while vep-rs reads the cut through the same flag, so the two runs write the same rows",
+  "files": {
+   "plugin_data/pLI_transcript_values.txt": "31aeef54a8ddbd4ea2e87277a0062241e601db32ef1fa4b3c4a8f243a589fdc6",
+   "plugin_data/pLI_values.txt": "680b775ba2828ad91f14656f521065aa4f4e5382083bbfb1ba4111032719e2d6"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin pLI [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh37",
+ "fasta": "none on either side",
+ "input": "33 gnomAD v2.1.1 genome records on chromosome 21 (dbSNP identifiers where the release carries one; INFO dropped), one or two in the canonical transcript of each chosen gene (an exonic substitution and, where the records offer one, an exonic indel): TPTE, LIPI, APP, SOD1, TTC3, DYRK1A, DSCAM, RUNX1, KCNJ6, SETD4, CXADR and HUNK, which the pLI file and the LoFtool file of tests/golden/116/GRCh37-plugin-loftool, a corpus over the same records, both list; GABPA, LTN1 and TMPRSS15, which the pLI file lists and that LoFtool file does not; one gene neither file lists (AL050302.1); and one intergenic record more than 5,000 bases from any transcript. The scores reach the output in every shape the plugin prints: two decimals from `0.00` (TPTE, 5.11e-31) to `1.00` (DSCAM) and, under `sigfig`, three significant figures from `5.11e-31` to `1`.",
+ "sha256": {
+  "default.txt": "bd96cc727c0769dff164474da843451b11f3bbec7b5abc4fd99301391a97565b",
+  "tab.txt": "40fa5c44b63423a5461d86bdb61b1e3656def39c390cbf72be49c061765eefa2",
+  "vcf.vcf": "232b11d9850d9e850de58a01b2a0281a620f1f5ef2cbfd3da35c5786a55bc310",
+  "json.jsonl": "e3b09f0b2e018639bf36280dc9a87c7918667b50de1e6e5dacabdaef837c6c81",
+  "default.summary.log": "e3a8ab09269d005603736eef507ea772b24566c2045bb85de379a771748d5f01",
+  "tab.summary.log": "5f173a149c29cad89eb7b3e4e6a284eca6ae28cb4cb0ca89352d437e4965137a",
+  "vcf.summary.log": "8106e2358a2bc8e06f21e77b8bc29ccd9cc6af68f186ff96c56888b6dcc45c39",
+  "json.summary.log": "64f4576a2c79bfe2040e3814e74cc514b2341c3d9b0d6ef14f47db856721021d"
+ },
+ "variants_vcf_sha256": "6061f4e0bcb09da8319a65d8a09b2f052c0a28e579dcd6e7e646c53a301ac961",
+ "plugin_files": {
+  "plugin_data/pLI_values.txt": "680b775ba2828ad91f14656f521065aa4f4e5382083bbfb1ba4111032719e2d6",
+  "plugin_data/pLI_transcript_values.txt": "31aeef54a8ddbd4ea2e87277a0062241e601db32ef1fa4b3c4a8f243a589fdc6"
+ },
+ "generator": "manifest: scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh37 --suite plugin-pli=<reference over the candidate records>=candidates.vcf --k 3 --seed 1 --include <each record's name> --covers pLI --matrix tests/parity/matrix.tsv --flag=--dir_plugins --flag={plugins} --flag=--plugin --flag=pLI, then flag-set for each flag_sets entry and classify for the manifest's run and each flag set; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh37 cache; plugin_data: the cut described under plugin_fixtures; expected outputs: scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> for the manifest's run and, per flag set, for a copy of the corpus carrying the set's flags as its own, whose outputs and record are the set's",
+ "flag_sets": {
+  "values-file": {
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "pLI,{corpus}/plugin_data/pLI_values.txt"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_values-file",
+   "perl_mode": "offline",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin pLI,{corpus}/plugin_data/pLI_values.txt [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "5a6c6e0d5d78eb377362d926504621894067b4d7ec757fcae89910056ad8c7e9",
+    "tab.txt": "79fe82cf9a0ef0a06f78eb9a24c26821c951f578896bd61469f2ebd17f79f99d",
+    "vcf.vcf": "e55591911b632846d38297ecf0a824c2892ec82ec989d9054edc6d728f43dd46",
+    "json.jsonl": "3afa3e623be5e9fc662eb85b9d0401ff9c5e97c27b69801e9270ffb8a433a40c",
+    "default.summary.log": "87ee2e6e16901c9c59e0a19349fc58edce4d5e5c6b2694a3ae0cef2f3e44a76c",
+    "tab.summary.log": "88e5b7f9b0fb9f42894e735859967fefe47885a067a9f0be1f7af2c9244e7da7",
+    "vcf.summary.log": "22428378bb35fb1bc0ac1d20ce91e094792523d00c326c6275e48476cba863c5",
+    "json.summary.log": "dee48f4fb46cd1d368514cceea02cb90d12576ee7835d0e27dd1f3404a7f9cfd"
+   }
+  },
+  "transcript": {
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "pLI,{corpus}/plugin_data/pLI_transcript_values.txt,transcript"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_transcript",
+   "perl_mode": "offline",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin pLI,{corpus}/plugin_data/pLI_transcript_values.txt,transcript [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "243b4fe6f6189b7bef7ce6757cb7a65daf9f2e5870734edf8675267420643244",
+    "tab.txt": "eac6b88d9c30e3768332feb799e0866fc2a7d4bf06aa28c8cd13104119045b47",
+    "vcf.vcf": "0bdf7144182f7f544eb39e0fe415f325288c0eb9c5a799a398d5a0b71b080fa9",
+    "json.jsonl": "6f2dada7ea806bccc9d3807ea11ad9612239fb38edbbc951447cc316ed9850b8",
+    "default.summary.log": "3400c7c93672e7816832b290ac05bf14b12a05e6597f4249261f3d4aa711d1f2",
+    "tab.summary.log": "5f79903edc2e2122b234b01e8888a33abb1936587cee52e0732d80910bffcc44",
+    "vcf.summary.log": "83abae26eb66e95a36f6e0a6330aca2b05515a861139496aed39bbe1396c9673",
+    "json.summary.log": "2dbc3ef41cdcc05522384e8013bfc2e9d364361c7a58a5417eb1171fd8d61c01"
+   }
+  },
+  "sigfig": {
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "pLI,sigfig"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_sigfig",
+   "perl_mode": "offline",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin pLI,sigfig [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "1573b5e67221957b2e4503c76a40e8bf5632fa085d60320549bcd883c09b8ca4",
+    "tab.txt": "be0242183ac41bd4ed4a8a1b48bfb8af5b45b19b3b0f2d593d2d3d5fd770d46d",
+    "vcf.vcf": "32abde7a9513bfa26997e711f7ff3a7cb12b22693552353e8a0619da5688e966",
+    "json.jsonl": "197a00baaf88464f5114383ac2e4d78ecf860c111553849dbb4120a380693634",
+    "default.summary.log": "c827e66701f8594ba31f837bfebcaf0adc8e34f16e5a41a704cff42f1d3aeb7b",
+    "tab.summary.log": "590beb89d463e338c67056b8b55275adb8a7eefca11f72cd13989ab8dce632e7",
+    "vcf.summary.log": "c217f64f8157602733b3df7c89b50543ecc58c509a027e3295adf5c9b4b7edac",
+    "json.summary.log": "ba0eb34c1c9056533bcbf909f8a70d9f03bffe38bade5bad1a0393117af84df7"
+   }
+  }
+ }
+}

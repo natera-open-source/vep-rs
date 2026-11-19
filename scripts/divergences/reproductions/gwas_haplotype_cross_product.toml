@@ -1,0 +1,35 @@
+entry = "gwas_haplotype_cross_product"
+page = "docs/plugins/flat-file.md#1-gwas-every-snp-of-a-haplotype-row-at-every-location-of-the-row"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 3 of 790 table rows · 2 flag sets, 1 corpus"
+# Ensembl VEP's plugin builds its processed catalog under --dir, which must be writable: a directory of the stage.
+prepare = [
+  "mkdir -p \"$STAGE/vepdir\"",
+]
+
+# The first location of the nine-SNP haplotype row of study GCST008413 in the committed catalog slice:
+# the SNP there is rs2838925, whose risk allele is C; three other SNPs of the row have the risk allele T.
+[input]
+format = "vcf"
+text = """
+21	45427844	hap_first_site	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-gwas/json_cache"
+
+[run]
+flags = ["--dir", "{stage}/vepdir", "--plugin", "GWAS,file={corpus}/plugin_data/gwas_catalog_slice.tsv"]
+
+[compare]
+kind = "rows"
+where = { record = "hap_first_site", feature = "ENST00000651438" }
+columns = ["Location", "Allele", "Feature", "GWAS_risk_allele", "GWAS_study"]
+
+[expected]
+ensembl_vep = ["21:45427844 | T | ENST00000651438 | T | GCST008413"]
+vep_rs = ["21:45427844 | T | ENST00000651438 | - | -"]

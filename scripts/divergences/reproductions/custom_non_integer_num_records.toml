@@ -1,0 +1,32 @@
+entry = "custom_non_integer_num_records"
+page = "docs/divergences/defect-n.md#26-a---custom-record-limit-that-is-not-a-whole-number"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "malformed"
+input_class_basis = "the accepted values of the num_records option of --custom are 50 (default), all, 0 or any positive integer (Ensembl VEP documentation, \"Custom annotations\", Options, num_records): the source is given a value with a fraction or a minus sign"
+notes = "The limit 1.5, the first shape of the class: the insertion overlaps two records of sites.vcf.gz, Ensembl VEP lists both and no `...` marker, vep-rs lists one and the marker, as both engines do under num_records=1. Every transcript row of the record prints the same list; the compare reads the first transcript's."
+
+[input]
+format = "vcf"
+text = """
+21	10542414	ins_padded	A	AT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+fasta = "tests/golden/116/GRCh38-custom/reference.fa.gz"
+
+[run]
+flags = ["--custom", "file={corpus}/custom/sites.vcf.gz,short_name=sites,format=vcf,type=overlap,coords=1,num_records=1.5,fields=AF%CLASS"]
+format = "default"
+
+[compare]
+kind = "field"
+field = "sites"
+where = { record = "ins_padded", feature = "ENST00000427445" }
+
+[expected]
+ensembl_vep = ["21:10542415-10542414,21:10542415-10542415"]
+vep_rs = ["21:10542415-10542414,..."]

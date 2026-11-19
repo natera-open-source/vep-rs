@@ -1,0 +1,29 @@
+entry = "dont_skip_cannot_keep"
+page = "docs/divergences/dont-skip-cannot-keep.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the region input format (Ensembl VEP documentation, \"Data formats\", REST-style regions); not seen in the measured datasets; classed by its most reachable shape, a span over --max_sv_size: a POS that is not a number breaks its Integer type (VCF 4.2 specification, section 1.4.1 \"Fixed fields\")"
+notes = "The first of the four shapes: a POS that is not a number. Under --dont_skip Ensembl VEP writes the text as the position and annotates the record as intergenic; vep-rs skips it with the parser's refusal."
+
+[input]
+format = "vcf"
+text = """
+21	abc	pos_not_a_number	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-writers/json_cache"
+
+[run]
+flags = ["--dont_skip"]
+
+[compare]
+kind = "rows"
+where = { record = "pos_not_a_number" }
+
+[expected]
+ensembl_vep = ["21:abc | G | - | intergenic_variant"]
+vep_rs = []

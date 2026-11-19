@@ -1,0 +1,32 @@
+entry = "one_column_fields_zero_row"
+page = "docs/output/vep-and-tab.md#choosing-the-columns-fields"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the documented value of --fields, a comma-separated list of fields of the tab output, here one field whose flag is on (Ensembl VEP documentation, \"Running Ensembl VEP\", --fields); not seen in the measured datasets"
+notes = "With SHIFT_LENGTH the only column, the first record's rows are the line 0, which Ensembl VEP's output loop reads as the end of the output; the insertion's three rows of 10 are lost with them."
+
+[input]
+format = "vcf"
+text = """
+21	13615721	intron_snv_2	A	C	.	.	.
+21	13620283	cds_tri_ins_fwd_1	G	GTCA	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-identifiers/json_cache"
+fasta = "tests/golden/116/GRCh38-identifiers/reference.fa.gz"
+
+[run]
+flags = ["--shift_3prime", "1", "--shift_length", "--fields", "SHIFT_LENGTH"]
+format = "tab"
+
+[compare]
+kind = "rows"
+columns = ["SHIFT_LENGTH"]
+
+[expected]
+ensembl_vep = []
+vep_rs = ["0", "0", "10", "10", "10"]

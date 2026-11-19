@@ -1,0 +1,29 @@
+entry = "compressed_stdin_and_cut_stream"
+page = "docs/divergences/compressed-input.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --input_file contract (Ensembl VEP documentation, \"Running Ensembl VEP\", --input_file); not seen in the measured datasets; classed by its most reachable shape, compressed bytes on standard input: a stream cut inside a member breaks the member format (RFC 1952, section 2.3)"
+notes = "The first mechanism of the entry: the corpus's BGZF file piped to -i STDIN. Ensembl VEP reads the compressed bytes as text and writes no row for any of the 39 records; vep-rs decompresses the stream and writes the rows it writes for the file, this record's among them."
+
+[input]
+format = "vcf"
+path = "tests/golden/116/GRCh38-input-compressed/variants.vcf.bgz"
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-input-compressed/json_cache"
+chromosomes = ["21", "22"]
+
+[run]
+flags = ["--max_sv_size", "-1"]
+stdin = true
+
+[compare]
+kind = "rows"
+where = { record = "stop_ins1_keep_rev" }
+
+[expected]
+ensembl_vep = []
+vep_rs = ["21:30813030-30813031 | T | ENST00000329621 | stop_retained_variant"]

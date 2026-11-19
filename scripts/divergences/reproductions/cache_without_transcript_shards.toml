@@ -1,0 +1,37 @@
+entry = "cache_without_transcript_shards"
+page = "docs/divergences/damaged-cache-shard.md#a-cache-holding-no-transcript-shard"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "malformed"
+input_class_basis = "a cache directory is one \"containing transcript data and potentially also regulatory and variation data\" (Bio::EnsEMBL::VEP::CacheDir module documentation, DESCRIPTION) and a cache holds \"all transcript models\" for a species (Ensembl VEP documentation, \"Annotation sources\", opening list): no chromosome directory of the cache holds a transcript file"
+notes = "Each cache holds its metadata file and an empty chromosome 21 directory and nothing else."
+# An Ensembl VEP cache of info.txt and an empty 21/; a vep-rs cache of info.json and an empty transcripts/21/.
+prepare = [
+  "mkdir -p \"$STAGE/perl-cache/homo_sapiens/116_GRCh38/21\" \"$STAGE/json-cache/transcripts/21\"",
+  "printf 'species\\thomo_sapiens\\nassembly\\tGRCh38\\n' > \"$STAGE/perl-cache/homo_sapiens/116_GRCh38/info.txt\"",
+  "printf '{\"species\": \"homo_sapiens\", \"assembly\": \"GRCh38\", \"cache_version\": 116}\\n' > \"$STAGE/json-cache/info.json\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	43774760	4725737	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+corpus = "tests/golden/116/GRCh38-pick-summary"
+
+[run]
+flags = []
+
+[compare]
+kind = "stderr"
+pattern = "no transcript shards"
+
+[expected]
+ensembl_vep = []
+vep_rs = ["ERROR: [cache] no transcript shards under <path> (serialiser_type storable)"]

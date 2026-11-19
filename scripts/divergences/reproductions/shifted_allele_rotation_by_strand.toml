@@ -1,0 +1,31 @@
+entry = "shifted_allele_rotation_by_strand"
+page = "docs/output/vep-and-tab.md#allele-on-a-coding-row-after-a-shift"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 76,935 per million · 0 flag sets, 89 corpora"
+notes = "AGC inserted after the GCAGCAGC run in a coding exon of the reverse-strand ENST00000399136: the 3' shift along the transcript moves it eight bases, longer than the allele, so Ensembl VEP's count of seq_length - shift_length is negative and rotates nothing."
+
+[input]
+format = "vcf"
+text = """
+21	37833544	ins_after_trinucleotide_run	C	CAGC	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37-hgvs/json_cache"
+fasta = "tests/golden/116/GRCh37-hgvs/reference.fa.gz"
+
+[run]
+flags = ["--shift_3prime", "1", "--shift_length", "--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = "ins_after_trinucleotide_run", feature = "ENST00000399136" }
+columns = ["Allele", "Consequence", "Codons", "Amino_acids", "HGVSc", "HGVSp", "SHIFT_LENGTH"]
+
+[expected]
+ensembl_vep = ["AGC | protein_altering_variant | ccc/cGCTcc | P/RS | ENST00000399136.1:c.455_457dup | ENSP00000382088.1:p.Pro153delinsArgSer | 8"]
+vep_rs = ["GCA | inframe_insertion | ccc/cTGCcc | P/LP | ENST00000399136.1:c.455_457dup | ENSP00000382088.1:p.Leu152dup | 8"]

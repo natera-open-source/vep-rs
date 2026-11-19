@@ -1,0 +1,38 @@
+entry = "shift_intron_term_unshifted_span"
+page = "docs/divergences/shift-intron-term-unshifted-span.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 137,702 per million · 3 flag sets, 104 corpora"
+notes = "Two deletions of one base from a run of As before an acceptor site: the first, two bases before the acceptor of an intron of ENST00000438328, shifts two bases onto the acceptor's A; the second, eight bases before an exon of ENST00000435744, shifts eight bases past the acceptor onto the exon's first base, where the row has no acceptor term."
+
+[input]
+format = "vcf"
+text = """
+21	22883198	rs1315375439	CA	C	.	.	.
+21	13065550	rs544638589	GA	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-release116/json_cache"
+fasta = "tests/golden/116/GRCh38-merged/reference.fa.gz"
+
+[run]
+flags = ["--hgvs", "--shift_3prime", "1", "--shift_length"]
+
+[compare]
+kind = "rows"
+where = { feature = ["ENST00000438328", "ENST00000435744"] }
+columns = ["Feature", "Consequence", "IMPACT", "HGVSc", "HGVS_OFFSET", "SHIFT_LENGTH"]
+
+[expected]
+ensembl_vep = [
+  "ENST00000435744 | splice_region_variant,non_coding_transcript_exon_variant,intron_variant | LOW | ENST00000435744.5:n.1288del | 8 | 8",
+  "ENST00000438328 | splice_acceptor_variant,intron_variant,non_coding_transcript_variant | HIGH | ENST00000438328.1:n.308-2del | 2 | 2",
+]
+vep_rs = [
+  "ENST00000435744 | splice_region_variant,non_coding_transcript_exon_variant | LOW | ENST00000435744.5:n.1288del | 8 | 8",
+  "ENST00000438328 | splice_acceptor_variant,non_coding_transcript_variant | HIGH | ENST00000438328.1:n.308-2del | 2 | 2",
+]

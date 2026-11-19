@@ -1,0 +1,41 @@
+entry = "cache_var_type_contradicts_variation_files"
+page = "docs/divergences/damaged-cache-shard.md#a-variation-directory-whose-files-are-not-the-form-var_type-names"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the per-region layout of known variants (Bio::EnsEMBL::VEP::AnnotationSource::Cache::Variation module documentation); not seen in the measured datasets; classed by its most reachable shape, both file forms under no var_type key: region files alone under var_type tabix break \"one file per chromosome\" (the VariationTabix module documentation)"
+notes = "Each cache says var_type tabix while its chromosome 21 directory holds one <start>-<end>_var.gz region file and no all_vars.gz; the record's position is inside that region."
+# The region file holds one record in an Ensembl VEP cache's layout: single-space delimited, each extra
+# space an empty cell (variation_name, failed, somatic, start, end, allele_string).
+prepare = [
+  "mkdir -p \"$STAGE/perl-cache/homo_sapiens/116_GRCh38/21\" \"$STAGE/json-cache/transcripts/21\" \"$STAGE/json-cache/variations/21\"",
+  "printf 'rs_craft   5025532  G/C\\n' | gzip -n > \"$STAGE/perl-cache/homo_sapiens/116_GRCh38/21/5000001-6000000_var.gz\"",
+  "cp \"$STAGE/perl-cache/homo_sapiens/116_GRCh38/21/5000001-6000000_var.gz\" \"$STAGE/json-cache/variations/21/\"",
+  "printf 'species\\thomo_sapiens\\nassembly\\tGRCh38\\nvariation_cols\\tchr,variation_name,failed,somatic,start,end,allele_string,strand\\nvar_type\\ttabix\\n' > \"$STAGE/perl-cache/homo_sapiens/116_GRCh38/info.txt\"",
+  "printf '[]' > \"$STAGE/json-cache/transcripts/21/1-1000000.json\"",
+  "printf '{\"species\": \"homo_sapiens\", \"assembly\": \"GRCh38\", \"cache_version\": 116, \"variation_cols\": [\"chr\", \"variation_name\", \"failed\", \"somatic\", \"start\", \"end\", \"allele_string\", \"strand\"], \"var_type\": \"tabix\"}\\n' > \"$STAGE/json-cache/info.json\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	5025532	craft1	G	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+corpus = "tests/golden/116/GRCh38-pick-summary"
+
+[run]
+flags = ["--check_existing"]
+
+[compare]
+kind = "stderr"
+pattern = "says var_type"
+
+[expected]
+ensembl_vep = []
+vep_rs = ["ERROR: [cache] <path> holds region files (<start>-<end>_var.gz) while <path> says var_type tabix"]

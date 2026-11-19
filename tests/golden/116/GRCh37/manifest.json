@@ -23,7 +23,25 @@
   "biotype",
   "prebuilt-binaries-glibc-floor",
   "portable-cpu-baseline-builds",
-  "bioconda-distribution"
+  "cache-region-files",
+  "cdna-and-coding-region-bounds",
+  "library-embedding",
+  "install-pl-auto",
+  "api-install-options",
+  "examples_and_validator",
+  "species_statement",
+  "os_and_architecture_matrix",
+  "memory_footprint_statement",
+  "nextflow-nf-core-drop-in",
+  "plugin-install-and-data",
+  "bioconda-distribution",
+  "api-header-info",
+  "api-plugin-fields-as-columns",
+  "api-feature-types-gating",
+  "api-filter-the-line",
+  "api-config-access",
+  "docker-image",
+  "singularity-apptainer"
  ],
  "reference_warnings": [
   "could not fetch sequence for tandem repeats; consequence calculation for tandem repeats is less precise when using --offline without --fasta"
@@ -12192,7 +12210,153 @@
  ],
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "overlaps",
+   "flags": [
+    "--grch37",
+    "--overlaps"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "tab",
+    "vcf"
+   ],
+   "expected_dir": "expected_overlaps",
+   "covers": [
+    "overlaps",
+    "overlapbp-overlappc-sv"
+   ]
+  }
+ ],
  "divergences": [
+  {
+   "location": "10:102539337-102539339",
+   "allele": "TCTTCCCTGA",
+   "feature": "ENST00000355243",
+   "feature_type": "Transcript",
+   "record_indices": [
+    302
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:102539337-102539339",
+   "allele": "TCTTCCCTGA",
+   "feature": "ENST00000361791",
+   "feature_type": "Transcript",
+   "record_indices": [
+    302
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:102539337-102539339",
+   "allele": "TCTTCCCTGA",
+   "feature": "ENST00000370296",
+   "feature_type": "Transcript",
+   "record_indices": [
+    302
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:102539337-102539339",
+   "allele": "TCTTCCCTGA",
+   "feature": "ENST00000427256",
+   "feature_type": "Transcript",
+   "record_indices": [
+    302
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:102539337-102539339",
+   "allele": "TCTTCCCTGA",
+   "feature": "ENST00000428433",
+   "feature_type": "Transcript",
+   "record_indices": [
+    302
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:102539337-102539339",
+   "allele": "TCTTCCCTGA",
+   "feature": "ENST00000553492",
+   "feature_type": "Transcript",
+   "record_indices": [
+    302
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_exon_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:102539337-102539339",
+   "allele": "TCTTCCCTGA",
+   "feature": "ENST00000554172",
+   "feature_type": "Transcript",
+   "record_indices": [
+    302
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:102539337-102539339",
+   "allele": "TCTTCCCTGA",
+   "feature": "ENST00000554363",
+   "feature_type": "Transcript",
+   "record_indices": [
+    302
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:102539337-102539339",
+   "allele": "TCTTCCCTGA",
+   "feature": "ENST00000556085",
+   "feature_type": "Transcript",
+   "record_indices": [
+    302
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
   {
    "location": "10:56424022-56424024",
    "allele": "-",
@@ -12460,6 +12624,300 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "10:90770570-90770572",
+   "allele": "ACAAGAATT",
+   "feature": "ENST00000313771",
+   "feature_type": "Transcript",
+   "record_indices": [
+    299
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_exon_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:90770570-90770572",
+   "allele": "ACAAGAATT",
+   "feature": "ENST00000352159",
+   "feature_type": "Transcript",
+   "record_indices": [
+    299
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:90770570-90770572",
+   "allele": "ACAAGAATT",
+   "feature": "ENST00000355279",
+   "feature_type": "Transcript",
+   "record_indices": [
+    299
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:90770570-90770572",
+   "allele": "ACAAGAATT",
+   "feature": "ENST00000355740",
+   "feature_type": "Transcript",
+   "record_indices": [
+    299
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:90770570-90770572",
+   "allele": "ACAAGAATT",
+   "feature": "ENST00000484444",
+   "feature_type": "Transcript",
+   "record_indices": [
+    299
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:90770570-90770572",
+   "allele": "ACAAGAATT",
+   "feature": "ENST00000487314",
+   "feature_type": "Transcript",
+   "record_indices": [
+    299
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_exon_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:90770570-90770572",
+   "allele": "ACAAGAATT",
+   "feature": "ENST00000488877",
+   "feature_type": "Transcript",
+   "record_indices": [
+    299
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:90770570-90770572",
+   "allele": "ACAAGAATT",
+   "feature": "ENST00000494410",
+   "feature_type": "Transcript",
+   "record_indices": [
+    299
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:90770570-90770572",
+   "allele": "ACAAGAATT",
+   "feature": "ENST00000494799",
+   "feature_type": "Transcript",
+   "record_indices": [
+    299
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_exon_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:90988142-90988153",
+   "allele": "CTGCAAAACATTCATTGTTTAGGAGGCAGTAGC",
+   "feature": "ENST00000282673",
+   "feature_type": "Transcript",
+   "record_indices": [
+    300
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:90988142-90988153",
+   "allele": "CTGCAAAACATTCATTGTTTAGGAGGCAGTAGC",
+   "feature": "ENST00000336233",
+   "feature_type": "Transcript",
+   "record_indices": [
+    300
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:90988142-90988153",
+   "allele": "CTGCAAAACATTCATTGTTTAGGAGGCAGTAGC",
+   "feature": "ENST00000371837",
+   "feature_type": "Transcript",
+   "record_indices": [
+    300
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:90988142-90988153",
+   "allele": "CTGCAAAACATTCATTGTTTAGGAGGCAGTAGC",
+   "feature": "ENST00000428800",
+   "feature_type": "Transcript",
+   "record_indices": [
+    300
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "10:90988142-90988153",
+   "allele": "CTGCAAAACATTCATTGTTTAGGAGGCAGTAGC",
+   "feature": "ENST00000456827",
+   "feature_type": "Transcript",
+   "record_indices": [
+    300
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "11:108003055-108012264",
+   "allele": "TAA",
+   "feature": "ENST00000299355",
+   "feature_type": "Transcript",
+   "record_indices": [
+    343
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "11:108003055-108012264",
+   "allele": "TAA",
+   "feature": "ENST00000531813",
+   "feature_type": "Transcript",
+   "record_indices": [
+    343
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "11:108143328-108143334",
+   "allele": "TTGCATTTTTTTA",
+   "feature": "ENST00000278616",
+   "feature_type": "Transcript",
+   "record_indices": [
+    347
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "11:108143328-108143334",
+   "allele": "TTGCATTTTTTTA",
+   "feature": "ENST00000452508",
+   "feature_type": "Transcript",
+   "record_indices": [
+    347
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "11:108143328-108143334",
+   "allele": "TTGCATTTTTTTA",
+   "feature": "ENST00000527805",
+   "feature_type": "Transcript",
+   "record_indices": [
+    347
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "11:111965529-111965694",
+   "allele": "-",
+   "feature": "ENST00000528048",
+   "feature_type": "Transcript",
+   "record_indices": [
+    355
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_region_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant,splice_region_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "11:111965529-111965694",
+   "allele": "-",
+   "feature": "ENST00000528182",
+   "feature_type": "Transcript",
+   "record_indices": [
+    355
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_region_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant,splice_region_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
    "location": "11:1457361-1457363",
    "allele": "-",
    "feature": "ENST00000524702",
@@ -12500,6 +12958,20 @@
     "inframe_deletion,splice_region_variant,start_retained_variant"
    ],
    "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "11:1776106-1776139",
+   "allele": "-",
+   "feature": "ENST00000433655",
+   "feature_type": "Transcript",
+   "record_indices": [
+    309
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
   },
   {
    "location": "11:57365746-57365753",
@@ -12684,6 +13156,524 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "11:612605-612650",
+   "allele": "-",
+   "feature": "ENST00000330243",
+   "feature_type": "Transcript",
+   "record_indices": [
+    304
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "11:612605-612650",
+   "allele": "-",
+   "feature": "ENST00000348655",
+   "feature_type": "Transcript",
+   "record_indices": [
+    304
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "11:612605-612650",
+   "allele": "-",
+   "feature": "ENST00000397562",
+   "feature_type": "Transcript",
+   "record_indices": [
+    304
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "11:612605-612650",
+   "allele": "-",
+   "feature": "ENST00000397566",
+   "feature_type": "Transcript",
+   "record_indices": [
+    304
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "11:612605-612650",
+   "allele": "-",
+   "feature": "ENST00000397570",
+   "feature_type": "Transcript",
+   "record_indices": [
+    304
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "11:612605-612650",
+   "allele": "-",
+   "feature": "ENST00000397574",
+   "feature_type": "Transcript",
+   "record_indices": [
+    304
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "11:612605-612650",
+   "allele": "-",
+   "feature": "ENST00000525445",
+   "feature_type": "Transcript",
+   "record_indices": [
+    304
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "11:64571674-64572290",
+   "allele": "-",
+   "feature": "ENST00000312049",
+   "feature_type": "Transcript",
+   "record_indices": [
+    325
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "11:64571674-64572290",
+   "allele": "-",
+   "feature": "ENST00000315422",
+   "feature_type": "Transcript",
+   "record_indices": [
+    325
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "11:64571674-64572290",
+   "allele": "-",
+   "feature": "ENST00000337652",
+   "feature_type": "Transcript",
+   "record_indices": [
+    325
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "11:64571674-64572290",
+   "allele": "-",
+   "feature": "ENST00000377313",
+   "feature_type": "Transcript",
+   "record_indices": [
+    325
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "11:64571674-64572290",
+   "allele": "-",
+   "feature": "ENST00000377316",
+   "feature_type": "Transcript",
+   "record_indices": [
+    325
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "11:64571674-64572290",
+   "allele": "-",
+   "feature": "ENST00000377321",
+   "feature_type": "Transcript",
+   "record_indices": [
+    325
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "11:64571674-64572290",
+   "allele": "-",
+   "feature": "ENST00000377326",
+   "feature_type": "Transcript",
+   "record_indices": [
+    325
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "11:64571674-64572290",
+   "allele": "-",
+   "feature": "ENST00000394374",
+   "feature_type": "Transcript",
+   "record_indices": [
+    325
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "11:64571674-64572290",
+   "allele": "-",
+   "feature": "ENST00000394376",
+   "feature_type": "Transcript",
+   "record_indices": [
+    325
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "11:64571674-64572290",
+   "allele": "-",
+   "feature": "ENST00000443283",
+   "feature_type": "Transcript",
+   "record_indices": [
+    325
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "11:66293661-66293662",
+   "allele": "ATGAGT",
+   "feature": "ENST00000318312",
+   "feature_type": "Transcript",
+   "record_indices": [
+    335
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "11:66293661-66293662",
+   "allele": "ATGAGT",
+   "feature": "ENST00000393994",
+   "feature_type": "Transcript",
+   "record_indices": [
+    335
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "11:66293661-66293662",
+   "allele": "ATGAGT",
+   "feature": "ENST00000455748",
+   "feature_type": "Transcript",
+   "record_indices": [
+    335
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "11:66293661-66293662",
+   "allele": "ATGAGT",
+   "feature": "ENST00000526760",
+   "feature_type": "Transcript",
+   "record_indices": [
+    335
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "11:66293661-66293662",
+   "allele": "ATGAGT",
+   "feature": "ENST00000527959",
+   "feature_type": "Transcript",
+   "record_indices": [
+    335
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_exon_variant,splice_donor_region_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "11:66293661-66293662",
+   "allele": "ATGAGT",
+   "feature": "ENST00000529766",
+   "feature_type": "Transcript",
+   "record_indices": [
+    335
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_exon_variant,splice_donor_region_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "11:66293661-66293662",
+   "allele": "ATGAGT",
+   "feature": "ENST00000529955",
+   "feature_type": "Transcript",
+   "record_indices": [
+    335
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_exon_variant,splice_donor_region_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "13:32950801-32950809",
+   "allele": "-",
+   "feature": "ENST00000528762",
+   "feature_type": "Transcript",
+   "record_indices": [
+    388
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant"
+   ],
+   "expected_divergence": "stop_retained_without_stop_codon_test"
+  },
+  {
+   "location": "13:32950805-32950926",
+   "allele": "-",
+   "feature": "ENST00000528762",
+   "feature_type": "Transcript",
+   "record_indices": [
+    389
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant"
+   ],
+   "expected_divergence": "stop_retained_without_stop_codon_test"
+  },
+  {
+   "location": "13:32954282-32954284",
+   "allele": "ACAG",
+   "feature": "ENST00000380152",
+   "feature_type": "Transcript",
+   "record_indices": [
+    393
+   ],
+   "vep_consequence_set": "coding_sequence_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "coding_sequence_variant,intron_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "13:32954282-32954284",
+   "allele": "ACAG",
+   "feature": "ENST00000470094",
+   "feature_type": "Transcript",
+   "record_indices": [
+    393
+   ],
+   "vep_consequence_set": "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "13:32954282-32954284",
+   "allele": "ACAG",
+   "feature": "ENST00000544455",
+   "feature_type": "Transcript",
+   "record_indices": [
+    393
+   ],
+   "vep_consequence_set": "coding_sequence_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "coding_sequence_variant,intron_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "14:35513595-35521682",
+   "allele": "-",
+   "feature": "ENST00000553852",
+   "feature_type": "Transcript",
+   "record_indices": [
+    406
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "14:35513595-35521682",
+   "allele": "-",
+   "feature": "ENST00000553955",
+   "feature_type": "Transcript",
+   "record_indices": [
+    406
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "14:35546986-35556772",
+   "allele": "-",
+   "feature": "ENST00000261475",
+   "feature_type": "Transcript",
+   "record_indices": [
+    407
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "14:35546986-35556772",
+   "allele": "-",
+   "feature": "ENST00000280987",
+   "feature_type": "Transcript",
+   "record_indices": [
+    407
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "14:35546986-35556772",
+   "allele": "-",
+   "feature": "ENST00000382406",
+   "feature_type": "Transcript",
+   "record_indices": [
+    407
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "14:35546986-35556772",
+   "allele": "-",
+   "feature": "ENST00000396472",
+   "feature_type": "Transcript",
+   "record_indices": [
+    407
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "14:35546986-35556772",
+   "allele": "-",
+   "feature": "ENST00000555219",
+   "feature_type": "Transcript",
+   "record_indices": [
+    407
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "14:35546986-35556772",
+   "allele": "-",
+   "feature": "ENST00000555260",
+   "feature_type": "Transcript",
+   "record_indices": [
+    407
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
    "location": "14:65544705-65544715",
    "allele": "-",
    "feature": "ENST00000556892",
@@ -12696,6 +13686,104 @@
     "5_prime_UTR_variant,start_retained_variant"
    ],
    "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "15:42702644-42704190",
+   "allele": "-",
+   "feature": "ENST00000318023",
+   "feature_type": "Transcript",
+   "record_indices": [
+    428
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "15:42702644-42704190",
+   "allele": "-",
+   "feature": "ENST00000357568",
+   "feature_type": "Transcript",
+   "record_indices": [
+    428
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "15:42702644-42704190",
+   "allele": "-",
+   "feature": "ENST00000564503",
+   "feature_type": "Transcript",
+   "record_indices": [
+    428
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "15:42702644-42704190",
+   "allele": "-",
+   "feature": "ENST00000567817",
+   "feature_type": "Transcript",
+   "record_indices": [
+    428
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "15:42702644-42704190",
+   "allele": "-",
+   "feature": "ENST00000568153",
+   "feature_type": "Transcript",
+   "record_indices": [
+    428
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "15:42702644-42704190",
+   "allele": "-",
+   "feature": "ENST00000569136",
+   "feature_type": "Transcript",
+   "record_indices": [
+    428
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "16:222870-226673",
+   "allele": "-",
+   "feature": "ENST00000251595",
+   "feature_type": "Transcript",
+   "record_indices": [
+    453
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
   },
   {
    "location": "16:31021716-31021717",
@@ -12712,6 +13800,160 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "16:68867191-68867403",
+   "allele": "-",
+   "feature": "ENST00000261769",
+   "feature_type": "Transcript",
+   "record_indices": [
+    498
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "16:68867191-68867403",
+   "allele": "-",
+   "feature": "ENST00000422392",
+   "feature_type": "Transcript",
+   "record_indices": [
+    498
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "16:89612620-89617763",
+   "allele": "AAAGTGCT",
+   "feature": "ENST00000566221",
+   "feature_type": "Transcript",
+   "record_indices": [
+    506
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "16:89811366-89815174",
+   "allele": "-",
+   "feature": "ENST00000561660",
+   "feature_type": "Transcript",
+   "record_indices": [
+    509
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "16:89835001-89839200",
+   "allele": "-",
+   "feature": "ENST00000567205",
+   "feature_type": "Transcript",
+   "record_indices": [
+    514
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "16:89871692-89878807",
+   "allele": "-",
+   "feature": "ENST00000563513",
+   "feature_type": "Transcript",
+   "record_indices": [
+    517
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:29660108-29663752",
+   "allele": "CTA",
+   "feature": "ENST00000479536",
+   "feature_type": "Transcript",
+   "record_indices": [
+    559
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:29676650-29684340",
+   "allele": "-",
+   "feature": "ENST00000417592",
+   "feature_type": "Transcript",
+   "record_indices": [
+    563
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:29676650-29684340",
+   "allele": "-",
+   "feature": "ENST00000581790",
+   "feature_type": "Transcript",
+   "record_indices": [
+    563
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:33427467-33428227",
+   "allele": "A",
+   "feature": "ENST00000460118",
+   "feature_type": "Transcript",
+   "record_indices": [
+    568
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:33427467-33428227",
+   "allele": "A",
+   "feature": "ENST00000590016",
+   "feature_type": "Transcript",
+   "record_indices": [
+    568
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
    "location": "17:33433449-33433495",
    "allele": "-",
    "feature": "ENST00000590631",
@@ -12724,6 +13966,1028 @@
     "5_prime_UTR_variant,start_retained_variant"
    ],
    "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "17:33445519-33445637",
+   "allele": "-",
+   "feature": "ENST00000586186",
+   "feature_type": "Transcript",
+   "record_indices": [
+    571
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:33445519-33445637",
+   "allele": "-",
+   "feature": "ENST00000592928",
+   "feature_type": "Transcript",
+   "record_indices": [
+    571
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197690-41197817",
+   "allele": "-",
+   "feature": "ENST00000491747",
+   "feature_type": "Transcript",
+   "record_indices": [
+    580
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_region_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_region_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197694-41197820",
+   "allele": "-",
+   "feature": "ENST00000309486",
+   "feature_type": "Transcript",
+   "record_indices": [
+    581
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197694-41197820",
+   "allele": "-",
+   "feature": "ENST00000346315",
+   "feature_type": "Transcript",
+   "record_indices": [
+    581
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197694-41197820",
+   "allele": "-",
+   "feature": "ENST00000351666",
+   "feature_type": "Transcript",
+   "record_indices": [
+    581
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197694-41197820",
+   "allele": "-",
+   "feature": "ENST00000352993",
+   "feature_type": "Transcript",
+   "record_indices": [
+    581
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197694-41197820",
+   "allele": "-",
+   "feature": "ENST00000354071",
+   "feature_type": "Transcript",
+   "record_indices": [
+    581
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197694-41197820",
+   "allele": "-",
+   "feature": "ENST00000357654",
+   "feature_type": "Transcript",
+   "record_indices": [
+    581
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197694-41197820",
+   "allele": "-",
+   "feature": "ENST00000468300",
+   "feature_type": "Transcript",
+   "record_indices": [
+    581
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197694-41197820",
+   "allele": "-",
+   "feature": "ENST00000471181",
+   "feature_type": "Transcript",
+   "record_indices": [
+    581
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197694-41197820",
+   "allele": "-",
+   "feature": "ENST00000491747",
+   "feature_type": "Transcript",
+   "record_indices": [
+    581
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197694-41197820",
+   "allele": "-",
+   "feature": "ENST00000493795",
+   "feature_type": "Transcript",
+   "record_indices": [
+    581
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197694-41197820",
+   "allele": "-",
+   "feature": "ENST00000586385",
+   "feature_type": "Transcript",
+   "record_indices": [
+    581
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197694-41197820",
+   "allele": "-",
+   "feature": "ENST00000591534",
+   "feature_type": "Transcript",
+   "record_indices": [
+    581
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197694-41197820",
+   "allele": "-",
+   "feature": "ENST00000591849",
+   "feature_type": "Transcript",
+   "record_indices": [
+    581
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41197695-41203134",
+   "allele": "-",
+   "feature": "ENST00000591849",
+   "feature_type": "Transcript",
+   "record_indices": [
+    582
+   ],
+   "vep_consequence_set": "5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000309486",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000346315",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000351666",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000352993",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000357654",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000461221",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000468300",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000471181",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000478531",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000484087",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000491747",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000493795",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000493919",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000586385",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATCAA",
+   "feature": "ENST00000591534",
+   "feature_type": "Transcript",
+   "record_indices": [
+    587
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000309486",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000346315",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000351666",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000352993",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000357654",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000461221",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000468300",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000471181",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000478531",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000484087",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000491747",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000493795",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000493919",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000586385",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41215963-41215966",
+   "allele": "GCAGAATGAA",
+   "feature": "ENST00000591534",
+   "feature_type": "Transcript",
+   "record_indices": [
+    588
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41242957-41246843",
+   "allele": "-",
+   "feature": "ENST00000412061",
+   "feature_type": "Transcript",
+   "record_indices": [
+    591
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:41256883-41256974",
+   "allele": "-",
+   "feature": "ENST00000461221",
+   "feature_type": "Transcript",
+   "record_indices": [
+    597
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "stop_retained_without_stop_codon_test"
+  },
+  {
+   "location": "17:41256883-41256974",
+   "allele": "-",
+   "feature": "ENST00000461798",
+   "feature_type": "Transcript",
+   "record_indices": [
+    597
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "stop_retained_without_stop_codon_test"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000309486",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "5_prime_UTR_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "5_prime_UTR_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000346315",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000351666",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000352993",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000354071",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000357654",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000461221",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "NMD_transcript_variant,frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "NMD_transcript_variant,frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000461798",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "NMD_transcript_variant,frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "NMD_transcript_variant,frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000467274",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_exon_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000468300",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000470026",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000471181",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000476777",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000478531",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000491747",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000492859",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000493795",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "5_prime_UTR_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "5_prime_UTR_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000493919",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "5_prime_UTR_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "5_prime_UTR_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:41258544-41258548",
+   "allele": "AAATCTATAAATT",
+   "feature": "ENST00000494123",
+   "feature_type": "Transcript",
+   "record_indices": [
+    601
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:45234747-45235568",
+   "allele": "-",
+   "feature": "ENST00000570818",
+   "feature_type": "Transcript",
+   "record_indices": [
+    607
+   ],
+   "vep_consequence_set": "NMD_transcript_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "NMD_transcript_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:45234749-45235569",
+   "allele": "-",
+   "feature": "ENST00000570818",
+   "feature_type": "Transcript",
+   "record_indices": [
+    608
+   ],
+   "vep_consequence_set": "NMD_transcript_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant"
+   ],
+   "expected_divergence": "stop_retained_without_stop_codon_test"
+  },
+  {
+   "location": "17:45677204-45683286",
+   "allele": "AGGCAGAATTTCACTCTTGTCACCC",
+   "feature": "ENST00000525048",
+   "feature_type": "Transcript",
+   "record_indices": [
+    609
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:56774053-56774219",
+   "allele": "-",
+   "feature": "ENST00000584617",
+   "feature_type": "Transcript",
+   "record_indices": [
+    613
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
   },
   {
    "location": "17:7349390-7349403",
@@ -12810,6 +15074,216 @@
    "expected_divergence": "splice_family_swap"
   },
   {
+   "location": "17:7572906-7579931",
+   "allele": "-",
+   "feature": "ENST00000269305",
+   "feature_type": "Transcript",
+   "record_indices": [
+    527
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:7572906-7579931",
+   "allele": "-",
+   "feature": "ENST00000420246",
+   "feature_type": "Transcript",
+   "record_indices": [
+    527
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:7572906-7579931",
+   "allele": "-",
+   "feature": "ENST00000445888",
+   "feature_type": "Transcript",
+   "record_indices": [
+    527
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:7572906-7579931",
+   "allele": "-",
+   "feature": "ENST00000455263",
+   "feature_type": "Transcript",
+   "record_indices": [
+    527
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:7572906-7579931",
+   "allele": "-",
+   "feature": "ENST00000576024",
+   "feature_type": "Transcript",
+   "record_indices": [
+    527
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "17:7579716-7579719",
+   "allele": "ACGTTCTT",
+   "feature": "ENST00000269305",
+   "feature_type": "Transcript",
+   "record_indices": [
+    528
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:7579716-7579719",
+   "allele": "ACGTTCTT",
+   "feature": "ENST00000359597",
+   "feature_type": "Transcript",
+   "record_indices": [
+    528
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:7579716-7579719",
+   "allele": "ACGTTCTT",
+   "feature": "ENST00000413465",
+   "feature_type": "Transcript",
+   "record_indices": [
+    528
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:7579716-7579719",
+   "allele": "ACGTTCTT",
+   "feature": "ENST00000420246",
+   "feature_type": "Transcript",
+   "record_indices": [
+    528
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:7579716-7579719",
+   "allele": "ACGTTCTT",
+   "feature": "ENST00000445888",
+   "feature_type": "Transcript",
+   "record_indices": [
+    528
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:7579716-7579719",
+   "allele": "ACGTTCTT",
+   "feature": "ENST00000455263",
+   "feature_type": "Transcript",
+   "record_indices": [
+    528
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:7579716-7579719",
+   "allele": "ACGTTCTT",
+   "feature": "ENST00000503591",
+   "feature_type": "Transcript",
+   "record_indices": [
+    528
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:7579716-7579719",
+   "allele": "ACGTTCTT",
+   "feature": "ENST00000508793",
+   "feature_type": "Transcript",
+   "record_indices": [
+    528
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:7579716-7579719",
+   "allele": "ACGTTCTT",
+   "feature": "ENST00000514944",
+   "feature_type": "Transcript",
+   "record_indices": [
+    528
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "17:7579716-7579719",
+   "allele": "ACGTTCTT",
+   "feature": "ENST00000604348",
+   "feature_type": "Transcript",
+   "record_indices": [
+    528
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
    "location": "17:79990613-79990615",
    "allele": "-",
    "feature": "ENST00000580965",
@@ -12838,6 +15312,300 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "17:80050892-80050893",
+   "allele": "GGCAGTA",
+   "feature": "ENST00000306749",
+   "feature_type": "Transcript",
+   "record_indices": [
+    634
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "18:59819870-59824935",
+   "allele": "-",
+   "feature": "ENST00000589098",
+   "feature_type": "Transcript",
+   "record_indices": [
+    641
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "18:61459676-61459677",
+   "allele": "TAAACTTTACCT",
+   "feature": "ENST00000336429",
+   "feature_type": "Transcript",
+   "record_indices": [
+    642
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "18:61459676-61459677",
+   "allele": "TAAACTTTACCT",
+   "feature": "ENST00000398019",
+   "feature_type": "Transcript",
+   "record_indices": [
+    642
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "18:61459676-61459677",
+   "allele": "TAAACTTTACCT",
+   "feature": "ENST00000425392",
+   "feature_type": "Transcript",
+   "record_indices": [
+    642
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "18:61459676-61459677",
+   "allele": "TAAACTTTACCT",
+   "feature": "ENST00000431370",
+   "feature_type": "Transcript",
+   "record_indices": [
+    642
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "18:61459676-61459677",
+   "allele": "TAAACTTTACCT",
+   "feature": "ENST00000447428",
+   "feature_type": "Transcript",
+   "record_indices": [
+    642
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "18:61459676-61459677",
+   "allele": "TAAACTTTACCT",
+   "feature": "ENST00000546027",
+   "feature_type": "Transcript",
+   "record_indices": [
+    642
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "19:11222310-11222314",
+   "allele": "TGTGCAA",
+   "feature": "ENST00000252444",
+   "feature_type": "Transcript",
+   "record_indices": [
+    652
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "19:11222310-11222314",
+   "allele": "TGTGCAA",
+   "feature": "ENST00000455727",
+   "feature_type": "Transcript",
+   "record_indices": [
+    652
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "19:11222310-11222314",
+   "allele": "TGTGCAA",
+   "feature": "ENST00000535915",
+   "feature_type": "Transcript",
+   "record_indices": [
+    652
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "19:11222310-11222314",
+   "allele": "TGTGCAA",
+   "feature": "ENST00000545707",
+   "feature_type": "Transcript",
+   "record_indices": [
+    652
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "19:11222310-11222314",
+   "allele": "TGTGCAA",
+   "feature": "ENST00000557933",
+   "feature_type": "Transcript",
+   "record_indices": [
+    652
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "19:11222310-11222314",
+   "allele": "TGTGCAA",
+   "feature": "ENST00000558013",
+   "feature_type": "Transcript",
+   "record_indices": [
+    652
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "19:11222310-11222314",
+   "allele": "TGTGCAA",
+   "feature": "ENST00000558518",
+   "feature_type": "Transcript",
+   "record_indices": [
+    652
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "19:11222310-11222314",
+   "allele": "TGTGCAA",
+   "feature": "ENST00000560173",
+   "feature_type": "Transcript",
+   "record_indices": [
+    652
+   ],
+   "vep_consequence_set": "non_coding_transcript_exon_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "19:11222310-11222314",
+   "allele": "TGTGCAA",
+   "feature": "ENST00000560467",
+   "feature_type": "Transcript",
+   "record_indices": [
+    652
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "19:11230813-11235085",
+   "allele": "-",
+   "feature": "ENST00000559340",
+   "feature_type": "Transcript",
+   "record_indices": [
+    654
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "19:13004385-13008073",
+   "allele": "-",
+   "feature": "ENST00000590530",
+   "feature_type": "Transcript",
+   "record_indices": [
+    657
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "19:33984005-33984228",
+   "allele": "GGCAAAGGCTGGGGCCCCATGTCAAGGCCCACGGCATG",
+   "feature": "ENST00000590408",
+   "feature_type": "Transcript",
+   "record_indices": [
+    661
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "stop_retained_without_stop_codon_test"
+  },
+  {
+   "location": "19:45858101-45858116",
+   "allele": "-",
+   "feature": "ENST00000587376",
+   "feature_type": "Transcript",
+   "record_indices": [
+    668
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
    "location": "19:47259139-47259161",
    "allele": "-",
    "feature": "ENST00000594467",
@@ -12850,6 +15618,412 @@
     "frameshift_variant,start_retained_variant"
    ],
    "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "1:115251151-115251187",
+   "allele": "-",
+   "feature": "ENST00000369535",
+   "feature_type": "Transcript",
+   "record_indices": [
+    16
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:27107246-27107256",
+   "allele": "-",
+   "feature": "ENST00000374152",
+   "feature_type": "Transcript",
+   "record_indices": [
+    6
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_without_stop_codon_test"
+  },
+  {
+   "location": "1:33473829-33478866",
+   "allele": "-",
+   "feature": "ENST00000354858",
+   "feature_type": "Transcript",
+   "record_indices": [
+    7
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:33473829-33478866",
+   "allele": "-",
+   "feature": "ENST00000373449",
+   "feature_type": "Transcript",
+   "record_indices": [
+    7
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "1:33473829-33478866",
+   "allele": "-",
+   "feature": "ENST00000467905",
+   "feature_type": "Transcript",
+   "record_indices": [
+    7
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:33473829-33478866",
+   "allele": "-",
+   "feature": "ENST00000548033",
+   "feature_type": "Transcript",
+   "record_indices": [
+    7
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000354383",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000355498",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000372098",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000372100",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000372104",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000372110",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000372115",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000448481",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000450313",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000456914",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000470256",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000488731",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000525160",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000528013",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000528332",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000529984",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000531105",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45794768-45799052",
+   "allele": "TA",
+   "feature": "ENST00000533178",
+   "feature_type": "Transcript",
+   "record_indices": [
+    10
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45798269-45801500",
+   "allele": "-",
+   "feature": "ENST00000461495",
+   "feature_type": "Transcript",
+   "record_indices": [
+    11
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45798269-45801500",
+   "allele": "-",
+   "feature": "ENST00000467940",
+   "feature_type": "Transcript",
+   "record_indices": [
+    11
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45798269-45801500",
+   "allele": "-",
+   "feature": "ENST00000475516",
+   "feature_type": "Transcript",
+   "record_indices": [
+    11
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45798269-45801500",
+   "allele": "-",
+   "feature": "ENST00000481571",
+   "feature_type": "Transcript",
+   "record_indices": [
+    11
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "1:45798269-45801500",
+   "allele": "-",
+   "feature": "ENST00000525160",
+   "feature_type": "Transcript",
+   "record_indices": [
+    11
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
   },
   {
    "location": "21:27341781",
@@ -13062,6 +16236,160 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "22:21351253-21351254",
+   "allele": "TTGG",
+   "feature": "ENST00000215739",
+   "feature_type": "Transcript",
+   "record_indices": [
+    941
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "22:21351253-21351254",
+   "allele": "TTGG",
+   "feature": "ENST00000389355",
+   "feature_type": "Transcript",
+   "record_indices": [
+    941
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "22:21351253-21351254",
+   "allele": "TTGG",
+   "feature": "ENST00000452988",
+   "feature_type": "Transcript",
+   "record_indices": [
+    941
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "22:21351253-21351254",
+   "allele": "TTGG",
+   "feature": "ENST00000463909",
+   "feature_type": "Transcript",
+   "record_indices": [
+    941
+   ],
+   "vep_consequence_set": "non_coding_transcript_exon_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "22:21351253-21351254",
+   "allele": "TTGG",
+   "feature": "ENST00000479606",
+   "feature_type": "Transcript",
+   "record_indices": [
+    941
+   ],
+   "vep_consequence_set": "non_coding_transcript_exon_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "22:21351253-21351254",
+   "allele": "TTGG",
+   "feature": "ENST00000498649",
+   "feature_type": "Transcript",
+   "record_indices": [
+    941
+   ],
+   "vep_consequence_set": "non_coding_transcript_exon_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "22:29105994-29108005",
+   "allele": "-",
+   "feature": "ENST00000417588",
+   "feature_type": "Transcript",
+   "record_indices": [
+    947
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "22:29105994-29108005",
+   "allele": "-",
+   "feature": "ENST00000439346",
+   "feature_type": "Transcript",
+   "record_indices": [
+    947
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "2:191835427-191835433",
+   "allele": "-",
+   "feature": "ENST00000361099",
+   "feature_type": "Transcript",
+   "record_indices": [
+    65
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "2:191835427-191835433",
+   "allele": "-",
+   "feature": "ENST00000409465",
+   "feature_type": "Transcript",
+   "record_indices": [
+    65
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "2:191835427-191835433",
+   "allele": "-",
+   "feature": "ENST00000415035",
+   "feature_type": "Transcript",
+   "record_indices": [
+    65
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
    "location": "2:211421460-211421462",
    "allele": "-",
    "feature": "ENST00000233072",
@@ -13104,6 +16432,314 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "2:215593398-215595734",
+   "allele": "-",
+   "feature": "ENST00000260947",
+   "feature_type": "Transcript",
+   "record_indices": [
+    69
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "2:215593398-215595734",
+   "allele": "-",
+   "feature": "ENST00000432456",
+   "feature_type": "Transcript",
+   "record_indices": [
+    69
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "2:215593398-215595734",
+   "allele": "-",
+   "feature": "ENST00000449967",
+   "feature_type": "Transcript",
+   "record_indices": [
+    69
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "2:230633431-230633434",
+   "allele": "AAGTAAATATACCATAT",
+   "feature": "ENST00000283943",
+   "feature_type": "Transcript",
+   "record_indices": [
+    76
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "2:230633431-230633434",
+   "allele": "AAGTAAATATACCATAT",
+   "feature": "ENST00000389044",
+   "feature_type": "Transcript",
+   "record_indices": [
+    76
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "2:230633431-230633434",
+   "allele": "AAGTAAATATACCATAT",
+   "feature": "ENST00000389045",
+   "feature_type": "Transcript",
+   "record_indices": [
+    76
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "2:230633431-230633434",
+   "allele": "AAGTAAATATACCATAT",
+   "feature": "ENST00000418123",
+   "feature_type": "Transcript",
+   "record_indices": [
+    76
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "2:241724516-241724517",
+   "allele": "CTTTT",
+   "feature": "ENST00000320389",
+   "feature_type": "Transcript",
+   "record_indices": [
+    80
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "2:241724516-241724517",
+   "allele": "CTTTT",
+   "feature": "ENST00000404283",
+   "feature_type": "Transcript",
+   "record_indices": [
+    80
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "2:241724516-241724517",
+   "allele": "CTTTT",
+   "feature": "ENST00000428768",
+   "feature_type": "Transcript",
+   "record_indices": [
+    80
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "2:241724516-241724517",
+   "allele": "CTTTT",
+   "feature": "ENST00000498729",
+   "feature_type": "Transcript",
+   "record_indices": [
+    80
+   ],
+   "vep_consequence_set": "intron_variant,protein_altering_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "protein_altering_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "2:27463122-27463128",
+   "allele": "GGAGGTTGAGG",
+   "feature": "ENST00000264705",
+   "feature_type": "Transcript",
+   "record_indices": [
+    35
+   ],
+   "vep_consequence_set": "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "2:27463122-27463128",
+   "allele": "GGAGGTTGAGG",
+   "feature": "ENST00000403525",
+   "feature_type": "Transcript",
+   "record_indices": [
+    35
+   ],
+   "vep_consequence_set": "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "2:27463122-27463128",
+   "allele": "GGAGGTTGAGG",
+   "feature": "ENST00000456311",
+   "feature_type": "Transcript",
+   "record_indices": [
+    35
+   ],
+   "vep_consequence_set": "intron_variant,splice_acceptor_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "2:27532720-27532867",
+   "allele": "-",
+   "feature": "ENST00000233545",
+   "feature_type": "Transcript",
+   "record_indices": [
+    36
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "2:27532720-27532867",
+   "allele": "-",
+   "feature": "ENST00000357186",
+   "feature_type": "Transcript",
+   "record_indices": [
+    36
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "2:27532720-27532867",
+   "allele": "-",
+   "feature": "ENST00000380044",
+   "feature_type": "Transcript",
+   "record_indices": [
+    36
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "2:27532720-27532867",
+   "allele": "-",
+   "feature": "ENST00000402310",
+   "feature_type": "Transcript",
+   "record_indices": [
+    36
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "2:27532720-27532867",
+   "allele": "-",
+   "feature": "ENST00000405076",
+   "feature_type": "Transcript",
+   "record_indices": [
+    36
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "2:27532720-27532867",
+   "allele": "-",
+   "feature": "ENST00000405983",
+   "feature_type": "Transcript",
+   "record_indices": [
+    36
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "2:27532720-27532867",
+   "allele": "-",
+   "feature": "ENST00000430991",
+   "feature_type": "Transcript",
+   "record_indices": [
+    36
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "2:27532720-27532867",
+   "allele": "-",
+   "feature": "ENST00000435114",
+   "feature_type": "Transcript",
+   "record_indices": [
+    36
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
    "location": "2:36803309",
    "allele": "A[21:38365819[",
    "feature": "ENST00000336648",
@@ -13144,6 +16780,62 @@
     "upstream_gene_variant"
    ],
    "expected_divergence": "breakend_mate_local_read"
+  },
+  {
+   "location": "2:48033983-48034002",
+   "allele": "AGTCTATAATTCCTTAATCAATGTAGTCAGTCTATAATTCCTTAATCA",
+   "feature": "ENST00000234420",
+   "feature_type": "Transcript",
+   "record_indices": [
+    50
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "2:48033983-48034002",
+   "allele": "AGTCTATAATTCCTTAATCAATGTAGTCAGTCTATAATTCCTTAATCA",
+   "feature": "ENST00000538136",
+   "feature_type": "Transcript",
+   "record_indices": [
+    50
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "2:48033983-48034002",
+   "allele": "AGTCTATAATTCCTTAATCAATGTAGTCAGTCTATAATTCCTTAATCA",
+   "feature": "ENST00000540021",
+   "feature_type": "Transcript",
+   "record_indices": [
+    50
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
+   "location": "3:128779622-128781249",
+   "allele": "-",
+   "feature": "ENST00000307395",
+   "feature_type": "Transcript",
+   "record_indices": [
+    124
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
   },
   {
    "location": "3:132441198-132441199",
@@ -13230,6 +16922,20 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "3:23959513-23959536",
+   "allele": "-",
+   "feature": "ENST00000436146",
+   "feature_type": "Transcript",
+   "record_indices": [
+    85
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,splice_region_variant"
+   ],
+   "expected_divergence": "stop_retained_three_base_stop_codon_test"
+  },
+  {
    "location": "3:37035041-37035043",
    "allele": "-",
    "feature": "ENST00000231790",
@@ -13298,6 +17004,412 @@
     "NMD_transcript_variant,inframe_deletion,start_retained_variant"
    ],
    "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "3:37038108-37038201",
+   "allele": "-",
+   "feature": "ENST00000454028",
+   "feature_type": "Transcript",
+   "record_indices": [
+    91
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "stop_retained_without_stop_codon_test"
+  },
+  {
+   "location": "3:37038108-37038201",
+   "allele": "-",
+   "feature": "ENST00000457004",
+   "feature_type": "Transcript",
+   "record_indices": [
+    91
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,intron_variant,splice_acceptor_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "stop_retained_without_stop_codon_test"
+  },
+  {
+   "location": "3:37042444-37042447",
+   "allele": "-",
+   "feature": "ENST00000442249",
+   "feature_type": "Transcript",
+   "record_indices": [
+    92
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,splice_acceptor_variant"
+   ],
+   "expected_divergence": "stop_retained_without_stop_codon_test"
+  },
+  {
+   "location": "3:37061776-37061930",
+   "allele": "CA",
+   "feature": "ENST00000447829",
+   "feature_type": "Transcript",
+   "record_indices": [
+    102
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "3:37067126-37067499",
+   "allele": "-",
+   "feature": "ENST00000413212",
+   "feature_type": "Transcript",
+   "record_indices": [
+    107
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "3:37067126-37067499",
+   "allele": "-",
+   "feature": "ENST00000458009",
+   "feature_type": "Transcript",
+   "record_indices": [
+    107
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "3:37091967-37092017",
+   "allele": "-",
+   "feature": "ENST00000450420",
+   "feature_type": "Transcript",
+   "record_indices": [
+    111
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "4:3491525-3491527",
+   "allele": "CCGGGCAGGCGGGCA",
+   "feature": "ENST00000340083",
+   "feature_type": "Transcript",
+   "record_indices": [
+    142
+   ],
+   "vep_consequence_set": "intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_donor_region_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "4:3491525-3491527",
+   "allele": "CCGGGCAGGCGGGCA",
+   "feature": "ENST00000389653",
+   "feature_type": "Transcript",
+   "record_indices": [
+    142
+   ],
+   "vep_consequence_set": "intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_donor_region_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "4:3491525-3491527",
+   "allele": "CCGGGCAGGCGGGCA",
+   "feature": "ENST00000503688",
+   "feature_type": "Transcript",
+   "record_indices": [
+    142
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "4:3491525-3491527",
+   "allele": "CCGGGCAGGCGGGCA",
+   "feature": "ENST00000507039",
+   "feature_type": "Transcript",
+   "record_indices": [
+    142
+   ],
+   "vep_consequence_set": "intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_donor_region_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "4:3491525-3491527",
+   "allele": "CCGGGCAGGCGGGCA",
+   "feature": "ENST00000513995",
+   "feature_type": "Transcript",
+   "record_indices": [
+    142
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "4:3491525-3491527",
+   "allele": "CCGGGCAGGCGGGCA",
+   "feature": "ENST00000515886",
+   "feature_type": "Transcript",
+   "record_indices": [
+    142
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant,splice_donor_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "4:74286010-74286039",
+   "allele": "AAAAT",
+   "feature": "ENST00000295897",
+   "feature_type": "Transcript",
+   "record_indices": [
+    149
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "4:74286010-74286039",
+   "allele": "AAAAT",
+   "feature": "ENST00000401494",
+   "feature_type": "Transcript",
+   "record_indices": [
+    149
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "4:74286010-74286039",
+   "allele": "AAAAT",
+   "feature": "ENST00000415165",
+   "feature_type": "Transcript",
+   "record_indices": [
+    149
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "4:74286010-74286039",
+   "allele": "AAAAT",
+   "feature": "ENST00000503124",
+   "feature_type": "Transcript",
+   "record_indices": [
+    149
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "4:74286010-74286039",
+   "allele": "AAAAT",
+   "feature": "ENST00000511370",
+   "feature_type": "Transcript",
+   "record_indices": [
+    149
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "5:118811425-118811440",
+   "allele": "TGTTGTGATTTTTTAGTGAATTGTGTATTTTAGTGATGTGTGTATAATTTTTTTAAAAAGTATATACTTTCCTCCTTTTACCCTATACAACATTGATTT",
+   "feature": "ENST00000256216",
+   "feature_type": "Transcript",
+   "record_indices": [
+    176
+   ],
+   "vep_consequence_set": "intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_donor_5th_base_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "5:118811425-118811440",
+   "allele": "TGTTGTGATTTTTTAGTGAATTGTGTATTTTAGTGATGTGTGTATAATTTTTTTAAAAAGTATATACTTTCCTCCTTTTACCCTATACAACATTGATTT",
+   "feature": "ENST00000414835",
+   "feature_type": "Transcript",
+   "record_indices": [
+    176
+   ],
+   "vep_consequence_set": "intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_donor_5th_base_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "5:118811425-118811440",
+   "allele": "TGTTGTGATTTTTTAGTGAATTGTGTATTTTAGTGATGTGTGTATAATTTTTTTAAAAAGTATATACTTTCCTCCTTTTACCCTATACAACATTGATTT",
+   "feature": "ENST00000442060",
+   "feature_type": "Transcript",
+   "record_indices": [
+    176
+   ],
+   "vep_consequence_set": "NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "5:118811425-118811440",
+   "allele": "TGTTGTGATTTTTTAGTGAATTGTGTATTTTAGTGATGTGTGTATAATTTTTTTAAAAAGTATATACTTTCCTCCTTTTACCCTATACAACATTGATTT",
+   "feature": "ENST00000503168",
+   "feature_type": "Transcript",
+   "record_indices": [
+    176
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "5:118811425-118811440",
+   "allele": "TGTTGTGATTTTTTAGTGAATTGTGTATTTTAGTGATGTGTGTATAATTTTTTTAAAAAGTATATACTTTCCTCCTTTTACCCTATACAACATTGATTT",
+   "feature": "ENST00000504811",
+   "feature_type": "Transcript",
+   "record_indices": [
+    176
+   ],
+   "vep_consequence_set": "intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_donor_5th_base_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "5:118811425-118811440",
+   "allele": "TGTTGTGATTTTTTAGTGAATTGTGTATTTTAGTGATGTGTGTATAATTTTTTTAAAAAGTATATACTTTCCTCCTTTTACCCTATACAACATTGATTT",
+   "feature": "ENST00000507695",
+   "feature_type": "Transcript",
+   "record_indices": [
+    176
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "5:118811425-118811440",
+   "allele": "TGTTGTGATTTTTTAGTGAATTGTGTATTTTAGTGATGTGTGTATAATTTTTTTAAAAAGTATATACTTTCCTCCTTTTACCCTATACAACATTGATTT",
+   "feature": "ENST00000510025",
+   "feature_type": "Transcript",
+   "record_indices": [
+    176
+   ],
+   "vep_consequence_set": "intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_donor_5th_base_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "5:118811425-118811440",
+   "allele": "TGTTGTGATTTTTTAGTGAATTGTGTATTTTAGTGATGTGTGTATAATTTTTTTAAAAAGTATATACTTTCCTCCTTTTACCCTATACAACATTGATTT",
+   "feature": "ENST00000511186",
+   "feature_type": "Transcript",
+   "record_indices": [
+    176
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "5:118811425-118811440",
+   "allele": "TGTTGTGATTTTTTAGTGAATTGTGTATTTTAGTGATGTGTGTATAATTTTTTTAAAAAGTATATACTTTCCTCCTTTTACCCTATACAACATTGATTT",
+   "feature": "ENST00000512841",
+   "feature_type": "Transcript",
+   "record_indices": [
+    176
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "5:118811425-118811440",
+   "allele": "TGTTGTGATTTTTTAGTGAATTGTGTATTTTAGTGATGTGTGTATAATTTTTTTAAAAAGTATATACTTTCCTCCTTTTACCCTATACAACATTGATTT",
+   "feature": "ENST00000515235",
+   "feature_type": "Transcript",
+   "record_indices": [
+    176
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_5th_base_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "5:118811425-118811440",
+   "allele": "TGTTGTGATTTTTTAGTGAATTGTGTATTTTAGTGATGTGTGTATAATTTTTTTAAAAAGTATATACTTTCCTCCTTTTACCCTATACAACATTGATTT",
+   "feature": "ENST00000515320",
+   "feature_type": "Transcript",
+   "record_indices": [
+    176
+   ],
+   "vep_consequence_set": "intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_polypyrimidine_tract_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_donor_5th_base_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
   },
   {
    "location": "5:32368771",
@@ -13524,6 +17636,370 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "6:109475247-109477387",
+   "allele": "GTTTCAAATCTAAAGCACTCCAAGGAAAAGTAT",
+   "feature": "ENST00000519095",
+   "feature_type": "Transcript",
+   "record_indices": [
+    201
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "6:109475247-109477387",
+   "allele": "GTTTCAAATCTAAAGCACTCCAAGGAAAAGTAT",
+   "feature": "ENST00000521277",
+   "feature_type": "Transcript",
+   "record_indices": [
+    201
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "6:135732465-135732479",
+   "allele": "TTTAAAACTTTAAAAAAGTC",
+   "feature": "ENST00000265602",
+   "feature_type": "Transcript",
+   "record_indices": [
+    203
+   ],
+   "vep_consequence_set": "intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "6:135732465-135732479",
+   "allele": "TTTAAAACTTTAAAAAAGTC",
+   "feature": "ENST00000327035",
+   "feature_type": "Transcript",
+   "record_indices": [
+    203
+   ],
+   "vep_consequence_set": "intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "6:135732465-135732479",
+   "allele": "TTTAAAACTTTAAAAAAGTC",
+   "feature": "ENST00000367799",
+   "feature_type": "Transcript",
+   "record_indices": [
+    203
+   ],
+   "vep_consequence_set": "intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "6:135732465-135732479",
+   "allele": "TTTAAAACTTTAAAAAAGTC",
+   "feature": "ENST00000367800",
+   "feature_type": "Transcript",
+   "record_indices": [
+    203
+   ],
+   "vep_consequence_set": "intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "6:135732465-135732479",
+   "allele": "TTTAAAACTTTAAAAAAGTC",
+   "feature": "ENST00000417892",
+   "feature_type": "Transcript",
+   "record_indices": [
+    203
+   ],
+   "vep_consequence_set": "intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "6:135732465-135732479",
+   "allele": "TTTAAAACTTTAAAAAAGTC",
+   "feature": "ENST00000457866",
+   "feature_type": "Transcript",
+   "record_indices": [
+    203
+   ],
+   "vep_consequence_set": "intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "6:135732465-135732479",
+   "allele": "TTTAAAACTTTAAAAAAGTC",
+   "feature": "ENST00000475846",
+   "feature_type": "Transcript",
+   "record_indices": [
+    203
+   ],
+   "vep_consequence_set": "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "NMD_transcript_variant,intron_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "6:135732465-135732479",
+   "allele": "TTTAAAACTTTAAAAAAGTC",
+   "feature": "ENST00000529865",
+   "feature_type": "Transcript",
+   "record_indices": [
+    203
+   ],
+   "vep_consequence_set": "intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "intron_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "6:135732465-135732479",
+   "allele": "TTTAAAACTTTAAAAAAGTC",
+   "feature": "ENST00000531788",
+   "feature_type": "Transcript",
+   "record_indices": [
+    203
+   ],
+   "vep_consequence_set": "NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "NMD_transcript_variant,intron_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:156619430-156619438",
+   "allele": "TCTCAGTTCA",
+   "feature": "ENST00000353442",
+   "feature_type": "Transcript",
+   "record_indices": [
+    235
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:156619430-156619438",
+   "allele": "TCTCAGTTCA",
+   "feature": "ENST00000354505",
+   "feature_type": "Transcript",
+   "record_indices": [
+    235
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:156619430-156619438",
+   "allele": "TCTCAGTTCA",
+   "feature": "ENST00000414218",
+   "feature_type": "Transcript",
+   "record_indices": [
+    235
+   ],
+   "vep_consequence_set": "NMD_transcript_variant,frameshift_variant,splice_acceptor_variant,stop_lost",
+   "vep_rs_consequence_sets": [
+    "NMD_transcript_variant,frameshift_variant,splice_region_variant,stop_lost"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:156619430-156619438",
+   "allele": "TCTCAGTTCA",
+   "feature": "ENST00000415428",
+   "feature_type": "Transcript",
+   "record_indices": [
+    235
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:156619430-156619438",
+   "allele": "TCTCAGTTCA",
+   "feature": "ENST00000433968",
+   "feature_type": "Transcript",
+   "record_indices": [
+    235
+   ],
+   "vep_consequence_set": "non_coding_transcript_exon_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:156619430-156619438",
+   "allele": "TCTCAGTTCA",
+   "feature": "ENST00000434278",
+   "feature_type": "Transcript",
+   "record_indices": [
+    235
+   ],
+   "vep_consequence_set": "NMD_transcript_variant,frameshift_variant,splice_acceptor_variant,stop_gained",
+   "vep_rs_consequence_sets": [
+    "NMD_transcript_variant,frameshift_variant,splice_region_variant,stop_gained"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:156619430-156619438",
+   "allele": "TCTCAGTTCA",
+   "feature": "ENST00000434453",
+   "feature_type": "Transcript",
+   "record_indices": [
+    235
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:156619430-156619438",
+   "allele": "TCTCAGTTCA",
+   "feature": "ENST00000444719",
+   "feature_type": "Transcript",
+   "record_indices": [
+    235
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:156619430-156619438",
+   "allele": "TCTCAGTTCA",
+   "feature": "ENST00000454132",
+   "feature_type": "Transcript",
+   "record_indices": [
+    235
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:156619430-156619438",
+   "allele": "TCTCAGTTCA",
+   "feature": "ENST00000461469",
+   "feature_type": "Transcript",
+   "record_indices": [
+    235
+   ],
+   "vep_consequence_set": "non_coding_transcript_exon_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:156619430-156619438",
+   "allele": "TCTCAGTTCA",
+   "feature": "ENST00000498034",
+   "feature_type": "Transcript",
+   "record_indices": [
+    235
+   ],
+   "vep_consequence_set": "non_coding_transcript_exon_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:156619430-156619438",
+   "allele": "TCTCAGTTCA",
+   "feature": "ENST00000540390",
+   "feature_type": "Transcript",
+   "record_indices": [
+    235
+   ],
+   "vep_consequence_set": "frameshift_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:6013030-6022622",
+   "allele": "-",
+   "feature": "ENST00000406569",
+   "feature_type": "Transcript",
+   "record_indices": [
+    209
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "7:80303461-80303464",
+   "allele": "-",
+   "feature": "ENST00000447544",
+   "feature_type": "Transcript",
+   "record_indices": [
+    223
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "7:80303461-80303464",
+   "allele": "-",
+   "feature": "ENST00000488048",
+   "feature_type": "Transcript",
+   "record_indices": [
+    223
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
    "location": "7:92765283-92765284",
    "allele": "-",
    "feature": "ENST00000318238",
@@ -13692,6 +18168,62 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "7:95838284-95838287",
+   "allele": "AGAGTTTCT",
+   "feature": "ENST00000265631",
+   "feature_type": "Transcript",
+   "record_indices": [
+    227
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:95838284-95838287",
+   "allele": "AGAGTTTCT",
+   "feature": "ENST00000416240",
+   "feature_type": "Transcript",
+   "record_indices": [
+    227
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:95838284-95838287",
+   "allele": "AGAGTTTCT",
+   "feature": "ENST00000472162",
+   "feature_type": "Transcript",
+   "record_indices": [
+    227
+   ],
+   "vep_consequence_set": "NMD_transcript_variant,frameshift_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "NMD_transcript_variant,frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "7:95838284-95838287",
+   "allele": "AGAGTTTCT",
+   "feature": "ENST00000542654",
+   "feature_type": "Transcript",
+   "record_indices": [
+    227
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_acceptor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
    "location": "8:72156894",
    "allele": "-",
    "feature": "ENST00000493349",
@@ -13790,6 +18322,76 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "9:21973189-21974729",
+   "allele": "-",
+   "feature": "ENST00000380151",
+   "feature_type": "Transcript",
+   "record_indices": [
+    268
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "9:34645661-34648822",
+   "allele": "-",
+   "feature": "ENST00000473506",
+   "feature_type": "Transcript",
+   "record_indices": [
+    270
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "9:34645661-34648822",
+   "allele": "-",
+   "feature": "ENST00000554085",
+   "feature_type": "Transcript",
+   "record_indices": [
+    270
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "9:34645661-34648822",
+   "allele": "-",
+   "feature": "ENST00000554550",
+   "feature_type": "Transcript",
+   "record_indices": [
+    270
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "9:34645661-34648822",
+   "allele": "-",
+   "feature": "ENST00000556244",
+   "feature_type": "Transcript",
+   "record_indices": [
+    270
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,5_prime_UTR_variant,NMD_transcript_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
    "location": "9:98270642-98270643",
    "allele": "TGT",
    "feature": "ENST00000331920",
@@ -13802,6 +18404,62 @@
     "start_retained_variant"
    ],
    "expected_divergence": "start_cooccurrence_swap"
+  },
+  {
+   "location": "X:107807152-107807155",
+   "allele": "CTTTTAAT",
+   "feature": "ENST00000328300",
+   "feature_type": "Transcript",
+   "record_indices": [
+    991
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "X:107807152-107807155",
+   "allele": "CTTTTAAT",
+   "feature": "ENST00000361603",
+   "feature_type": "Transcript",
+   "record_indices": [
+    991
+   ],
+   "vep_consequence_set": "frameshift_variant,intron_variant,splice_donor_region_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "frameshift_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "X:107807152-107807155",
+   "allele": "CTTTTAAT",
+   "feature": "ENST00000470339",
+   "feature_type": "Transcript",
+   "record_indices": [
+    991
+   ],
+   "vep_consequence_set": "intron_variant,non_coding_transcript_exon_variant,splice_donor_region_variant,splice_donor_variant",
+   "vep_rs_consequence_sets": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "expected_divergence": "splice_term_past_the_record_span"
+  },
+  {
+   "location": "X:153295818-153296901",
+   "allele": "-",
+   "feature": "ENST00000407218",
+   "feature_type": "Transcript",
+   "record_indices": [
+    998
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
   },
   {
    "location": "X:153991243-153991245",
@@ -47947,31 +52605,15 @@
   }
  ],
  "divergence_summary": {
+  "splice_term_past_the_record_span": 173,
   "start_cooccurrence_swap": 80,
+  "stop_codon_removed_without_stop_codon_test": 128,
+  "stop_retained_three_base_stop_codon_test": 19,
+  "stop_retained_without_stop_codon_test": 10,
   "splice_family_swap": 9,
   "breakend_mate_local_read": 28
  },
  "vep_rs_only_summary": {
   "reference_skipped_record": 2624
- },
- "flag_sets": [
-  {
-   "name": "overlaps",
-   "flags": [
-    "--grch37",
-    "--overlaps"
-   ],
-   "input": "variants.vcf",
-   "stdin": false,
-   "formats": [
-    "tab",
-    "vcf"
-   ],
-   "expected_dir": "expected_overlaps",
-   "covers": [
-    "overlaps",
-    "overlapbp-overlappc-sv"
-   ]
-  }
- ]
+ }
 }

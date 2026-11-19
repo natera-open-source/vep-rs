@@ -8,34 +8,110 @@ use std::ops::Range;
 
 use smallvec::SmallVec;
 
-use crate::pipeline::WriteContext;
+use crate::pipeline::{Chunk, WriteContext};
 use crate::variation_matcher;
 use vep_core::consequence::Consequence;
 use vep_core::variant::{push_decimal, InputVariant};
 use vep_io::output::fields::{
-    percent_encode_control_bytes, record_rows_into, write_field_value, write_terms,
-    write_versioned_id, ExtraFieldsPlan, Row,
+    empty_value_is_written, percent_encode_control_bytes, plugin_names_a_fixed_column,
+    record_rows_into, write_field_value, write_terms, write_versioned_id, ExtraFieldsPlan, Row,
+    DEFAULT_OUTPUT_COLS,
 };
+#[cfg(feature = "parquet")]
+use vep_io::output::parquet::RowBatchBuilder;
 use vep_io::output::tab::render_tab_record;
 use vep_io::OutputFormatter;
+
+/// What a render task accumulates for one chunk of units: the bytes of a text
+/// format, or the typed rows of the Parquet format.
+pub(crate) enum ChunkOutput {
+    Text(Vec<u8>),
+    #[cfg(feature = "parquet")]
+    Rows(Box<RowBatchBuilder>),
+}
+
+impl ChunkOutput {
+    /// An empty output for the run's format; `reserve` is the text buffer's
+    /// capacity.
+    pub(crate) fn new(ctx: &WriteContext<'_>, reserve: usize) -> Self {
+        #[cfg(not(feature = "parquet"))]
+        let _ = ctx;
+        #[cfg(feature = "parquet")]
+        if let Some(formatter) = &ctx.parquet_formatter {
+            return ChunkOutput::Rows(Box::new(RowBatchBuilder::new(std::sync::Arc::clone(
+                formatter,
+            ))));
+        }
+        ChunkOutput::Text(Vec::with_capacity(reserve))
+    }
+
+    /// Appends a passthrough line of the input (a VCF output's header line),
+    /// which only a text format carries.
+    pub(crate) fn push_text_line(&mut self, line: &[u8]) {
+        match self {
+            ChunkOutput::Text(out) => {
+                out.extend_from_slice(line);
+                out.push(b'\n');
+            }
+            #[cfg(feature = "parquet")]
+            ChunkOutput::Rows(_) => {}
+        }
+    }
+
+    /// The chunk the writer stage takes.
+    pub(crate) fn finish(self) -> Chunk {
+        match self {
+            ChunkOutput::Text(out) => Chunk::Text(out),
+            #[cfg(feature = "parquet")]
+            ChunkOutput::Rows(builder) => Chunk::Rows(builder.finish()),
+        }
+    }
+}
+
+/// Whether [`render_record`] leaves the record's rows in the caller's buffer:
+/// the default, tab and Parquet renderers fill it as they write; the VCF and
+/// JSON formatters order the rows inside their own calls and leave it as it was.
+pub(crate) fn fills_rows(ctx: &WriteContext<'_>) -> bool {
+    match ctx.output_format {
+        "vcf" | "json" => false,
+        "tab" => ctx.tab_formatter.is_some_and(|f| !f.columns().is_empty()),
+        _ => true,
+    }
+}
 
 /// Renders one input record: the alleles split from one line, written together
 /// so every format emits a record the way VEP does (one VCF line or JSON
 /// object per record; default and tab rows in `fields::record_rows`'s order:
 /// transcript, regulatory and motif rows, each kind feature-major then
-/// allele-minor, intergenic rows last).
+/// allele-minor, intergenic rows last; Parquet rows in the tab order).
 pub(crate) fn render_record<'a>(
+    out: &mut ChunkOutput,
+    record: &[&'a InputVariant],
+    ctx: &WriteContext<'_>,
+    rows: &mut Vec<Row<'a>>,
+) -> anyhow::Result<()> {
+    match out {
+        ChunkOutput::Text(out) => render_text_record(out, record, ctx, rows),
+        #[cfg(feature = "parquet")]
+        ChunkOutput::Rows(builder) => {
+            builder.push_record(record, rows);
+            Ok(())
+        }
+    }
+}
+
+/// [`render_record`] for a text format: the record's lines appended to `out`.
+fn render_text_record<'a>(
     out: &mut Vec<u8>,
     record: &[&'a InputVariant],
     ctx: &WriteContext<'_>,
     rows: &mut Vec<Row<'a>>,
 ) -> anyhow::Result<()> {
-    // Bytes rather than text, so a VCF input's line that is not UTF-8 comes
-    // out as it was read.
+    // Bytes rather than text, so a VCF input's line that is not UTF-8 keeps
+    // the bytes it was read from.
     let lines = match ctx.output_format {
         "vcf" => ctx.vcf_formatter.map(|f| f.format_record_bytes(record)),
         "json" => ctx.json_formatter.map(|f| f.format_record_bytes(record)),
-        "parquet" => ctx.parquet_formatter.map(|f| f.format_record_bytes(record)),
         "tab" => {
             if let Some(formatter) = ctx.tab_formatter {
                 render_tab_record(out, record, formatter, rows);
@@ -110,6 +186,10 @@ pub(crate) fn render_default_record<'a>(
             out.push(b'\n');
             continue;
         }
+        if plugin_names_a_fixed_column(variant, tc) {
+            write_columns_from_field_table(out, variant, tc, plan);
+            continue;
+        }
         let own_prefix = shifted_rows
             || (plan.options.use_transcript_ref && variant.reference_allele_row)
             || tc.is_some_and(|x| x.shifted_allele.is_some());
@@ -160,13 +240,14 @@ pub(crate) fn render_default_record<'a>(
             Some(tc) => {
                 out.push(b'\t');
                 write_encoded(out, |out| {
-                    if tc.gene_id.is_empty() {
+                    let gene_id = tc.gene_id();
+                    if gene_id.is_empty() {
                         out.push(b'-');
                     } else {
                         write_versioned_id(
                             out,
-                            &tc.gene_id,
-                            tc.gene_version,
+                            gene_id,
+                            tc.gene_version(),
                             plan.options.gene_version,
                         );
                     }
@@ -175,8 +256,8 @@ pub(crate) fn render_default_record<'a>(
                 write_encoded(out, |out| {
                     write_versioned_id(
                         out,
-                        &tc.transcript_id,
-                        tc.transcript_version,
+                        tc.transcript_id(),
+                        tc.transcript_version(),
                         plan.options.transcript_version,
                     )
                 });
@@ -231,6 +312,34 @@ pub(crate) fn render_default_record<'a>(
     Ok(())
 }
 
+/// A row whose plugin wrote a key named as one of the thirteen columns
+/// ([`plugin_names_a_fixed_column`]): every column through the field table,
+/// which prints the plugin's value, `-` where a column has no value
+/// ([`empty_value_is_written`]), then the Extra column, which leaves the
+/// thirteen names out.
+fn write_columns_from_field_table(
+    out: &mut Vec<u8>,
+    variant: &InputVariant,
+    tc: Option<&vep_core::consequence::TranscriptConsequence>,
+    plan: &ExtraFieldsPlan,
+) {
+    for (i, column) in DEFAULT_OUTPUT_COLS.iter().enumerate() {
+        if i > 0 {
+            out.push(b'\t');
+        }
+        write_encoded(out, |out| {
+            let start = out.len();
+            write_field_value(out, column, variant, tc, &plan.options, ",");
+            if out.len() == start && !empty_value_is_written(column, variant, tc, &plan.options) {
+                out.push(b'-');
+            }
+        });
+    }
+    out.push(b'\t');
+    variation_matcher::write_extra_fields(variant, tc, plan, out);
+    out.push(b'\n');
+}
+
 /// Appends what `write` writes to `out` with its control bytes percent-encoded
 /// ([`percent_encode_control_bytes`]).
 fn write_encoded(out: &mut Vec<u8>, write: impl FnOnce(&mut Vec<u8>)) {
@@ -256,11 +365,13 @@ fn write_existing_variation(out: &mut Vec<u8>, variant: &InputVariant) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runner::edit_transcript;
     use std::borrow::Cow;
     use std::sync::Arc;
 
     use vep_core::consequence::{FeatureType, Impact, TranscriptConsequence};
     use vep_core::terms::Vocabulary;
+    use vep_core::transcript::Transcript;
     use vep_core::variant::{ColocatedVariant, MatchedAllele, VariantClass};
     use vep_io::output::fields::{
         extra_keys_with, field_value, rendered_terms, version_suffix, ClinSigAllele, FieldOptions,
@@ -324,6 +435,27 @@ mod tests {
                 .iter()
                 .position(|v| std::ptr::eq(*v, variant))
                 .expect("row allele belongs to its record");
+            let summary_row = tc.is_none() && variant.summary_terms.is_some();
+            if !summary_row && plugin_names_a_fixed_column(variant, tc) {
+                let cells: Vec<String> = DEFAULT_OUTPUT_COLS
+                    .iter()
+                    .map(|column| {
+                        let cell = field_value(column, variant, tc, &plan.options, ",");
+                        if cell.is_empty()
+                            && !empty_value_is_written(column, variant, tc, &plan.options)
+                        {
+                            "-".to_string()
+                        } else {
+                            cell
+                        }
+                    })
+                    .collect();
+                out.extend_from_slice(cells.join("\t").as_bytes());
+                out.push(b'\t');
+                write_extra_fields_with_strings(variant, tc, plan, out)?;
+                out.push(b'\n');
+                continue;
+            }
             let cols = &columns[allele];
             let existing_str = cols.existing.as_deref().unwrap_or("-");
             let location: Cow<str> = if shifted_rows {
@@ -378,13 +510,13 @@ mod tests {
                 (Some(tc), _) => {
                     out.extend_from_slice(allele_text.as_bytes());
                     out.push(b'\t');
-                    if tc.gene_id.is_empty() {
+                    if tc.gene_id().is_empty() {
                         out.push(b'-');
                     } else {
                         out.extend_from_slice(
                             versioned_id_string(
-                                &tc.gene_id,
-                                tc.gene_version,
+                                tc.gene_id(),
+                                tc.gene_version(),
                                 plan.options.gene_version,
                             )
                             .as_bytes(),
@@ -393,8 +525,8 @@ mod tests {
                     out.push(b'\t');
                     out.extend_from_slice(
                         versioned_id_string(
-                            &tc.transcript_id,
-                            tc.transcript_version,
+                            tc.transcript_id(),
+                            tc.transcript_version(),
                             plan.options.transcript_version,
                         )
                         .as_bytes(),
@@ -447,10 +579,13 @@ mod tests {
         let has_plugin_data =
             !variant.plugin_data.is_empty() || tc.is_some_and(|t| !t.plugin_data.is_empty());
         let summary_row = tc.is_none() && variant.summary_terms.is_some();
+        let unflagged_bam_edit =
+            !plan.options.bam_edited && tc.is_some_and(|t| t.bam_edit_status.is_some());
         if !plan.any_optional_group
             && !has_plugin_data
             && !variant.is_structural
             && !summary_row
+            && !unflagged_bam_edit
             && plan.options.user_group_is_plain()
         {
             return write_user_group_with_strings(tc, writer);
@@ -458,10 +593,11 @@ mod tests {
 
         let options = &plan.options;
         let mut first = true;
-        for key in extra_keys_with(&plan.flag_fields, variant, tc, options) {
+        for key in extra_keys_with(&plan.flag_fields, &plan.custom_keys, variant, tc, options) {
             let value = field_value(key, variant, tc, options, ",");
             if value.is_empty()
                 && !vep_io::output::fields::empty_value_is_written(key, variant, tc, options)
+                && !vep_io::output::fields::empty_plugin_value_is_written(key, variant, tc, options)
             {
                 continue;
             }
@@ -496,7 +632,7 @@ mod tests {
         }
         write!(writer, ";STRAND={}", tc.strand)?;
         let flags: Vec<&str> = tc
-            .flags
+            .flags()
             .iter()
             .filter(|f| f.starts_with("cds_"))
             .map(String::as_str)
@@ -515,17 +651,20 @@ mod tests {
         impact: Impact,
     ) -> TranscriptConsequence {
         TranscriptConsequence {
-            transcript_id: Arc::from(transcript),
-            gene_id: Arc::from(gene),
-            gene_symbol: Some(Arc::from("SOD1")),
+            transcript: Some(Arc::new(Transcript {
+                stable_id: Arc::from(transcript),
+                gene_stable_id: Arc::from(gene),
+                gene_symbol: Some(Arc::from("SOD1")),
+                flags: Arc::from(["cds_end_NF".to_string(), "basic".to_string()]),
+                version: Some(4),
+                gene_version: Some(12),
+                ..Transcript::default()
+            })),
             consequences: terms.iter().copied().collect(),
             impact,
             strand: if rank.is_multiple_of(2) { 1 } else { -1 },
-            flags: Arc::from(["cds_end_NF".to_string(), "basic".to_string()]),
             feature_start: 1_000,
             feature_end: 2_000,
-            transcript_version: Some(4),
-            gene_version: Some(12),
             id_rank: rank,
             ..TranscriptConsequence::default()
         }
@@ -538,10 +677,10 @@ mod tests {
             id: id.to_string(),
             allele_string: Some("A/G/T".to_string()),
             strand: 1,
-            clin_sig: vec!["pathogenic".to_string(), "likely_pathogenic".to_string()],
+            clin_sig: Some("pathogenic,likely_pathogenic".to_string()),
             somatic: false,
             phenotype: true,
-            pubmed: vec!["123".to_string(), "456".to_string()],
+            pubmed: Some("123,456".to_string()),
             matched_alleles: matched
                 .iter()
                 .enumerate()
@@ -596,10 +735,12 @@ mod tests {
         coding.hgvsp = Some("ENSP00000300.1:p.Ala101=".to_string());
         coding.sift = Some("deleterious(0.01)".to_string());
         coding.canonical = true;
-        coding.biotype = Some(Arc::from("protein_coding"));
-        coding.tsl = Some(1);
         coding.domains = vec![("Pfam".to_string(), "PF00080".to_string())];
-        coding.uniparc = Some("UPI000012A3C5".to_string());
+        edit_transcript(&mut coding, |transcript| {
+            transcript.biotype = Arc::from("protein_coding");
+            transcript.tsl = Some("1".to_string());
+            transcript.uniparc = Some("UPI000012A3C5".to_string());
+        });
         coding
             .plugin_data
             .insert("ZPlugin".to_string(), "a=b;c".to_string());
@@ -730,11 +871,16 @@ mod tests {
             overlaps: true,
             nearest: true,
             shift_length: true,
+            refseq: true,
+            merged: true,
             use_transcript_ref: true,
+            bam_edited: true,
+            custom_sources: Vec::new(),
             shift_3prime: true,
             shift_genomic: true,
             var_synonyms: true,
             regulatory: true,
+            cell_type: true,
             transcript_version: true,
             gene_version: true,
             ambiguity: true,
@@ -743,6 +889,9 @@ mod tests {
             total_length: true,
             positions_of_own_span: false,
             clin_sig_allele: ClinSigAllele::PerAllele,
+            plugin_row_kinds: Arc::default(),
+            plugin_fields: Arc::default(),
+            unflagged_plugin_fields: Arc::default(),
         }
     }
 
@@ -758,11 +907,11 @@ mod tests {
         let mut variant = InputVariant::new("21".into(), 110, 110, b"A".to_vec(), b"G".to_vec());
         variant.id = Some("reg".to_string());
         variant.transcript_consequences.push(TranscriptConsequence {
-            transcript_id: "ENSR_FIXTURE".into(),
+            feature_id: Some("ENSR_FIXTURE".into()),
+            feature_biotype: Some("enhancer".into()),
             feature_type: FeatureType::RegulatoryFeature,
             consequences: std::iter::once(Consequence::RegulatoryRegionVariant).collect(),
             impact: Impact::MODIFIER,
-            biotype: Some("enhancer".into()),
             feature_start: 100,
             feature_end: 120,
             ..Default::default()
@@ -846,6 +995,120 @@ mod tests {
         let (strings, bytes) = render_both(&no_plugin, options);
         assert_eq!(bytes, strings);
         assert!(strings.contains(";SYMBOL=SOD1;"));
+    }
+
+    /// A plugin key named as one of the thirteen columns prints in that column
+    /// and never in Extra (`VEP_output.pm:103-109` reads the line hash after
+    /// the plugins wrote it): the row takes every column from the field table,
+    /// the record's other rows keep their copied columns, and both renderers
+    /// agree byte for byte.
+    #[test]
+    fn a_plugin_key_named_as_a_fixed_column_prints_in_the_column() {
+        let mut record = record();
+        record[0].transcript_consequences[0]
+            .plugin_data
+            .insert("Codons".to_string(), "GCC/GTC".to_string());
+        let (strings, bytes) = render_both(&record, FieldOptions::default());
+        assert_eq!(bytes, strings);
+        assert_eq!(strings.lines().count(), 5);
+        let coding = strings
+            .lines()
+            .find(|line| line.contains("\tENST00000300\t"))
+            .unwrap();
+        assert!(
+            coding.contains("\t428\t301\t101\tA/V\tGCC/GTC\trs1,COSV2\t"),
+            "{coding}"
+        );
+        assert!(!coding.contains("Codons="), "{coding}");
+        assert!(coding.contains(";ZPlugin=a=b%3Bc"), "{coding}");
+        let upstream = strings
+            .lines()
+            .find(|line| line.starts_with("rs1\tchr21:10500\tG\tENSG00000100\tENST00000010\t"))
+            .unwrap();
+        assert!(
+            upstream.contains("\t-\t-\t-\t-\t-\trs1,COSV2\t"),
+            "{upstream}"
+        );
+        assert!(!upstream.contains("Codons"), "{upstream}");
+    }
+
+    /// A row the field table writes ([`write_columns_from_field_table`]) prints
+    /// `-` for a column without a value and an empty cell for a plugin's
+    /// defined empty string, `-` for its undefined value (`VEP_output.pm:104`
+    /// prints `-` for an undefined key and a defined value as it is); a key a
+    /// plugin wrote for the whole allele routes its intergenic row too.
+    #[test]
+    fn a_row_the_field_table_writes_prints_dashes_and_a_defined_empty_cell() {
+        let mut record = record();
+        record[0].transcript_consequences[1]
+            .plugin_data
+            .insert("Codons".to_string(), "GCC/GTC".to_string());
+        record[2]
+            .plugin_data
+            .insert("Codons".to_string(), "GCC/GTC".to_string());
+        let (strings, bytes) = render_both(&record, FieldOptions::default());
+        assert_eq!(bytes, strings);
+        assert!(
+            strings.contains(
+                "rs1\tchr21:10500\tG\tENSG00000100\tENST00000010\tTranscript\tupstream_gene_variant\
+                 \t-\t-\t-\t-\tGCC/GTC\trs1,COSV2\tIMPACT=MODIFIER;DISTANCE=2500;STRAND=-1;FLAGS=cds_end_NF\n"
+            ),
+            "{strings}"
+        );
+        assert!(
+            strings.ends_with(
+                "rs1\tchr21:10500\tC\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\tGCC/GTC\t-\tIMPACT=MODIFIER\n"
+            ),
+            "{strings}"
+        );
+        record[0].transcript_consequences[1]
+            .plugin_data
+            .insert("Codons".to_string(), String::new());
+        let (strings, bytes) = render_both(&record, FieldOptions::default());
+        assert_eq!(bytes, strings);
+        assert!(
+            strings.contains(
+                "rs1\tchr21:10500\tG\tENSG00000100\tENST00000010\tTranscript\tupstream_gene_variant\
+                 \t-\t-\t-\t-\t-\trs1,COSV2\tIMPACT=MODIFIER;"
+            ),
+            "{strings}"
+        );
+        record[0].transcript_consequences[1]
+            .plugin_empty_strings
+            .push("Codons".to_string());
+        let (strings, bytes) = render_both(&record, FieldOptions::default());
+        assert_eq!(bytes, strings);
+        assert!(
+            strings.contains(
+                "rs1\tchr21:10500\tG\tENSG00000100\tENST00000010\tTranscript\tupstream_gene_variant\
+                 \t-\t-\t-\t-\t\trs1,COSV2\tIMPACT=MODIFIER;"
+            ),
+            "{strings}"
+        );
+    }
+
+    /// A `--summary` row is the record's hash alone, which no plugin runs on
+    /// (`summary_only` returns before `run_plugins`, OutputFactory.pm:387), so
+    /// a key a plugin wrote for the allele under a fixed column's name leaves
+    /// the row its `-` cells and prints nowhere, in both renderers.
+    #[test]
+    fn a_summary_row_ignores_a_plugin_key_named_as_a_fixed_column() {
+        let mut record = record();
+        for v in &mut record {
+            v.transcript_consequences.clear();
+            v.most_severe_consequence = None;
+        }
+        record[0].most_severe_consequence = Some(Consequence::MissenseVariant);
+        record[0].summary_terms = Some(smallvec::smallvec![Consequence::MissenseVariant]);
+        record[0]
+            .plugin_data
+            .insert("Codons".to_string(), "GCC/GTC".to_string());
+        let (strings, bytes) = render_both(&record, FieldOptions::default());
+        assert_eq!(bytes, strings);
+        assert_eq!(
+            strings,
+            "rs1\tchr21:10500\t-\t-\t-\t-\tmissense_variant\t-\t-\t-\t-\t-\t-\t-\n"
+        );
     }
 
     /// A structural row's Extra column carries OverlapBP and OverlapPC after the
@@ -1150,10 +1413,13 @@ mod tests {
         const GENE: usize = 3;
         const FEATURE: usize = 4;
         let tc = TranscriptConsequence {
-            transcript_id: Arc::from("ENST00000354250"),
-            gene_id: Arc::from("ENSG00000160194"),
-            transcript_version: Some(7),
-            gene_version: Some(20),
+            transcript: Some(Arc::new(Transcript {
+                stable_id: Arc::from("ENST00000354250"),
+                gene_stable_id: Arc::from("ENSG00000160194"),
+                version: Some(7),
+                gene_version: Some(20),
+                ..Transcript::default()
+            })),
             ..Default::default()
         };
         let both = FieldOptions {
@@ -1169,11 +1435,11 @@ mod tests {
         assert_eq!(columns[GENE], "ENSG00000160194");
         assert_eq!(columns[FEATURE], "ENST00000354250");
 
-        let versioned = TranscriptConsequence {
-            transcript_id: Arc::from("NM_021075.4"),
-            transcript_version: None,
-            ..tc
-        };
+        let mut versioned = tc;
+        edit_transcript(&mut versioned, |transcript| {
+            transcript.stable_id = Arc::from("NM_021075.4");
+            transcript.version = None;
+        });
         let columns = default_row_columns(both, versioned);
         assert_eq!(columns[GENE], "ENSG00000160194.20");
         assert_eq!(columns[FEATURE], "NM_021075.4");

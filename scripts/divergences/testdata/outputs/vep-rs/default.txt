@@ -1,0 +1,3 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+fx1	21:100	A	ENSG1	ENST1	Transcript	downstream_gene_variant	-	-	-	-	-	-	IMPACT=MODIFIER;DISTANCE=5000
+fx2	21:200	T	ENSG2	ENST2	Transcript	synonymous_variant	10	10	4	L	ctA/ctG	-	IMPACT=LOW;HGVSp=ENSP2:p.Leu4%3D

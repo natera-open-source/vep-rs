@@ -1,0 +1,38 @@
+entry = "damaged_cache_shard"
+page = "docs/divergences/damaged-cache-shard.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "malformed"
+input_class_basis = "each member of a gzip file has a header, its compressed blocks, then CRC32 and ISIZE (RFC 1952, section 2.3 \"Member format\"): the transcript region file of the cache is cut short inside its compressed blocks and carries neither CRC32 nor ISIZE"
+notes = "Region 43000001-44000000 of chromosome 21 is cut to half its bytes in both caches; the record lies 208,610 bases inside that region, so Ensembl VEP reads the cut file alone. The vep-rs copy drops CHECKSUMS.sha256 so the inflater, not the checksum, refuses the shard."
+# Hard-link copies of both caches; the region file is unlinked before the cut copy is written so the source stays whole.
+prepare = [
+  'mkdir -p "$STAGE/perl-cache/homo_sapiens" && cp -al "$PERL_CACHE" "$STAGE/perl-cache/homo_sapiens/116_GRCh38"',
+  'src="$PERL_CACHE/21/43000001-44000000.gz"; dst="$STAGE/perl-cache/homo_sapiens/116_GRCh38/21/43000001-44000000.gz"; rm "$dst"; head -c "$(( $(wc -c < "$src") / 2 ))" "$src" > "$dst"',
+  'cp -al "$CORPUS/json_cache" "$STAGE/json-cache" && rm "$STAGE/json-cache/CHECKSUMS.sha256"',
+  'src="$CORPUS/json_cache/transcripts/21/43000001-44000000.json.gz"; dst="$STAGE/json-cache/transcripts/21/43000001-44000000.json.gz"; rm "$dst"; head -c "$(( $(wc -c < "$src") / 2 ))" "$src" > "$dst"',
+]
+
+[input]
+format = "vcf"
+text = """
+21	43791391	shard_cut	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+corpus = "tests/golden/116/GRCh38-pick-summary"
+
+[run]
+flags = []
+
+[compare]
+kind = "stderr"
+pattern = "Cannot read the transcript cache"
+
+[expected]
+ensembl_vep = []
+vep_rs = ["ERROR: [cache] Cannot read the transcript cache for chr21: Failed to inflate <path> incomplete deflate stream"]

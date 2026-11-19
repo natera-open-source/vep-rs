@@ -5,8 +5,10 @@
  "seed": 1,
  "exemplars_per_combination": 100,
  "max_span": 1000000,
+ "fasta": "reference.fa.gz",
  "covers": [
-  "id-input-format"
+  "id-input-format",
+  "input-data-and-id"
  ],
  "suites": {
   "GRCh38-input-id": {
@@ -298,6 +300,7 @@
    "formats": [
     "default",
     "tab",
+    "vcf",
     "json"
    ],
    "expected_dir": "expected_id",
@@ -319,6 +322,7 @@
    "formats": [
     "default",
     "tab",
+    "vcf",
     "json"
    ],
    "expected_dir": "expected_id",

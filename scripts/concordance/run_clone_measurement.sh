@@ -4,8 +4,8 @@
 #
 # Runs the full 10-suite measurement (6 SNP/indel + 4 structural-variant) for ONE
 # engine (vep-rs | fastvep | perl) against an already-populated data tree,
-# emitting per-suite concordance reports (compare_vep_outputs.py for the
-# SNP/indel suites, compare_sv_concordance.py for the SV suites) and a
+# emitting a concordance report per cell (the tuple comparator for the SNP/indel
+# cells, compare_sv_concordance.py for the structural-variant ones) and a
 # machine-readable wall_times.csv.
 #
 # Scope: measurement only. It does not fetch inputs, build binaries, or manage
@@ -18,17 +18,17 @@
 #                  --json_cache <cache dir> --fasta <fa> --fork 16 \
 #                  --buffer_size 5000 --force --no_stats --quiet
 #   vep-rs   SV: same, per-VCF loop, same --fork as SNP/indel,
-#                  plus --species homo_sapiens --assembly <ASM>
+#                  plus --species <species> --assembly <ASM>
 #   fastvep  SNP/indel: RAYON_NUM_THREADS=16 fastvep annotate --gff3 <g> \
 #                  --fasta <fa> --transcript-cache <cache.bin> \
 #                  -i <vcf> -o <raw> --output-format tab
 #                then fastvep_normalize.py <raw> <output.txt>
-#                then compare_vep_outputs.py ... --glob 'output.txt'
+#                then the tuple comparator ... --glob 'output.txt'
 #   fastvep  SV: same annotate form, per-VCF loop; concordance is best-effort
 #                  and is skipped when the loop produces no non-empty output.
 #   perl   both: docker run ... vep -i <in> -o <out> --offline --cache \
 #                  --dir_cache /work/cache --cache_version <ver> \
-#                  --species homo_sapiens --assembly <asm> --format vcf \
+#                  --species <species> --assembly <asm> --format vcf \
 #                  --buffer_size 5000 --fork 16 --fasta /work/ref.fa \
 #                  --no_headers --no_stats --quiet --force_overwrite
 #                Perl is the ground truth, so it has no concordance branch and
@@ -43,9 +43,13 @@
 #   ground_truth/perl/sv_per_vcf/<asm>/                        SV truth
 #   caches/vep-rs/<asm>/                                       vep-rs JSON cache
 #   caches/fastvep/<asm>.bin                                   fastVEP cache
-#   caches/perl/vep-cache/                                     Perl Storable cache
+#   caches/perl/vep-cache/<species>/<version>_<asm>/           Perl Storable cache
 #   reference/<asm>/<genome>.fa[.fai]                           reference FASTA
 #   reference/<asm>/<annotation>.gff3                           GFF3 annotation
+#
+# Every suite row names its species beside its assembly, and the per-genome resources (the
+# FASTA, the vep-rs and fastVEP caches, the GFF3) are tables keyed <species>:<assembly>, the
+# two human genomes their documented entries; another genome adds a line to each table.
 #
 # "canonical" means Ensembl-style contig names. Raw all_variants/ inputs score
 # F1=0 on the GRCh38 chr21 cells, whose contigs are `chr21` while the ground
@@ -62,15 +66,17 @@
 #   scripts/concordance/run_clone_measurement.sh \
 #     --engine vep-rs --vep-binary /path/to/vep \
 #     --data-dir <data> --output-dir <data>/work \
-#     [--suites all|snp-indel|sv|"s01 s04"] [--walltime-only] [--skip-fields] [--fork 16] \
+#     [--suites all|snp-indel|sv|"s01 s04" | --cells s01,s02,s07,s08,s09,s10] [--walltime-only] \
+#     [--skip-fields] [--fork 16] \
 #     [--reference-release 115.2|116.2] [--run-id <id>] [--host-id <id>] \
 #     [--vep-extra-args "<flags>"]
 #
 #   scripts/concordance/run_clone_measurement.sh --engine fastvep \
-#     --fastvep-binary /path/to/fastvep --data-dir <data> --output-dir <data>/work
+#     --fastvep-binary /path/to/fastvep --data-dir <data> --output-dir <data>/work \
+#     [--fastvep-extra-args "<flags>"]
 #
 #   scripts/concordance/run_clone_measurement.sh --engine perl \
-#     --perl-image ensemblorg/ensembl-vep:release_116.2 \
+#     --perl-image ensemblorg/ensembl-vep:release_116.2 [--perl-image-digest <sha256:hex>] \
 #     --data-dir <data> --output-dir <data>/work
 set -euo pipefail
 
@@ -86,6 +92,9 @@ ENGINE=""
 VEP_BINARY=""
 FASTVEP_BINARY=""
 PERL_IMAGE="ensemblorg/ensembl-vep:release_116.2"
+# The tag's manifest-list digest on Docker Hub. The Perl engine refuses to time an image whose
+# RepoDigests lack it, so a moved tag cannot be measured under the pinned engine_version.
+PERL_IMAGE_DIGEST="${VEP_PERL_IMAGE_DIGEST:-sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da}"
 DATA_DIR=""
 OUTPUT_DIR=""
 SUITES_FILTER="all"
@@ -100,6 +109,7 @@ HOST_ID="local"
 REPLICATE=""
 CONTAINER_PROBE=0
 VEP_EXTRA_ARGS=""
+FASTVEP_EXTRA_ARGS=""
 # The Ensembl VEP release of the ground truth, handed to both comparators as
 # --reference-release. Empty means derived per cell from the ground-truth directory's
 # provenance (provenance.json or <output>.provenance.json, reference_release.py); a
@@ -117,15 +127,26 @@ Required:
 
 Engine binary (one, matching --engine):
   --vep-binary <path>      vep-rs binary             (engine vep-rs)
-  --fastvep-binary <path>  fastVEP binary            (engine fastvep)
+  --fastvep-binary <path>  fastVEP binary            (engine fastvep). A name without
+                           a slash is found through PATH, as the cells start it,
+                           never in the working directory. Without
+                           --fastvep-extra-args a path holding '=' is an error:
+                           env, which starts the binary, reads such a path as an
+                           assignment.
   --perl-image <ref>       Perl VEP Docker image      (engine perl; default
                            ensemblorg/ensembl-vep:release_116.2). The cache
                            release the Perl cells read, VEP_PERL_CACHE_VERSION
                            (default 116), must match the image's release: a
                            release_115.2 image needs VEP_PERL_CACHE_VERSION=115.
+  --perl-image-digest <sha256:hex>  Digest the pulled Perl image must carry (engine
+                           perl; default the pinned tag's manifest-list digest, or
+                           VEP_PERL_IMAGE_DIGEST)
 
 Optional:
   --suites <filter>      all (default) | snp-indel | sv | space-separated "s01 s04"
+  --cells <ids>          A comma-separated cell list (s01,s02,s07,s08,s09,s10), the
+                         comma form of --suites; an unknown or repeated id is an
+                         error before any cell runs
   --walltime-only        Skip concordance compare / GT-sync / normalize; time
                          the annotation only (annotation output still written so
                          the real I/O happens). Default: full concordance + timing.
@@ -135,6 +156,17 @@ Optional:
                          VEP_FIELDS_COMPARATOR, when it names an executable (a
                          path, or a command on PATH), runs in the Python
                          comparator's place with the same flags.
+                         VEP_OUTPUTS_COMPARATOR selects the SNP/indel tuple
+                         comparator of every cell that scores F1. Unset: the
+                         Rust tool this tree builds,
+                         tools/vep-outputs-compare/target/release/vep-outputs-compare
+                         (cargo build --release --locked --manifest-path
+                         tools/vep-outputs-compare/Cargo.toml). `python`:
+                         compare_vep_outputs.py, the reference implementation,
+                         which writes the same reports. Any other value: a
+                         comparator binary, as a path or a command on PATH.
+                         A comparator that is not an executable stops the run
+                         before the first engine run; nothing is built here.
   --fork <N>             SNP/indel parallelism (default 16; fastVEP uses
                          RAYON_NUM_THREADS=N)
   --buffer-size <N>      Engine buffer size (default 5000)
@@ -170,6 +202,29 @@ Optional:
                          its sha256 and the extra arguments (that record is written
                          for every vep-rs run, extra arguments or not). An empty value
                          appends nothing and writes no wrapper.
+  --fastvep-extra-args "<flags>"
+                         fastVEP engine only: arguments appended, after the harness's
+                         own, to every fastVEP `annotate` run (the warmup and the timed
+                         run of each SNP/indel cell, and each input of the SV per-VCF
+                         loop), split on whitespace. Each word is an option (-x, --name,
+                         --name=value) or a value of [A-Za-z0-9_=.,:/-] that opens with
+                         no dash; any other word stops the run before anything is
+                         written. They reach the binary through
+                         <output-dir>/fastvep-wrapper.sh, at the cost of one bash start
+                         per invocation inside the timed window, and the wrapper logs
+                         every argument vector it runs to
+                         <output-dir>/fastvep-wrapper.argv. <output-dir>/provenance.json
+                         then names the binary, the words (fastvep_extra_args, joined by
+                         single spaces, and fastvep_extra_argv), the wrapper
+                         (fastvep_wrapper) and, after the last cell, the executed
+                         argument vectors (fastvep_executed_argv). An empty value
+                         appends nothing and writes no wrapper and no record.
+                         With words, an <output-dir> whose path holds '=' is an
+                         error before anything is written: env, which starts the
+                         wrapper, reads such a path as an assignment.
+                         --sa-dir names a directory of one assembly's annotation
+                         databases, so a run whose words carry it takes cells of one
+                         assembly: cells of two are an error before any cell runs.
 EOF
 	exit 1
 }
@@ -192,6 +247,10 @@ while [[ $# -gt 0 ]]; do
 		PERL_IMAGE="$2"
 		shift 2
 		;;
+	--perl-image-digest)
+		PERL_IMAGE_DIGEST="$2"
+		shift 2
+		;;
 	--data-dir)
 		DATA_DIR="$2"
 		shift 2
@@ -202,6 +261,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--suites)
 		SUITES_FILTER="$2"
+		shift 2
+		;;
+	--cells)
+		SUITES_FILTER="${2//,/ }"
 		shift 2
 		;;
 	--walltime-only)
@@ -244,6 +307,10 @@ while [[ $# -gt 0 ]]; do
 		VEP_EXTRA_ARGS="$2"
 		shift 2
 		;;
+	--fastvep-extra-args)
+		FASTVEP_EXTRA_ARGS="$2"
+		shift 2
+		;;
 	-h | --help) usage ;;
 	*)
 		echo "ERROR: unknown argument: $1" >&2
@@ -251,6 +318,13 @@ while [[ $# -gt 0 ]]; do
 		;;
 	esac
 done
+
+# should_run matches a cell id between single spaces while the validation loop below splits on
+# any whitespace, so a tab- or newline-separated list would validate and then skip every cell:
+# one space per gap, no padding.
+SUITES_FILTER=$(printf '%s' "$SUITES_FILTER" | tr -s '[:space:]' ' ')
+SUITES_FILTER="${SUITES_FILTER# }"
+SUITES_FILTER="${SUITES_FILTER% }"
 
 # Validate args
 case "$REFERENCE_RELEASE" in
@@ -271,6 +345,38 @@ esac
 [[ -z "${VEP_EXTRA_ARGS//[[:space:]]/}" || "$ENGINE" == "vep-rs" ]] || {
 	echo "ERROR: --vep-extra-args applies to --engine vep-rs only (got engine '$ENGINE')" >&2
 	usage
+}
+# A word of --fastvep-extra-args is an option (one or two dashes, then a letter) or a value that
+# opens with no dash; the class holds no character the shell or JSON reads, so a word needs no
+# escaping wherever it is rendered. `read -d ''` splits the whole value on whitespace, a newline
+# included, without globbing a word. The refusals below come before the output directory is made.
+FASTVEP_EXTRA_OPTION='^-{1,2}[A-Za-z][A-Za-z0-9_=.,:/-]*$'
+FASTVEP_EXTRA_VALUE='^[A-Za-z0-9_=.,:/][A-Za-z0-9_=.,:/-]*$'
+FASTVEP_EXTRA_ARGV=()
+read -r -d '' -a FASTVEP_EXTRA_ARGV <<<"$FASTVEP_EXTRA_ARGS" || true
+[[ ${#FASTVEP_EXTRA_ARGV[@]} -eq 0 || "$ENGINE" == "fastvep" ]] || {
+	echo "ERROR: --fastvep-extra-args applies to --engine fastvep only (got engine '$ENGINE')" >&2
+	usage
+}
+for word in ${FASTVEP_EXTRA_ARGV[@]+"${FASTVEP_EXTRA_ARGV[@]}"}; do
+	# Matched in the C locale: under a collating locale `[A-Za-z]` and `[0-9]` also match
+	# letters and digits outside ASCII.
+	(LC_ALL=C && [[ "$word" =~ $FASTVEP_EXTRA_OPTION || "$word" =~ $FASTVEP_EXTRA_VALUE ]]) || {
+		echo "ERROR: [run_clone_measurement] --fastvep-extra-args word '$word' is neither an option (-x, --name, --name=value) nor a value of [A-Za-z0-9_=.,:/-] that opens with no dash" >&2
+		exit 1
+	}
+done
+# The SNP/indel cells run fastVEP as the command operand of `env`, which reads an operand holding
+# `=` as an assignment and runs the next word instead. The operand is
+# <output-dir>/fastvep-wrapper.sh with words and the binary's own path without them; the wrapper
+# execs the binary, so with words the binary's path never reaches `env`.
+[[ ${#FASTVEP_EXTRA_ARGV[@]} -eq 0 || "$OUTPUT_DIR" != *=* ]] || {
+	echo "ERROR: [run_clone_measurement] --output-dir '$OUTPUT_DIR' holds '=': with --fastvep-extra-args the SNP/indel cells run <output-dir>/fastvep-wrapper.sh under env, which reads a path holding '=' as an assignment; name an output directory without one" >&2
+	exit 1
+}
+[[ "$ENGINE" != "fastvep" || ${#FASTVEP_EXTRA_ARGV[@]} -gt 0 || "$FASTVEP_BINARY" != *=* ]] || {
+	echo "ERROR: [run_clone_measurement] --fastvep-binary '$FASTVEP_BINARY' holds '=': the SNP/indel cells run it under env, which reads a path holding '=' as an assignment; name a path without one" >&2
+	exit 1
 }
 case "$ENGINE" in
 vep-rs | fastvep | perl) ;;
@@ -321,14 +427,40 @@ fastvep)
 		echo "ERROR: --fastvep-binary required for engine fastvep" >&2
 		exit 1
 	}
-	[[ -x "$FASTVEP_BINARY" ]] || {
-		echo "ERROR: fastVEP binary not executable: $FASTVEP_BINARY" >&2
+	# The cells start the binary by the word given, so a name without a slash runs the file
+	# PATH resolves, never a like-named file of the working directory, and the executable test
+	# reads that file. `type -P` returns a non-executable PATH match when no executable one
+	# exists, hence `-x` on its result.
+	if [[ "$FASTVEP_BINARY" == */* ]]; then
+		[[ -x "$FASTVEP_BINARY" ]] || {
+			echo "ERROR: fastVEP binary not executable: $FASTVEP_BINARY" >&2
+			exit 1
+		}
+	else
+		fastvep_on_path=$(type -P -- "$FASTVEP_BINARY") || fastvep_on_path=""
+		[[ -x "$fastvep_on_path" ]] || {
+			echo "ERROR: [run_clone_measurement] --fastvep-binary '$FASTVEP_BINARY' names no executable on PATH: a name without a slash is started through PATH, never from the working directory; give a path (./$FASTVEP_BINARY for a file there)" >&2
+			exit 1
+		}
+	fi
+	[[ ${#FASTVEP_EXTRA_ARGV[@]} -eq 0 ]] || command -v python3 >/dev/null 2>&1 || {
+		echo "ERROR: [run_clone_measurement] python3 is not on PATH: a fastVEP run with --fastvep-extra-args writes <output-dir>/provenance.json through it; install it" >&2
 		exit 1
 	}
 	;;
 perl)
 	command -v docker >/dev/null 2>&1 || {
 		echo "ERROR: docker required for engine perl" >&2
+		exit 1
+	}
+	[[ "$PERL_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+		echo "ERROR: --perl-image-digest must be sha256:<64 hex> (got '$PERL_IMAGE_DIGEST')" >&2
+		exit 1
+	}
+	docker image inspect "$PERL_IMAGE" >/dev/null 2>&1 || docker pull "$PERL_IMAGE" >/dev/null
+	perl_digests=$(docker image inspect --format '{{join .RepoDigests ","}}' "$PERL_IMAGE" 2>/dev/null || echo "")
+	[[ "$perl_digests" == *"@$PERL_IMAGE_DIGEST"* ]] || {
+		echo "ERROR: [perl-image] digest mismatch: ${perl_digests:-none} (expected $PERL_IMAGE_DIGEST)" >&2
 		exit 1
 	}
 	;;
@@ -347,10 +479,24 @@ echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] data_dir=$DATA_DIR output_dir=$OUTPUT_DIR
 SNP_INDEL_GT_DIR="${VEP_SNP_INDEL_GT_DIR:-$DATA_DIR/ground_truth/perl/snp_indel}"
 SV_GT_DIR="${VEP_SV_GT_DIR:-$DATA_DIR/ground_truth/perl/sv_per_vcf}"
 
-# Per-assembly reference FASTA (shared across all engines), indexed (.fa + .fai).
+# Per-genome reference FASTA (shared across all engines), indexed (.fa + .fai).
 FASTA_GRCH37="${VEP_FASTA_GRCH37:-$DATA_DIR/reference/grch37/genome.fa}"
 FASTA_GRCH38="${VEP_FASTA_GRCH38:-$DATA_DIR/reference/grch38/genome.fa}"
-fasta_for() { [[ "$1" == "GRCh37" ]] && echo "$FASTA_GRCH37" || echo "$FASTA_GRCH38"; }
+# resource_for <table> <species> <assembly>: the table's path for the genome; a table is
+# "<species>:<assembly>	<path>" lines, and a genome with no line is named on stderr and
+# returns 1, so the cell fails before any engine runs with an empty path.
+resource_for() {
+	local path
+	path=$(printf '%s' "$1" | awk -F'\t' -v k="$2:$3" '$1 == k {print $2; exit}')
+	[[ -n "$path" ]] || {
+		echo "ERROR: [run_clone_measurement] no resource is named for the genome $2:$3; add its line to the table" >&2
+		return 1
+	}
+	printf '%s' "$path"
+}
+FASTA_TABLE="homo_sapiens:GRCh37	$FASTA_GRCH37
+homo_sapiens:GRCh38	$FASTA_GRCH38"
+fasta_for() { resource_for "$FASTA_TABLE" "$1" "$2"; }
 
 # Engine-specific resources.
 # vep-rs JSON caches. Build them with `vep-cache-builder`, or convert an existing
@@ -368,8 +514,31 @@ GFF3_GRCH38="${VEP_GFF3_GRCH38:-$DATA_DIR/reference/grch38/annotation.gff3}"
 # `-`; feature type is part of the comparison key, so without it every
 # intergenic row of a fastVEP run scores discordant.
 FASTVEP_NORMALIZE="$SCRIPT_DIR/fastvep_normalize.py"
-# Perl Storable cache (the --dir_cache mount; contains homo_sapiens/...). VEP resolves
-# homo_sapiens/<cache_version>_<assembly> underneath it from --cache_version and --assembly.
+# The SNP/indel tuple comparator of the cells that score F1. Unset, VEP_OUTPUTS_COMPARATOR
+# selects the Rust tool this tree builds, tools/vep-outputs-compare, which takes
+# compare_vep_outputs.py's flags and writes the same bytes to every report file; `python`
+# selects the Python, the reference implementation; any other value names a comparator
+# binary. `type -P` resolves a bare name through PATH as the exec does (`-x` alone would test
+# it against the cwd) and returns a non-executable PATH match, hence the file tests on its
+# result. A comparator that is not an executable stops the run here, before any engine runs.
+OUTPUTS_COMPARE=()
+if [[ "$WALLTIME_ONLY" != "true" && "$ENGINE" != "perl" ]]; then
+	case "${VEP_OUTPUTS_COMPARATOR:-}" in
+	python) OUTPUTS_COMPARE=(python3 "$REPO_DIR/scripts/concordance/compare_vep_outputs.py") ;;
+	*)
+		outputs_named="${VEP_OUTPUTS_COMPARATOR:-$REPO_DIR/tools/vep-outputs-compare/target/release/vep-outputs-compare}"
+		if outputs_bin=$(type -P -- "$outputs_named") && [[ -f "$outputs_bin" && -x "$outputs_bin" ]]; then
+			OUTPUTS_COMPARE=("$outputs_bin")
+		else
+			echo "ERROR: [run_clone_measurement] the tuple comparator $outputs_named is not an executable: build the tool with 'cargo build --release --locked --manifest-path $REPO_DIR/tools/vep-outputs-compare/Cargo.toml' or name a built one in VEP_OUTPUTS_COMPARATOR, or set VEP_OUTPUTS_COMPARATOR=python to score with the Python reference implementation" >&2
+			exit 1
+		fi
+		;;
+	esac
+fi
+# Perl Storable cache (the --dir_cache mount; contains <species>/...). VEP resolves
+# <species>/<cache_version>_<assembly> underneath it from --species, --cache_version and
+# --assembly.
 #
 # The flag is `--dir_cache`. `--full_cache_dir` is not a VEP flag, and VEP does not
 # error on it: it ignores it, falls back to
@@ -385,17 +554,136 @@ PERL_CACHE_DIR="${VEP_PERL_CACHE_DIR:-$DATA_DIR/caches/perl/vep-cache}"
 # Perl VEP cache release. Must match the release the ground truth was built with.
 PERL_CACHE_VERSION="${VEP_PERL_CACHE_VERSION:-116}"
 
-veprs_cache_for() { [[ "$1" == "GRCh37" ]] && echo "$VEPRS_CACHE_GRCH37" || echo "$VEPRS_CACHE_GRCH38"; }
-fastvep_cache_for() { [[ "$1" == "GRCh37" ]] && echo "$FASTVEP_CACHE_GRCH37" || echo "$FASTVEP_CACHE_GRCH38"; }
-gff3_for() { [[ "$1" == "GRCh37" ]] && echo "$GFF3_GRCH37" || echo "$GFF3_GRCH38"; }
+VEPRS_CACHE_TABLE="homo_sapiens:GRCh37	$VEPRS_CACHE_GRCH37
+homo_sapiens:GRCh38	$VEPRS_CACHE_GRCH38"
+FASTVEP_CACHE_TABLE="homo_sapiens:GRCh37	$FASTVEP_CACHE_GRCH37
+homo_sapiens:GRCh38	$FASTVEP_CACHE_GRCH38"
+GFF3_TABLE="homo_sapiens:GRCh37	$GFF3_GRCH37
+homo_sapiens:GRCh38	$GFF3_GRCH38"
+# Each takes <species> <assembly>.
+veprs_cache_for() { resource_for "$VEPRS_CACHE_TABLE" "$1" "$2"; }
+fastvep_cache_for() { resource_for "$FASTVEP_CACHE_TABLE" "$1" "$2"; }
+gff3_for() { resource_for "$GFF3_TABLE" "$1" "$2"; }
+
+# Suite table: id:name:assembly:type:vcf_base:species
+declare -a SUITES=(
+	"s01:ClinVar_GRCh37:GRCh37:snp_indel:clinvar_grch37:homo_sapiens"
+	"s02:ClinVar_GRCh38:GRCh38:snp_indel:clinvar_grch38:homo_sapiens"
+	"s03:gnomAD_v2.1.1_chr21:GRCh37:snp_indel:gnomad_genomes_v2.1.1_chr21:homo_sapiens"
+	"s04:gnomAD_v4.1_chr21:GRCh38:snp_indel:gnomad_genomes_v4.1_chr21:homo_sapiens"
+	# s05 + s06 are the ONLY suites whose SOURCE inputs carry per-sample genotypes
+	# (1000 Genomes; the high-coverage set has 3,202 samples, FORMAT=GT). Genotypes
+	# do NOT affect VEP annotation output (VEP keys on position/allele; tab output has
+	# no genotype columns), so the apples-to-apples cells (s05/s06) use the SITES-ONLY
+	# inputs (bcftools view -G; the 4 other SNP/indel suites s01-s04 are sites-only at
+	# source). The `*m` rows below measure the SAME suites WITH genotypes for the
+	# sample-scaling measurement (vep-rs + fastVEP; this script's Perl branch always
+	# strips genotypes, and Ensembl VEP's one genotype-carrying measurement is the probe
+	# row of manuscript/data/perl_bench.csv).
+	# Concordance F1 is identical between the sites-only and multi-sample forms.
+	"s05:1KG_integrated_chr21:GRCh37:snp_indel:1kg_integrated_chr21_sitesonly:homo_sapiens"
+	"s06:1KG_highcov_chr21:GRCh38:snp_indel:1kg_highcov_chr21:homo_sapiens"
+	"s07:SV_GRCh37:GRCh37:sv:-:homo_sapiens"
+	"s08:SV_GRCh38:GRCh38:sv:-:homo_sapiens"
+	"s09:SV_real_world_GRCh37:GRCh37:sv:-:homo_sapiens"
+	"s10:SV_real_world_GRCh38:GRCh38:sv:-:homo_sapiens"
+	# Sample-scaling rows (with-genotypes; NOT part of --suites all / the headline table).
+	# Run explicitly, e.g. --suites "s05m s06m". vcf_base names the genotype-carrying input.
+	"s05m:1KG_integrated_chr21_multisample:GRCh37:snp_indel:1kg_integrated_chr21:homo_sapiens"
+	"s06m:1KG_highcov_chr21_multisample:GRCh38:snp_indel:1kg_highcov_chr21_multisample:homo_sapiens"
+)
+
+# A cell list names ids from the table above; an unknown id would match nothing, time nothing
+# and exit 0, and a repeated id would run its cell once under a list that names it twice, so
+# both are refused here, before any cell runs.
+case "$SUITES_FILTER" in
+all | snp-indel | sv) ;;
+*)
+	known_cells=$(printf '%s\n' "${SUITES[@]}" | cut -d: -f1 | tr '\n' ' ')
+	[[ -n "$SUITES_FILTER" ]] || {
+		echo "ERROR: [run_clone_measurement] empty cell list in --suites/--cells; the cells are: $known_cells" >&2
+		exit 1
+	}
+	seen_cells=""
+	# An id shaped like `s0*` is refused as text; with globbing on, a file named `s01` in the
+	# working directory would satisfy it.
+	set -o noglob
+	for cell_id in $SUITES_FILTER; do
+		[[ " $known_cells " == *" $cell_id "* ]] || {
+			echo "ERROR: [run_clone_measurement] unknown cell '$cell_id' in --suites/--cells; the cells are: $known_cells" >&2
+			exit 1
+		}
+		[[ " $seen_cells " != *" $cell_id "* ]] || {
+			echo "ERROR: [run_clone_measurement] repeated cell '$cell_id' in --suites/--cells" >&2
+			exit 1
+		}
+		seen_cells="$seen_cells $cell_id"
+	done
+	set +o noglob
+	;;
+esac
+
+# SV per-assembly dedupe: the canonical per-VCF SV GT carries all 16 VCFs per
+# assembly in one directory (13 synthetic + 3 real-world). s07/s09 (GRCh37) and
+# s08/s10 (GRCh38) measure the SAME per-assembly SV set, so the annotation +
+# comparison is done ONCE per assembly under s07 (GRCh37) / s08 (GRCh38);
+# s09/s10 record a pointer marker. compare_sv_concordance.py reports overall +
+# per-file F1, so the synthetic vs real-world split is recoverable.
+# bash 3.2 has no associative arrays, and macOS ships 3.2 while `bash -n`
+# and shellcheck both PASS on `declare -A` -- it fails at RUNTIME, mid-run. A
+# delimited string is exact here: at most two keys (the two assemblies) and the
+# values are suite ids with no colons.
+SV_DONE=""
+
+# should_run <suite_id> <stype> : honor --suites filter.
+should_run() {
+	local sid="$1" stype="$2"
+	# Sample-scaling rows (ids ending in `m`, e.g. s05m/s06m) are OPT-IN: they run ONLY
+	# when named explicitly (--suites "s05m s06m"), never under all/snp-indel, so a
+	# default run stays the sites-only apples-to-apples set and never times the
+	# genotype matrix, whose cost is measured separately.
+	case "$SUITES_FILTER" in
+	all) [[ "$sid" != *m ]] ;;
+	snp-indel) [[ "$stype" == "snp_indel" && "$sid" != *m ]] ;;
+	sv) [[ "$stype" == "sv" ]] ;;
+	*) [[ " $SUITES_FILTER " == *" $sid "* ]] ;;
+	esac
+}
+
+# fastVEP reads its annotation databases from the one directory --sa-dir names, and a
+# directory holds one assembly's, so the cells of a run whose words carry it are of one
+# assembly: cells of two would all be annotated from one assembly's databases, and are
+# refused here, before any cell runs. `${...[*]-}`, not a bare `"${...[*]}"`: on bash 3.2
+# an empty array is an unbound variable under `set -u`.
+fastvep_words=" ${FASTVEP_EXTRA_ARGV[*]-} "
+if [[ "$fastvep_words" == *" --sa-dir "* || "$fastvep_words" == *" --sa-dir="* ]]; then
+	sa_assemblies=""
+	sa_count=0
+	for entry in "${SUITES[@]}"; do
+		IFS=':' read -r suite_id _ assembly stype _ <<<"$entry"
+		should_run "$suite_id" "$stype" || continue
+		[[ " $sa_assemblies " != *" $assembly "* ]] || continue
+		sa_assemblies="$sa_assemblies $assembly"
+		sa_count=$((sa_count + 1))
+	done
+	[[ "$sa_count" -le 1 ]] || {
+		echo "ERROR: [run_clone_measurement] --fastvep-extra-args carries --sa-dir, a directory of one assembly's databases, and the selected cells are of $sa_count assemblies:$sa_assemblies; select the cells of one assembly with --suites or --cells and run once per assembly" >&2
+		exit 1
+	}
+fi
 
 # Output dir + wall_times.csv. The schema is identical across all three engines,
 # so runs can be concatenated into one uniform CSV.
+#
+# The first write under the output directory: every refusal on the arguments stands above
+# this line, so a refused run leaves an earlier run's files there as they are.
 mkdir -p "$OUTPUT_DIR"
-# A re-run into the same output directory starts without the previous run's vep-rs record,
-# wrapper and log, which only a vep-rs run writes (the wrapper and log only with extra
-# arguments), so none of the three sits beside a wall_times.csv they do not describe.
-rm -f "$OUTPUT_DIR/provenance.json" "$OUTPUT_DIR/vep-wrapper.sh" "$OUTPUT_DIR/vep-wrapper.argv"
+# A re-run into the same output directory starts without the previous run's record, wrappers
+# and logs: a vep-rs run writes the record always and its wrapper and log only with extra
+# arguments, a fastVEP run writes all three only with extra arguments, so none of them sits
+# beside a wall_times.csv it does not describe.
+rm -f "$OUTPUT_DIR/provenance.json" "$OUTPUT_DIR/vep-wrapper.sh" "$OUTPUT_DIR/vep-wrapper.argv" \
+	"$OUTPUT_DIR/fastvep-wrapper.sh" "$OUTPUT_DIR/fastvep-wrapper.argv"
 WALL_CSV="$OUTPUT_DIR/wall_times.csv"
 echo "engine,run_id,host_id,replicate,suite_id,suite_name,assembly,run_kind,wall_seconds,exit_code" >"$WALL_CSV"
 # replicate is a provenance column: this run's 1..N index across a set of repeated
@@ -446,6 +734,40 @@ record = {"engine": "vep-rs", "vep_binary": binary,
           "wrapper": wrapper or None, "executed_argv": []}
 json.dump(record, open(out, "w"), indent=1, sort_keys=True)
 PY
+fi
+
+# --fastvep-extra-args reaches fastVEP the same way, through a wrapper that FASTVEP_BINARY is
+# pointed at, so both fastVEP command lines below stay as the header documents them. A run
+# without the words writes no wrapper and no record; with them, provenance.json names the
+# binary, the words and the wrapper, and its fastvep_executed_argv is filled after the last
+# cell from the wrapper's log.
+FASTVEP_ARGV_LOG=""
+if [[ ${#FASTVEP_EXTRA_ARGV[@]} -gt 0 ]]; then
+	FASTVEP_WRAPPER="$OUTPUT_DIR/fastvep-wrapper.sh"
+	FASTVEP_ARGV_LOG="$OUTPUT_DIR/fastvep-wrapper.argv"
+	: >"$FASTVEP_ARGV_LOG"
+	real_q=$(printf '%q' "$FASTVEP_BINARY")
+	extra_q=$(printf ' %q' "${FASTVEP_EXTRA_ARGV[@]}")
+	log_q=$(printf '%q' "$FASTVEP_ARGV_LOG")
+	cat >"$FASTVEP_WRAPPER" <<EOF
+#!/usr/bin/env bash
+# Written by run_clone_measurement.sh for --fastvep-extra-args: runs the measured binary
+# with the extra arguments after the harness's own, and appends every argument vector
+# it runs to the log beside it, one line per invocation, fields separated by \\037.
+{ printf '%s\\037' $real_q "\$@"$extra_q; echo; } >>$log_q
+exec $real_q "\$@"$extra_q
+EOF
+	chmod +x "$FASTVEP_WRAPPER"
+	python3 - "$OUTPUT_DIR/provenance.json" "$FASTVEP_BINARY" "$FASTVEP_WRAPPER" "${FASTVEP_EXTRA_ARGV[@]}" <<'PY'
+import json, sys
+out, binary, wrapper, *argv = sys.argv[1:]
+record = {"engine": "fastvep", "fastvep_binary": binary,
+          "fastvep_extra_args": " ".join(argv), "fastvep_extra_argv": argv,
+          "fastvep_wrapper": wrapper, "fastvep_executed_argv": []}
+json.dump(record, open(out, "w"), indent=1, sort_keys=True)
+PY
+	FASTVEP_BINARY="$FASTVEP_WRAPPER"
+	echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] fastVEP extra arguments: ${FASTVEP_EXTRA_ARGV[*]} (through $FASTVEP_WRAPPER)"
 fi
 
 # discard_warmup_output <suite_dir>
@@ -571,61 +893,6 @@ canonicalize() {
 	fi
 }
 
-# Suite table: id:name:assembly:type:vcf_base
-declare -a SUITES=(
-	"s01:ClinVar_GRCh37:GRCh37:snp_indel:clinvar_grch37"
-	"s02:ClinVar_GRCh38:GRCh38:snp_indel:clinvar_grch38"
-	"s03:gnomAD_v2.1.1_chr21:GRCh37:snp_indel:gnomad_genomes_v2.1.1_chr21"
-	"s04:gnomAD_v4.1_chr21:GRCh38:snp_indel:gnomad_genomes_v4.1_chr21"
-	# s05 + s06 are the ONLY suites whose SOURCE inputs carry per-sample genotypes
-	# (1000 Genomes; the high-coverage set has 3,202 samples, FORMAT=GT). Genotypes
-	# do NOT affect VEP annotation output (VEP keys on position/allele; tab output has
-	# no genotype columns), so the apples-to-apples cells (s05/s06) use the SITES-ONLY
-	# inputs (bcftools view -G; the 4 other SNP/indel suites s01-s04 are sites-only at
-	# source). The `*m` rows below measure the SAME suites WITH genotypes for the
-	# sample-scaling measurement (vep-rs + fastVEP; this script's Perl branch always
-	# strips genotypes, and Perl VEP's one genotype-carrying measurement is the probe
-	# row of manuscript/data/perl_bench.csv).
-	# Concordance F1 is identical between the sites-only and multi-sample forms.
-	"s05:1KG_integrated_chr21:GRCh37:snp_indel:1kg_integrated_chr21_sitesonly"
-	"s06:1KG_highcov_chr21:GRCh38:snp_indel:1kg_highcov_chr21"
-	"s07:SV_GRCh37:GRCh37:sv:-"
-	"s08:SV_GRCh38:GRCh38:sv:-"
-	"s09:SV_real_world_GRCh37:GRCh37:sv:-"
-	"s10:SV_real_world_GRCh38:GRCh38:sv:-"
-	# Sample-scaling rows (with-genotypes; NOT part of --suites all / the headline table).
-	# Run explicitly, e.g. --suites "s05m s06m". vcf_base names the genotype-carrying input.
-	"s05m:1KG_integrated_chr21_multisample:GRCh37:snp_indel:1kg_integrated_chr21"
-	"s06m:1KG_highcov_chr21_multisample:GRCh38:snp_indel:1kg_highcov_chr21_multisample"
-)
-
-# SV per-assembly dedupe: the canonical per-VCF SV GT carries all 16 VCFs per
-# assembly in one directory (13 synthetic + 3 real-world). s07/s09 (GRCh37) and
-# s08/s10 (GRCh38) measure the SAME per-assembly SV set, so the annotation +
-# comparison is done ONCE per assembly under s07 (GRCh37) / s08 (GRCh38);
-# s09/s10 record a pointer marker. compare_sv_concordance.py reports overall +
-# per-file F1, so the synthetic vs real-world split is recoverable.
-# bash 3.2 has no associative arrays, and macOS ships 3.2 while `bash -n` and
-# shellcheck both PASS on `declare -A` -- it fails at RUNTIME, mid-run. A
-# delimited string is exact here: at most two keys (the two assemblies) and the
-# values are suite ids with no colons.
-SV_DONE=""
-
-# should_run <suite_id> <stype> : honor --suites filter.
-should_run() {
-	local sid="$1" stype="$2"
-	# Sample-scaling rows (ids ending in `m`, e.g. s05m/s06m) are OPT-IN: they run ONLY
-	# when named explicitly (--suites "s05m s06m"), never under all/snp-indel, so a
-	# default run stays the sites-only apples-to-apples set and never times the
-	# genotype matrix, whose cost is measured separately.
-	case "$SUITES_FILTER" in
-	all) [[ "$sid" != *m ]] ;;
-	snp-indel) [[ "$stype" == "snp_indel" && "$sid" != *m ]] ;;
-	sv) [[ "$stype" == "sv" ]] ;;
-	*) [[ " $SUITES_FILTER " == *" $sid "* ]] ;;
-	esac
-}
-
 # True when this suite has Perl ground truth to compare against. Distinguishes an
 # EXPECTED absence from a missing file, because conflating the two makes a run
 # report failure while producing perfect data.
@@ -680,14 +947,18 @@ reference_release_for() {
 # Per-engine SNP/indel measurement
 # measure_p1 covers the SNP/indel suites (suite type `snp_indel`).
 measure_p1() {
-	local suite_id="$1" suite_name="$2" assembly="$3" vcf_base="$4"
+	local suite_id="$1" suite_name="$2" assembly="$3" vcf_base="$4" species="$5"
 	local suite_dir="$OUTPUT_DIR/$suite_id"
 	mkdir -p "$suite_dir/rust" "$suite_dir/report" "$suite_dir/perf"
 	local fasta
-	fasta=$(fasta_for "$assembly")
+	fasta=$(fasta_for "$species" "$assembly") || {
+		csv_row "$suite_id" "$suite_name" "$assembly" "genome_resources_missing" "" "1"
+		return 1
+	}
 	# Canonical input (Ensembl-style contigs) -- the set the
 	# ground_truth/perl/snp_indel/ Perl GT was generated from.
-	local vcf="$DATA_DIR/vcf/$(printf %s "$assembly" | tr "[:upper:]" "[:lower:]")/all_variants_canonical/${vcf_base}.canonical.vcf.gz"
+	local vcf
+	vcf="$DATA_DIR/vcf/$(printf %s "$assembly" | tr "[:upper:]" "[:lower:]")/all_variants_canonical/${vcf_base}.canonical.vcf.gz"
 	local gt_dir="$SNP_INDEL_GT_DIR/$suite_id"
 	# The comparator's --reference-release, derived BEFORE the warmup and timed runs so a
 	# ground truth that names no release fails the cell before any annotation is timed.
@@ -705,7 +976,10 @@ measure_p1() {
 	case "$ENGINE" in
 	vep-rs)
 		local cache
-		cache=$(veprs_cache_for "$assembly")
+		cache=$(veprs_cache_for "$species" "$assembly") || {
+			csv_row "$suite_id" "$suite_name" "$assembly" "genome_resources_missing" "" "1"
+			return 1
+		}
 		local out="$suite_dir/rust/output.txt"
 		local run_kind perf_txt res wall rc
 		for run_kind in warmup timed; do
@@ -725,7 +999,7 @@ measure_p1() {
 		if [[ "$WALLTIME_ONLY" != "true" ]] && ground_truth_ready "$suite_id" "$suite_name" "$assembly" "$gt_dir"; then
 			mkdir -p "$suite_dir/perl"
 			ln -sf "$gt_dir/output.txt" "$suite_dir/perl/output.txt"
-			python3 "$REPO_DIR/scripts/concordance/compare_vep_outputs.py" \
+			"${OUTPUTS_COMPARE[@]}" \
 				--perl-dir "$suite_dir/perl" \
 				--rust-dir "$suite_dir/rust" \
 				--report-dir "$suite_dir/report" \
@@ -767,8 +1041,14 @@ measure_p1() {
 		;;
 	fastvep)
 		local cache gff3
-		cache=$(fastvep_cache_for "$assembly")
-		gff3=$(gff3_for "$assembly")
+		cache=$(fastvep_cache_for "$species" "$assembly") || {
+			csv_row "$suite_id" "$suite_name" "$assembly" "genome_resources_missing" "" "1"
+			return 1
+		}
+		gff3=$(gff3_for "$species" "$assembly") || {
+			csv_row "$suite_id" "$suite_name" "$assembly" "genome_resources_missing" "" "1"
+			return 1
+		}
 		local raw="$suite_dir/rust/raw.txt"
 		local run_kind perf_txt res wall rc
 		for run_kind in warmup timed; do
@@ -807,7 +1087,7 @@ measure_p1() {
 			fi
 			mkdir -p "$suite_dir/perl"
 			ln -sf "$gt_dir/output.txt" "$suite_dir/perl/output.txt"
-			python3 "$REPO_DIR/scripts/concordance/compare_vep_outputs.py" \
+			"${OUTPUTS_COMPARE[@]}" \
 				--perl-dir "$suite_dir/perl" \
 				--rust-dir "$suite_dir/rust" \
 				--report-dir "$suite_dir/report" \
@@ -827,12 +1107,13 @@ measure_p1() {
 		#
 		# Cache completeness is asserted BEFORE any work: a chromosome-subset cache
 		# produces a fast, wrong wall time and exits 0.
-		if ! assert_perl_cache_complete "$assembly"; then
+		if ! assert_perl_cache_complete "$species" "$assembly"; then
 			csv_row "$suite_id" "$suite_name" "$assembly" "perl_cache_incomplete" "" "1"
 			return 1
 		fi
 		local canon_vcf="$suite_dir/inputs/${vcf_base}.canonical.vcf.gz"
-		local raw_vcf="$DATA_DIR/vcf/$(printf %s "$assembly" | tr "[:upper:]" "[:lower:]")/all_variants/${vcf_base}.vcf.gz"
+		local raw_vcf
+		raw_vcf="$DATA_DIR/vcf/$(printf %s "$assembly" | tr "[:upper:]" "[:lower:]")/all_variants/${vcf_base}.vcf.gz"
 		mkdir -p "$suite_dir/inputs" "$suite_dir/perl_scratch"
 		# canonicalize fails closed (see its definition). A cell whose input is not
 		# canonical cannot be compared against the canonical-filtered ground truth,
@@ -846,7 +1127,7 @@ measure_p1() {
 		for run_kind in warmup timed; do
 			perf_txt="$suite_dir/perf/${run_kind}.time.txt"
 			res=$(perl_annotate_timed "${suite_id}_${run_kind}" "$perf_txt" \
-				"$canon_vcf" "$suite_dir/perl_scratch/output.txt" "$assembly")
+				"$canon_vcf" "$suite_dir/perl_scratch/output.txt" "$species" "$assembly")
 			wall="${res%%|*}"
 			rc="${res##*|}"
 			echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)]   $suite_id $run_kind wall=${wall}s rc=$rc"
@@ -865,14 +1146,14 @@ measure_p1() {
 	esac
 }
 
-# perl_annotate_timed <label> <perf_txt> <in.vcf.gz> <out.txt> <assembly>
+# perl_annotate_timed <label> <perf_txt> <in.vcf.gz> <out.txt> <species> <assembly>
 # Runs Perl VEP in Docker under /usr/bin/time. --fork matches the value the other
 # engines are given, so the comparison is like for like; the SV ground truth's own
 # fork setting belongs to generate_reference_output.sh, not to a timed cell.
 perl_annotate_timed() {
-	local label="$1" perf_txt="$2" in_vcf="$3" out_txt="$4" assembly="$5"
+	local label="$1" perf_txt="$2" in_vcf="$3" out_txt="$4" species="$5" assembly="$6"
 	local fasta out_dir out_base
-	fasta=$(fasta_for "$assembly")
+	fasta=$(fasta_for "$species" "$assembly")
 	out_dir=$(dirname "$out_txt")
 	out_base=$(basename "$out_txt")
 	mkdir -p "$out_dir"
@@ -889,7 +1170,7 @@ perl_annotate_timed() {
 		-i /work/input.vcf.gz \
 		-o "/work/perl_out/${out_base}" \
 		--offline --cache --dir_cache /work/cache --cache_version "$PERL_CACHE_VERSION" \
-		--species homo_sapiens --assembly "$assembly" \
+		--species "$species" --assembly "$assembly" \
 		--format vcf --buffer_size "$BUFFER_SIZE" --fork "$FORK" \
 		--fasta /work/ref.fa \
 		--no_headers --no_stats --quiet --force_overwrite
@@ -965,25 +1246,26 @@ assert_perl_annotated() {
 	return 0
 }
 
-# assert_perl_cache_complete <assembly>
+# assert_perl_cache_complete <species> <assembly>
 #
 # A chromosome-subset cache (a `116_GRCh37/` holding only `21/` against a genome-wide
 # `116_GRCh38/`) is a second way for Perl to annotate almost nothing and exit 0, independent
 # of the flag.
 #
-# `assert_perl_annotated` does NOT subsume this, which is the whole reason the function exists.
-# Its reference-free `rows >= records` floor catches a chr21-only cache only where the input is
-# genome-wide. Over the 16 GRCh37 SV VCFs, whose records are chr21 by design, the same broken
-# cache passes the floor with an order of magnitude spare while `09_breakends` silently loses
-# every mate that points off chromosome 21. An output-volume gate cannot see a cache gap the
-# input barely samples, so completeness is asserted on the cache itself, before any timing.
+# The reference-free `rows >= records` floor of `assert_perl_annotated` catches a chr21-only
+# cache only where the input is genome-wide. Over the 16 GRCh37 SV VCFs, whose records are
+# chr21 by design, such a cache passes the floor with an order of magnitude spare while
+# `09_breakends` loses every mate that points off chromosome 21. An output-volume gate
+# cannot see a cache gap the input barely samples, so completeness is asserted on the cache
+# itself, before any timing.
 #
 # Primary contigs only. Ensembl's full GRCh37 cache carries 699 directories, the other 674 being
 # unplaced scaffolds and haplotype contigs, and no input here reaches them -- so requiring all
 # 699 would fail a legitimately pruned cache. Requiring the 25 primary contigs fails every
-# chromosome-subset cache, which is the defect class.
+# chromosome-subset cache, which is the defect class. The primary set is known for homo_sapiens
+# alone; another species' slice must hold at least one chromosome directory.
 assert_perl_cache_complete() {
-	local assembly="$1"
+	local species="$1" assembly="$2"
 	# The default is load-bearing rather than defensive. The CACHE-COMPLETE gate in
 	# test_run_clone_measurement.sh extracts this function with awk and evals it, so the gate
 	# runs the shipped code and not a copy that can drift from it. Under that eval the harness's
@@ -991,14 +1273,25 @@ assert_perl_cache_complete() {
 	# reference would abort the whole gate suite on an unbound variable, exiting 1 with no
 	# failing assertion printed and reading as a harness defect rather than a missing default.
 	local ver="${PERL_CACHE_VERSION:-116}"
-	local slice="$PERL_CACHE_DIR/homo_sapiens/${ver}_${assembly}"
+	local slice="$PERL_CACHE_DIR/$species/${ver}_${assembly}"
 	local primaries="1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT"
-	local c missing=""
+	local c missing="" n_chrom=0
 
 	if [[ ! -d "$slice" ]]; then
 		echo "ERROR: [run_clone_measurement] Perl cache slice not found: $slice" >&2
-		echo "  Expected homo_sapiens/${ver}_${assembly} under \$PERL_CACHE_DIR ($PERL_CACHE_DIR)." >&2
+		echo "  Expected $species/${ver}_${assembly} under \$PERL_CACHE_DIR ($PERL_CACHE_DIR)." >&2
 		return 1
+	fi
+	if [[ "$species" != "homo_sapiens" ]]; then
+		for c in "$slice"/*/; do
+			[[ -d "$c" ]] && n_chrom=$((n_chrom + 1))
+		done
+		if [[ "$n_chrom" -eq 0 ]]; then
+			echo "ERROR: [run_clone_measurement] Perl cache slice holds no chromosome directory: $slice" >&2
+			return 1
+		fi
+		echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)]   perl cache check ($species $assembly): $n_chrom chromosome directories; completeness is asserted for homo_sapiens alone"
+		return 0
 	fi
 
 	for c in $primaries; do
@@ -1064,7 +1357,7 @@ assert_sv_outputs_present() {
 }
 
 measure_sv() {
-	local suite_id="$1" suite_name="$2" assembly="$3"
+	local suite_id="$1" suite_name="$2" assembly="$3" species="$4"
 	local suite_dir="$OUTPUT_DIR/$suite_id"
 	mkdir -p "$suite_dir/rust" "$suite_dir/report" "$suite_dir/perf"
 	# `${var,,}` is bash 4+ and fails at runtime on macOS bash 3.2 while passing
@@ -1101,12 +1394,18 @@ measure_sv() {
 	fi
 
 	local fasta
-	fasta=$(fasta_for "$assembly")
+	fasta=$(fasta_for "$species" "$assembly") || {
+		csv_row "$suite_id" "$suite_name" "$assembly" "genome_resources_missing" "" "1"
+		return 1
+	}
 
 	case "$ENGINE" in
 	vep-rs)
 		local cache
-		cache=$(veprs_cache_for "$assembly")
+		cache=$(veprs_cache_for "$species" "$assembly") || {
+			csv_row "$suite_id" "$suite_name" "$assembly" "genome_resources_missing" "" "1"
+			return 1
+		}
 		local run_kind rust_out perf_txt res wall rc
 		for run_kind in warmup timed; do
 			rust_out="$suite_dir/rust"
@@ -1128,7 +1427,7 @@ measure_sv() {
 			res=$(time_run "${suite_id}_${run_kind}" "$perf_txt" -- \
 				bash -c '
 					set -uo pipefail
-					bin="$1"; cache="$2"; fasta="$3"; asm="$4"; buf="$5"; in_dir="$6"; out_dir="$7"; fork="$8"
+					bin="$1"; cache="$2"; fasta="$3"; asm="$4"; buf="$5"; in_dir="$6"; out_dir="$7"; fork="$8"; species="$9"
 					shopt -s nullglob
 					failed=0
 					for vcf in "$in_dir"/*.vcf "$in_dir"/*.vcf.gz; do
@@ -1137,7 +1436,7 @@ measure_sv() {
 						"$bin" -i "$vcf" -o "$out_dir/$b.txt" \
 							--offline --json_cache "$cache" --fasta "$fasta" \
 							--fork "$fork" --buffer_size "$buf" --force --no_stats \
-							--species homo_sapiens --assembly "$asm" --quiet \
+							--species "$species" --assembly "$asm" --quiet \
 							2>"$out_dir/$b.stderr" || {
 							failed=$((failed+1))
 							echo "ERROR: [run_clone_measurement] per-VCF invocation failed: $b" >&2
@@ -1147,7 +1446,7 @@ measure_sv() {
 						echo "ERROR: [run_clone_measurement] $failed per-VCF invocation(s) failed" >&2
 						exit "$failed"
 					}
-				' _ "$VEP_BINARY" "$cache" "$fasta" "$assembly" "$BUFFER_SIZE" "$sv_inputs" "$rust_out" "$FORK")
+				' _ "$VEP_BINARY" "$cache" "$fasta" "$assembly" "$BUFFER_SIZE" "$sv_inputs" "$rust_out" "$FORK" "$species")
 			wall="${res%%|*}"
 			rc="${res##*|}"
 			echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)]   $suite_id $run_kind wall=${wall}s rc=$rc"
@@ -1182,8 +1481,14 @@ measure_sv() {
 		;;
 	fastvep)
 		local cache gff3
-		cache=$(fastvep_cache_for "$assembly")
-		gff3=$(gff3_for "$assembly")
+		cache=$(fastvep_cache_for "$species" "$assembly") || {
+			csv_row "$suite_id" "$suite_name" "$assembly" "genome_resources_missing" "" "1"
+			return 1
+		}
+		gff3=$(gff3_for "$species" "$assembly") || {
+			csv_row "$suite_id" "$suite_name" "$assembly" "genome_resources_missing" "" "1"
+			return 1
+		}
 		local run_kind rust_out perf_txt res wall rc
 		for run_kind in warmup timed; do
 			rust_out="$suite_dir/rust"
@@ -1250,8 +1555,8 @@ measure_sv() {
 				# The mask authority is the vep-rs JSON cache, which fastVEP itself never
 				# reads, so a fastVEP data tree can be complete for annotation and still
 				# lack it; assert it by name before the comparator does with a traceback.
-				if [[ ! -d "$(veprs_cache_for "$assembly")" ]]; then
-					echo "ERROR: [run_clone_measurement] $suite_id: vep-rs JSON cache absent at $(veprs_cache_for "$assembly"); the fastVEP tree must carry it for the cross-chromosome mask (--vep-rs-cache)" >&2
+				if [[ ! -d "$(veprs_cache_for "$species" "$assembly")" ]]; then
+					echo "ERROR: [run_clone_measurement] $suite_id: vep-rs JSON cache absent at $(veprs_cache_for "$species" "$assembly"); the fastVEP tree must carry it for the cross-chromosome mask (--vep-rs-cache)" >&2
 					csv_row "$suite_id" "$suite_name" "$assembly" "mask_cache_missing" "" "1"
 					return 1
 				fi
@@ -1260,7 +1565,7 @@ measure_sv() {
 					--input-dir "$sv_inputs" \
 					--perl-dir "$sv_gt" \
 					--rust-dir "$suite_dir/rust" \
-					--vep-rs-cache "$(veprs_cache_for "$assembly")" \
+					--vep-rs-cache "$(veprs_cache_for "$species" "$assembly")" \
 					--scored-engine fastvep \
 					--reference-release "$reference_release" \
 					--output-dir "$suite_dir/report" || {
@@ -1282,7 +1587,7 @@ measure_sv() {
 		# This is the branch `assert_perl_annotated` cannot protect: these inputs are
 		# chr21 by design, so a chr21-only cache clears its rows/records floor while
 		# `09_breakends` loses every off-chromosome mate. See the guard's own comment.
-		if ! assert_perl_cache_complete "$assembly"; then
+		if ! assert_perl_cache_complete "$species" "$assembly"; then
 			csv_row "$suite_id" "$suite_name" "$assembly" "perl_cache_incomplete" "" "1"
 			return 1
 		fi
@@ -1293,7 +1598,7 @@ measure_sv() {
 			res=$(time_run "${suite_id}_${run_kind}" "$perf_txt" -- \
 				bash -c '
 					set -uo pipefail
-					image="$1"; cache="$2"; fasta="$3"; asm="$4"; in_dir="$5"; scratch="$6"; uidgid="$7"; buf="$8"; fork="$9"; cache_version="${10}"
+					image="$1"; cache="$2"; fasta="$3"; asm="$4"; in_dir="$5"; scratch="$6"; uidgid="$7"; buf="$8"; fork="$9"; cache_version="${10}"; species="${11}"
 					mkdir -p "$scratch"
 					shopt -s nullglob
 					failed=0
@@ -1315,7 +1620,7 @@ measure_sv() {
 							"$image" \
 							vep -i /work/input.vcf.gz -o "/work/perl_out/$b.txt" \
 							--offline --cache --dir_cache /work/cache --cache_version "$cache_version" \
-							--species homo_sapiens --assembly "$asm" \
+							--species "$species" --assembly "$asm" \
 							--format vcf --buffer_size "$buf" --fork "$fork" \
 							--fasta /work/ref.fa \
 							--no_headers --no_stats --quiet --force_overwrite || {
@@ -1328,7 +1633,7 @@ measure_sv() {
 						exit "$failed"
 					}
 				' _ "$PERL_IMAGE" "$PERL_CACHE_DIR" "$fasta" "$assembly" \
-				"$sv_inputs" "$suite_dir/perl_scratch" "$(id -u):$(id -g)" "$BUFFER_SIZE" "$FORK" "$PERL_CACHE_VERSION")
+				"$sv_inputs" "$suite_dir/perl_scratch" "$(id -u):$(id -g)" "$BUFFER_SIZE" "$FORK" "$PERL_CACHE_VERSION" "$species")
 			wall="${res%%|*}"
 			rc="${res##*|}"
 			echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)]   $suite_id $run_kind wall=${wall}s rc=$rc"
@@ -1360,32 +1665,36 @@ measure_sv() {
 # remaining step of the surrounding run and produce no results at all.
 failed_suites=()
 for entry in "${SUITES[@]}"; do
-	IFS=':' read -r suite_id suite_name assembly stype vcf_base <<<"$entry"
+	IFS=':' read -r suite_id suite_name assembly stype vcf_base species <<<"$entry"
 	if ! should_run "$suite_id" "$stype"; then
 		echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] suite $suite_id skipped (suites=$SUITES_FILTER)"
 		continue
 	fi
-	echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] suite $suite_id ($suite_name $assembly $stype) starting"
+	echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] suite $suite_id ($suite_name $species $assembly $stype) starting"
 	if [[ "$stype" == "snp_indel" ]]; then
-		measure_p1 "$suite_id" "$suite_name" "$assembly" "$vcf_base" ||
+		measure_p1 "$suite_id" "$suite_name" "$assembly" "$vcf_base" "$species" ||
 			failed_suites+=("$suite_id")
 	else
-		measure_sv "$suite_id" "$suite_name" "$assembly" ||
+		measure_sv "$suite_id" "$suite_name" "$assembly" "$species" ||
 			failed_suites+=("$suite_id")
 	fi
 done
 
-# The wrapper's argument-vector log, one record per vep-rs invocation, folded into
-# provenance.json now that every cell has run.
-if [[ -n "$VEP_ARGV_LOG" ]]; then
-	python3 - "$OUTPUT_DIR/provenance.json" "$VEP_ARGV_LOG" <<'PY'
+# The wrapper's argument-vector log, one record per engine invocation, is folded into
+# provenance.json after the last cell: under executed_argv for vep-rs and
+# fastvep_executed_argv for fastVEP. A run writes at most one of the two logs.
+ARGV_LOG="${VEP_ARGV_LOG:-$FASTVEP_ARGV_LOG}"
+if [[ -n "$ARGV_LOG" ]]; then
+	ARGV_KEY=executed_argv
+	[[ "$ENGINE" == vep-rs ]] || ARGV_KEY=fastvep_executed_argv
+	python3 - "$OUTPUT_DIR/provenance.json" "$ARGV_LOG" "$ARGV_KEY" <<'PY'
 import json, sys
-out, log = sys.argv[1:]
+out, log, key = sys.argv[1:]
 record = json.load(open(out))
-record["executed_argv"] = [line.split("\037")[:-1] for line in open(log).read().split("\n") if line]
+record[key] = [line.split("\037")[:-1] for line in open(log).read().split("\n") if line]
 json.dump(record, open(out, "w"), indent=1, sort_keys=True)
 PY
-	echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(grep -c . "$VEP_ARGV_LOG" || true) vep-rs invocation(s) recorded in $OUTPUT_DIR/provenance.json"
+	echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $(grep -c . "$ARGV_LOG" || true) $ENGINE invocation(s) recorded in $OUTPUT_DIR/provenance.json"
 fi
 
 # container_probe <n>: n bare starts of the Perl image, the same --user flag as the

@@ -1,0 +1,31 @@
+entry = "utrannotator_lost_stop_written_before_stop_codon"
+page = "docs/divergences/utrannotator-lost-stop-written-before-stop-codon.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 63,698 per million · 4 flag sets, 93 corpora"
+notes = "The constructed record inserts two bases directly before the start codon at cDNA 361 (5' UTR index 360) of ENST00001091162. The bases repeat the codon's first two, so the changed sequence is the reference with those two bases written after the codon's second base, inside the stop codon of the uORF that begins 133 bases before the coding sequence. That stop codon's index reads no stop codon in the changed sequence. Ensembl VEP reports the uORF's frameshift; vep-rs reports its lost stop, as Ensembl VEP does for the same bases written after the codon's second base."
+
+[input]
+format = "vcf"
+text = """
+21	10535884	utr_ins_before_stop_codon	C	CAT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-utr-annotator/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-utr-annotator/reference.fa.gz"
+
+[run]
+flags = ["--plugin", "UTRAnnotator,file={corpus}/data/uORF_5UTR_GRCh38_PUBLIC.chr21.txt", "--hgvs"]
+
+[compare]
+kind = "field"
+field = "5UTR_consequence"
+where = { record = "utr_ins_before_stop_codon", feature = "ENST00001091162" }
+
+[expected]
+ensembl_vep = ["5_prime_UTR_uORF_frameshift_variant"]
+vep_rs = ["5_prime_UTR_uORF_stop_codon_loss_variant"]

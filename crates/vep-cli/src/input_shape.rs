@@ -3,7 +3,9 @@
 
 //! The shape of a bgzipped, indexed input, read from four sampled windows: how
 //! many bytes a record inflates to and how many records the file holds, for the
-//! `auto` decompression thread count and `--resolved_config`.
+//! `auto` decompression thread count and `--resolved_config`; and the shape of
+//! the host's processors, read from the kernel's topology files, for the
+//! `--reader_core` rule.
 //!
 //! A BGZF file is recognised by its first block header, never by its name, with
 //! the reader's own detection (`runner::bgzf_block_size`). The windows
@@ -73,6 +75,115 @@ impl InputShape {
     }
 }
 
+/// Where Linux describes the processors.
+const CPU_TOPOLOGY_ROOT: &str = "/sys/devices/system/cpu";
+
+/// The host's processors as the kernel's topology files describe them: each
+/// physical core with the logical CPUs that share it, so a core of two is a
+/// pair of hardware threads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CpuTopology {
+    /// Each core's logical CPUs, sorted; the cores sorted by their first CPU.
+    cores: Vec<Vec<usize>>,
+}
+
+impl CpuTopology {
+    /// The host's topology from `/sys/devices/system/cpu`; `None` where the
+    /// directory holds no `cpu<n>/topology/thread_siblings_list`, as on a host
+    /// that is not Linux.
+    pub fn read() -> Option<Self> {
+        Self::read_from(Path::new(CPU_TOPOLOGY_ROOT))
+    }
+
+    /// The topology under `root`, laid out as `/sys/devices/system/cpu` is: one
+    /// `cpu<n>` directory per logical CPU, its `topology/thread_siblings_list`
+    /// naming the CPUs of its core as a comma-separated list of numbers and
+    /// `a-b` ranges. A CPU whose list is missing or unreadable, as an offline
+    /// CPU's is, belongs to no core; `None` when no CPU directory has a list.
+    pub fn read_from(root: &Path) -> Option<Self> {
+        let mut cores: Vec<Vec<usize>> = Vec::new();
+        for entry in std::fs::read_dir(root).ok()?.flatten() {
+            let name = entry.file_name();
+            let Some(cpu) = name
+                .to_str()
+                .and_then(|n| n.strip_prefix("cpu"))
+                .and_then(|n| n.parse::<usize>().ok())
+            else {
+                continue;
+            };
+            let Ok(list) =
+                std::fs::read_to_string(entry.path().join("topology/thread_siblings_list"))
+            else {
+                continue;
+            };
+            let mut siblings = cpu_list(&list);
+            if !siblings.contains(&cpu) {
+                siblings.push(cpu);
+            }
+            cores.push(siblings);
+        }
+        (!cores.is_empty()).then(|| Self::from_cores(cores))
+    }
+
+    /// A topology of the given cores, each a list of logical CPUs, as the
+    /// kernel's files would describe them.
+    pub fn from_cores(cores: Vec<Vec<usize>>) -> Self {
+        let mut cores: Vec<Vec<usize>> = cores
+            .into_iter()
+            .map(|mut core| {
+                core.sort_unstable();
+                core.dedup();
+                core
+            })
+            .filter(|core| !core.is_empty())
+            .collect();
+        cores.sort_unstable();
+        cores.dedup();
+        Self { cores }
+    }
+
+    /// Each core's logical CPUs.
+    pub fn cores(&self) -> &[Vec<usize>] {
+        &self.cores
+    }
+
+    /// The physical cores.
+    pub fn physical_cores(&self) -> usize {
+        self.cores.len()
+    }
+
+    /// The logical CPUs of the core `cpu` belongs to, `None` for a CPU the
+    /// topology does not name.
+    pub fn core_of(&self, cpu: usize) -> Option<&[usize]> {
+        self.cores
+            .iter()
+            .find(|core| core.contains(&cpu))
+            .map(Vec::as_slice)
+    }
+}
+
+/// The CPUs a kernel CPU list names: comma-separated numbers and `a-b` ranges,
+/// with a trailing newline; a token that is neither is skipped.
+fn cpu_list(text: &str) -> Vec<usize> {
+    text.trim()
+        .split(',')
+        .filter(|token| !token.is_empty())
+        .flat_map(|token| match token.split_once('-') {
+            Some((from, to)) => match (from.parse::<usize>(), to.parse::<usize>()) {
+                (Ok(from), Ok(to)) if from <= to => (from..=to).collect(),
+                _ => Vec::new(),
+            },
+            None => token.parse::<usize>().into_iter().collect(),
+        })
+        .collect()
+}
+
+/// The host's physical cores, `None` where the kernel's topology files are
+/// absent.
+pub fn physical_cores() -> Option<usize> {
+    CpuTopology::read().map(|topology| topology.physical_cores())
+}
+
 /// What the windows hold between them.
 #[derive(Default)]
 struct Sample {
@@ -123,11 +234,25 @@ fn read_indexed(path: &Path) -> Option<InputShape> {
     })
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Windows read on this thread, for the tests that assert how many were.
+    static WINDOWS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Windows read on this thread so far (a test-only count).
+#[cfg(test)]
+fn windows_read() -> usize {
+    WINDOWS_READ.with(std::cell::Cell::get)
+}
+
 /// Reads the window opening at block `start` into `sample`: consecutive blocks
 /// until the window holds [`WINDOW_MIN_LINES`] complete data lines,
 /// [`WINDOW_MAX_BLOCKS`] blocks, a block that cannot be read or the empty
 /// end-of-file block. `None` when the first block cannot be read.
 fn read_window(file: &mut File, start: u64, sample: &mut Sample) -> Option<()> {
+    #[cfg(test)]
+    WINDOWS_READ.with(|count| count.set(count.get() + 1));
     let at_file_start = start == 0;
     let mut text = Vec::new();
     let mut compressed_bytes = 0u64;
@@ -655,6 +780,43 @@ mod tests {
         );
     }
 
+    /// A run reads the input's shape only when a knob resolves from it: a
+    /// pinned `--fork` with `--decompression_threads` `0` or a fixed count reads
+    /// no window; `--decompression_threads auto` and `--fork 0` each read at
+    /// least one per eighth (an eighth whose first block is the end-of-file
+    /// block reads two).
+    #[test]
+    fn windows_are_read_only_when_a_knob_asks() {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/sv_validation/grch37/03_small_indels.vcf.gz");
+        let workers = |flags: &[&str]| {
+            let mut argv = vec!["vep", "-i", fixture.to_str().unwrap()];
+            argv.extend_from_slice(flags);
+            let config = crate::config::Config::from_argv(argv).unwrap();
+            let shape = crate::runner::input_shape_if_asked(&config);
+            crate::runner::decompression_workers(&config, &shape)
+        };
+        let before = windows_read();
+        workers(&["--fork", "4", "--decompression_threads", "0"]);
+        workers(&["--fork", "4", "--decompression_threads", "3"]);
+        assert_eq!(
+            windows_read(),
+            before,
+            "a count that needs no shape reads no window"
+        );
+        assert!(workers(&["--fork", "4", "--decompression_threads", "auto"]) >= 1);
+        let after_auto = windows_read();
+        assert!(
+            after_auto >= before + SAMPLE_EIGHTHS.len(),
+            "auto reads a window per eighth"
+        );
+        assert!(workers(&["--fork", "0", "--decompression_threads", "0"]) >= 1);
+        assert!(
+            windows_read() >= after_auto + SAMPLE_EIGHTHS.len(),
+            "fork 0 reads a window per eighth"
+        );
+    }
+
     /// A structural-variant fixture bgzipped and indexed by htslib reads as
     /// `Indexed`, with the bytes per record of its own data lines.
     #[test]
@@ -689,6 +851,59 @@ mod tests {
             "{records_estimate} records estimated against {records}"
         );
         assert_eq!(file_bytes, std::fs::metadata(&fixture).unwrap().len());
+    }
+
+    /// A topology directory whose eight CPUs pair up as four cores (`0,4`,
+    /// `1,5`, ...), the layout of a host with two hardware threads per core,
+    /// reads four physical cores, each CPU's core its pair; a directory with no
+    /// topology lists is `None`, as is an absent one; a CPU without a list, as
+    /// an offline CPU, belongs to no core; a list written as a range reads as
+    /// its CPUs.
+    #[test]
+    fn physical_cores_read_from_topology_or_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("paired");
+        for cpu in 0..8usize {
+            let dir = root.join(format!("cpu{cpu}/topology"));
+            std::fs::create_dir_all(&dir).unwrap();
+            let (a, b) = (cpu % 4, cpu % 4 + 4);
+            std::fs::write(dir.join("thread_siblings_list"), format!("{a},{b}\n")).unwrap();
+        }
+        // Directories beside the CPUs, as the kernel's `cpufreq` and `cpuidle`.
+        std::fs::create_dir_all(root.join("cpufreq")).unwrap();
+        std::fs::create_dir_all(root.join("cpu8/topology")).unwrap();
+        std::fs::write(root.join("cpu8/topology/thread_siblings_list"), "8-9\n").unwrap();
+        std::fs::create_dir_all(root.join("cpu10/topology")).unwrap();
+        let topology = CpuTopology::read_from(&root).unwrap();
+        assert_eq!(topology.physical_cores(), 5);
+        assert_eq!(
+            topology.cores(),
+            &[vec![0, 4], vec![1, 5], vec![2, 6], vec![3, 7], vec![8, 9]]
+        );
+        assert_eq!(topology.core_of(5), Some(&[1, 5][..]));
+        assert_eq!(topology.core_of(10), None);
+        assert_eq!(topology.core_of(11), None);
+
+        let bare = tmp.path().join("bare");
+        std::fs::create_dir_all(bare.join("cpu0")).unwrap();
+        assert_eq!(CpuTopology::read_from(&bare), None);
+        assert_eq!(CpuTopology::read_from(&tmp.path().join("absent")), None);
+
+        assert_eq!(cpu_list("0-3,8,10-11\n"), vec![0, 1, 2, 3, 8, 10, 11]);
+        assert_eq!(cpu_list("7\n"), vec![7]);
+        assert_eq!(cpu_list("x,3-1,\n"), Vec::<usize>::new());
+
+        // The host's own reading, where it has one: its cores name at least as
+        // many CPUs as the host offers the run, since a CPU outside the run's
+        // allowed set is still in the topology.
+        if let Some(host) = CpuTopology::read() {
+            let cpus = std::thread::available_parallelism().unwrap().get();
+            assert!(host.physical_cores() >= 1);
+            assert!(host.cores().iter().map(Vec::len).sum::<usize>() >= cpus);
+            assert_eq!(physical_cores(), Some(host.physical_cores()));
+        } else {
+            assert_eq!(physical_cores(), None);
+        }
     }
 
     #[test]

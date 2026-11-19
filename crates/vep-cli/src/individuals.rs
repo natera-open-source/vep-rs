@@ -189,15 +189,24 @@ impl RecordReading<'_> {
             .is_some_and(|split| split.mode == IndividualMode::Copies)
     }
 
+    /// Whether the reading has individuals to read (`--individual` or
+    /// `--individual_zyg`), and so needs a record's [`RecordAlleles`].
+    pub fn reads_individuals(&self) -> bool {
+        self.individuals.is_some()
+    }
+
     /// The alleles the record writes: its individuals' copies, the record with its
     /// individuals' zygosities, or the record itself with the reference row when
-    /// `--process_ref_homs` asks for one. `minimal` is the run's `--minimal`, which
-    /// decides whether a reading prints the record's uploaded string as
+    /// `--process_ref_homs` asks for one. `alleles` is the record's
+    /// [`RecordAlleles`], which a reading with individuals reads and a reading
+    /// without never looks at, so a caller builds them when
+    /// [`Self::reads_individuals`] holds. `minimal` is the run's `--minimal`,
+    /// which decides whether a reading prints the record's uploaded string as
     /// `UPLOADED_ALLELE` ([`keeps_uploaded_spelling`]).
     pub fn finish_record(
         &self,
         mut record: Vec<InputVariant>,
-        alleles: &RecordAlleles<'_>,
+        alleles: Option<&RecordAlleles<'_>>,
         columns: &VcfColumns<'_>,
         minimal: bool,
     ) -> Vec<InputVariant> {
@@ -207,6 +216,7 @@ impl RecordReading<'_> {
             }
             return record;
         };
+        let alleles = alleles.expect("the alleles of a record read per individual");
         let run = RunFlags {
             process_ref_homs: self.process_ref_homs,
             minimal,

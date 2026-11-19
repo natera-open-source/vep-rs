@@ -1,6 +1,6 @@
 # Two `--minimal` alleles that trim to the same allele string
 
-A difference in which rows are written under `--minimal` for one multi-allelic shape; nothing is set aside, since no measured dataset runs the flag.
+A difference in which rows are written under `--minimal` for one multi-allelic shape; nothing is set aside, since no measured dataset runs the flag. Where two alternate alleles trim to the same allele string at different positions, Ensembl VEP writes the later allele's rows in place of the earlier allele's; vep-rs keeps the rows of every allele.
 
 Under `--minimal`, Ensembl VEP splits a multi-allelic record whose alleles trim into one feature per allele (`InputBuffer.pm` lines 638-718) and, at output, merges every allele after the first back into the record's feature under the key `<trimmed allele string>_<transcript key>` (`OutputFactory.pm` line 2316). Two alternate alleles that trim to the same allele string at different positions share that key, and the later allele's rows replace the earlier allele's. The record below has three alternate alleles, which trim to `A/C` at 10542414, `A/T` at 10542414 and `A/T` at 10542415:
 

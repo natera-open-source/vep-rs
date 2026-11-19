@@ -1,0 +1,23 @@
+# The reference codons of a deletion spanning the bases a RefSeq model's alignment deleted
+
+**The defect in one sentence.** On a RefSeq model whose alignment deleted bases, for a deletion removing them with mapped bases on both sides, Ensembl VEP splices the genomic allele over the shorter coding span, so its reference codons show bases the model lacks, where vep-rs's show the model's own.
+
+**Why this is a defect.** The reference codons name the model's bases at the protein positions the row prints, and the model's translation, which the same row's amino acids come from, is read from those bases. The splice assumes the reference allele has the coding span's length. Where the allele is longer, the codon window reads the allele's first bases, the last of which lie in the genome alone, and the model's final bases of the span fall out of it. The alternate codons, read without the splice, agree on both engines.
+
+**What vep-rs does instead.** vep-rs reads the reference codons from the model's coding sequence at the row's protein positions, the deleted bases in upper case, as it does for every other allele.
+
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-variation` at release/116):
+
+- `Bio/EnsEMBL/Variation/TranscriptVariationAllele.pm`, lines 826-827 and 872-874, `codon`: on a model carrying an `_rna_edit` attribute, the reference allele's bases are spliced over the coding span, `substr($cds, $cds_start - 1, $vf_nt_len) = $seq`. The splice replaces `$vf_nt_len` bases with `length($seq)` bases, and line 877 then reads `$codon_len` bases from the first codon's start.
+- `Bio/EnsEMBL/Variation/TranscriptVariation.pm`, lines 441-468, `_get_ref_allele`: under `--use_transcript_ref`, which a BAM-edited cache switches on (`Bio/EnsEMBL/VEP/CacheDir.pm`, lines 411-414), the model's own bases become the reference allele only when the span maps to at most two segments (line 459). A span over deleted bases maps to three, so the genomic bases stand.
+- `Bio/EnsEMBL/TranscriptMapper.pm`, lines 168-221, `_load_mapper`: a deletion edit pairs no cDNA position with the deleted genomic bases (lines 213-218), which is why the span holds fewer coding positions than genomic bases.
+
+**What correcting it would change.** Every such row's reference codons would be the model's bases over its protein positions, the same string vep-rs writes. The alternate codons, amino acids, positions and terms would not change.
+
+**The class it produces.** `refseq_edited_model_deleted_span_codons`: the Codons of a `Transcript` row carrying `BAM_EDIT=OK` whose `USED_REF` has more bases than its CDS span, the two engines' alternate codons equal and their reference codons of one length agreeing at every lower-case base and differing in an upper-case one. Ensembl VEP's upper-case bases spell `USED_REF`'s leading bases on the model's strand. The format comparator applies it once per row and compares every other field, the amino acids included. The gnomAD v4.1 chromosome 21 dataset (GRCh38) carries 2 such rows under `--refseq` and under `--merged`, on the two COL18A1 models; the gnomAD v2.1.1 and 1000 Genomes chromosome 21 datasets carry none, and so do the committed RefSeq corpora.
+
+## 1. A seventeen-base deletion over the nine bases COL18A1's models lack
+
+**In short.** `NM_030582.4` and `NM_130444.3` lack the nine genomic bases `21:45504526-45504534` (edits `3387 3395` and `4092 4100`), so the seventeen bases `21:45504519-45504535`, `CAGGCCCCCCAGGCCCA`, hold eight of each model's coding positions, CDS 3371-3378 and 4076-4083. The models read `CAGGCCCA` there: `CAGGCCC` from `21:45504519-45504525`, then `A` from `21:45504535`. For the gnomAD v4.1 deletion `rs1179352929` (`21:45504518 CCAGGCCCCCCAGGCCCA C`), both engines write `frameshift_variant`, protein positions 1124-1126 and 1359-1361, amino acids `PGP/X` and the alternate codon `c`. The reference codons differ: Ensembl VEP's hold the first codon's base and the genomic allele's first eight bases, vep-rs's the models' own nine bases.
+
+**The reference codons.** Ensembl VEP writes `cCAGGCCCC`: the first codon's base, then the genomic allele's first eight bases, ending in the `C` at `21:45504526`, a base the models lack, while the models' `A` at CDS 3378 and 4083 is not shown. vep-rs writes `cCAGGCCCA`, the models' own nine bases. On the unedited sibling `NM_001379500.1`, which has all seventeen bases, both engines write `cCAGGCCCCCCAGGCCCA/c` over protein positions 944-949. The commands of [Reproducing these examples](reproducing.md#reproducing-these-examples), with `--refseq` and the RefSeq GRCh38 cache, print these rows; `grep -E 'NM_030582.4|NM_130444.3|NM_001379500.1'` selects them.

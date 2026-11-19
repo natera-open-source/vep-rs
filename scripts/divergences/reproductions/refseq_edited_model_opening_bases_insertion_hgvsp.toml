@@ -1,0 +1,66 @@
+entry = "refseq_edited_model_opening_bases_insertion_hgvsp"
+page = "docs/divergences/refseq-edited-model-opening-bases-insertion-hgvsp.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "seen in the ClinVar GRCh37 and GRCh38 files annotated on the RefSeq caches: 1 of the 49 rows of the 12 records written between the two genomic neighbours of a model's added bases, record 768677 on NM_001288959.2"
+notes = "ClinVar record 768677 inserts 18 bases between 14:94582130 and 14:94582131, where the forward-strand model NM_001288959.2 carries the insertion edit `97 96` of nine bases, its coding positions 1 to 9; the 18 bases are those nine twice. The genome's 3' shift moves the insertion three places. Both engines print cDNA 97-105 and CDS ?-9. Ensembl VEP reads the protein notation at the shifted point and, the row carrying start_lost, prints the two residues beside that point with `?` between the positions 5 and 4; vep-rs reads the row where the record is written and writes the duplication of residues 2 to 4. No committed cache holds the model, so the prepare steps copy the one region file of the Ensembl VEP RefSeq GRCh37 cache that holds it and convert it with the Perl of the image, which the run therefore needs, and write a chromosome 14 FASTA from the model's own sequence."
+# The region file 14/94000001-95000000 of the Ensembl VEP RefSeq cache, converted into the cache vep-rs reads, and a
+# chromosome 14 FASTA of 95,000,000 bases that holds the 494 genomic bases of the model's four exons and N elsewhere.
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the region file is converted with the Perl of the image: pass --image" >&2; exit 1; }
+mkdir -p "$STAGE/perl-cut/14" "$STAGE/json-cache"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$STAGE/perl-cut/"
+cp "$PERL_CACHE/14/94000001-95000000.gz" "$STAGE/perl-cut/14/"
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$STAGE/perl-cut:/input:ro" -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE/json-cache:/output" "$IMAGE" perl /scripts/storable_to_json.pl /input /output 14 > "$STAGE/convert.log" 2>&1''',
+  '''python3 - "$STAGE/json-cache/transcripts/14/94000001-95000000.json" "$STAGE/chr14_exon_window.fa" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1]) as fh:
+    model = next(t for t in json.load(fh) if t["stable_id"] == "NM_001288959.2")
+cached = model["variation_effect_feature_cache"]
+pairs = sorted((p["from_start"], p["from_end"], p["to_start"], p["to_end"]) for p in cached["mapper"]["pairs"])
+if pairs != [(1, 62, 94577082, 94577143), (63, 92, 94581197, 94581226), (93, 96, 94582127, 94582130), (106, 254, 94582131, 94582279), (255, 503, 94582779, 94583027)]:
+    sys.exit(f"the model's exons are mapped otherwise: {pairs}")
+cdna = cached["spliced_seq"].upper()
+pieces, at = [], 1
+for cdna_start, cdna_end, start, end in pairs:
+    pieces += ["N" * (start - at), cdna[cdna_start - 1 : cdna_end]]
+    at = end + 1
+chrom = "".join(pieces) + "N" * (95000000 - at + 1)
+with open(sys.argv[2], "w") as out:
+    out.write(">14\n")
+    out.writelines(chrom[i : i + 60] + "\n" for i in range(0, len(chrom), 60))
+PY
+printf '14\t95000000\t4\t60\t61\n' > "$STAGE/chr14_exon_window.fa.fai"''',
+]
+
+[input]
+format = "vcf"
+text = """
+14	94582130	768677	T	TGGCCATGGCGGCCATGGC	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+source = "refseq"
+json_cache = "{stage}/json-cache"
+fasta = "{stage}/chr14_exon_window.fa"
+
+[run]
+flags = ["--refseq", "--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = "768677", feature = "NM_001288959.2" }
+columns = ["Uploaded_variation", "cDNA_position", "CDS_position", "Protein_position", "HGVSp"]
+
+[expected]
+ensembl_vep = [
+  "768677 | 97-105 | ?-9 | ?-3 | NP_001275888.1:p.GlyCys5_?4",
+]
+vep_rs = [
+  "768677 | 97-105 | ?-9 | ?-3 | NP_001275888.1:p.His2_Gly4dup",
+]

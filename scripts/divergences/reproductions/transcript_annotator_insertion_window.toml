@@ -1,0 +1,35 @@
+entry = "transcript_annotator_insertion_window"
+page = "docs/plugins/annotation-store.md#10-transcriptannotator-a-table-row-written-at-an-insertions-start"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the TranscriptAnnotator plugin's header, which asks for chromosome, position, reference allele, alternative allele and transcript ID as the first 5 columns and sets no convention for the position or the alleles of an insertion's row; not seen in the measured datasets"
+notes = "Both engines print the insertion at 21:10541124-10541125; Ensembl VEP's window is 10541123-10541124 and the row sits at 10541125. The same row written as `21 10541124 T TA` lies inside both windows and both engines write it."
+# A one-row table in the corpus table's columns, its row at the insertion's start with reference `-`.
+prepare = [
+  "printf '#Chrom\\tPos\\tRef\\tAlt\\tTranscript\\tSIFT_score\\tSIFT_pred\\tComment\\n21\\t10541125\\t-\\tA\\tENST00000618007\\t0.42\\tTolerated\\tVEPstyleIns\\n' | bgzip > \"$STAGE/ins_vepstyle.tsv.gz\"",
+  "tabix -s 1 -b 2 -e 2 \"$STAGE/ins_vepstyle.tsv.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	10541124	insA	T	TA	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-transcript-annotator/json_cache"
+
+[run]
+flags = ["--plugin", "TranscriptAnnotator,file={stage}/ins_vepstyle.tsv.gz"]
+
+[compare]
+kind = "field"
+field = "ins_vepstyle_SIFT_score"
+where = { record = "insA", feature = "ENST00000618007" }
+
+[expected]
+ensembl_vep = ["-"]
+vep_rs = ["0.42"]

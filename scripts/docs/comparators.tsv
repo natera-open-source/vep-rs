@@ -1,0 +1,4 @@
+id	name	role	record_keys	colour_slot	concordance_panel	speed_panel	headline_extra_args
+vep-rs	vep-rs	released	vep-rs vep_rs	1	yes	yes	-
+fastvep	fastVEP	comparator	fastvep	2	yes	yes	--exclude-readthrough --exclude-artifact
+ensembl-vep	Ensembl VEP	reference	ensembl_vep perl	3	no	yes	-

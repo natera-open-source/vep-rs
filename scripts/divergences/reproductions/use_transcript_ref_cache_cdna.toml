@@ -1,0 +1,31 @@
+entry = "use_transcript_ref_cache_cdna"
+page = "docs/divergences/use-transcript-ref-cache-cdna.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 999,950 per million · 2 flag sets, 109 corpora"
+notes = "The corpus FASTA is masked to N outside the regions its own runs read, 21:30541662 included; the cache names ENST00000334046's exonic bases there."
+
+[input]
+format = "vcf"
+text = """
+21	30541662	del_30541662	AG	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-individual/json_cache"
+fasta = "tests/golden/116/GRCh38-vcf-check-ref/reference.fa.gz"
+
+[run]
+flags = ["--use_transcript_ref"]
+
+[compare]
+kind = "rows"
+where = { record = "del_30541662", feature = "ENST00000334046" }
+columns = ["Location", "Allele", "Feature", "Consequence", "Amino_acids", "USED_REF"]
+
+[expected]
+ensembl_vep = ["21:30541663 | - | ENST00000334046 | frameshift_variant | - | N"]
+vep_rs = ["21:30541663 | - | ENST00000334046 | frameshift_variant | F/X | G"]

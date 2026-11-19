@@ -3,10 +3,15 @@
 
 //! Ensembl-format records whose alleles are given on the reverse strand annotate
 //! as Ensembl VEP 116.2 annotates them: the consequences, codons and HGVS
-//! notations read the alleles on the forward strand, the `Allele` column and the
-//! JSON keep them as written, and a shifted insertion's HGVSp and shifted codons
-//! turn the allele as the record wrote it. Every expected row is Ensembl VEP
-//! 116.2's output for the same record on the release-116 GRCh38 cache.
+//! notations read the alleles on the forward strand, and the `Allele` column
+//! and the JSON keep them as written. A shifted insertion's HGVSp, shifted
+//! codons and printed allele turn the written allele as read on the
+//! transcript's strand, so a record and its spelling on the other strand
+//! annotate alike; Ensembl VEP 116.2 turns the written allele by the
+//! transcript's strand alone (TranscriptVariationAllele.pm:1337-1339), a defect
+//! whose rows are named where an expected row departs from its output. Every
+//! other expected row is Ensembl VEP 116.2's output for the same record on the
+//! release-116 GRCh38 cache.
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -17,10 +22,23 @@ fn cache() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/116/GRCh38/json_cache")
 }
 
-/// A chromosome 21 FASTA holding the two windows the records below read, `N`
-/// elsewhere: 26021751-26022050 around the APP insertion site and
-/// 46302401-46302700 around the ENST00000291691 one (GRCh38).
-fn write_fasta(dir: &Path) -> PathBuf {
+/// The length of GRCh38 chromosome 21.
+const CHROMOSOME_LENGTH: usize = 46_709_983;
+
+/// The last base of the FASTA that ends inside ENST00000291691 (46301130-46323870):
+/// 144 bases past the insertion site the records below read, at the end of
+/// its window.
+const CUT_LENGTH: usize = 46_302_700;
+
+/// A chromosome 21 FASTA of `length` bases holding the two windows the records
+/// below read, `N` elsewhere: 26021751-26022050 around the APP insertion site
+/// and 46302401-46302700 around the ENST00000291691 one (GRCh38). The
+/// chromosome runs to its GRCh38 length where Ensembl VEP 116.2's rows are the
+/// expectation, since it reads one `N` for a sequence request past a FASTA's end
+/// (`FastaSequence.pm`, `_raw_seq`) and on a file ending inside ENST00000291691
+/// writes its HGVSc as `c.745_746insTGC`, where the complete chromosome gives
+/// `c.743_745dup`.
+fn write_fasta(dir: &Path, length: usize) -> PathBuf {
     const WINDOWS: [(usize, &str); 2] = [
         (
             26_021_751,
@@ -35,22 +53,17 @@ fn write_fasta(dir: &Path) -> PathBuf {
              CTGAATAAAGTTTCCGTTTTTCCTATTTGTTAAAGTGATAGAGCATTATAGGACCAGAGAACAGGTGTGTCTGTACACTGTGCAGGTCCCCGGGGCAGGC",
         ),
     ];
-    let length = WINDOWS
-        .iter()
-        .map(|(start, window)| start + window.len() - 1)
-        .max()
-        .unwrap();
     let mut sequence = vec![b'N'; length];
     for (start, window) in WINDOWS {
         sequence[start - 1..start - 1 + window.len()].copy_from_slice(window.as_bytes());
     }
-    let fasta = dir.join("21.fa");
+    let fasta = dir.join(format!("21-{length}.fa"));
     let mut contents = b">21\n".to_vec();
     contents.extend_from_slice(&sequence);
     contents.push(b'\n');
     std::fs::write(&fasta, contents).unwrap();
     std::fs::write(
-        dir.join("21.fa.fai"),
+        dir.join(format!("21-{length}.fa.fai")),
         format!("21\t{length}\t4\t{length}\t{}\n", length + 1),
     )
     .unwrap();
@@ -128,6 +141,89 @@ fn reverse_strand_snvs_annotate_on_their_forward_alleles() {
     );
 }
 
+/// AlphaMissense.pm:228-235 compares transcript-oriented peptides, whose CDS
+/// construction complements opposite-strand alleles (TranscriptVariationAllele.pm:2413-2417).
+#[test]
+fn alphamissense_matches_real_transcript_peptides_on_both_strands() {
+    use std::io::Write;
+
+    use noodles::bgzf;
+    use noodles::core::Position;
+    use noodles::csi::binning_index::index::header::Builder;
+    use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+
+    let dir = tempfile::tempdir().unwrap();
+    let data_path = dir.path().join("alphamissense.tsv.gz");
+    let mut writer = bgzf::io::Writer::new(std::fs::File::create(&data_path).unwrap());
+    let mut indexer = noodles::tabix::index::Indexer::default();
+    indexer.set_header(
+        Builder::default()
+            .set_reference_sequence_name_index(0)
+            .set_start_position_index(1)
+            .build(),
+    );
+    writeln!(
+        writer,
+        "#CHROM\tPOS\tREF\tALT\tgenome\tuniprot_id\ttranscript_id\tprotein_variant\tam_pathogenicity\tam_class"
+    )
+    .unwrap();
+    // Controlled scores distinguish compatible peptides from decoys at the
+    // real SNV_RECORDS sites; AlphaMissense.pm:232-233 ignores positions and IDs.
+    for row in [
+        "chr21\t13610310\tA\tG\thg38\tP1\tENST_OTHER\tC1R\t0.01\tlikely_benign",
+        "chr21\t13610310\tA\tG\thg38\tP1\tENST_OTHER\tC1G\t0.91\tlikely_pathogenic",
+        "chr21\t14109002\tG\tT\thg38\tP2\tENST_OTHER\tN1K\t0.02\tlikely_benign",
+        "chr21\t14109002\tG\tT\thg38\tP2\tENST_OTHER\tR1K\t0.45\tambiguous",
+    ] {
+        let fields: Vec<_> = row.split('\t').collect();
+        let position = Position::try_from(fields[1].parse::<usize>().unwrap()).unwrap();
+        let start = writer.virtual_position();
+        writeln!(writer, "{row}").unwrap();
+        indexer
+            .add_record(
+                fields[0],
+                position,
+                position,
+                Chunk::new(start, writer.virtual_position()),
+            )
+            .unwrap();
+    }
+    writer.finish().unwrap();
+    noodles::tabix::fs::write(
+        dir.path().join("alphamissense.tsv.gz.tbi"),
+        &indexer.build(),
+    )
+    .unwrap();
+
+    let rows = annotate(
+        dir.path(),
+        "alphamissense",
+        &format!("{SNV_RECORDS}21\t13610310\t13610310\tA/G\t1\tcv3216832_fwd\n"),
+        &[
+            "--plugin",
+            &format!("AlphaMissense,file={}", data_path.display()),
+            "--tab",
+            "--fields",
+            "Uploaded_variation,Feature,Consequence,Protein_position,Amino_acids,STRAND,am_pathogenicity,am_class",
+        ],
+    );
+    assert_eq!(
+        rows_on(
+            &rows,
+            &["ENST00000299443", "ENST00000400211", "ENST00000536861"]
+        ),
+        [
+            "cv3308991\tENST00000299443\tsynonymous_variant\t495\tT\t1\t-\t-",
+            "cv3216832\tENST00000299443\tmissense_variant\t28\tC/G\t1\t0.91\tlikely_pathogenic",
+            "cv4047524\tENST00000400211\tmissense_variant\t362\tR/K\t-1\t0.45\tambiguous",
+            "cv4047524\tENST00000536861\tsynonymous_variant\t452\tK\t-1\t-\t-",
+            "cv4047524_fwd\tENST00000400211\tmissense_variant\t362\tR/K\t-1\t0.45\tambiguous",
+            "cv4047524_fwd\tENST00000536861\tsynonymous_variant\t452\tK\t-1\t-\t-",
+            "cv3216832_fwd\tENST00000299443\tmissense_variant\t28\tC/G\t1\t0.91\tlikely_pathogenic",
+        ]
+    );
+}
+
 /// The JSON document keeps the record as written (`allele_string` `A/T`,
 /// `strand` -1, each consequence's `variant_allele` `T`) while its codons read
 /// the forward-strand allele, as Ensembl VEP's does.
@@ -155,12 +251,17 @@ fn reverse_strand_record_json_keeps_the_written_alleles() {
 
 /// Records on APP (ENST00000346798, reverse strand) and ENST00000291691 (reverse
 /// strand) under `--hgvs`. The insertion `-/CTT -1` at 26021981 moves one base
-/// 3' like its forward twin `-/AAG 1` and takes the same HGVSc, but its HGVSp
-/// inserts Leu where the twin's inserts Ser: `shift_feature_seqs` turns the
-/// allele as the record wrote it (TranscriptVariationAllele.pm:1330-1347). The
-/// insertion `-/CAG 1` at 46302557 moves four bases along a reverse-strand
-/// transcript, more than its three, so the allele is left as written for HGVSp:
-/// `p.Gln249delinsProGlu`, as for its reverse-strand twin `-/CTG -1`.
+/// 3' like its forward twin `-/AAG 1`, takes the same HGVSc, `c.725_726insTTC`,
+/// and the same HGVSp, `insSer`, the `TTC` the notation names: the written
+/// `CTT` is the transcript's own strand, so the shift turns it left to `TTC`.
+/// Ensembl VEP 116.2 turns it by the transcript's strand alone, `seq_length -
+/// shift_length` places (TranscriptVariationAllele.pm:1337-1339), to `TCT` and
+/// prints `p.Ala242_Asp243insLeu`, a defect. The insertion `-/CAG 1` at
+/// 46302557 moves four bases along a reverse-strand transcript, more than its
+/// three, so the allele turns by the remainder, one base, to `GCA` (`TGC` on
+/// the transcript), the `c.743_745dup` its HGVSc names: `p.Leu248dup`, as for
+/// its reverse-strand twin `-/CTG -1`; Ensembl VEP 116.2 turns nothing there,
+/// its count being negative, and prints `p.Gln249delinsProGlu` for both.
 const HGVS_RECORDS: &str = "\
 21\t26021896\t26021896\tG/A\t-1\tcv1915683
 21\t26021943\t26021943\tT/C\t-1\tcv721913
@@ -174,7 +275,7 @@ const HGVS_RECORDS: &str = "\
 #[test]
 fn reverse_strand_records_take_ensembl_veps_hgvs() {
     let dir = tempfile::tempdir().unwrap();
-    let fasta = write_fasta(dir.path());
+    let fasta = write_fasta(dir.path(), CHROMOSOME_LENGTH);
     let rows = annotate(
         dir.path(),
         "hgvs",
@@ -187,29 +288,83 @@ fn reverse_strand_records_take_ensembl_veps_hgvs() {
             "cv1915683\t21:26021896\tA\tENSG00000142192\tENST00000346798\tTranscript\tmissense_variant\t959\t809\t270\tT/N\taCc/aAc\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000346798.8:c.809C>A;HGVSp=ENSP00000284981.4:p.Thr270Asn",
             "cv721913\t21:26021943\tC\tENSG00000142192\tENST00000346798\tTranscript\tsynonymous_variant\t912\t762\t254\tV\tgtA/gtC\t-\tIMPACT=LOW;STRAND=-1;HGVSc=ENST00000346798.8:c.762A>C;HGVSp=ENSP00000284981.4:p.Val254%3D",
             "cv664060\t21:26021866-26021871\t-\tENSG00000142192\tENST00000346798\tTranscript\tinframe_deletion\t984-989\t834-839\t278-280\tTTT/T\tacCACCACa/aca\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000346798.8:c.834_839del;HGVSp=ENSP00000284981.4:p.Thr279_Thr280del",
-            "cv2041960\t21:26021980-26021981\tCTT\tENSG00000142192\tENST00000346798\tTranscript\tinframe_insertion\t874-875\t724-725\t242\tA/AS\tgcc/gCTTcc\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000346798.8:c.725_726insTTC;HGVSp=ENSP00000284981.4:p.Ala242_Asp243insLeu;HGVS_OFFSET=-1",
+            "cv2041960\t21:26021980-26021981\tCTT\tENSG00000142192\tENST00000346798\tTranscript\tinframe_insertion\t874-875\t724-725\t242\tA/AS\tgcc/gCTTcc\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000346798.8:c.725_726insTTC;HGVSp=ENSP00000284981.4:p.Ala242_Asp243insSer;HGVS_OFFSET=-1",
             "cv2041960_fwd\t21:26021980-26021981\tAAG\tENSG00000142192\tENST00000346798\tTranscript\tinframe_insertion\t874-875\t724-725\t242\tA/AS\tgcc/gCTTcc\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000346798.8:c.725_726insTTC;HGVSp=ENSP00000284981.4:p.Ala242_Asp243insSer;HGVS_OFFSET=-1",
-            "ins_cag_fwd\t21:46302556-46302557\tCAG\tENSG00000160298\tENST00000291691\tTranscript\tinframe_insertion\t1873-1874\t741-742\t247-248\t-/L\t-/CTG\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000291691.12:c.743_745dup;HGVSp=ENSP00000291691.8:p.Gln249delinsProGlu;HGVS_OFFSET=-4",
-            "ins_ctg_rev\t21:46302556-46302557\tCTG\tENSG00000160298\tENST00000291691\tTranscript\tinframe_insertion\t1873-1874\t741-742\t247-248\t-/L\t-/CTG\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000291691.12:c.743_745dup;HGVSp=ENSP00000291691.8:p.Gln249delinsProGlu;HGVS_OFFSET=-4",
+            "ins_cag_fwd\t21:46302556-46302557\tCAG\tENSG00000160298\tENST00000291691\tTranscript\tinframe_insertion\t1873-1874\t741-742\t247-248\t-/L\t-/CTG\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000291691.12:c.743_745dup;HGVSp=ENSP00000291691.8:p.Leu248dup;HGVS_OFFSET=-4",
+            "ins_ctg_rev\t21:46302556-46302557\tCTG\tENSG00000160298\tENST00000291691\tTranscript\tinframe_insertion\t1873-1874\t741-742\t247-248\t-/L\t-/CTG\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000291691.12:c.743_745dup;HGVSp=ENSP00000291691.8:p.Leu248dup;HGVS_OFFSET=-4",
+        ]
+    );
+}
+
+/// On a FASTA cut after 46302700, inside ENST00000291691 and 144 bases past the
+/// two insertions' site, the rows are those of the complete chromosome: vep-rs
+/// reads the bases a notation needs at their own coordinates, so the HGVSc stays
+/// `c.743_745dup`. Ensembl VEP 116.2 fetches the sequence past a FASTA's end as
+/// one `N` (`FastaSequence.pm`, `_raw_seq`), keeps the transcript's sequence
+/// that many bases short, and writes `c.745_746insTGC`, a defect
+/// (`hgvs_dup_read_as_insertion_past_the_fasta_end`).
+#[test]
+fn a_fasta_ending_inside_the_transcript_keeps_the_duplication() {
+    let dir = tempfile::tempdir().unwrap();
+    let cut = write_fasta(dir.path(), CUT_LENGTH);
+    let complete = write_fasta(dir.path(), CHROMOSOME_LENGTH);
+    let on_cut = annotate(
+        dir.path(),
+        "cut",
+        HGVS_RECORDS,
+        &["--hgvs", "--fasta", cut.to_str().unwrap()],
+    );
+    let on_complete = annotate(
+        dir.path(),
+        "complete",
+        HGVS_RECORDS,
+        &["--hgvs", "--fasta", complete.to_str().unwrap()],
+    );
+    let transcripts = ["ENST00000346798", "ENST00000291691"];
+    assert_eq!(
+        rows_on(&on_cut, &transcripts),
+        rows_on(&on_complete, &transcripts)
+    );
+    let hgvsc: Vec<&str> = rows_on(&on_cut, &["ENST00000291691"])
+        .into_iter()
+        .map(|row| {
+            row.split("HGVSc=")
+                .nth(1)
+                .unwrap()
+                .split(';')
+                .next()
+                .unwrap()
+        })
+        .collect();
+    assert_eq!(
+        hgvsc,
+        [
+            "ENST00000291691.12:c.743_745dup",
+            "ENST00000291691.12:c.743_745dup"
         ]
     );
 }
 
 /// Under `--shift_3prime 1` the codons read the allele `shift_feature_seqs`
-/// leaves (`codon`, TranscriptVariationAllele.pm:820): the APP insertion given on
-/// the reverse strand inserts `TCT` on the transcript (`A/AL`) where its forward
-/// twin inserts `TTC` (`A/AS`), and the ENST00000291691 insertion, moved further
-/// than its length, keeps `CTG` on the transcript and so alters the protein
-/// (`Q/PE`, `protein_altering_variant`) instead of duplicating a leucine. The
-/// columns from `Consequence` on are compared, then `Allele`: a row whose codon
-/// was read prints the turned allele (OutputFactory.pm:1347), `TCT` and `GAA`
-/// for the APP insertions, where the non-coding ENST00000474136 row keeps the
-/// written `CTT` and `AAG`, and the ENST00000291691 rows keep theirs, the shift
-/// of four exceeding the allele's three bases on the reverse strand.
+/// leaves (`codon`, TranscriptVariationAllele.pm:820), turned as read on the
+/// transcript's strand: the APP insertion given on either strand inserts `TTC`
+/// on the transcript (`A/AS`), and the ENST00000291691 insertion, moved four
+/// bases, further than its length, turns by the remainder to `TGC` on the
+/// transcript and duplicates a leucine (`Q/LQ`, `inframe_insertion`). Ensembl
+/// VEP 116.2 turns the written allele by the transcript's strand alone
+/// (`:1337-1339`): the reverse-written APP insertion inserts `TCT` (`A/AL`) and
+/// the ENST00000291691 insertion keeps `CTG` and alters the protein (`Q/PE`,
+/// `protein_altering_variant`), each a defect. The columns from `Consequence`
+/// on are compared, then `Allele`: a row whose codon was read prints the turned
+/// allele (OutputFactory.pm:1347), `TTC` and `GAA` for the APP insertions
+/// (Ensembl VEP 116.2 prints `TCT` for the first), where the non-coding
+/// ENST00000474136 row keeps the written `CTT` and `AAG`, and the
+/// ENST00000291691 rows print `GCA` and `TGC`, the written `CAG` and `CTG`
+/// turned one base (Ensembl VEP 116.2 keeps both as written).
 #[test]
 fn shifted_codons_turn_the_allele_as_the_record_wrote_it() {
     let dir = tempfile::tempdir().unwrap();
-    let fasta = write_fasta(dir.path());
+    let fasta = write_fasta(dir.path(), CHROMOSOME_LENGTH);
     let rows = annotate(
         dir.path(),
         "shift",
@@ -235,10 +390,10 @@ fn shifted_codons_turn_the_allele_as_the_record_wrote_it() {
     assert_eq!(
         shifted,
         [
-            "cv2041960\tinframe_insertion\t875-876\t725-726\t242\tA/AL\tgcc/gcTCTc\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000346798.8:c.725_726insTTC;HGVSp=ENSP00000284981.4:p.Ala242_Asp243insLeu;HGVS_OFFSET=-1;SHIFT_LENGTH=1",
+            "cv2041960\tinframe_insertion\t875-876\t725-726\t242\tA/AS\tgcc/gcTTCc\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000346798.8:c.725_726insTTC;HGVSp=ENSP00000284981.4:p.Ala242_Asp243insSer;HGVS_OFFSET=-1;SHIFT_LENGTH=1",
             "cv2041960_fwd\tinframe_insertion\t875-876\t725-726\t242\tA/AS\tgcc/gcTTCc\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000346798.8:c.725_726insTTC;HGVSp=ENSP00000284981.4:p.Ala242_Asp243insSer;HGVS_OFFSET=-1;SHIFT_LENGTH=1",
-            "ins_cag_fwd\tprotein_altering_variant\t1877-1878\t745-746\t249\tQ/PE\tcag/cCTGag\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000291691.12:c.743_745dup;HGVSp=ENSP00000291691.8:p.Gln249delinsProGlu;HGVS_OFFSET=-4;SHIFT_LENGTH=4",
-            "ins_ctg_rev\tprotein_altering_variant\t1877-1878\t745-746\t249\tQ/PE\tcag/cCTGag\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000291691.12:c.743_745dup;HGVSp=ENSP00000291691.8:p.Gln249delinsProGlu;HGVS_OFFSET=-4;SHIFT_LENGTH=4",
+            "ins_cag_fwd\tinframe_insertion\t1877-1878\t745-746\t249\tQ/LQ\tcag/cTGCag\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000291691.12:c.743_745dup;HGVSp=ENSP00000291691.8:p.Leu248dup;HGVS_OFFSET=-4;SHIFT_LENGTH=4",
+            "ins_ctg_rev\tinframe_insertion\t1877-1878\t745-746\t249\tQ/LQ\tcag/cTGCag\t-\tIMPACT=MODERATE;STRAND=-1;HGVSc=ENST00000291691.12:c.743_745dup;HGVSp=ENSP00000291691.8:p.Leu248dup;HGVS_OFFSET=-4;SHIFT_LENGTH=4",
         ]
     );
     let allele = |row: &str| {
@@ -256,12 +411,12 @@ fn shifted_codons_turn_the_allele_as_the_record_wrote_it() {
     assert_eq!(
         alleles,
         [
-            "cv2041960 ENST00000346798 TCT",
+            "cv2041960 ENST00000346798 TTC",
             "cv2041960 ENST00000474136 CTT",
             "cv2041960_fwd ENST00000346798 GAA",
             "cv2041960_fwd ENST00000474136 AAG",
-            "ins_cag_fwd ENST00000291691 CAG",
-            "ins_ctg_rev ENST00000291691 CTG",
+            "ins_cag_fwd ENST00000291691 GCA",
+            "ins_ctg_rev ENST00000291691 TGC",
         ]
     );
 }

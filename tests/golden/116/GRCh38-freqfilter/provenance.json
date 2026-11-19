@@ -11,7 +11,11 @@
   "default.txt": "582d38e6e673cc3ad1bd3b8b102b8df1cebfe10d40f476dd885e77921010733e",
   "tab.txt": "d35394281049fb6211919ce128230d94388f1e4b637738311e625063da1496c1",
   "vcf.vcf": "fa302acc428a04d9a258c1b6195dcae2169e21aa302e7725054884ebf4eb854b",
-  "json.jsonl": "53aafda796220263bd716cec11f6da618300f82d5f84728ed209a4d8bf878381"
+  "json.jsonl": "53aafda796220263bd716cec11f6da618300f82d5f84728ed209a4d8bf878381",
+  "default.summary.log": "7ba456d724ba544463af775af04e4504dbbb5129d14d5d2f35f601497edba011",
+  "tab.summary.log": "2c3c55cd936d0915f2c2a55e2578a20cb5e50f3f5e644d4b06d23b159d19a360",
+  "vcf.summary.log": "4f3043fda63707c4b49228a9d8244f8e527f7926d12568787705eff6f9a2c02e",
+  "json.summary.log": "ec8f55b96bfbb99d8bcb14abdb06f1ac8a15cc24f89fe28341031f102102230a"
  },
  "variants_vcf_sha256": "78342844cb3c6ef70b142100cc4320adae4003672ec9cc88d08eb1939545b790",
  "flag_sets": {
@@ -147,5 +151,9 @@
    "filter-common.tab": "e2287b8be186a0e28cc638fe715f9f58afc7a89753420ef73f83a0ff9636e50d",
    "filter-common.vcf": "97c633fa498b25f6c6a894ca21c1857adf7bfe3e788ffaf7951bc9a3b8b06aad"
   }
+ },
+ "summary_log": {
+  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite [--tab|--vcf|--json]",
+  "annotation_rows": "equal to the expected outputs' rows; the two runs differ only in the header lines that name a time, the cache path or the command line"
  }
 }

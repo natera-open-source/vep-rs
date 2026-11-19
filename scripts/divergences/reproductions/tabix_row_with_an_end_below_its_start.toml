@@ -1,0 +1,56 @@
+entry = "tabix_row_with_an_end_below_its_start"
+page = "docs/divergences/tabix-row-with-an-end-below-its-start.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF missing value, a dot in all cases (VCF 4.2 specification, section 1.4.1 \"Fixed fields\"); not seen in the measured datasets; classed by its most reachable shape, an END set to the missing value: an END below POS breaks section 3, \"For precise variants, END is POS + length of REF allele - 1\""
+notes = "Ensembl VEP's tabix reader (htslib 1.9) spans a VCF row to its INFO END and returns a row whose END lies below its position, or is not a number, for no query over its bases; the reader parses each row as it answers, so the index's builder does not decide. Neither engine writes a warning."
+# Six four-base deletion rows: two well formed (no END; END at the reference allele's end) and four with an END that is no end
+# (below the position; x; .; empty), each a --custom VCF source row named by its ID column.
+prepare = [
+  "printf '##fileformat=VCFv4.2\\n##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">\\n##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the variant\">\\n##contig=<ID=21>\\n#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO\\n21\\t5029100\\tctrl_no_end\\tTCTG\\tT\\t.\\t.\\tDP=3\\n21\\t5029120\\tctrl_end\\tATGA\\tA\\t.\\t.\\tEND=5029123\\n21\\t5029140\\tend_below\\tCAGC\\tC\\t.\\t.\\tEND=5029000\\n21\\t5029160\\tend_x\\tCCAG\\tC\\t.\\t.\\tEND=x\\n21\\t5029200\\tend_dot\\tAGAA\\tA\\t.\\t.\\tEND=.\\n21\\t5029220\\tend_empty\\tTCGT\\tT\\t.\\t.\\tEND=\\n' | bgzip > \"$STAGE/span.vcf.gz\"",
+  "tabix -p vcf \"$STAGE/span.vcf.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	5029102	in_ctrl_no_end	T	G	.	.	.
+21	5029122	in_ctrl_end	G	T	.	.	.
+21	5029142	in_end_below	G	T	.	.	.
+21	5029162	in_end_x	A	C	.	.	.
+21	5029202	in_end_dot	A	C	.	.	.
+21	5029222	in_end_empty	G	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+
+[run]
+flags = ["--custom", "file={stage}/span.vcf.gz,short_name=SPAN,format=vcf,type=overlap,coords=0"]
+
+# Six intergenic substitutions, one row each, at the third base of each source row's reference allele.
+[compare]
+kind = "rows"
+where = { record = ["in_ctrl_no_end", "in_ctrl_end", "in_end_below", "in_end_x", "in_end_dot", "in_end_empty"] }
+columns = ["Location", "Allele", "Feature", "Consequence", "SPAN"]
+
+[expected]
+ensembl_vep = [
+  "21:5029102 | G | - | intergenic_variant | ctrl_no_end",
+  "21:5029122 | T | - | intergenic_variant | ctrl_end",
+  "21:5029142 | T | - | intergenic_variant | -",
+  "21:5029162 | C | - | intergenic_variant | -",
+  "21:5029202 | C | - | intergenic_variant | -",
+  "21:5029222 | T | - | intergenic_variant | -",
+]
+vep_rs = [
+  "21:5029102 | G | - | intergenic_variant | ctrl_no_end",
+  "21:5029122 | T | - | intergenic_variant | ctrl_end",
+  "21:5029142 | T | - | intergenic_variant | end_below",
+  "21:5029162 | C | - | intergenic_variant | end_x",
+  "21:5029202 | C | - | intergenic_variant | end_dot",
+  "21:5029222 | T | - | intergenic_variant | end_empty",
+]

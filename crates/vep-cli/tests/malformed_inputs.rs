@@ -230,7 +230,7 @@ fn a_plugin_catalogue_line_past_the_cap_drops_the_plugin_or_refuses_under_safe()
     assert!(!rows.is_empty(), "{warnings}");
     // A loaded plugin describes its column in the header; a dropped one does not.
     let header = std::fs::read_to_string(dir.path().join("dropped.out")).unwrap();
-    assert!(!header.contains("## LoFtool_percentile"), "{header}");
+    assert!(!header.contains("## LoFtool"), "{header}");
 
     let (output, rows, _) = run(
         dir.path(),

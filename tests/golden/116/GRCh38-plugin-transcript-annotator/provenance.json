@@ -1,0 +1,60 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --plugin TranscriptAnnotator,file=data/transcript_annotator.tsv.gz [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "variants.vcf: 12 records at chromosome 21 sites of two genes, one record per allele: a splice-region intronic SNV, an intronic SNV the table does not name, missense SNVs in TPTE named by an Ensembl transcript id and by RefSeq accessions of two isoforms, a missense SNV whose table cells carry surrounding whitespace, three synonymous records at one position of which two are in the table with their own values, a frameshift deletion the table writes with its leading base, a stop gain whose table row is one column short, an inframe deletion the table writes trimmed, and a missense SNV in SAMSN1, on the reverse strand, named by its RefSeq accession",
+ "sha256": {
+  "default.txt": "29f3581e937b65d64c80839873a36af4ed48b8446c8e3d93388aba3ca3183292",
+  "tab.txt": "43a335ea3d198e34f78a4988a92efb251f23ea8de2b4c939757f24dfbe96ae64",
+  "vcf.vcf": "f925b50e557f28610ffb37d2beaa06b55eb0515aee541eb6bdfaf5c09f750fbc",
+  "json.jsonl": "bf55fee656a42f0ba98a859a61c7aeedf20a553ac1f1110583a61d249ba5981d"
+ },
+ "variants_vcf_sha256": "cb65eade58a85588bd5b66608f0bf37d87cfa7f5d5b997424990d19ed1a9d6db",
+ "flag_sets": {
+  "cols": {
+   "flags": [
+    "--plugin",
+    "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,cols=SIFT_score:Comment"
+   ],
+   "expected_dir": "expected_cols",
+   "sha256": {
+    "default.txt": "99cbd55f6213cae655aceed86c5b94406dae4de7a75ce951196ff1637b5ca34b",
+    "tab.txt": "4a3ce6e6ac39ec82ffb6ada49f03f00fb70b4a46ab03ad3165475924aa617f01",
+    "vcf.vcf": "fb70cee4250abc02ba2220fe54e55079efb96d0c3b3f0d8a1f032ebbbd8c3ac7",
+    "json.jsonl": "cfb1820be888750de403e82109f0a8e534cd347fa7124b8fe2de4c404d998920"
+   }
+  },
+  "prefix-0": {
+   "flags": [
+    "--plugin",
+    "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,prefix=0"
+   ],
+   "expected_dir": "expected_prefix-0",
+   "sha256": {
+    "default.txt": "d4d905ae4496db4c4b57d2699f6b25a30cd4545d185be6ee0ac0706202e0e5ad",
+    "tab.txt": "5aeb61df4230eef36082a96b1318d939a8f9dccf9af61ac2b0ece5f6b1b0b669",
+    "vcf.vcf": "fa67f0b2b2f9eb6e449c1d7a5987e0654e69ce642560e78263c2d6e86cc4fbd9",
+    "json.jsonl": "5fadfe735728e0b0f451bc6e16d77f6dcea9006b15827924052490eda48a64af"
+   }
+  },
+  "trim-0": {
+   "flags": [
+    "--plugin",
+    "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,trim=0"
+   ],
+   "expected_dir": "expected_trim-0",
+   "sha256": {
+    "default.txt": "219cbb7657c98e4e9de43b5c6acf66e039997cda139a464be37c666451f3b8b1",
+    "tab.txt": "1e0f98dad7a0719bb29b90310cace3a9ada9fd788195606e9d2c79a4a5a4a3c2",
+    "vcf.vcf": "28c5cf3550f09fd8881221b7302e554bd7b6e9b2652a78bd12543d9a962628af",
+    "json.jsonl": "5f7d019ba73652481175271f9c26722c0c92ce9795769f96eeabdda57df759c4"
+   }
+  }
+ },
+ "data": "data/transcript_annotator.tsv.gz: the table TranscriptAnnotator reads, authored for the corpus (a preamble line, the header line Chrom Pos Ref Alt Transcript SIFT_score SIFT_pred Comment, 12 rows), bgzip-compressed and indexed with tabix -b2 -e2; the header descriptions repeat the path as the flag spells it, so the flag names the file by its path relative to the corpus directory, where both engines run",
+ "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116; scripts/concordance/generate_reference_output.sh --corpus (the manifest's run and, with the manifest's flags set to each flag set's words in turn, every flag set's run); scripts/golden/build_golden_corpus.py flag-set (one per flag set) and classify (the manifest's run and each flag set)"
+}

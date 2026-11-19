@@ -1,0 +1,29 @@
+entry = "empty_input_lines"
+page = "docs/divergences/empty-vcf-lines.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the default input format, whose parser provides for empty lines (Bio::EnsEMBL::VEP::Parser, skip_empty_lines); not seen in the measured datasets; classed by its most reachable shape, an empty line in that format: one in a VCF breaks \"8 fixed fields per record\" (VCF 4.2 specification, section 1.4.1)"
+notes = "The first mechanism of the entry, in a VCF: two empty lines in a row between two records. Ensembl VEP's first buffer fill ends at the first empty line, the next fill begins on the second and holds nothing, and the run ends with the first record's row alone and no message; vep-rs skips both lines with the warning `Skipped 2 empty lines from line 2` and annotates the second record."
+
+[input]
+format = "vcf"
+text = """
+21	30881493	before_empty	G	A	.	PASS	.
+
+
+21	30883080	after_empty	C	A	.	PASS	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-writers/json_cache"
+
+[compare]
+kind = "rows"
+where = { record = "after_empty" }
+
+[expected]
+ensembl_vep = []
+vep_rs = ["21:30883080 | A | ENST00000332378 | upstream_gene_variant"]

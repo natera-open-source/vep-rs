@@ -1,0 +1,33 @@
+entry = "utrannotator_lost_start_after_insertion"
+page = "docs/divergences/utrannotator-lost-start-after-insertion.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 63,698 per million · 4 flag sets, 93 corpora"
+notes = "The constructed record inserts three bases between cDNA positions 145 and 146 of ENST00000427445, directly before the `A` of a uORF's ATG at cDNA 146 (5' UTR index 145). The codon stands whole three bases on. Ensembl VEP reads the inserted bases at index 145 and reports the codon lost; no other analysis fires, so vep-rs writes `-`. The second constructed record inserts three bases after the first base of the start codon at cDNA 49 (5' UTR index 48) of the reverse-strand ENST00000400211. The inserted bases end with the codon's first base, so the codon stands whole three bases on there as well. Ensembl VEP reads the three bases at index 48 and reports the codon lost; vep-rs writes `-`."
+
+[input]
+format = "vcf"
+text = """
+21	10524582	utr_ins_before_start	A	ACCC	.	.	.
+21	14210906	utr_ins_inside_start	A	ATGG	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-utr-annotator/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-utr-annotator/reference.fa.gz"
+
+[run]
+flags = ["--plugin", "UTRAnnotator,file={corpus}/data/uORF_5UTR_GRCh38_PUBLIC.chr21.txt"]
+
+[compare]
+kind = "field"
+field = "5UTR_consequence"
+with_key = true
+where = { record = ["utr_ins_before_start", "utr_ins_inside_start"], feature = ["ENST00000427445", "ENST00000400211"] }
+
+[expected]
+ensembl_vep = ["ENST00000400211=5_prime_UTR_premature_start_codon_loss_variant", "ENST00000427445=5_prime_UTR_premature_start_codon_loss_variant"]
+vep_rs = ["ENST00000400211=-", "ENST00000427445=-"]

@@ -8,7 +8,7 @@ homepage.workspace = true
 rust-version.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Consequence calculation engine for VEP"
+description = "Consequence-calling engine of vep-rs, a Rust reimplementation of Ensembl VEP: Sequence Ontology terms, impact and HGVS per transcript"
 
 [dependencies]
 vep-core = { workspace = true }

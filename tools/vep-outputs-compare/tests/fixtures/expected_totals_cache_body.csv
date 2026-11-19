@@ -1,0 +1,14 @@
+term,vep_tuples
+5_prime_UTR_variant,1
+coding_transcript_variant,1
+frameshift_variant,1
+intergenic_variant,1
+intron_variant,5
+missense_variant,3
+non_coding_transcript_variant,1
+splice_region_variant,2
+start_lost,1
+start_retained_variant,1
+stop_gained,1
+synonymous_variant,1
+transcript_ablation,3

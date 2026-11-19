@@ -1,0 +1,92 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species mus_musculus --assembly GRCm39 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "mus_musculus/116_GRCm39",
+ "fasta": "the eighteen contigs the records and the pruned cache's transcripts sit on (19, MT and sixteen unplaced scaffolds) at their full length from Mus_musculus.GRCm39.dna.primary_assembly.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 502 records on chromosome 19, the mitochondrion and sixteen unplaced scaffolds. 371 come from the Ensembl release 116 variation set of Mus musculus (mus_musculus.vcf.gz, chromosome 19; the set carries no mitochondrial record), their IDs the rs identifiers. 131 are designed records derived from the reference FASTA, their IDs naming the set, chromosome, position and alleles: every single-nucleotide substitution of the mitochondrion, a family of deletions of 1 to 4 bases, insertions of 1 to 3 and a two-base substitution every 29th mitochondrial position, and the same single-nucleotide and indel probes at fixed strides across the transcript windows of every scaffold the cache holds transcripts for. Two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term, plus the records the manifest's included_records name: the genetic code table 2 shapes of the mitochondrion (a TGA codon read as tryptophan, AGA and AGG read as stops, ATA as methionine, the non-ATG starts ATT, ATC, ATA and GTG kept and lost, a stop lost to TGA, a stop retained, an incomplete terminal codon) and one record on each scaffold. Three multi-allelic insertion records of chromosome 19 (rs3389480233, rs265482355, rs3408733889) were left out of the selection pool: under --hgvs Ensembl VEP annotates their later alleles at the coordinates to which an earlier allele shifted, while the same alleles given one per record annotate at their own coordinates. The chromosome names are the cache's on both sides and no synonyms file is needed",
+ "sha256": {
+  "default.txt": "f8fdcce0ac711e768c34520b3e793e3ecd6530edd2e260b6885bdc06c1f5176c",
+  "tab.txt": "661e1a99066ed7966256407938135324b400eb953627a7fd9d100e0da42625e9",
+  "vcf.vcf": "5ef6e298b72c30fbfaa16970a1a4578d57c8160dbbb33d7c34d1cdf41777fbde",
+  "json.jsonl": "2148747c38970173cabf06b53cca3e920f37eb6fb85a4b5804071d8756d46da7",
+  "default.summary.log": "f4a6da439463a920380c433dddd2c3d6c962c721de2f596e61057bf8f20a5c57",
+  "tab.summary.log": "cb3ee7077230be43ac623c1e69df6d6bfe52cd6924ae5c5a6290656f8fdc6dc3",
+  "vcf.summary.log": "dcf499ae830eec6d65a2e6eeae43ac5bae90a3b4ce27002505335a5add7bc91f",
+  "json.summary.log": "fbeb92c63be9116c215daf32ffc5fa155a6b270cf69ab1a9f9ed06e037d05dd1"
+ },
+ "variants_vcf_sha256": "20c7c0691336b0fef1e1a1c2510ef5b5b56bb5829c129e29a836f7770cb4947c",
+ "flag_sets": {
+  "hgvs-sift": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species mus_musculus --assembly GRCm39 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --hgvs --sift b [--tab|--vcf|--json]",
+   "perl_cache": "mus_musculus/116_GRCm39",
+   "fasta": "reference.fa.gz beside this file, decompressed, on both sides",
+   "input": "variants.vcf; the mitochondrial records' HGVSp follow genetic code table 2, and SIFT predictions with their scores are compared on every single-residue change",
+   "sha256": {
+    "default.txt": "fe7515f30e386226ce7d0e33d19f90ccbe75b4c3d8395c432adda914e086ba13",
+    "tab.txt": "0cfd7a91c434caaa79b5afea93da9f3354a1fac50ed0148e07eed8618fe0dd7e",
+    "vcf.vcf": "419322a61da5c656c67a2a631cede294ee8d4367270dc474d48977e67b349257",
+    "json.jsonl": "ccae6f04b69c4ba02a6db4641ff9c445ad240fecaa8c7e0cc09ed05be93e537b",
+    "default.summary.log": "a562a847b9bab839504ae5d1cfdcef5c3ecb923733bd060753cd2f2ffc88cf73",
+    "tab.summary.log": "1b16c318662b6218bc06223bbf4b0cfeb3734a94c239fd527f05645d0676ab39",
+    "vcf.summary.log": "d23399b825a60458c7886dbd1736508e46ae7c02636308a9b728abb6c85bd56b",
+    "json.summary.log": "86ea3c24b48323cea884fa9059e7b0b5bb42b03d6ea9c6ff9fbc8afdc639b70c"
+   },
+   "variants_vcf_sha256": "20c7c0691336b0fef1e1a1c2510ef5b5b56bb5829c129e29a836f7770cb4947c"
+  },
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species mus_musculus --assembly GRCm39 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "mus_musculus/116_GRCm39",
+   "fasta": "reference.fa.gz beside this file, decompressed, on both sides",
+   "input": "variants.vcf; the cache carries SIFT matrices and no PolyPhen matrix, so Ensembl VEP reports disabling PolyPhen and the SIFT, APPRIS, TSL, CANONICAL, GENE_PHENO, DOMAINS and identifier columns are populated on both sides; the pruned cache carries no regulatory shard, so the reference's RegulatoryFeature rows are set aside under the regulatory_feature_rows mask",
+   "sha256": {
+    "default.txt": "7150f3d8f286e00fe4a4e9c213dcd2190758a9552b928150dd0a611675385890",
+    "tab.txt": "98f964d9dc1ddb54f560424b9b1399ec76954af63ae618ec9ca204f7a547814f",
+    "vcf.vcf": "2dd0bed3d3f9db563a3293b9abcdd9a7b685d3cd99ba155f3ce0feb4511dd68b",
+    "json.jsonl": "f7f69023f61a3c79f1b91225a04c715943cd6587f86f5b3669fc5a1eb38551ec",
+    "default.summary.log": "73997fbd35f2e4dc7ae6c3cd709a151289de2e9265e6e7208bbcd2e71c45d38a",
+    "tab.summary.log": "8ae378b65c4ba1aa4b017034b5cee2f2aad4de03829da8f346d98ab60dae7b0e",
+    "vcf.summary.log": "7c07c0d9909fe64a1fba17d11eec10ddebd04a47ac561352c2f1684ee161854c",
+    "json.summary.log": "59072747d21402add78f0d71d5d0ab5b5956ae0c4d97d4e237b384e6a94e073f"
+   },
+   "variants_vcf_sha256": "20c7c0691336b0fef1e1a1c2510ef5b5b56bb5829c129e29a836f7770cb4947c"
+  }
+ },
+ "generator": "Ensembl VEP over the two inputs under the corpus flags; scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCm39 --species mus_musculus --suite chr19_MT=<reference>=<the chromosome 19 records> --suite probe=<reference>=<the designed records> --k 2 --seed 1 --max-span 1000000 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-mouse-grcm39 --covers species-harness-parameter --covers genetic-code-tables --matrix tests/parity/matrix.tsv --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_function_predictions --drop-except <the transcripts on which a record changes one residue, the rows SIFT scores> --perl-info <cache>/info.txt --cache-version 116 --variations <cache>/variations over the whole cache scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCm39 cache (protein features kept for the DOMAINS column of the everything set; the variation slices hold the known variants within one base of a record); scripts/concordance/generate_reference_output.sh --corpus for the manifest's run and each flag set; scripts/golden/build_golden_corpus.py flag-set (everything, hgvs-sift) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp --field SIFT for the hgvs-sift set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "19": 3782,
+   "GL456210.1": 13,
+   "GL456211.1": 2,
+   "GL456212.1": 2,
+   "GL456219.1": 1,
+   "GL456221.1": 7,
+   "GL456239.1": 1,
+   "GL456354.1": 3,
+   "GL456372.1": 1,
+   "GL456381.1": 1,
+   "GL456385.1": 2,
+   "JH584296.1": 3,
+   "JH584297.1": 3,
+   "JH584298.1": 1,
+   "JH584299.1": 10,
+   "JH584303.1": 1,
+   "JH584304.1": 13,
+   "MT": 37
+  },
+  "shards": 73,
+  "synonym_lines": 73,
+  "matrices_kept_on": 456,
+  "variation_slices": "the known variants within one base of a record under variations/<chr>/all_vars.gz with its .csi, as the Ensembl VEP cache lays them out; the mitochondrion and the scaffolds carry the empty indexed file the cache carries for a chromosome without variants"
+ }
+}

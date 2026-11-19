@@ -1,0 +1,32 @@
+entry = "pc_description_text"
+page = "docs/divergences/pc-description-text.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 1 of 392 flag sets · 14 flag sets, 1 corpus"
+notes = "The default setting, without reciprocal: both engines print regions_PC=66.667,100.000, the share of each annotation record the deletion covers, and only the header sentence differs."
+
+[input]
+format = "vcf"
+text = """
+21	5028997	.	TCA	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+fasta = "tests/golden/116/GRCh38-custom/reference.fa.gz"
+
+[run]
+flags = ["--custom", "file={corpus}/custom/regions.bed.gz,short_name=regions,format=bed,type=overlap,fields=PC"]
+format = "default"
+
+[compare]
+kind = "header"
+pattern = "^## regions_PC : "
+mask_paths = false
+
+[expected]
+ensembl_vep = ["## regions_PC : Percentage of input variant covered by reference variant from [PATH]/regions.bed.gz"]
+vep_rs = ["## regions_PC : Percentage of the annotation record covered by the input variant from [PATH]/regions.bed.gz"]

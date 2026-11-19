@@ -5,6 +5,9 @@ Runs after `mdbook build` on the release channel at the site root or on the
 development preview of main under `main/`. On every page it rewrites the menu
 bar's `<h1 class="menu-title">` as a `<p>`, so the page's own heading is its
 one `h1`, and collapses a `<title>` whose chapter name repeats the book title.
+On the release channel it drops the release tag from every `<title>` and from
+`og:site_name`, so a title ends with the project's name alone; the preview
+keeps `vep-rs main`.
 On every page except `print.html`, `toc.html`, `404.html` and the stub mdBook
 writes for a redirected path, it inserts `<link rel="canonical">` and `og:url`
 for the page's address under `--base` and, on the preview,
@@ -13,14 +16,20 @@ search engine lists the release and not the preview. On those pages it also
 replaces the book-wide description metas with the page's first paragraph of
 prose, so each search result shows its own snippet, and on the home page it
 names what the project is in the title and, for a release, adds a schema.org
-SoftwareApplication JSON-LD record. It writes `versions.json`,
+SoftwareApplication JSON-LD record. In the home page's `<noscript>` block it
+puts the chapter list of `toc.html` where mdBook frames that file, so the page
+carries every chapter as a link without a script. It writes `versions.json`,
 which the header's channel switcher reads, and for a release `sitemap.xml`.
 
 When `VEP_RS_DOCS_README_HOME` is `1` the home page renders the README, so its
-edit link is pointed at `README.md` and the benchmark chart, which that page
-does not show, is not held to the README.
+edit link is pointed at `README.md`, and the benchmark chart is not held to the
+README.
 
-Then two checks. Every redirect destination the built pages name must exist:
+Then three checks. Every page a reader lands on has a title and a description
+of its own: a title or a description two pages share, or a page left on the
+book's description, fails the preview and is a warning line on the release,
+whose pages come from a published tag; the release's sitemap lists every such
+page. Every redirect destination the built pages name must exist:
 the page as a file and, when the destination carries one, the id on that page.
 The benchmark chart's `data-release` must equal the version in the README's
 `## Current release: vX.Y.Z` heading of the tree the site was built from
@@ -50,6 +59,8 @@ SKIP_PAGES = {"print.html", "toc.html", "404.html"}
 PREVIEW_CHANNEL_NAME = "main"
 MENU_TITLE = re.compile(r'<h1 class="menu-title">(.*?)</h1>', re.DOTALL)
 TITLE = re.compile(r"<title>(.*?) - (.*?)</title>")
+PAGE_TITLE = re.compile(r"(<title>)([^<]*)(</title>)")
+SITE_NAME = re.compile(r'(<meta property="og:site_name" content=")([^"]*)(">)')
 EDIT_HOME = re.compile(r'(href="[^"]*/edit/[^"]*/)[^"/]+/index\.md"')
 REFRESH = re.compile(r'http-equiv="refresh"\s+content="0;\s*URL=([^"]+)"', re.IGNORECASE)
 FRAGMENT_MAP = re.compile(r"fragmentMap\s*=\s*(\{.*?\})\s*;", re.DOTALL)
@@ -61,6 +72,10 @@ PARAGRAPH = re.compile(r"<p>(.*?)</p>", re.DOTALL)
 TAG = re.compile(r"<[^>]+>")
 DESCRIPTION_METAS = re.compile(
     r'(<meta (?:name="description"|property="og:description"|name="twitter:description") content=")[^"]*(">)'
+)
+CHAPTER_LIST = re.compile(r"<body[^>]*>\s*(.*?)\s*</body>", re.DOTALL)
+CHAPTER_FRAME = re.compile(
+    r'(<noscript>\s*)<iframe class="sidebar-iframe-outer" src="toc\.html"></iframe>(\s*</noscript>)'
 )
 HOME_TITLE = re.compile(r"<title>([^<]*)</title>")
 HOME_OG_TITLES = re.compile(r'(<meta (?:property="og:title"|name="twitter:title") content=")[^"]*(">)')
@@ -111,6 +126,16 @@ def collapse_title(m):
     """`<chapter> - <book>` becomes `<book>` when the chapter is the book's name or its first word."""
     chapter, book = m[1], m[2]
     return f"<title>{book}</title>" if chapter in (book, book.split(" ")[0]) else m[0]
+
+
+def drop_release(text, release):
+    """The page's `<title>` and `og:site_name` without the release tag the release's book title ends with."""
+    tag = " " + release
+
+    def bare(m):
+        return m[1] + m[2].removesuffix(tag) + m[3]
+
+    return SITE_NAME.sub(bare, PAGE_TITLE.sub(bare, text, 1))
 
 
 def page_description(text):
@@ -164,18 +189,41 @@ def title_home(text, release, channel, base):
     return text
 
 
+def chapter_list(site):
+    """The list of every chapter that mdBook writes to `toc.html` at the site root; None if the site has none."""
+    path = os.path.join(site, "toc.html")
+    m = CHAPTER_LIST.search(read(path)) if os.path.isfile(path) else None
+    return m[1] if m else None
+
+
+def list_chapters(text, chapters):
+    """Puts the chapter list where a `<noscript>` block frames `toc.html`; the page and the count of links listed.
+
+    The sidebar does not scroll, so the list sits in a box of the class that does. Its links are relative to the
+    site root, so the page is the home page.
+    """
+    box = f'<div class="sidebar-scrollbox">{chapters}</div>'
+    text, framed = CHAPTER_FRAME.subn(lambda m: m[1] + box + m[2], text, 1)
+    return text, chapters.count(' href="') if framed else 0
+
+
 def finish_pages(site, pages, reader_pages, base, channel, readme_home, release):
     problems, inserted, present = [], 0, 0
+    chapters, listed = chapter_list(site), 0
     for page in pages:
         path = os.path.join(site, page)
         text = MENU_TITLE.sub(r'<p class="menu-title">\1</p>', read(path))
         text = TITLE.sub(collapse_title, text, 1)
+        if not channel:
+            text = drop_release(text, release)
         if readme_home and page == "index.html":
             text = EDIT_HOME.sub(r'\1README.md"', text)
         if page in reader_pages:
             text = describe_page(text)
             if page == "index.html":
                 text = title_home(text, release, channel, base)
+                if chapters:
+                    text, listed = list_chapters(text, chapters)
             if 'rel="canonical"' in text:
                 present += 1
             elif "</head>" not in text:
@@ -194,6 +242,8 @@ def finish_pages(site, pages, reader_pages, base, channel, readme_home, release)
         f"{len(pages)} pages finished: menu title demoted, head tags ({what}) inserted on {inserted},"
         f" {present} already carried a canonical link"
     )
+    if listed:
+        print(f"home page: {listed} chapter links listed in its <noscript> block")
     return problems
 
 
@@ -225,6 +275,53 @@ def write_sitemap(site, pages, base):
     lines.append("</urlset>")
     write(os.path.join(site, "sitemap.xml"), "\n".join(lines) + "\n")
     print(f"sitemap.xml: {len(pages)} pages")
+
+
+def shared_heads(what, heads):
+    """One finding for each title or description that more than one page has."""
+    return [
+        f"{what} {head!r} is on {len(pages)} pages: {', '.join(pages)}"
+        for head, pages in heads.items()
+        if len(pages) > 1
+    ]
+
+
+def check_page_heads(site, reader_pages, channel):
+    """Every page a reader lands on has a title and a description of its own, and the release's sitemap lists it.
+
+    A title or a description two pages share, or a page left on the book's description, fails the preview,
+    whose pages can still be changed; the release's pages come from a published tag, so each is a warning there.
+    """
+    titles, descriptions, on_book = {}, {}, []
+    for page in sorted(reader_pages):
+        text = read(os.path.join(site, page))
+        m = PAGE_TITLE.search(text)
+        titles.setdefault(m[2] if m else "", []).append(page)
+        description = page_description(text)
+        if description:
+            descriptions.setdefault(description, []).append(page)
+        else:
+            on_book.append(page)
+    shared_titles = shared_heads("title", titles)
+    shared_descriptions = shared_heads("description", descriptions)
+    print(
+        f"page heads: {len(reader_pages)} pages, {len(shared_titles)} titles shared,"
+        f" {len(shared_descriptions)} descriptions shared, {len(on_book)} on the book's description"
+    )
+    findings = shared_titles + shared_descriptions
+    findings += [
+        f"{page}: no paragraph of {DESCRIPTION_MIN} characters or more, so its description is the book's"
+        for page in on_book
+    ]
+    if channel:
+        return findings
+    for finding in findings:
+        print(f"WARNING: [site_postbuild] {finding}")
+    sitemap = os.path.join(site, "sitemap.xml")
+    listed = read(sitemap).count("<loc>") if os.path.isfile(sitemap) else 0
+    if listed != len(reader_pages):
+        return [f"sitemap.xml lists {listed} pages, a reader lands on {len(reader_pages)}"]
+    return []
 
 
 def redirect_destinations(text):
@@ -281,7 +378,7 @@ def check_chart_release(site, source, readme_home):
         print("benchmark chart: not in the site, release check skipped")
         return []
     if readme_home:
-        print("benchmark chart: not shown, the README is the home page; release check skipped")
+        print("benchmark chart: the README is the home page; release check skipped")
         return []
     m = SVG_RELEASE.search(read(svg))
     if not m:
@@ -324,6 +421,7 @@ def main():
     failures += write_versions(args.site, base, args.release, args.channel)
     if not args.channel:
         write_sitemap(args.site, sorted(reader_pages), base)
+    failures += check_page_heads(args.site, reader_pages, args.channel)
     failures += check_redirects(args.site, pages, base)
     failures += check_chart_release(args.site, args.source, readme_home)
 

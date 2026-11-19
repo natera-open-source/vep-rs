@@ -31,6 +31,7 @@ use noodles::vcf;
 use tracing::{debug, info, warn};
 use vep_core::cache_info::FIXED_VARIATION_COLUMNS;
 use vep_core::coordinate::is_cache_path_component;
+use vep_core::vcf_header::fileformat_refusal;
 
 use crate::core_dumps::read_table;
 
@@ -847,15 +848,13 @@ fn for_each_record(
     }
     let file = std::fs::File::open(path)
         .with_context(|| format!("Failed to open VCF: {}", path.display()))?;
-    let reader: Box<dyn BufRead> = if is_compressed(path) {
+    let mut reader: Box<dyn BufRead> = if is_compressed(path) {
         Box::new(std::io::BufReader::new(bgzf::io::Reader::new(file)))
     } else {
         Box::new(std::io::BufReader::new(file))
     };
+    read_header(&mut reader, path)?;
     let mut vcf_reader = vcf::io::Reader::new(reader);
-    vcf_reader
-        .read_header()
-        .with_context(|| format!("Failed to read VCF header: {}", path.display()))?;
     read_records(
         path,
         |record| vcf_reader.read_record(record),
@@ -866,6 +865,36 @@ fn for_each_record(
             f(fields)
         },
     )
+}
+
+/// Reads the header of `reader`, the lines opening with `#` up to the first
+/// that does not, as the dumper's tabix parser reads it (`Dumper/Variation.pm:
+/// 307`, `VCF4Tabix.pm:55-58`: each line less its line end, tested on its own),
+/// and ends the run with Ensembl VEP's words on a `##fileformat` line that
+/// parser refuses (`BaseVCF4.pm:116-130`); every other line is read on, as it
+/// reads on. No VCF header parser runs on the file, so a header without the
+/// line, or with one such a parser would refuse, reads on as Ensembl VEP reads
+/// on. The line end is `\n` with one `\r` before it, or one `\r` ending the
+/// file, as htslib cuts it.
+fn read_header(reader: &mut impl BufRead, path: &Path) -> Result<()> {
+    let header_error = || format!("Failed to read VCF header: {}", path.display());
+    let mut line = Vec::new();
+    while reader.fill_buf().with_context(header_error)?.first() == Some(&b'#') {
+        line.clear();
+        reader
+            .read_until(b'\n', &mut line)
+            .with_context(header_error)?;
+        if line.last() == Some(&b'\n') {
+            line.pop();
+        }
+        if line.last() == Some(&b'\r') {
+            line.pop();
+        }
+        if let Some(reason) = fileformat_refusal(&line) {
+            bail!("{}: {}", header_error(), reason);
+        }
+    }
+    Ok(())
 }
 
 /// Calls `f` with each record of chromosome `chr` of the indexed VCF `path` and
@@ -881,9 +910,7 @@ fn query_chromosome(
     let mut reader = vcf::io::indexed_reader::Builder::default()
         .build_from_path(path)
         .with_context(|| format!("Failed to open indexed VCF: {}", path.display()))?;
-    let header = reader
-        .read_header()
-        .with_context(|| format!("Failed to read VCF header: {}", path.display()))?;
+    read_header(&mut reader.header_reader(), path)?;
     let Some(index_header) = reader.index().header() else {
         return Ok(None);
     };
@@ -894,6 +921,9 @@ fn query_chromosome(
         return Ok(Some(0));
     }
     let region = Region::new(chr, ..);
+    // The query reads the header for a record's end against a bounded region;
+    // the region is the whole chromosome.
+    let header = vcf::Header::default();
     let mut query = reader
         .query(&header, &region)
         .with_context(|| format!("Failed to query {} in {}", chr, path.display()))?;
@@ -2195,5 +2225,75 @@ mod tests {
         })
         .unwrap();
         assert_eq!(names, ["COSV2"]);
+    }
+
+    /// The header is the `#` lines up to the first that is not one, and the
+    /// reader is left at that line: a header without a `##fileformat` line, one
+    /// spelt `VCFv4.2.1` (the version is the first `<digits>.<digits>`, 4.2),
+    /// `VCFv04.2`, an empty value, a `FILEFORMAT` key, a `##fileformat` line
+    /// after `#CHROM`, a `\r\n` line end and no `#CHROM` line at all read on.
+    /// `VCFv3.3` is refused wherever it stands among the `#` lines, as are
+    /// `##  fileformat=VCFv3.3`, `VCFv4`, `VCFv05.0` (printed as the line spelt
+    /// it) and `##fileformat=\r\r\n`, whose value is the `\r` htslib leaves; a
+    /// `##fileformat=VCFv3.3` line below the first record is a record.
+    #[test]
+    fn header_is_read_as_the_dumpers_parser_reads_it() {
+        const RECORD: &str = "21\t100\trs1\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n";
+        const CHROM: &str = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
+        let read = |text: &str| {
+            let mut reader = text.as_bytes();
+            let result = read_header(&mut reader, Path::new("x.vcf.gz"));
+            (result.map_err(|e| format!("{e:#}")), reader.to_vec())
+        };
+        for header in [
+            "##fileformat=VCFv4.2\n##source=x\n#CHROM\n",
+            "##source=x\n#CHROM\n",
+            "##fileformat=VCFv4.2.1\n#CHROM\n",
+            "##fileformat=VCFv04.2\n#CHROM\n",
+            "##fileformat=\n#CHROM\n",
+            "##FILEFORMAT=VCFv3.3\n#CHROM\n",
+            "##source=x\n#CHROM\n##fileformat=VCFv4.2\n",
+            "##fileformat=VCFv4.2\r\n#CHROM\r\n",
+            "##fileformat=VCFv4.2\n",
+            "",
+        ] {
+            let (result, rest) = read(&format!("{header}{RECORD}"));
+            assert_eq!(result, Ok(()), "{header:?}");
+            assert_eq!(rest, RECORD.as_bytes(), "{header:?}");
+        }
+        let (result, rest) = read(&format!("{CHROM}{RECORD}##fileformat=VCFv3.3\n"));
+        assert_eq!(result, Ok(()));
+        assert_eq!(rest, format!("{RECORD}##fileformat=VCFv3.3\n").as_bytes());
+
+        const INCOMPATIBLE_3_3: &str = "x.vcf.gz: The VCF file format version 3.3 is not \
+            compatible with the parser version (VCF v4.2)";
+        const UNREADABLE: &str =
+            "x.vcf.gz: The script can't read the VCF file format version of 'fileformat'";
+        for (header, reason) in [
+            ("##fileformat=VCFv3.3\n#CHROM\n", INCOMPATIBLE_3_3),
+            (
+                "##source=x\n##fileformat=VCFv3.3\n#CHROM\n",
+                INCOMPATIBLE_3_3,
+            ),
+            (
+                "##fileformat=VCFv4.2\n#CHROM\n##fileformat=VCFv3.3\n",
+                INCOMPATIBLE_3_3,
+            ),
+            ("##  fileformat=VCFv3.3\n#CHROM\n", INCOMPATIBLE_3_3),
+            ("##fileformat=VCFv4\n#CHROM\n", UNREADABLE),
+            (
+                "##fileformat=VCFv05.0\n#CHROM\n",
+                "x.vcf.gz: The VCF file format version 05.0 is not compatible with the \
+                 parser version (VCF v4.2)",
+            ),
+            ("##fileformat=\r\r\n#CHROM\n", UNREADABLE),
+        ] {
+            let (result, _) = read(&format!("{header}{RECORD}"));
+            assert_eq!(
+                result,
+                Err(format!("Failed to read VCF header: {reason}")),
+                "{header:?}"
+            );
+        }
     }
 }

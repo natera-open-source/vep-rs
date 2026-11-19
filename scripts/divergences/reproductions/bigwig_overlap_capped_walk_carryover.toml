@@ -1,0 +1,34 @@
+entry = "bigwig_overlap_capped_walk_carryover"
+page = "docs/output/custom-bigwig.md#a-bigwig-record-listed-twice-after-a-neighbouring-variants-capped-walk"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 2,356 per million · 0 flag sets, 41 corpora"
+notes = "inputs/bigwig_overlap_capped_walk_carryover/dense.bw holds 150 one-base intervals at 21:5028900-5029049 with the values 0.001 to 0.150. The deletion's window holds 102 of them, more than the default num_records of 50, so its walk stops early and the substitution at the last base of its span reads the queued interval at 5029000 before its own."
+
+[input]
+format = "vcf"
+header = ["##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the variant\">"]
+text = """
+21	5028900	.	N	<DEL>	.	.	END=5029000
+21	5029000	.	A	G	.	.	.
+21	5029010	.	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+
+[run]
+flags = ["--custom", "file={repo}/scripts/divergences/reproductions/inputs/bigwig_overlap_capped_walk_carryover/dense.bw,short_name=dense,format=bigwig,type=overlap"]
+format = "default"
+
+[compare]
+kind = "field"
+field = "dense"
+where = { record = "21_5029000_A/G" }
+
+[expected]
+ensembl_vep = ["0.101000003516674,0.101000003516674"]
+vep_rs = ["0.101000003516674"]

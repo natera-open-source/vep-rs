@@ -1,0 +1,252 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 3,
+ "included_records": {
+  "GRCh38-plugin-splicevault-fixture": [
+   "acceptor_fwd_decoy_only",
+   "acceptor_fwd_snv",
+   "acceptor_rev_lowercase",
+   "acceptor_rev_snv",
+   "acceptor_rev_two_transcripts",
+   "donor_fwd_deletion",
+   "donor_fwd_snv",
+   "donor_fwd_two_transcripts",
+   "donor_fwd_unscored",
+   "donor_region_fwd_insertion",
+   "donor_rev_deletion",
+   "donor_rev_insertion",
+   "donor_rev_snv",
+   "exon_fwd_snv",
+   "intergenic_snv"
+  ]
+ },
+ "max_span": 1000000,
+ "cache_cost_flank": 5000,
+ "covers": [
+  "SpliceVault"
+ ],
+ "suites": {
+  "GRCh38-plugin-splicevault-fixture": {
+   "reference": "default.txt",
+   "input": "variants.vcf",
+   "rows": 22,
+   "combinations": 8
+  }
+ },
+ "combinations": {
+  "downstream_gene_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 3
+  },
+  "frameshift_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intergenic_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_donor_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "splice_acceptor_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 5
+  },
+  "splice_donor_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 6
+  },
+  "splice_region_variant,synonymous_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  }
+ },
+ "variant_classes": {
+  "deletion": 3,
+  "insertion": 3,
+  "snv": 16
+ },
+ "records": [
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t13618457\tdonor_fwd_two_transcripts\tT\tC\t.\t.\t.",
+   "combinations": [
+    "splice_donor_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t13628452\tdonor_fwd_deletion\tGGC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t13629855\tacceptor_fwd_decoy_only\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t13629903\tdonor_region_fwd_insertion\tA\tAT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,splice_donor_region_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t13630940\tacceptor_fwd_snv\tG\tT\t.\t.\t.",
+   "combinations": [
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t13630943\texon_fwd_snv\tT\tC\t.\t.\t.",
+   "combinations": [
+    "splice_region_variant,synonymous_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t13631108\tdonor_fwd_snv\tG\tA\t.\t.\t.",
+   "combinations": [
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t13639639\tdonor_fwd_unscored\tG\tC\t.\t.\t.",
+   "combinations": [
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t18294269\tdonor_rev_snv\tC\tA\t.\t.\t.",
+   "combinations": [
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t18297830\tacceptor_rev_snv\tC\tG\t.\t.\t.",
+   "combinations": [
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t18312942\tdonor_rev_deletion\tTAC\tT\t.\t.\t.",
+   "combinations": [
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t18315257\tacceptor_rev_lowercase\tc\ta\t.\t.\t.",
+   "combinations": [
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t18326431\tdonor_rev_insertion\tC\tCG\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t19268555\tintergenic_snv\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-splicevault-fixture",
+   "vcf": "21\t40353744\tacceptor_rev_two_transcripts\tC\tA\t.\t.\t.",
+   "combinations": [
+    "splice_acceptor_variant",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "splicevault",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/data",
+    "--plugin",
+    "SpliceVault,file={corpus}/data/SpliceVault_data_GRCh38_synthetic.tsv.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_splicevault",
+   "covers": [
+    "SpliceVault",
+    "api-params-parsing"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "splicevault-transcript-match-0",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/data",
+    "--plugin",
+    "SpliceVault,file={corpus}/data/SpliceVault_data_GRCh38_synthetic.tsv.gz,transcript_match=0"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf"
+   ],
+   "expected_dir": "expected_splicevault-transcript-match-0",
+   "covers": [
+    "SpliceVault"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

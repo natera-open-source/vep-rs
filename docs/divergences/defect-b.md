@@ -1,6 +1,6 @@
 # Defect B: `start_lost` and `start_retained_variant` are both written for one allele
 
-**The defect in one sentence.** Ensembl VEP decides "the start codon is lost" and "the start codon is retained" with two separate tests that never consult each other, so one allele can be given both terms, and on the records of this class it is.
+**The defect in one sentence.** Ensembl VEP decides "the start codon is lost" and "the start codon is retained" with two separate tests that never consult each other, so one allele can be given both terms, and on the records of this class it is. Those records are of two kinds, a sequence deletion at a start codon and a structural allele over one, and on each vep-rs writes one of the two terms, the one the record supports.
 
 **Why this is a defect.** The two terms contradict each other: a start codon cannot be both lost and kept by the same change. Which of the two is wrong depends on the allele. On a sequence deletion, an allele given as bases, Ensembl VEP rebuilds the leading untranslated region (UTR) and the coding sequence with the edit applied. The loss test behind `start_lost` reads that rebuilt sequence at the old UTR length, finds `TGA` where `ATG` stood, and reports the start altered; `start_lost` is the wrong member.
 
@@ -16,7 +16,7 @@ On a structural allele, a symbolic one such as `<DEL>`, the retention test behin
 **What correcting it would change.** Correcting the misread at line 939 removes the sequence pairs; correcting the structural shortcut at line 1037 removes the structural pairs. With both corrected, classes 3 and 4 vanish and Ensembl VEP writes one term per allele, as vep-rs does.
 
 **The classes it produces.**
-- Class 3: the SNP/indel datasets (ClinVar GRCh37 and GRCh38, gnomAD v2.1.1 and v4.1 chr21, 1000 Genomes high-coverage chr21: 261, 1,466, 3, 127 and 1 pairs); both members of each pair are set aside.
+- Class 3: the SNP/indel datasets (ClinVar GRCh37 and GRCh38, gnomAD v2.1.1 and v4.1 chr21, 1000 Genomes high-coverage chr21: 261, 1,466, 3, 127 and 1 pairs); both members of each pair are set aside. The comparators name it `start_cooccurrence_swap`: the SNP/indel comparator's excluding rule decides the pair, and the format comparator and the golden harness set the same pair aside under that name.
 - Class 4: the structural-variant sets, 3 pairs on GRCh37 and 38 on GRCh38 (37 distinct); both members of each pair are set aside.
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).

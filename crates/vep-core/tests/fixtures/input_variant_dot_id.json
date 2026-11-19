@@ -1,0 +1,40 @@
+{
+  "chr": "21",
+  "original_chr": "21",
+  "start": 100,
+  "end": 100,
+  "strand": "Forward",
+  "ref_allele": [
+    65
+  ],
+  "alt_alleles": [
+    [
+      71
+    ]
+  ],
+  "allele_string": "A/G",
+  "allele_index": 0,
+  "id": ".",
+  "variant_class": "Snv",
+  "transcript_consequences": [],
+  "intergenic_overlap": false,
+  "most_severe_consequence": null,
+  "colocated_variants": [],
+  "minimised": false,
+  "original_allele_string": null,
+  "original_start": null,
+  "original_end": null,
+  "raw_input": null,
+  "existing_variation": [],
+  "is_structural": false,
+  "is_single_breakend": false,
+  "vep_skip": false,
+  "oversize_sv": false,
+  "no_allele": false,
+  "input_record": 0,
+  "record_allele_string_multi": null,
+  "intergenic_pick": false,
+  "check_ref_failed": false,
+  "hom_ref": false,
+  "reference_allele_row": false
+}

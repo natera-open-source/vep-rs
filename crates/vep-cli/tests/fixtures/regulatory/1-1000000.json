@@ -1,5 +1,5 @@
 [
-  {"stable_id":"ENSR_FIXTURE","start":100,"end":120,"strand":0,"feature_type":"RegulatoryFeature","biotype":"enhancer"},
-  {"stable_id":"ENSM_FORWARD","start":105,"end":108,"strand":1,"feature_type":"MotifFeature","binding_matrix":{"stable_id":"ENSPFM_FORWARD","name":"forward matrix","transcription_factors":["TF_A","TF_B"],"frequencies":{"1":{"A":1,"C":0,"G":0,"T":0},"2":{"A":0,"C":1,"G":0,"T":0},"3":{"A":0,"C":0,"G":1,"T":0},"4":{"A":0,"C":0,"G":0,"T":1}}}},
-  {"stable_id":"ENSM_REVERSE","start":115,"end":118,"strand":-1,"feature_type":"MotifFeature","binding_matrix":{"stable_id":"ENSPFM_REVERSE","transcription_factors":[],"frequencies":{"1":{"A":1},"2":{"C":1},"3":{"G":1},"4":{"T":1}}}}
+  {"activity":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIPRN-----------------------------","biotype":"enhancer","dbid":1,"end":120,"feature_type":"RegulatoryFeature","stable_id":"ENSR_FIXTURE","start":100},
+  {"dbid":2,"end":108,"feature_type":"MotifFeature","matrix":"ENSPFM_FORWARD","score":3.5,"seq":"ACGT","stable_id":"ENSM_FORWARD","start":105,"strand":1},
+  {"dbid":3,"end":118,"feature_type":"MotifFeature","matrix":"ENSPFM_REVERSE","score":2.25,"seq":"TGCA","stable_id":"ENSM_REVERSE","start":115,"strand":-1}
 ]

@@ -34,12 +34,13 @@ impl TabOutputFormatter {
     /// `header_lines` are the `##` lines and the `#`-prefixed column line, as
     /// [`fields::tab_header`] builds them; `no_headers` suppresses them all.
     pub fn new(
-        options: FieldOptions,
+        mut options: FieldOptions,
         plugin_fields: Vec<String>,
         selected_fields: Option<Vec<String>>,
         header_lines: Vec<String>,
         no_headers: bool,
     ) -> Self {
+        options.set_plugin_fields(plugin_fields.iter().cloned());
         let columns = fields::tab_columns(&options, &plugin_fields, selected_fields.as_deref());
         let produced = columns
             .iter()
@@ -138,23 +139,29 @@ impl OutputFormatter for TabOutputFormatter {
 mod tests {
     use super::*;
     use smallvec::smallvec;
+    use std::sync::Arc;
     use vep_core::consequence::{Consequence, Impact, TranscriptConsequence};
+    use vep_core::transcript::Transcript;
 
     use crate::output::fields::fixtures::{
-        all_options, every_column, populated_consequence, populated_variant, structural_variant,
+        all_options, edit_transcript, every_column, populated_consequence, populated_variant,
+        structural_variant,
     };
 
     fn variant() -> InputVariant {
         let mut v = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         v.id = Some("rs1".into());
         v.transcript_consequences = vec![TranscriptConsequence {
-            transcript_id: "ENST1".into(),
-            gene_id: "ENSG1".into(),
+            transcript: Some(Arc::new(Transcript {
+                stable_id: "ENST1".into(),
+                gene_stable_id: "ENSG1".into(),
+                flags: Arc::from(["cds_end_NF".to_string()]),
+                ..Transcript::default()
+            })),
             consequences: smallvec![Consequence::UpstreamGeneVariant],
             impact: Impact::MODIFIER,
             distance: Some(42),
             strand: -1,
-            flags: std::sync::Arc::from(["cds_end_NF".to_string()]),
             ..Default::default()
         }];
         v
@@ -222,6 +229,104 @@ mod tests {
         v.nearest = None;
         let lines = f.format_record(&[&v]).unwrap();
         assert!(lines[0].ends_with("\tcds_end_NF\t-"), "{}", lines[0]);
+    }
+
+    /// Ensembl VEP 116.2 writes the AncestralAllele plugin's `AA` as the string
+    /// the FASTA index returns for the record's span, empty for a span past the
+    /// record's end (AncestralAllele.pm:136-137, :151), so the tab cell is
+    /// empty, not the `-` of an undefined value (`Tab.pm:128`); a record the
+    /// plugin left without the key prints `-`.
+    #[test]
+    fn an_ancestral_allele_past_the_fasta_record_end_prints_an_empty_cell() {
+        let f = TabOutputFormatter::new(
+            FieldOptions::default(),
+            vec!["AA".to_string()],
+            None,
+            vec![],
+            true,
+        );
+        assert!(f.columns().join("\t").ends_with("\tFLAGS\tAA"));
+        let mut v = variant();
+        v.plugin_data.insert("AA".to_string(), String::new());
+        let lines = f.format_record(&[&v]).unwrap();
+        assert!(lines[0].ends_with("\tcds_end_NF\t"), "{}", lines[0]);
+        v.plugin_data.insert("AA".to_string(), "..".to_string());
+        let lines = f.format_record(&[&v]).unwrap();
+        assert!(lines[0].ends_with("\tcds_end_NF\t.."), "{}", lines[0]);
+        v.plugin_data.clear();
+        let lines = f.format_record(&[&v]).unwrap();
+        assert!(lines[0].ends_with("\tcds_end_NF\t-"), "{}", lines[0]);
+    }
+
+    /// A plugin column named as a core field (dbNSFP's `TSL`) is one the run
+    /// produces without the core flag: the plugin's value where it wrote one,
+    /// `-` on a row it left alone, never the cache's value, which the core hash
+    /// carries only under `--tsl` (OutputFactory.pm:1609, :2231); under `--tsl`
+    /// the one `TSL` column prints the plugin's value over the cache's.
+    #[test]
+    fn a_plugin_column_named_as_a_core_field_prints_the_plugins_value() {
+        let declaring_tsl = |tsl: bool| {
+            let options = FieldOptions {
+                tsl,
+                ..Default::default()
+            };
+            TabOutputFormatter::new(options, vec!["TSL".to_string()], None, vec![], true)
+        };
+        let f = declaring_tsl(false);
+        assert!(f.columns().join("\t").ends_with("\tFLAGS\tTSL"));
+        let mut v = variant();
+        let tc = &mut v.transcript_consequences[0];
+        edit_transcript(tc, |t| t.tsl = Some("1".to_string()));
+        let lines = f.format_record(&[&v]).unwrap();
+        assert!(lines[0].ends_with("\tcds_end_NF\t-"), "{}", lines[0]);
+        v.transcript_consequences[0]
+            .plugin_data
+            .insert("TSL".to_string(), "5,1,2,3,2,NA".to_string());
+        let lines = f.format_record(&[&v]).unwrap();
+        assert!(
+            lines[0].ends_with("\tcds_end_NF\t5,1,2,3,2,NA"),
+            "{}",
+            lines[0]
+        );
+        let flagged = declaring_tsl(true);
+        assert_eq!(flagged.columns().iter().filter(|c| *c == "TSL").count(), 1);
+        let lines = flagged.format_record(&[&v]).unwrap();
+        assert!(
+            lines[0].ends_with("\tcds_end_NF\t5,1,2,3,2,NA"),
+            "{}",
+            lines[0]
+        );
+        v.transcript_consequences[0].plugin_data.clear();
+        let lines = flagged.format_record(&[&v]).unwrap();
+        assert!(lines[0].ends_with("\tcds_end_NF\t1"), "{}", lines[0]);
+    }
+
+    /// A table cell TranscriptAnnotator's row has and leaves empty is Ensembl
+    /// VEP's empty string, an empty cell (`Tab.pm:128` over the defined `''`
+    /// of `TranscriptAnnotator.pm:245-250`), and the row names its field in
+    /// `plugin_empty_strings`; a column the row lacks is undefined and prints
+    /// `-`, as does the same field on a row whose list does not name it.
+    #[test]
+    fn a_table_cell_the_row_has_and_leaves_empty_prints_an_empty_cell() {
+        let f = TabOutputFormatter::new(
+            FieldOptions::default(),
+            vec!["scores_SIFT_pred".to_string(), "scores_Comment".to_string()],
+            None,
+            vec![],
+            true,
+        );
+        let mut v = variant();
+        let tc = &mut v.transcript_consequences[0];
+        tc.plugin_data
+            .insert("scores_SIFT_pred".to_string(), String::new());
+        tc.plugin_data
+            .insert("scores_Comment".to_string(), String::new());
+        tc.plugin_empty_strings.push("scores_SIFT_pred".to_string());
+        let lines = f.format_record(&[&v]).unwrap();
+        assert!(lines[0].ends_with("\tcds_end_NF\t\t-"), "{}", lines[0]);
+        v.transcript_consequences[0].plugin_empty_strings.clear();
+        let lines = f.format_record(&[&v]).unwrap();
+        assert!(lines[0].ends_with("\tcds_end_NF\t-\t-"), "{}", lines[0]);
     }
 
     /// Ensembl VEP 116.2 under `--tab --fields ""` writes the header block, a bare
@@ -312,7 +417,11 @@ mod tests {
     /// writes no line.
     #[test]
     fn tab_writers_match_the_string_writer_on_every_column() {
-        let plugin_fields = vec!["ZPlugin".to_string(), "VPlugin".to_string()];
+        let plugin_fields = vec![
+            "ZPlugin".to_string(),
+            "SpliceVault_top_events".to_string(),
+            "VPlugin".to_string(),
+        ];
         let every = TabOutputFormatter::new(all_options(), plugin_fields, None, vec![], true);
         let expected_columns: Vec<&str> = every_column()
             .into_iter()
@@ -401,9 +510,9 @@ mod tests {
             vec![String::new()]
         );
 
-        // The overlap pair, structural rows' alone, and the regulatory fields
-        // print `-` on the populated sequence row; the structural row fills the
-        // pair.
+        // The overlap pair, structural rows' alone, and the regulatory and
+        // cell-type fields print `-` on the populated sequence row; the
+        // structural row fills the pair.
         let dashes_of = |lines: &str| -> Vec<String> {
             let cells: Vec<&str> = lines.trim_end_matches('\n').split('\t').collect();
             every
@@ -420,6 +529,7 @@ mod tests {
             "HIGH_INF_POS",
             "MOTIF_SCORE_CHANGE",
             "TRANSCRIPTION_FACTORS",
+            "CELL_TYPE",
         ];
         let lines = assert_byte_path_matches(&every, &[&full]);
         let mut expected: Vec<String> = vec!["OverlapBP".to_string(), "OverlapPC".to_string()];
@@ -429,7 +539,12 @@ mod tests {
         assert!(!dashes_of(&structural_lines).contains(&"OverlapBP".to_string()));
         assert!(structural_lines.contains("\t101\t10.09\t"));
         assert!(lines.contains("\tENSP00000300.1:p.Ala101%3D;p.%3D\t"));
-        assert!(lines.contains("\ta=b;c\tx;y\n"));
+        // The plugin list cell joins its elements with `,`, a `,` inside one kept; the cell is
+        // the made-up one of the test row.
+        assert!(lines.contains(
+            "\ta=b;c\tTop1:CD:-35:31%:Frameshift,Top2:CA:+112:1,5%:inFrame\tx;y\t\
+             21:100-100,rs1\tBenign,Pathogenic\tcriteria_provided\n"
+        ));
         let lines = assert_byte_path_matches(&default, &[&absent, &intergenic]);
         assert_eq!(
             lines,

@@ -1,0 +1,41 @@
+{
+ "generator": "scripts/fixtures/make_plugin_fixture.py",
+ "layout": "dbscsnv",
+ "assembly": "GRCh38",
+ "seed": 7,
+ "preparation": {
+  "index": "tabix -s 5 -b 6 -e 6 -c c",
+  "coordinate_columns": [
+   "hg38_chr",
+   "hg38_pos"
+  ],
+  "other_assembly_columns": [
+   "chr",
+   "pos"
+  ],
+  "other_assembly_shift": 100000,
+  "line_end": "CRLF",
+  "columns": 18
+ },
+ "inputs": {
+  "vcf": {
+   "variants.vcf": "c42e8bd5e0d23e9f07dfbf8c0fc6fbcfc5aeb11248d81b8dc62ec13ff153ec79"
+  },
+  "reference": {
+   "expected/default.txt.gz": "965c8c58a0660405c75f11c96cca54adfe401d7677b10e9679db47d68e2209f1"
+  }
+ },
+ "misses": [],
+ "rows": {
+  "snv": 27,
+  "miss": 0
+ },
+ "files": {
+  "dbscSNV1.1_synthetic_GRCh38.txt.gz": "1664df8ce778e0bfc1fec75ff130e7681480a3bcc6b6e8a9614f141dfc62f34c",
+  "dbscSNV1.1_synthetic_GRCh38.txt.gz.tbi": "4aa34d958e58f22bfcff734d344c04b4255cf3715153596ae33304a5556b62ff"
+ },
+ "tools": {
+  "bgzip": "bgzip (htslib) 1.22.1",
+  "tabix": "tabix (htslib) 1.22.1"
+ }
+}

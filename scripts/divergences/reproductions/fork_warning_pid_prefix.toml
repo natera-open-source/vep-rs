@@ -1,0 +1,32 @@
+entry = "fork_warning_pid_prefix"
+page = "docs/divergences/fork-warning-pid-prefix.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 12 of 392 flag sets · 392 flag sets, 6 corpora"
+notes = "Every Ensembl VEP run here passes --fork 1, so the child that annotates the record raises the transcript-assembly mismatch into its captured standard error and the parent relays it behind the child's process id (Runner.pm:565); the id varies by host and is masked. vep-rs writes the condition alone at every worker count."
+
+[input]
+format = "vcf"
+text = """
+21	45505371	rs922296917	CGGCCCTCCGGGCCCCCCTG	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "refseq"
+json_cache = "tests/golden/116/GRCh38-refseq/cache_root/homo_sapiens_refseq/116_GRCh38"
+fasta = "tests/golden/116/GRCh38-refseq/reference.fa.gz"
+
+[run]
+flags = ["--refseq"]
+
+[compare]
+kind = "warnings"
+pattern = "Transcript-assembly mismatch"
+mask = ["^WARNING: \\d+ : "]
+
+[expected]
+ensembl_vep = ["<masked>WARNING: Transcript-assembly mismatch in rs922296917"]
+vep_rs = ["WARNING: Transcript-assembly mismatch in rs922296917"]

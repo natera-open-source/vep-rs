@@ -1,0 +1,33 @@
+entry = "hgvs_transcript_protein_input"
+page = "docs/divergences/hgvs-transcript-input.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the HGVS input format (Ensembl VEP documentation, \"Data formats\", HGVS identifiers); not seen in the measured datasets"
+notes = "The first mechanism of the entry: a transcript and a protein notation of CRYAA given to both engines offline. Ensembl VEP refuses the format offline (`Cannot use HGVS format in offline mode`) and writes no row; vep-rs resolves both from the transcript cache and the reference FASTA. The five transcript-branch and six protein-branch readings that differ need Ensembl VEP's database and are not run here."
+
+[input]
+format = "hgvs"
+text = """
+ENST00000291554:c.3G>A
+ENSP00000291554:p.Thr4Ala
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-input-hgvs/json_cache"
+fasta = "tests/golden/116/GRCh38-input-hgvs/reference.fa.gz"
+
+[compare]
+kind = "rows"
+where = { record = ["ENST00000291554:c.3G>A", "ENSP00000291554:p.Thr4Ala"], feature = "ENST00000291554" }
+columns = ["Uploaded_variation", "Location", "Allele", "Feature", "Consequence"]
+
+[expected]
+ensembl_vep_exit = 2
+ensembl_vep = []
+vep_rs = [
+  "ENST00000291554:c.3G>A | 21:43169102 | A | ENST00000291554 | start_lost",
+  "ENSP00000291554:p.Thr4Ala | 21:43169109 | G | ENST00000291554 | missense_variant",
+]

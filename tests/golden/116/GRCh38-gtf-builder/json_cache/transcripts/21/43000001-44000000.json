@@ -1,0 +1,130 @@
+[
+  {
+    "stable_id": "ENST00000613967",
+    "version": 1,
+    "gene_stable_id": "ENSG00000278433",
+    "start": 43609887,
+    "end": 43609989,
+    "strand": -1,
+    "biotype": "miRNA",
+    "source": "mirbase",
+    "gene_symbol": "MIR6070",
+    "is_canonical": 1,
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00003743001",
+        "start": 43609887,
+        "end": 43609989,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "value": "GENCODE basic"
+      },
+      {
+        "code": "gencode_primary",
+        "value": "GENCODE primary"
+      },
+      {
+        "code": "TSL",
+        "value": "tslNA"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 103,
+            "to_start": 43609887,
+            "to_end": 43609989,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00003743001",
+          "start": 43609887,
+          "end": 43609989,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000452969",
+    "version": 1,
+    "gene_stable_id": "ENSG00000234030",
+    "start": 43783123,
+    "end": 43783573,
+    "strand": 1,
+    "biotype": "processed_pseudogene",
+    "source": "havana",
+    "gene_symbol": "TMEM97P1",
+    "is_canonical": 1,
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00001720675",
+        "start": 43783123,
+        "end": 43783573,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "value": "GENCODE basic"
+      },
+      {
+        "code": "gencode_primary",
+        "value": "GENCODE primary"
+      },
+      {
+        "code": "TSL",
+        "value": "tslNA"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 451,
+            "to_start": 43783123,
+            "to_end": 43783573,
+            "ori": 1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00001720675",
+          "start": 43783123,
+          "end": 43783573,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  }
+]

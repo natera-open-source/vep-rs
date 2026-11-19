@@ -4,7 +4,9 @@
 //! `--hgvsg` through the `vep` binary: the refusal without a reference FASTA,
 //! and the HGVSg strings Ensembl VEP 116.2 writes on the GRCh37 golden corpus's
 //! reference, for records of the corpus and for multi-allelic records built on
-//! it, in every output format.
+//! it, in every output format; the name `--hgvsg_use_accession` prints for
+//! three spellings of one chromosome and for an unplaced scaffold; and the
+//! accession the `--ga4gh_vrs` object names beside it.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -505,4 +507,491 @@ fn grch37_hgvs_corpus_carries_a_full_flank_shift_record() {
             ("571387".to_string(), 51, 421)
         ]
     );
+}
+
+/// The rows of the record `intron_snv_1` of the `GRCh38-identifiers` golden
+/// corpus under `--hgvsg --hgvsg_use_accession`, `{name}` standing for the
+/// chromosome name the input writes. Ensembl VEP 116.2 writes them offline
+/// for `21` and `chr21`, which the synonyms table pairs with `NC_000021.9`,
+/// and with a database connection (`--database --db_version 116`) for `Chr21`,
+/// a spelling the cache resolves and the table does not hold.
+const ACCESSION_ROWS: &[&str] = &[
+    "intron_snv_1\t{name}:10538885\tC\tENSG00000274391\tENST00000427445\tTranscript\tintron_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;STRAND=1;HGVSg=NC_000021.9:g.10538885A>C",
+    "intron_snv_1\t{name}:10538885\tC\tENSG00000274391\tENST00000612746\tTranscript\tintron_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;STRAND=1;HGVSg=NC_000021.9:g.10538885A>C",
+    "intron_snv_1\t{name}:10538885\tC\tENSG00000274391\tENST00000612957\tTranscript\tintron_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;STRAND=1;FLAGS=cds_end_NF;HGVSg=NC_000021.9:g.10538885A>C",
+    "intron_snv_1\t{name}:10538885\tC\tENSG00000274391\tENST00000618007\tTranscript\tintron_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;STRAND=1;HGVSg=NC_000021.9:g.10538885A>C",
+    "intron_snv_1\t{name}:10538885\tC\tENSG00000274391\tENST00000622113\tTranscript\tintron_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;STRAND=1;HGVSg=NC_000021.9:g.10538885A>C",
+    "intron_snv_1\t{name}:10538885\tC\tENSG00000274391\tENST00001091160\tTranscript\tintron_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;STRAND=1;HGVSg=NC_000021.9:g.10538885A>C",
+    "intron_snv_1\t{name}:10538885\tC\tENSG00000274391\tENST00001091161\tTranscript\tintron_variant,NMD_transcript_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;STRAND=1;HGVSg=NC_000021.9:g.10538885A>C",
+    "intron_snv_1\t{name}:10538885\tC\tENSG00000274391\tENST00001091162\tTranscript\tintron_variant,NMD_transcript_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;STRAND=1;HGVSg=NC_000021.9:g.10538885A>C",
+    "intron_snv_1\t{name}:10538885\tC\tENSG00000274391\tENST00001131865\tTranscript\tintron_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;STRAND=1;HGVSg=NC_000021.9:g.10538885A>C",
+];
+
+/// `--hgvsg_use_accession` names the accession of the chromosome a name
+/// resolves to: `Chr21` prints the rows of Ensembl VEP 116.2's run with a
+/// database connection, field for field, where its offline run ends on the
+/// record (OutputFactory.pm 1368-1372 reads the synonyms of the name as written
+/// alone), and `21` and `chr21` print the rows of its offline run.
+#[test]
+fn hgvsg_use_accession_names_the_resolved_chromosome() {
+    let dir = corpus("GRCh38-identifiers");
+    let out = tempfile::tempdir().unwrap();
+    for name in ["Chr21", "chr21", "21"] {
+        let input = out.path().join(format!("{name}.vcf"));
+        std::fs::write(
+            &input,
+            format!(
+                "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+                 {name}\t10538885\tintron_snv_1\tA\tC\t.\t.\t.\n"
+            ),
+        )
+        .unwrap();
+        let output = out.path().join(format!("{name}.txt"));
+        let result = common::isolated_vep_anywhere()
+            .args(["-i", input.to_str().unwrap()])
+            .args(["-o", output.to_str().unwrap()])
+            .args(["--json_cache", dir.join("json_cache").to_str().unwrap()])
+            .args(["--offline", "--assembly", "GRCh38"])
+            .args(["--hgvsg", "--hgvsg_use_accession"])
+            .args(["--fasta", dir.join("reference.fa.gz").to_str().unwrap()])
+            .args(["--force_overwrite", "--no_stats", "--quiet"])
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let rows: Vec<String> = std::fs::read_to_string(&output)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .map(str::to_string)
+            .collect();
+        let expected: Vec<String> = ACCESSION_ROWS
+            .iter()
+            .map(|row| row.replace("{name}", name))
+            .collect();
+        assert_eq!(rows, expected, "{name}");
+    }
+}
+
+/// The row of the record at `KI270728.1:17420` of the GRCh38-alt-contigs corpus,
+/// under an identifier of its own, with `--hgvsg --hgvsg_use_accession`: the
+/// one row Ensembl VEP 116.2 writes for it with a database connection under
+/// each of the scaffold's three names. `{name}` stands for the name as the
+/// input writes it.
+const SCAFFOLD_ACCESSION_ROW: &str = "scaffold_snv\t{name}:17420\tC\tENSG00000274175\tENST00000616638\tTranscript\tmissense_variant\t187\t157\t53\tS/P\tTcg/Ccg\t-\tIMPACT=MODERATE;STRAND=1;HGVSg=NT_187383.1:g.17420T>C";
+
+/// A sequence with no `NC_` synonym takes its RefSeq name: the unplaced
+/// scaffold `KI270728.1` prints `NT_187383.1` under its Ensembl name, its UCSC
+/// name and the RefSeq name itself, the slice's `RefSeq_genomic` synonym
+/// Ensembl VEP 116.2 prints with a database connection (ensembl-variation
+/// VariationFeature.pm 1912-1916); offline its lookup reads `NC_` names alone
+/// (OutputFactory.pm 1369-1370). The synonyms file holds the three lines
+/// Ensembl's table has for the scaffold, and the FASTA is a stand-in with the
+/// record's reference base at its position, all a substitution's notation
+/// reads.
+#[test]
+fn hgvsg_use_accession_names_a_scaffold_by_its_refseq_name() {
+    let dir = corpus("GRCh38-alt-contigs");
+    let out = tempfile::tempdir().unwrap();
+    let synonyms = out.path().join("chr_synonyms.txt");
+    std::fs::write(
+        &synonyms,
+        "NT_187383.1\tchr16_KI270728v1_random\n\
+         KI270728.1\tchr16_KI270728v1_random\n\
+         KI270728.1\tNT_187383.1\n",
+    )
+    .unwrap();
+    let position = 17420;
+    let sequence = format!("{}T{}", "N".repeat(position - 1), "N".repeat(60));
+    let fasta = out.path().join("scaffold.fa");
+    std::fs::write(&fasta, format!(">KI270728.1\n{sequence}\n")).unwrap();
+    std::fs::write(
+        out.path().join("scaffold.fa.fai"),
+        format!(
+            "KI270728.1\t{0}\t{1}\t{0}\t{2}\n",
+            sequence.len(),
+            ">KI270728.1\n".len(),
+            sequence.len() + 1
+        ),
+    )
+    .unwrap();
+    for name in ["KI270728.1", "chr16_KI270728v1_random", "NT_187383.1"] {
+        let input = out.path().join(format!("{name}.vcf"));
+        std::fs::write(
+            &input,
+            format!(
+                "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+                 {name}\t{position}\tscaffold_snv\tT\tC\t.\t.\t.\n"
+            ),
+        )
+        .unwrap();
+        let output = out.path().join(format!("{name}.txt"));
+        let result = common::isolated_vep_anywhere()
+            .args(["-i", input.to_str().unwrap()])
+            .args(["-o", output.to_str().unwrap()])
+            .args(["--json_cache", dir.join("json_cache").to_str().unwrap()])
+            .args(["--synonyms", synonyms.to_str().unwrap()])
+            .args(["--offline", "--assembly", "GRCh38"])
+            .args(["--hgvsg", "--hgvsg_use_accession"])
+            .args(["--fasta", fasta.to_str().unwrap()])
+            .args(["--force_overwrite", "--no_stats", "--quiet"])
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let rows: Vec<String> = std::fs::read_to_string(&output)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .map(str::to_string)
+            .collect();
+        assert_eq!(
+            rows,
+            [SCAFFOLD_ACCESSION_ROW.replace("{name}", name)],
+            "{name}"
+        );
+    }
+}
+
+/// A sequence the synonyms table gives no RefSeq name is printed under
+/// `--hgvsg_use_accession` by the cache's name for it, whatever the input
+/// writes: the cache's name itself, a synonym the table pairs with it, or a
+/// spelling the `chr` rule resolves. Ensembl VEP 116.2 prints the slice's own
+/// name for such a sequence with a database connection (ensembl-variation
+/// VariationFeature.pm 1916); offline it has no output for the record
+/// (OutputFactory.pm 1368-1372). The table is built here: one line pairing
+/// chromosome 21 with a name of no RefSeq form.
+#[test]
+fn hgvsg_use_accession_names_a_sequence_without_a_refseq_name_as_the_cache_does() {
+    let out = tempfile::tempdir().unwrap();
+    let synonyms = out.path().join("chr_synonyms.txt");
+    std::fs::write(&synonyms, "21\tsequence_21\n").unwrap();
+    let (record, expected) = RECORDS[0];
+    let fields = record.strip_prefix("21\t").unwrap();
+    for name in ["21", "sequence_21", "chr21"] {
+        let input = out.path().join(format!("{name}.vcf"));
+        std::fs::write(
+            &input,
+            format!(
+                "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+                 {name}\t{fields}\t.\t.\t.\n"
+            ),
+        )
+        .unwrap();
+        let output = out.path().join(format!("{name}.txt"));
+        let result = common::isolated_vep_anywhere()
+            .args(["-i", input.to_str().unwrap()])
+            .args(["-o", output.to_str().unwrap()])
+            .args([
+                "--json_cache",
+                corpus("GRCh37-hgvs").join("json_cache").to_str().unwrap(),
+            ])
+            .args(["--synonyms", synonyms.to_str().unwrap()])
+            .args(["--offline", "--assembly", "GRCh37"])
+            .args(["--hgvsg", "--hgvsg_use_accession"])
+            .args(["--fasta", corpus_fasta().to_str().unwrap()])
+            .args(["--force_overwrite", "--no_stats", "--quiet"])
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let written: Vec<String> = std::fs::read_to_string(&output)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .filter_map(|line| {
+                line.split('\t')
+                    .nth(13)?
+                    .split(';')
+                    .find_map(|pair| pair.strip_prefix("HGVSg="))
+                    .map(str::to_string)
+            })
+            .collect();
+        assert!(!written.is_empty(), "{name}: no row carries HGVSg");
+        for value in &written {
+            assert_eq!(value, expected, "{name}");
+        }
+    }
+}
+
+/// An `NC_` accession is taken wherever the table lists it among a name's
+/// synonyms: after a RefSeq name of another prefix it is the one printed, as
+/// Ensembl VEP's offline lookup keeps the `NC_` names alone (OutputFactory.pm
+/// 1370). The table is built here: chromosome 21 paired first with a name of
+/// another RefSeq prefix, then with an `NC_` name.
+#[test]
+fn hgvsg_use_accession_takes_an_nc_accession_listed_after_another_refseq_name() {
+    let out = tempfile::tempdir().unwrap();
+    let synonyms = out.path().join("chr_synonyms.txt");
+    std::fs::write(&synonyms, "21\tNT_000000021.1\n21\tNC_000021.8\n").unwrap();
+    let (record, notation) = RECORDS[0];
+    let expected = format!("NC_000021.8{}", notation.strip_prefix("21").unwrap());
+    let input = out.path().join("in.vcf");
+    std::fs::write(
+        &input,
+        format!(
+            "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+             {record}\t.\t.\t.\n"
+        ),
+    )
+    .unwrap();
+    let output = out.path().join("out.txt");
+    let result = common::isolated_vep_anywhere()
+        .args(["-i", input.to_str().unwrap()])
+        .args(["-o", output.to_str().unwrap()])
+        .args([
+            "--json_cache",
+            corpus("GRCh37-hgvs").join("json_cache").to_str().unwrap(),
+        ])
+        .args(["--synonyms", synonyms.to_str().unwrap()])
+        .args(["--offline", "--assembly", "GRCh37"])
+        .args(["--hgvsg", "--hgvsg_use_accession"])
+        .args(["--fasta", corpus_fasta().to_str().unwrap()])
+        .args(["--force_overwrite", "--no_stats", "--quiet"])
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let written: Vec<String> = std::fs::read_to_string(&output)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .filter_map(|line| {
+            line.split('\t')
+                .nth(13)?
+                .split(';')
+                .find_map(|pair| pair.strip_prefix("HGVSg="))
+                .map(str::to_string)
+        })
+        .collect();
+    assert!(!written.is_empty(), "no row carries HGVSg");
+    for value in &written {
+        assert_eq!(value, &expected);
+    }
+}
+
+/// Where the table lists one accession with and without its version, the
+/// versioned form is the one printed, whichever the table lists first and
+/// whichever of the three names the input writes: the sequence's name, the
+/// accession without its version, the accession with it. The tables are built
+/// here, one for an accession of another RefSeq prefix and one for an `NC_`
+/// accession, each listing the form without a version first.
+#[test]
+fn hgvsg_use_accession_takes_the_versioned_form_of_an_accession_listed_twice() {
+    let out = tempfile::tempdir().unwrap();
+    let (record, notation) = RECORDS[0];
+    let fields = record.strip_prefix("21\t").unwrap();
+    for (bare, versioned) in [
+        ("NT_000000021", "NT_000000021.4"),
+        ("NC_000021", "NC_000021.8"),
+    ] {
+        let synonyms = out.path().join(format!("{bare}.synonyms.txt"));
+        std::fs::write(
+            &synonyms,
+            format!("21\t{bare}\n21\t{versioned}\n{bare}\t{versioned}\n"),
+        )
+        .unwrap();
+        let expected = format!("{versioned}{}", notation.strip_prefix("21").unwrap());
+        for name in ["21", bare, versioned] {
+            let input = out.path().join(format!("{bare}.{name}.vcf"));
+            std::fs::write(
+                &input,
+                format!(
+                    "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+                     {name}\t{fields}\t.\t.\t.\n"
+                ),
+            )
+            .unwrap();
+            let output = out.path().join(format!("{bare}.{name}.txt"));
+            let result = common::isolated_vep_anywhere()
+                .args(["-i", input.to_str().unwrap()])
+                .args(["-o", output.to_str().unwrap()])
+                .args([
+                    "--json_cache",
+                    corpus("GRCh37-hgvs").join("json_cache").to_str().unwrap(),
+                ])
+                .args(["--synonyms", synonyms.to_str().unwrap()])
+                .args(["--offline", "--assembly", "GRCh37"])
+                .args(["--hgvsg", "--hgvsg_use_accession"])
+                .args(["--fasta", corpus_fasta().to_str().unwrap()])
+                .args(["--force_overwrite", "--no_stats", "--quiet"])
+                .output()
+                .unwrap();
+            assert!(
+                result.status.success(),
+                "{bare} {name}: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            let written: Vec<String> = std::fs::read_to_string(&output)
+                .unwrap()
+                .lines()
+                .filter(|line| !line.starts_with('#'))
+                .filter_map(|line| {
+                    line.split('\t')
+                        .nth(13)?
+                        .split(';')
+                        .find_map(|pair| pair.strip_prefix("HGVSg="))
+                        .map(str::to_string)
+                })
+                .collect();
+            assert!(!written.is_empty(), "{bare} {name}: no row carries HGVSg");
+            for value in &written {
+                assert_eq!(value, &expected, "{bare} {name}");
+            }
+        }
+    }
+}
+
+/// Where the table lists two versions of one accession for a sequence, the
+/// higher is the one printed, whichever the table lists first and whichever of
+/// the three names the input writes. A cache's table links the previous
+/// assembly's version of a sequence to it, and Ensembl VEP 116.2 with a
+/// database connection prints the version of the assembly the run reads, the
+/// higher (the slice's own `RefSeq_genomic` synonym, ensembl-variation
+/// VariationFeature.pm 1912-1916). The tables are built here, one for an
+/// accession of another RefSeq prefix and one for an `NC_` accession, each
+/// listing the lower version first.
+#[test]
+fn hgvsg_use_accession_takes_the_highest_version_of_an_accession_listed_twice() {
+    let out = tempfile::tempdir().unwrap();
+    let (record, notation) = RECORDS[0];
+    let fields = record.strip_prefix("21\t").unwrap();
+    for (lower, higher) in [
+        ("NT_000000021.2", "NT_000000021.3"),
+        ("NC_000021.7", "NC_000021.8"),
+    ] {
+        let synonyms = out.path().join(format!("{lower}.synonyms.txt"));
+        std::fs::write(
+            &synonyms,
+            format!("21\t{lower}\n21\t{higher}\n{lower}\t{higher}\n"),
+        )
+        .unwrap();
+        let expected = format!("{higher}{}", notation.strip_prefix("21").unwrap());
+        for name in ["21", lower, higher] {
+            let input = out.path().join(format!("{lower}.{name}.vcf"));
+            std::fs::write(
+                &input,
+                format!(
+                    "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+                     {name}\t{fields}\t.\t.\t.\n"
+                ),
+            )
+            .unwrap();
+            let output = out.path().join(format!("{lower}.{name}.txt"));
+            let result = common::isolated_vep_anywhere()
+                .args(["-i", input.to_str().unwrap()])
+                .args(["-o", output.to_str().unwrap()])
+                .args([
+                    "--json_cache",
+                    corpus("GRCh37-hgvs").join("json_cache").to_str().unwrap(),
+                ])
+                .args(["--synonyms", synonyms.to_str().unwrap()])
+                .args(["--offline", "--assembly", "GRCh37"])
+                .args(["--hgvsg", "--hgvsg_use_accession"])
+                .args(["--fasta", corpus_fasta().to_str().unwrap()])
+                .args(["--force_overwrite", "--no_stats", "--quiet"])
+                .output()
+                .unwrap();
+            assert!(
+                result.status.success(),
+                "{lower} {name}: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            let written: Vec<String> = std::fs::read_to_string(&output)
+                .unwrap()
+                .lines()
+                .filter(|line| !line.starts_with('#'))
+                .filter_map(|line| {
+                    line.split('\t')
+                        .nth(13)?
+                        .split(';')
+                        .find_map(|pair| pair.strip_prefix("HGVSg="))
+                        .map(str::to_string)
+                })
+                .collect();
+            assert!(!written.is_empty(), "{lower} {name}: no row carries HGVSg");
+            for value in &written {
+                assert_eq!(value, &expected, "{lower} {name}");
+            }
+        }
+    }
+}
+
+/// The `--ga4gh_vrs` object names the sequence by the accession the row's
+/// HGVSg carries under `--hgvsg_use_accession`: where the table lists the
+/// chromosome's `NC_` accession in more than one form, both take the latest,
+/// the versioned form over the one without a version and the higher of two
+/// versions. The tables are built here, each listing the earlier form first.
+#[test]
+fn ga4gh_vrs_object_names_the_accession_the_hgvsg_names() {
+    let out = tempfile::tempdir().unwrap();
+    let (record, _) = RECORDS[0];
+    for (earlier, later) in [("NC_000021", "NC_000021.8"), ("NC_000021.7", "NC_000021.8")] {
+        let synonyms = out.path().join(format!("{earlier}.synonyms.txt"));
+        std::fs::write(
+            &synonyms,
+            format!("21\t{earlier}\n21\t{later}\n{earlier}\t{later}\n"),
+        )
+        .unwrap();
+        let input = out.path().join(format!("{earlier}.vcf"));
+        std::fs::write(
+            &input,
+            format!(
+                "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+                 {record}\t.\t.\t.\n"
+            ),
+        )
+        .unwrap();
+        let output = out.path().join(format!("{earlier}.txt"));
+        let result = common::isolated_vep_anywhere()
+            .args(["-i", input.to_str().unwrap()])
+            .args(["-o", output.to_str().unwrap()])
+            .args([
+                "--json_cache",
+                corpus("GRCh37-hgvs").join("json_cache").to_str().unwrap(),
+            ])
+            .args(["--synonyms", synonyms.to_str().unwrap()])
+            .args(["--offline", "--assembly", "GRCh37"])
+            .args(["--hgvsg", "--hgvsg_use_accession", "--ga4gh_vrs"])
+            .args(["--fasta", corpus_fasta().to_str().unwrap()])
+            .args(["--force_overwrite", "--no_stats", "--quiet"])
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{earlier}: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let text = std::fs::read_to_string(&output).unwrap();
+        let extras: Vec<&str> = text
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .filter_map(|line| line.split('\t').nth(13))
+            .collect();
+        assert!(!extras.is_empty(), "{earlier}: no row");
+        for extra in extras {
+            let named = |key: &str, end: &[char]| {
+                let (_, rest) = extra.split_once(key)?;
+                Some(rest.split(end).next().unwrap_or(rest))
+            };
+            assert_eq!(named("HGVSg=", &[':']), Some(later), "{earlier}: {extra}");
+            assert_eq!(
+                named("refseq:", &['"', '\\']),
+                Some(later),
+                "{earlier}: {extra}"
+            );
+        }
+    }
 }

@@ -1,0 +1,32 @@
+entry = "custom_chr_pattern_later_source"
+page = "docs/custom-annotation.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the ###CHR### placeholder of the --custom file option (Ensembl VEP documentation, \"Custom annotations\", \"Multiple files split by chromosome\"); not seen in the measured datasets; classed by its most reachable shape, files named for chromosomes the run does not try: a pattern with no file breaks the file option's valid path"
+notes = "The pattern is the second --custom source and matches no file. Ensembl VEP writes the row with the first source's records and no `missing` key, header line or warning; vep-rs exits 1 with `No files with pattern <file> were found`. The same pattern as the first source makes Ensembl VEP die with the same text."
+
+[input]
+format = "vcf"
+text = """
+21	5028997	.	TCA	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+
+[run]
+flags = [
+  "--custom", "file={corpus}/custom/regions.bed.gz,short_name=regions,format=bed,type=overlap",
+  "--custom", "file={corpus}/custom/missing_###CHR###.bed.gz,short_name=missing,format=bed,type=overlap",
+]
+format = "default"
+
+[compare]
+kind = "exit"
+
+[expected]
+ensembl_vep = ["0"]
+vep_rs = ["1"]

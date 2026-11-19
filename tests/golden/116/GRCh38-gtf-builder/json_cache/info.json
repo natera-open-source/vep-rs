@@ -1,0 +1,13 @@
+{
+  "species": "homo_sapiens",
+  "assembly": "GRCh38",
+  "cache_version": 116,
+  "regulatory": false,
+  "source_versions": {
+    "assembly": "GRCh38.p14",
+    "genebuild": "2025-11"
+  },
+  "contig_order": [
+    "21"
+  ]
+}

@@ -1,0 +1,33 @@
+entry = "reference_skipped_record"
+page = "docs/divergences/defect-c.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "1 · 0.26 per million · no flag needed"
+notes = "A multi-allelic symbolic list with no type of its own: Ensembl VEP marks the record skipped and drops it; vep-rs writes one row per ALT under each ALT's own class."
+
+[input]
+format = "vcf"
+text = """
+21	30165800	multi_ins_del	N	<INS>,<DEL>	.	.	END=30166000
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-input-compressed/json_cache"
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = "multi_ins_del" }
+columns = ["Location", "Allele", "Feature", "Consequence"]
+
+[expected]
+ensembl_vep = []
+vep_rs = [
+  "21:30165801-30166000 | deletion | ENST00000286808 | frameshift_variant,stop_lost,feature_truncation,3_prime_UTR_variant",
+  "21:30165801-30166000 | insertion | ENST00000286808 | feature_elongation,coding_sequence_variant,3_prime_UTR_variant",
+]

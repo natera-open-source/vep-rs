@@ -1,77 +1,77 @@
 # Quick start
 
-This page takes a freshly built `vep` from its first run on the bundled corpus to annotating your own VCF with a transcript cache and plugins.
+Start with a freshly built `vep`: run the bundled example, install a transcript cache, then annotate your own VCF, with plugins where you need them.
 
-## 1. Try the bundled corpus
+## 1. Try the bundled example
 
-This needs no download. It runs the bundled 1,008-record excerpt of the benchmark datasets against the pruned GRCh37 cache that ships in `tests/golden/`:
+This needs no download. It annotates `examples/homo_sapiens_GRCh37.vcf`, 175 records cut from the GRCh37 golden corpus, against the pruned cache that ships beside that corpus in `tests/golden/`. The repository's `examples/README.md` describes both example files:
 
 ```bash
 target/release/vep \
   --json_cache tests/golden/116/GRCh37/json_cache \
   --assembly GRCh37 \
-  -i tests/golden/116/GRCh37/variants.vcf -o output.txt
+  -i examples/homo_sapiens_GRCh37.vcf -o output.txt
 ```
 
 ## 2. Get a transcript cache
 
-For real data you need a JSON transcript cache. Build one natively with `vep-cache-builder` (GRCh38 shown; [Cache setup](../cache-setup.md) explains each input and gives the GRCh37 command):
+For real data you need a JSON transcript cache. One command installs a release's cache and its indexed genome FASTA under `$HOME/.vep` in the layout `vep` resolves. The command shows GRCh38, and `GRCh37` in its place works the same. [Cache setup](../cache-setup.md) explains each input:
 
 ```bash
 # Ensembl release 116, GRCh38
-wget https://ftp.ensembl.org/pub/release-116/gtf/homo_sapiens/\
-Homo_sapiens.GRCh38.116.gtf.gz
-wget https://ftp.ensembl.org/pub/release-116/fasta/homo_sapiens/dna/\
-Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-gunzip Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-samtools faidx Homo_sapiens.GRCh38.dna.primary_assembly.fa
-
 cargo build --release -p vep-cache-builder
-target/release/vep-cache-builder \
-  --species homo_sapiens --assembly GRCh38 --release 116 \
-  --gtf Homo_sapiens.GRCh38.116.gtf.gz \
-  --genome-fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa \
-  --output-dir $HOME/.vep/json_cache/homo_sapiens/116_GRCh38
+target/release/vep-cache-builder --auto homo_sapiens GRCh38 --release 116 \
+  --dir_cache $HOME/.vep
 ```
 
-Or convert an existing Ensembl VEP cache with `scripts/data/storable_to_json.pl` ([scripts/README.md](../../scripts/README.md)).
+The cache lands at `$HOME/.vep/homo_sapiens/116_GRCh38`. It is about 1.6 GB of downloads checked against Ensembl's `CHECKSUMS` files, with no `wget`, `gunzip` or `samtools` step.
+
+The inputs can also be named one flag at a time. A GTF alone, with the genome, builds the cache Ensembl VEP's `--gtf` would annotate from instead ([A GTF or GFF3 as the transcript model](../cache-from-gtf-or-gff3.md)). Or convert an existing Ensembl VEP cache with `scripts/data/storable_to_json.pl` ([scripts/README.md](../../scripts/README.md)).
 
 ## 3. Annotate
 
-Run the same VEP command you run, with `--json_cache` naming the cache directory. That is the directory holding `info.json` and `transcripts/`, so `116_GRCh38` itself, not its parent:
+Run the same command you run with Ensembl VEP. Name the cache root with `--dir_cache`, as Ensembl VEP does. Or name the cache directory itself, the one holding `info.json` and `transcripts/`, with `--json_cache`:
 
 ```bash
 target/release/vep \
-  --json_cache $HOME/.vep/json_cache/homo_sapiens/116_GRCh38 \
-  --assembly GRCh38 \
+  --dir_cache $HOME/.vep --cache_version 116 --assembly GRCh38 \
   -i input.vcf -o output.txt
 ```
 
 ## Usage
 
 ```bash
-# With annotation plugins, on data staged by scripts/data/setup_plugin_data.sh
+# With annotation plugins: REVEL on data staged by
+# scripts/data/setup_plugin_data.sh, CADD on your own file
 plugin_data=$HOME/.vep/plugin_data/grch38/full
+cadd_snv=/path/to/your/snv.tsv.gz
 target/release/vep \
-  --json_cache $HOME/.vep/json_cache/homo_sapiens/116_GRCh38 \
+  --json_cache $HOME/.vep/homo_sapiens/116_GRCh38 \
   --assembly GRCh38 \
-  --plugin CADD,snv=$plugin_data/cadd/whole_genome_SNVs.tsv.gz \
+  --plugin CADD,snv=$cadd_snv \
   --plugin REVEL,file=$plugin_data/revel/revel.tsv.gz \
   -i input.vcf -o output.txt --force_overwrite
 
 # JSON output with HGVS notation
 target/release/vep \
-  --json_cache $HOME/.vep/json_cache/homo_sapiens/116_GRCh38 \
+  --json_cache $HOME/.vep/homo_sapiens/116_GRCh38 \
   --assembly GRCh38 --json \
-  --fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa \
   --hgvs --everything \
   -i input.vcf -o output.json
 ```
 
-**Output formats.** VEP default (the tab-delimited text format with the `Extra` column), `--vcf` (annotations in the `CSQ` INFO field), `--json` (one object per variant) and `--tab` match Ensembl VEP's layouts. `--output_format parquet` is vep-rs's own, written through the `duckdb` CLI (1.3.2 or newer on PATH). Field-level specs are in [Output formats](../output-formats.md).
+**Plugins.** `--plugin <Name>,<params>` resolves a built-in plugin first, and otherwise loads a C-ABI shared library from `--dir_plugins`. Support is per reference genome: `--assembly` selects the right column and refuses a data file whose own assembly contradicts it. The support table, the data files and how to write a plugin are in [Plugins](../plugins.md).
 
-**Plugins.** `--plugin <Name>,<params>` resolves one of the eleven built-in plugins first (ten with supported data), and otherwise loads a C-ABI dynamic library from `--dir_plugins`. Support is per reference genome: `--assembly` selects the right column and refuses a data file whose own assembly contradicts it. The support matrix, the data files and how to write a plugin are in [Plugins](../plugins.md).
+**HGVS.** The FASTA `--auto` places in the cache directory is found without a flag. `--fasta` takes a `samtools faidx`-indexed genome, plain or compressed with `bgzip` (Ensembl's `dna_index` files), and gives `--hgvs` the reference context for the 3' shifting of indels. `--hgvs` without a FASTA is refused, as Ensembl VEP refuses it offline.
 
-**HGVS.** `--fasta` takes a `samtools faidx`-indexed genome, plain or compressed with `bgzip` (Ensembl's `dna_index` files), and gives `--hgvs` the reference context for the 3' shifting of indels; `--hgvs` without a FASTA is refused, as Ensembl VEP refuses it offline.
+**Output formats.** The first four match Ensembl VEP's layouts, and the fifth is vep-rs's own:
+
+- VEP default: the tab-delimited text format with the `Extra` column.
+- `--vcf`: annotations in the `CSQ` INFO field.
+- `--json`: one object per variant.
+- `--tab`.
+- `--output_format parquet`: a directory of typed Parquet parts written natively, with no external tool.
+
+Field-level specs are in [Output formats](../output-formats.md).
 
 **All flags.** The [CLI reference](../cli-reference.md) is the complete flag reference, including the flags accepted for Ensembl VEP compatibility but not implemented.

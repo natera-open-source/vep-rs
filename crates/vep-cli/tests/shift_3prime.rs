@@ -86,10 +86,12 @@ fn protein_cells(rows: &[String], transcript: &str) -> [String; 4] {
 /// reference peptide that is the stop (Utils/VariationEffect.pm:1554), the
 /// type is read from the peptides `*` and the partial-codon `X`, both `X` once
 /// `_get_hgvs_protein_type` rewrites the stop (TranscriptVariationAllele.pm:2060-2061),
-/// and the equal three-letter peptides print `p.Ter687=` (:1911-1912), the
-/// row's terms `stop_lost` and its peptides `*/X`.
+/// and the equal three-letter peptides would print the stop as unchanged
+/// (:1911-1912) beside the row's terms `stop_lost` and its peptides `*/X`. The
+/// stop is lost: the whole protein is kept and residues follow it, so the
+/// notation is the extension named at the stop that the two proteins give.
 #[test]
-fn a_deletion_shifted_onto_the_stop_codon_prints_ter_equals_under_shift_3prime() {
+fn a_deletion_shifted_onto_the_stop_codon_is_an_extension_under_shift_3prime() {
     let dir = tempfile::tempdir().unwrap();
     let record = "21\t34716478\tdel_bad\tAGG\tA\t.\t.\t.\n";
     let shifted = annotate(
@@ -100,11 +102,16 @@ fn a_deletion_shifted_onto_the_stop_codon_prints_ter_equals_under_shift_3prime()
     );
     assert_eq!(
         protein_cells(&shifted, "ENST00000349499"),
-        ["stop_lost", "*/X", "TGa/a", "ENSP00000290332.4:p.Ter687%3D"]
+        [
+            "stop_lost",
+            "*/X",
+            "TGa/a",
+            "ENSP00000290332.4:p.Ter687LysextTer12"
+        ]
     );
     assert_eq!(
         protein_cells(&shifted, "ENST00000360731")[3],
-        "ENSP00000353959.3:p.Ter705%3D"
+        "ENSP00000353959.3:p.Ter705LysextTer12"
     );
     let unshifted = annotate(dir.path(), "unshifted", record, &["--hgvs"]);
     assert_eq!(
@@ -217,4 +224,64 @@ fn the_reference_row_is_read_at_the_alternates_shifted_span() {
     );
     assert_eq!(&cells[1][2..5], ["2295-2298", "1900-1903", "634-635"]);
     assert_eq!(cells[1][6], "1");
+}
+
+/// `shift_3prime=i` and `shift_genomic=i` (Config.pm:231-232) are read for
+/// truth alone (AnnotationType/Transcript.pm:162, OutputFactory.pm:1349, 1992),
+/// so any integer but 0 writes the rows of `1` and a spelling of zero the rows
+/// of `0`. The command line's value is the number Getopt::Long stores; a
+/// `--config` file's stays its text (Config.pm:1101), true unless it is `0`, so
+/// `00` shifts from a file and not on the command line. The record is the
+/// deletion `21 34716319 AGATT A`, which moves one base on CLIC6.
+#[test]
+fn any_integer_but_zero_shifts_as_one_does() {
+    let dir = tempfile::tempdir().unwrap();
+    let record = "21\t34716319\tdel_boundary\tAGATT\tA\t.\t.\t.\n";
+    let rows = |shift_3prime: &str, shift_genomic: &str| {
+        annotate(
+            dir.path(),
+            "typed",
+            record,
+            &[
+                "--hgvs",
+                "--shift_length",
+                "--shift_3prime",
+                shift_3prime,
+                "--shift_genomic",
+                shift_genomic,
+            ],
+        )
+    };
+    let shifted = rows("1", "1");
+    let unshifted = rows("0", "1");
+    let location_kept = rows("1", "0");
+    assert_ne!(shifted, unshifted);
+    assert_ne!(shifted, location_kept);
+    assert_ne!(unshifted, location_kept);
+    for value in ["2", "10", "-1", "+1", "01", "1_0", "2\n"] {
+        assert_eq!(rows(value, "1"), shifted, "--shift_3prime {value:?}");
+        assert_eq!(rows("1", value), shifted, "--shift_genomic {value:?}");
+    }
+    for value in ["00", "-0", "+0", "0_0", "0\n"] {
+        assert_eq!(rows(value, "1"), unshifted, "--shift_3prime {value:?}");
+        assert_eq!(rows("1", value), location_kept, "--shift_genomic {value:?}");
+    }
+    let config = dir.path().join("flags.ini");
+    for (value, expected) in [("00", &shifted), ("2", &shifted), ("0", &unshifted)] {
+        std::fs::write(&config, format!("shift_3prime {value}\n")).unwrap();
+        let from_file = annotate(
+            dir.path(),
+            "from-file",
+            record,
+            &[
+                "--hgvs",
+                "--shift_length",
+                "--shift_genomic",
+                "1",
+                "--config",
+                config.to_str().unwrap(),
+            ],
+        );
+        assert_eq!(&from_file, expected, "shift_3prime {value} in a file");
+    }
 }

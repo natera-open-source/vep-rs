@@ -1,0 +1,34 @@
+entry = "tabix_allele_case_insensitive_match"
+page = "docs/plugins.md#3-a-score-table-row-whose-alleles-are-written-in-lower-case"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", REF and ALT (bases case insensitive), which the SpliceAI and gnomADMt fixture tables follow, and under the AVI plugin's header (AVI.pm:24-58), which sets no letter case for its table's alleles; not seen in the measured datasets"
+notes = "AVI, the plugin the entry names; the corpus table with the 21:5030633 C>T row's alleles lower-cased and re-indexed."
+prepare = [
+  "zcat \"$CORPUS/avi_scores.synthetic.tsv.gz\" | awk -F'\\t' -v OFS='\\t' '$1 == \"chr21\" && $2 == 5030633 && $4 == \"T\" { $3 = \"c\"; $4 = \"t\" } { print }' | bgzip -c > \"$STAGE/avi_scores.lower.synthetic.tsv.gz\"",
+  "tabix -s 1 -b 2 -e 2 \"$STAGE/avi_scores.lower.synthetic.tsv.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	5030633	.	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-avi/json_cache"
+
+[run]
+flags = ["--plugin", "AVI,file={stage}/avi_scores.lower.synthetic.tsv.gz,raw=1,links=1"]
+
+[compare]
+kind = "field"
+field = "AVI_PHRED"
+where = { record = "21_5030633_C/T" }
+
+[expected]
+ensembl_vep = ["-"]
+vep_rs = ["3.465"]

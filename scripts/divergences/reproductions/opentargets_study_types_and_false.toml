@@ -1,0 +1,34 @@
+entry = "opentargets_study_types_and_false"
+page = "docs/plugins/annotation-store.md#opentargets"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the file option of the OpenTargets plugin's header (GWAS or QTL annotations, or both); not seen in the measured datasets; classed by its most reachable shape, a one-family export under the default study_types: lead_variants_only=false breaks the header's \"1 (filtered) or 0 (unfiltered)\""
+notes = "Of the two behaviours the entry names this reproduces the first, a GWAS-only export under the default study_types; Ensembl VEP writes `Failed to instantiate plugin OpenTargets` to its warnings file and no row carries an OpenTargets_ field. The second, `lead_variants_only=false`, is read as true by Ensembl VEP and refused by vep-rs."
+# The committed export split to its GWAS family as Ensembl VEP's plugin documents: the header, the gwas rows, columns 1-19.
+prepare = [
+  "zcat \"$CORPUS/open_targets_vep.slice.tsv.gz\" | awk -F\"\t\" 'NR == 1 || $7 == \"gwas\"' | cut -f 1-19 | bgzip -c > \"$STAGE/open_targets_gwas.tsv.gz\" && tabix -s 1 -b 2 -e 2 \"$STAGE/open_targets_gwas.tsv.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	14979687	ot_gwas_insertion_lead	G	GT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-opentargets/json_cache"
+
+[run]
+flags = ["--plugin", "OpenTargets,file={stage}/open_targets_gwas.tsv.gz"]
+
+[compare]
+kind = "rows"
+where = { record = "ot_gwas_insertion_lead", feature = "ENST00000318948" }
+columns = ["Feature", "OpenTargets_gwasLocusToGeneScore", "OpenTargets_gwasGeneId", "OpenTargets_gwasDiseases"]
+
+[expected]
+ensembl_vep = ["ENST00000318948 | - | - | -"]
+vep_rs = ["ENST00000318948 | 0.84708172082901 | ENSG00000180530 | EFO_0009188"]

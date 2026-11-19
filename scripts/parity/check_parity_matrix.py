@@ -34,7 +34,18 @@ request when:
   work proved more or less than its target is changed by a target decision, never landed under
   another target; a bare `landed` is an error and an `excluded` row never lands;
 - a `removed` row is landed while args.rs still declares its flag;
-- a `perl_reference` is empty (`-` is the value for an item with none).
+- a `perl_reference` is empty (`-` is the value for an item with none);
+- the plugin support table of docs/plugins.md disagrees with the matrix. The table is the six-column
+  table under the `## Support table` heading, one row per Ensembl VEP plugin, its first cell the
+  plugin name (linked or bare) and its fifth the status. Every table row names a matrix row (its
+  `item`), and the status fixes the row's `target`: `supported, verified on real data` and
+  `supported on the user's licensed file, verified on synthetic fixtures` are `implemented`, `not ported`
+  is `error`; a supported status also needs the row landed, since the table's "verified" is a claim
+  about shipped code, and `not ported` fits any open row, whatever its target. Every plugin row of
+  the matrix, one whose `perl_reference` is `<item>.pm`, has a table row; a plugin row named
+  otherwise (LoFTEE's `LoF.pm`) is checked through its table row alone. The rows keep alphabetical
+  order of the plugin name, case ignored. A row without six cells, a status outside the three
+  phrases or an empty or repeated name is malformed.
 
 `interim` names a refusal or stop-gap shipped before the row lands, as the test that proves it.
 
@@ -72,6 +83,17 @@ NEEDS_TEST2 = ("implemented", "documented_subset")
 MATRIX = Path("tests/parity/matrix.tsv")
 ARGS_RS = Path("crates/vep-cli/src/args.rs")
 RUST_TEST = Path("crates/vep-cli/tests/parity_matrix.rs")
+PLUGINS_PAGE = Path("docs/plugins.md")
+SUPPORT_TABLE_HEADING = "## Support table"
+SUPPORT_TABLE_COLUMNS = 6
+STATUS_TARGETS = {
+    "supported, verified on real data": "implemented",
+    "supported on the user's licensed file, verified on synthetic fixtures": "implemented",
+    "not ported": "error",
+}
+# A table cell that is one Markdown link: the plugin name is its text.
+LINK_CELL_RE = re.compile(r"^\[([^\]]+)\]\([^)]*\)$")
+SEPARATOR_ROW_RE = re.compile(r"^\|[\s:|-]*\|$")
 TEST_PATH_RE = re.compile(r"^(crates/[A-Za-z0-9_./-]+\.rs)::([A-Za-z_][A-Za-z0-9_]*)$")
 SCRIPT_TEST_RE = re.compile(
     r"^(scripts/[A-Za-z0-9_./-]+/test_[A-Za-z0-9_]+\.py)::(test_[A-Za-z0-9_]*)$"
@@ -258,6 +280,119 @@ def read_matrix(root: Path) -> tuple[list[dict], list[str]]:
         elif state != "open" and not state.startswith("landed:"):
             errors.append(f"{where}: state {state!r} is not open or landed:<target>")
     return rows, errors
+
+
+def table_cells(line: str) -> list[str]:
+    """The cells of a Markdown table row, split on the pipes not escaped as `\\|`, each stripped."""
+    inner = line.strip().removeprefix("|")
+    if inner.endswith("|") and not inner.endswith("\\|"):
+        inner = inner[:-1]
+    return [cell.replace("\\|", "|").strip() for cell in re.split(r"(?<!\\)\|", inner)]
+
+
+def read_support_table(root: Path) -> tuple[list[dict], list[str]]:
+    """The rows of the plugin support table, each `{"name", "status", "lineno"}`, or the reasons the
+    table cannot be read: the page or the heading missing, no table under the heading, no separator
+    row, a header, separator or row without six cells, a status outside STATUS_TARGETS, an empty or
+    a repeated name."""
+    page = root / PLUGINS_PAGE
+    if not page.is_file():
+        return [], [f"{PLUGINS_PAGE} is missing"]
+    lines = page.read_text(encoding="utf-8").splitlines()
+    heading = next(
+        (i for i, line in enumerate(lines) if line.strip() == SUPPORT_TABLE_HEADING), None
+    )
+    if heading is None:
+        return [], [f"{PLUGINS_PAGE}: no {SUPPORT_TABLE_HEADING!r} heading"]
+    header = None
+    for index in range(heading + 1, len(lines)):
+        if lines[index].startswith("#"):
+            break
+        if lines[index].lstrip().startswith("|"):
+            header = index
+            break
+    if header is None:
+        return [], [f"{PLUGINS_PAGE}: no table under {SUPPORT_TABLE_HEADING!r}"]
+    malformed = f"{PLUGINS_PAGE}: support table malformed at line"
+    header_cells = len(table_cells(lines[header]))
+    if header_cells != SUPPORT_TABLE_COLUMNS:
+        return [], [
+            f"{malformed} {header + 1}: the header has {header_cells} cells, not {SUPPORT_TABLE_COLUMNS}"
+        ]
+    if header + 1 >= len(lines) or not SEPARATOR_ROW_RE.match(lines[header + 1].strip()):
+        return [], [f"{malformed} {header + 2}: no separator row"]
+    separator_cells = len(table_cells(lines[header + 1]))
+    if separator_cells != SUPPORT_TABLE_COLUMNS:
+        return [], [
+            f"{malformed} {header + 2}: the separator has {separator_cells} cells, not {SUPPORT_TABLE_COLUMNS}"
+        ]
+    rows: list[dict] = []
+    errors: list[str] = []
+    seen: dict[str, int] = {}
+    for index in range(header + 2, len(lines)):
+        line = lines[index]
+        if not line.lstrip().startswith("|"):
+            break
+        lineno = index + 1
+        cells = table_cells(line)
+        if len(cells) != SUPPORT_TABLE_COLUMNS:
+            errors.append(f"{malformed} {lineno}: {len(cells)} cells, not {SUPPORT_TABLE_COLUMNS}")
+            continue
+        link = LINK_CELL_RE.match(cells[0])
+        name = link.group(1) if link else cells[0]
+        status = cells[4]
+        if not name:
+            errors.append(f"{malformed} {lineno}: empty plugin name")
+        elif name in seen:
+            errors.append(f"{malformed} {lineno}: {name} repeats line {seen[name]}")
+        else:
+            seen[name] = lineno
+        if status not in STATUS_TARGETS:
+            phrases = ", ".join(repr(phrase) for phrase in STATUS_TARGETS)
+            errors.append(f"{malformed} {lineno}: status {status!r} is not one of {phrases}")
+        rows.append({"name": name, "status": status, "lineno": lineno})
+    return rows, errors
+
+
+def check_support_table(table: list[dict], rows: list[dict]) -> list[str]:
+    """One error per table row without a matrix row, whose supported status names an open matrix
+    row, or whose status contradicts a landed row's target (`not ported` fits any open row: vep-rs
+    ships no such plugin until the row lands); one per row that sorts before the row above it, case
+    ignored; and one per plugin row of the matrix (`perl_reference` equal to `<item>.pm`) the table
+    lacks. A status outside STATUS_TARGETS asserts no target; `read_support_table` reports it."""
+    errors: list[str] = []
+    by_item = {row["item"]: row for row in rows}
+    previous = ""
+    for entry in table:
+        name, status = entry["name"], entry["status"]
+        if name.casefold() < previous.casefold():
+            errors.append(
+                f"{PLUGINS_PAGE}: support table row {name} is out of alphabetical order after {previous}"
+            )
+        previous = name
+        row = by_item.get(name)
+        target = STATUS_TARGETS.get(status)
+        if row is None:
+            errors.append(f"{PLUGINS_PAGE}: support table row {name} has no matrix row")
+        elif row["state"] == "open":
+            if target == "implemented":
+                errors.append(
+                    f"{PLUGINS_PAGE}: support table row {name} status {status} names an open matrix row"
+                )
+        elif target is not None and target != row["target"]:
+            errors.append(
+                f"{PLUGINS_PAGE}: support table row {name} status {status} "
+                f"does not match target {row['target']}"
+            )
+    named = {entry["name"] for entry in table}
+    for row in rows:
+        item = row["item"]
+        if row["perl_reference"] == f"{item}.pm" and item not in named:
+            errors.append(
+                f"{MATRIX}:{row['lineno']}: {item} is a plugin row (perl_reference {item}.pm) "
+                "absent from the support table"
+            )
+    return errors
 
 
 def entries(cell: str) -> list[str]:
@@ -486,9 +621,13 @@ def check(root: Path) -> tuple[list[str], str]:
     rows, errors = read_matrix(root)
     if errors:
         return errors, ""
+    table, errors = read_support_table(root)
+    if errors:
+        return errors, ""
     items = {row["item"] for row in rows}
 
     flags, errors = scan_args(args_rs.read_text(encoding="utf-8", errors="replace"))
+    errors.extend(check_support_table(table, rows))
     declared = {flag.replace("-", "_") for flag in flags}
     for flag in flags:
         name = flag.replace("-", "_")
@@ -542,7 +681,10 @@ def check(root: Path) -> tuple[list[str], str]:
         if manifest is not None and reason is None:
             errors.extend(covers_outside_matrix(entry, manifest, items))
 
-    summary = f"parity: {len(rows)} rows, {len(flags)} flags covered, {landed} landed, {interim} interim entries resolve"
+    summary = (
+        f"parity: {len(rows)} rows, {len(flags)} flags covered, {landed} landed, "
+        f"{interim} interim entries resolve, {len(table)} support table rows"
+    )
     return errors, summary
 
 

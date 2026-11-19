@@ -1,0 +1,345 @@
+[
+  {
+    "stable_id": "ENST00000657104",
+    "version": 1,
+    "gene_stable_id": "ENSG00000184856",
+    "start": 22098616,
+    "end": 22116605,
+    "strand": 1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "LINC00308",
+    "is_canonical": 1,
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00003873878",
+        "start": 22098616,
+        "end": 22098712,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001643098",
+        "start": 22109446,
+        "end": 22109553,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003869352",
+        "start": 22114958,
+        "end": 22115112,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003882553",
+        "start": 22116336,
+        "end": 22116605,
+        "rank": 4,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "gencode_primary",
+        "value": "GENCODE primary"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 22098713,
+          "end": 22109445,
+          "rank": 1
+        },
+        {
+          "start": 22109554,
+          "end": 22114957,
+          "rank": 2
+        },
+        {
+          "start": 22115113,
+          "end": 22116335,
+          "rank": 3
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 97,
+            "to_start": 22098616,
+            "to_end": 22098712,
+            "ori": 1
+          },
+          {
+            "from_start": 98,
+            "from_end": 205,
+            "to_start": 22109446,
+            "to_end": 22109553,
+            "ori": 1
+          },
+          {
+            "from_start": 206,
+            "from_end": 360,
+            "to_start": 22114958,
+            "to_end": 22115112,
+            "ori": 1
+          },
+          {
+            "from_start": 361,
+            "from_end": 630,
+            "to_start": 22116336,
+            "to_end": 22116605,
+            "ori": 1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00003873878",
+          "start": 22098616,
+          "end": 22098712,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001643098",
+          "start": 22109446,
+          "end": 22109553,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00003869352",
+          "start": 22114958,
+          "end": 22115112,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00003882553",
+          "start": 22116336,
+          "end": 22116605,
+          "rank": 4,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000419431",
+    "version": 2,
+    "gene_stable_id": "ENSG00000184856",
+    "start": 22098617,
+    "end": 22116528,
+    "strand": 1,
+    "biotype": "lncRNA",
+    "source": "havana",
+    "gene_symbol": "LINC00308",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00001543427",
+        "start": 22098617,
+        "end": 22098712,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001643098",
+        "start": 22109446,
+        "end": 22109553,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001794212",
+        "start": 22111771,
+        "end": 22111826,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001798738",
+        "start": 22114760,
+        "end": 22114898,
+        "rank": 4,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001684289",
+        "start": 22114978,
+        "end": 22115112,
+        "rank": 5,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001612574",
+        "start": 22116336,
+        "end": 22116528,
+        "rank": 6,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "value": "GENCODE basic"
+      },
+      {
+        "code": "TSL",
+        "value": "tsl5"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 22098713,
+          "end": 22109445,
+          "rank": 1
+        },
+        {
+          "start": 22109554,
+          "end": 22111770,
+          "rank": 2
+        },
+        {
+          "start": 22111827,
+          "end": 22114759,
+          "rank": 3
+        },
+        {
+          "start": 22114899,
+          "end": 22114977,
+          "rank": 4
+        },
+        {
+          "start": 22115113,
+          "end": 22116335,
+          "rank": 5
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 96,
+            "to_start": 22098617,
+            "to_end": 22098712,
+            "ori": 1
+          },
+          {
+            "from_start": 97,
+            "from_end": 204,
+            "to_start": 22109446,
+            "to_end": 22109553,
+            "ori": 1
+          },
+          {
+            "from_start": 205,
+            "from_end": 260,
+            "to_start": 22111771,
+            "to_end": 22111826,
+            "ori": 1
+          },
+          {
+            "from_start": 261,
+            "from_end": 399,
+            "to_start": 22114760,
+            "to_end": 22114898,
+            "ori": 1
+          },
+          {
+            "from_start": 400,
+            "from_end": 534,
+            "to_start": 22114978,
+            "to_end": 22115112,
+            "ori": 1
+          },
+          {
+            "from_start": 535,
+            "from_end": 727,
+            "to_start": 22116336,
+            "to_end": 22116528,
+            "ori": 1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00001543427",
+          "start": 22098617,
+          "end": 22098712,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001643098",
+          "start": 22109446,
+          "end": 22109553,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001794212",
+          "start": 22111771,
+          "end": 22111826,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001798738",
+          "start": 22114760,
+          "end": 22114898,
+          "rank": 4,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001684289",
+          "start": 22114978,
+          "end": 22115112,
+          "rank": 5,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001612574",
+          "start": 22116336,
+          "end": 22116528,
+          "rank": 6,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  }
+]

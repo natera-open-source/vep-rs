@@ -1,0 +1,54 @@
+entry = "refseq_edited_model_inserted_span_codons"
+page = "docs/divergences/refseq-edited-model-inserted-span-codons.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "seen in the genome-wide ClinVar GRCh38 file: 2 insertions written on a coding place of the RefSeq GRCh38 cache where a model holds bases the genome lacks, both at 2:73385942, variation 1167157 with the difference in Codons"
+notes = "NM_002111.8 carries the edit `256 255` with six bases, so the base inserted between 4:3074935 and 4:3074936 stands on cDNA 256-261, CDS 111-116, residues 37-39. Ensembl VEP writes the empty reference allele over that span and reads the nine-base window from CDS 109, so its reference codons are CDS 109-110 then 117-123 and its reference amino acids their translation (TranscriptVariationAllele.pm:873, 877); vep-rs writes the model's CDS 109-117 and residues 37-39. NM_015120.4 carries `186 185` with three bases; ClinVar variation 1167157 inserts two bases between 2:73385942 and 2:73385943, on CDS 75-77, where the two reference codon strings differ and translate alike. The rows of NM_001388492.1 and NM_001378454.1, models of the same two genes without those bases, are equal. No committed cache holds a model with such bases inside its coding sequence, so the first step copies info.txt and two region files from the RefSeq GRCh38 cache under the --perl-cache-dir roots and the second converts them with scripts/data/storable_to_json.pl in the image the run names; both engines read that cut. Both engines refuse a BAM-edited cache without --fasta unless --use_given_ref is passed (Runner.pm:762), and the tree commits no FASTA of chromosomes 2 and 4: the flag leaves an insertion's reference allele empty, as it is without it, and the compared columns are the same with a FASTA and without the flag."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the cut of the RefSeq cache is converted in the Ensembl VEP image: pass --image" >&2; exit 1; }
+[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens_refseq/116_GRCh38 with chromosomes 2 and 4 under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens_refseq/116_GRCh38"
+mkdir -p "$cut/2" "$cut/4"
+cp "$PERL_CACHE/info.txt" "$cut/info.txt"
+cp "$PERL_CACHE/2/73000001-74000000.gz" "$cut/2/"
+cp "$PERL_CACHE/4/3000001-4000000.gz" "$cut/4/"''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens_refseq/116_GRCh38 /stage/json-cache/homo_sapiens_refseq/116_GRCh38 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+4	3074935	ins_on_model_bases	A	AT	.	.	.
+2	73385942	1167157	A	AGG	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "refseq"
+json_cache = "{stage}/json-cache/homo_sapiens_refseq/116_GRCh38"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = ["--refseq", "--use_given_ref"]
+
+[compare]
+kind = "rows"
+where = { record = ["ins_on_model_bases", "1167157"], feature = ["NM_002111.8", "NM_001388492.1", "NM_015120.4", "NM_001378454.1"] }
+columns = ["Feature", "Consequence", "CDS_position", "Protein_position", "Amino_acids", "Codons"]
+
+[expected]
+ensembl_vep = [
+  "NM_001378454.1 | frameshift_variant | 74-75 | 25 | E/EX | gaa/gaGGa",
+  "NM_001388492.1 | frameshift_variant | 110-111 | 37 | Q/HX | caa/caTa",
+  "NM_002111.8 | frameshift_variant | 111-116 | 37-39 | QQP/HX | caacagccg/caTa",
+  "NM_015120.4 | frameshift_variant | 75-77 | 25-26 | EE/EX | gaagag/gaGGa",
+]
+vep_rs = [
+  "NM_001378454.1 | frameshift_variant | 74-75 | 25 | E/EX | gaa/gaGGa",
+  "NM_001388492.1 | frameshift_variant | 110-111 | 37 | Q/HX | caa/caTa",
+  "NM_002111.8 | frameshift_variant | 111-116 | 37-39 | QQQ/HX | cagcagcaa/caTa",
+  "NM_015120.4 | frameshift_variant | 75-77 | 25-26 | EE/EX | gaggaa/gaGGa",
+]

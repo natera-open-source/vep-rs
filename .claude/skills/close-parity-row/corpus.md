@@ -25,9 +25,8 @@ the row and `python3 scripts/parity/check_parity_matrix.py` passes.
 
 Ensembl VEP's expected outputs need a host with Docker and an Ensembl VEP 116 cache for the corpus's
 assembly. `scripts/concordance/generate_reference_output.sh --corpus <dir>` writes a corpus's
-top-level `expected/` and its `provenance.json`. A flag set's `expected_<name>/` has no generator in
-the repository: run Ensembl VEP under the set's `flags` the way `provenance.json` records the
-top-level run, one run per format, and say in the pull request how the files were made. Then
+top-level `expected/` and its `provenance.json`, and with `--flag-set <name>` the set's
+`expected_<name>/` under its `flags` (`--dir-plugins <modules>` for a set that names a plugin). Then
 `build_golden_corpus.py classify` (with `--flag-set <name>` for a flag set) records the divergence
 keys against the vep-rs binary.
 
@@ -38,8 +37,10 @@ the corpus, the flags and the reference run it is waiting for.
 ## Compare
 
 Run `cargo test -p vep-cli --test golden --test format_parity`. Done when every column of every
-format of every run of the corpus passes. A mismatch is fixed in the code or recorded as a documented
-divergence under `docs/divergences/`; the expected outputs stay as Ensembl VEP wrote them.
+format of every run of the corpus passes. A mismatch is fixed in the code or, where Ensembl VEP is
+the engine in the wrong, documented as an intended divergence through
+[fix-a-divergence](../fix-a-divergence/SKILL.md) (its page, its index row, its reproduction and the
+mask class the manifest names); the expected outputs stay as Ensembl VEP wrote them.
 
 Keep the corpus under its 15 MB budget (`each_corpus_fits_its_size_budget`): narrow the exemplars
 with `--max-span` before growing the cache.

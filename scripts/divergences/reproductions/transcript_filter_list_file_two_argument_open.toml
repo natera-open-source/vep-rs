@@ -1,0 +1,34 @@
+entry = "transcript_filter_list_file_two_argument_open"
+page = "docs/divergences/transcript-filter-list-file-two-argument-open.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the in operator of the filter notation, whose value may be a file containing values on separate lines, with no rule on the characters of the file's name (Ensembl VEP documentation, \"Filtering results\", Operators, in); not seen in the measured datasets"
+notes = "The corpus record tf_7130369 lies within reach of 3 transcripts, ENST00000624153 among them. The stage holds a file named `true|`, one line ENST00000624153, beside a program named `true` that prints nothing. The filter names the file; FilterSet.pm:396 finds it with `-e`, and :397's two-argument `open` reads the trailing `|` as a pipe from the command `true`, the rest of the name, so the handle yields nothing, the list is empty and the record is written as intergenic_variant. vep-rs opens the file of the written name and keeps the transcript it lists. A name beginning with `<` reads the same way on Ensembl VEP: `<ids.txt` opens `ids.txt`, where vep-rs opens the file named `<ids.txt`."
+prepare = [
+  "printf 'ENST00000624153\\n' > \"$STAGE/true|\"",
+  "printf '#!/bin/sh\\nexit 0\\n' > \"$STAGE/true\" && chmod +x \"$STAGE/true\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	7130369	tf_7130369	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-transcript-filter/json_cache"
+
+[run]
+flags = ["--transcript_filter", "stable_id in {stage}/true|"]
+
+[compare]
+kind = "field"
+field = "Feature"
+where = { record = "tf_7130369" }
+
+[expected]
+ensembl_vep = ["-"]
+vep_rs = ["ENST00000624153"]

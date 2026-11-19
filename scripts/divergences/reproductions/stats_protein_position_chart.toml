@@ -1,0 +1,35 @@
+entry = "stats_protein_position_chart"
+page = "docs/divergences/stats-protein-position.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 23 of 392 flag sets · 23 flag sets, 13 corpora"
+
+[input]
+format = "vcf"
+path = "tests/golden/116/GRCh37-hgvs/variants.vcf"
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37-hgvs/json_cache"
+fasta = "tests/golden/116/GRCh37-hgvs/reference.fa.gz"
+
+[run]
+flags = ["--hgvs"]
+stats = true
+
+[compare]
+kind = "stats"
+section = "[Position in protein]"
+sorted = false
+
+[expected]
+ensembl_vep = [
+  "00-10%\t166", "10-20%\t76", "20-30%\t79", "30-40%\t95", "40-50%\t87",
+  "50-60%\t126", "60-70%\t66", "70-80%\t80", "80-90%\t112", "90-100%\t145",
+]
+vep_rs = [
+  "00-10%\t171", "10-20%\t75", "20-30%\t79", "30-40%\t95", "40-50%\t90",
+  "50-60%\t129", "60-70%\t65", "70-80%\t78", "80-90%\t113", "90-100%\t158",
+]

@@ -1,0 +1,32 @@
+entry = "json_summary_without_consequence"
+page = "docs/divergences/json-summary-without-term.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 2.0 per million · 0 flag sets, 3 corpora"
+notes = "A non-variant record kept by --allow_non_variant has no consequence; under --most_severe Ensembl VEP's JSON run dies on it (Can't use an undefined value as an ARRAY reference) and writes no object, where vep-rs writes the record's object with most_severe_consequence ?."
+
+[input]
+format = "vcf"
+text = """
+21	34716449	nonvariant_site	C	.	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-individual-zyg/json_cache"
+
+[run]
+flags = ["--allow_non_variant", "--most_severe"]
+format = "json"
+
+[compare]
+kind = "json"
+path = "id"
+where = { id = "nonvariant_site" }
+
+[expected]
+ensembl_vep_exit = 255
+ensembl_vep = []
+vep_rs = ["nonvariant_site"]

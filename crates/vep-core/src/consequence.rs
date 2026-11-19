@@ -9,12 +9,15 @@
 //! release/115). `OutputFactory.pm` is `Bio/EnsEMBL/VEP/OutputFactory.pm` in
 //! ensembl-vep release/115.
 
+use std::borrow::Cow;
 use std::fmt;
 use std::sync::Arc;
 
 use smallvec::SmallVec;
 
-use crate::transcript::Transcript;
+use crate::prediction::PredictionTerm;
+pub use crate::transcript::SourceCache;
+use crate::transcript::{BamEditStatus, Transcript};
 
 /// Per-transcript consequence term list.
 ///
@@ -363,6 +366,75 @@ impl Consequence {
     pub fn most_severe(consequences: &[Consequence]) -> Option<Consequence> {
         consequences.iter().copied().min_by_key(|c| c.rank())
     }
+
+    /// Every term in rank order, so `ALL[i].rank() == i + 1` and a term's
+    /// position in the list is `term as usize`.
+    pub const ALL: [Consequence; 41] = [
+        Consequence::TranscriptAblation,
+        Consequence::SpliceAcceptorVariant,
+        Consequence::SpliceDonorVariant,
+        Consequence::StopGained,
+        Consequence::FrameshiftVariant,
+        Consequence::StopLost,
+        Consequence::StartLost,
+        Consequence::TranscriptAmplification,
+        Consequence::FeatureElongation,
+        Consequence::FeatureTruncation,
+        Consequence::InframeInsertion,
+        Consequence::InframeDeletion,
+        Consequence::MissenseVariant,
+        Consequence::ProteinAlteringVariant,
+        Consequence::SpliceDonor5thBaseVariant,
+        Consequence::SpliceRegionVariant,
+        Consequence::SpliceDonorRegionVariant,
+        Consequence::SplicePolypyrimidineTractVariant,
+        Consequence::IncompleteTerminalCodonVariant,
+        Consequence::StartRetainedVariant,
+        Consequence::StopRetainedVariant,
+        Consequence::SynonymousVariant,
+        Consequence::CodingSequenceVariant,
+        Consequence::MatureMirnaVariant,
+        Consequence::FivePrimeUtrVariant,
+        Consequence::ThreePrimeUtrVariant,
+        Consequence::NonCodingTranscriptExonVariant,
+        Consequence::IntronVariant,
+        Consequence::NmdTranscriptVariant,
+        Consequence::NonCodingTranscriptVariant,
+        Consequence::CodingTranscriptVariant,
+        Consequence::UpstreamGeneVariant,
+        Consequence::DownstreamGeneVariant,
+        Consequence::TfbsAblation,
+        Consequence::TfbsAmplification,
+        Consequence::TfBindingSiteVariant,
+        Consequence::RegulatoryRegionAblation,
+        Consequence::RegulatoryRegionAmplification,
+        Consequence::RegulatoryRegionVariant,
+        Consequence::IntergenicVariant,
+        Consequence::SequenceVariant,
+    ];
+
+    /// Whether the term's `OVERLAP_CONSEQUENCES` entry carries
+    /// `include => {coding => 1}` (`Utils/Constants.pm`): the thirteen terms
+    /// the `Coding consequences` chart of the run statistics counts.
+    /// `coding_transcript_variant` is not one.
+    pub fn is_coding_include(self) -> bool {
+        matches!(
+            self,
+            Consequence::StopGained
+                | Consequence::FrameshiftVariant
+                | Consequence::StopLost
+                | Consequence::StartLost
+                | Consequence::InframeInsertion
+                | Consequence::InframeDeletion
+                | Consequence::MissenseVariant
+                | Consequence::ProteinAlteringVariant
+                | Consequence::IncompleteTerminalCodonVariant
+                | Consequence::StartRetainedVariant
+                | Consequence::StopRetainedVariant
+                | Consequence::SynonymousVariant
+                | Consequence::CodingSequenceVariant
+        )
+    }
 }
 
 impl fmt::Display for Consequence {
@@ -497,26 +569,39 @@ fn derive_introns_from_exons(
 /// Produced by `vep_effects::calculate_consequences()` for each transcript
 /// that a variant overlaps. Contains the assigned SO consequence terms,
 /// positional information (cDNA, CDS, protein coordinates), codon/amino acid
-/// changes, and metadata from the source transcript. Multiple instances are
+/// changes, and a shared handle on the source transcript, whose identifiers,
+/// symbol, biotype, flags, cross-references and pick criteria the accessors of
+/// the same names read ([`Self::transcript_id`], [`Self::gene_symbol`],
+/// [`Self::biotype`], [`Self::mane_select`], ...). Multiple instances are
 /// attached to each [`InputVariant`](crate::variant::InputVariant).
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+///
+/// The serde document is flat: the transcript's values appear under their
+/// accessor names, in the order [`TRANSCRIPT_CONSEQUENCE_KEYS`] lists, among
+/// the row's own fields. `transcript`, `feature_id`, `feature_biotype`,
+/// `picked` and `protein_id_display` have no key of their own (`picked` is the
+/// `PICK` entry of `flags`, `protein_id_display` shapes `protein_id`), nor
+/// does a field whose doc marks it never serialized, and the keys the list
+/// marks optional appear only when populated.
+#[derive(Debug, Clone)]
 pub struct TranscriptConsequence {
-    /// Transcript stable ID (e.g., "ENST00000366667").
-    pub transcript_id: Arc<str>,
-    /// Gene stable ID (e.g., "ENSG00000142168").
-    pub gene_id: Arc<str>,
-    /// Gene symbol (e.g., "SOD1").
-    pub gene_symbol: Option<Arc<str>>,
-    /// Gene symbol source (e.g., "HGNC").
-    pub gene_symbol_source: Option<Arc<str>>,
-    /// HGNC ID.
-    pub hgnc_id: Option<Arc<str>>,
+    /// The source transcript, shared with the index that holds it: every
+    /// per-transcript value the row prints is read from it. `None` on a row
+    /// against a regulatory or motif feature and on a row built without a
+    /// feature, whose transcript accessors read `feature_id`,
+    /// `feature_biotype` or nothing.
+    pub transcript: Option<Arc<Transcript>>,
+    /// The stable id of a regulatory or motif feature's row, which has no
+    /// transcript to read one from ([`Self::transcript_id`]); `None` on a
+    /// transcript's row.
+    pub feature_id: Option<Arc<str>>,
+    /// The biotype of a regulatory feature's row ([`Self::biotype`]); `None`
+    /// on a transcript's row and on a structural variant's regulatory row,
+    /// which prints none.
+    pub feature_biotype: Option<Arc<str>>,
     /// Consequence terms assigned.
     pub consequences: ConsequenceList,
     /// Impact of the most severe consequence.
     pub impact: Impact,
-    /// Biotype of the transcript.
-    pub biotype: Option<Arc<str>>,
     /// Whether this is the canonical transcript.
     pub canonical: bool,
     /// cDNA position (e.g., "428").
@@ -530,11 +615,8 @@ pub struct TranscriptConsequence {
     /// sequence length and the peptide length where it lies in the coding
     /// region and the cache carries the sequence. Set whenever the column's
     /// rule holds, position or not, so a `-` column prints `-/<total>`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cdna_total: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cds_total: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub protein_total: Option<u32>,
     /// The three positions of the allele's own span where the columns print
     /// another span's: for an allele of a `--minimal` split the columns print the
@@ -543,14 +625,13 @@ pub struct TranscriptConsequence {
     /// `OutputFactory/JSON.pm:217-220` clear the cached positions before the
     /// rejoin, so they are recomputed on the trimmed feature and kept). `None`
     /// when the columns are the allele's own.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own_span_positions: Option<Box<OwnSpanPositions>>,
     /// Amino acid change (e.g., "A/V").
     pub amino_acids: Option<String>,
     /// Codon change (e.g., "gCc/gTc").
     pub codons: Option<String>,
-    /// Protein (Ensembl) ID.
-    pub protein_id: Option<Arc<str>>,
+    /// How the row prints the transcript's protein id ([`Self::protein_id`]).
+    pub protein_id_display: ProteinIdDisplay,
     /// Distance to transcript (for upstream/downstream).
     pub distance: Option<u64>,
     /// Strand of the transcript (1 or -1).
@@ -566,10 +647,20 @@ pub struct TranscriptConsequence {
     /// Bases the HGVS notations were shifted 3' along the transcript, signed by
     /// the transcript strand; `None` when nothing shifted.
     pub hgvs_offset: Option<i64>,
+    /// Whether `hgvs_offset` counts a move of the HGVSc alone, on a record
+    /// that does not shift: every other field of the row, and what a plugin
+    /// reads of it, stays where the record is written. Never serialized.
+    pub hgvs_offset_of_hgvsc_alone: bool,
+    /// The intron offsets of the HGVSc start and end coordinates as
+    /// `hgvs_transcript` keeps them (`_hgvs_intron_start_offset`,
+    /// `_hgvs_intron_end_offset`, TranscriptVariationAllele.pm:1530-1545): the
+    /// signed distance after the exon coordinate of each cDNA position, read
+    /// before the two positions are ordered, 0 for an exonic position. `None`
+    /// when the row has no HGVSc. Never serialized.
+    pub hgvs_intron_offsets: Option<(i32, i32)>,
     /// Bases the insertion or deletion was moved 3' along the transcript before
     /// its terms and positions were computed (`--shift_3prime 1`); 0 when nothing
     /// moved, every other row included.
-    #[serde(default)]
     pub shift_length: u64,
     /// The `Allele` the row prints under `--shift_3prime 1` when it is not the
     /// allele as the record wrote it: the inserted bases rotated along the
@@ -577,66 +668,34 @@ pub struct TranscriptConsequence {
     /// since `codon` rotates the allele's sequence there (`shift_feature_seqs`,
     /// TranscriptVariationAllele.pm:820, 1330-1347) and the row prints that
     /// sequence (OutputFactory.pm:1347); `None` for every other row.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shifted_allele: Option<Arc<str>>,
     /// The reference allele the row was analysed against under
     /// `--use_transcript_ref`, relative to the variant's strand: the transcript's
     /// where the variant maps inside its exons, the input's elsewhere (`USED_REF`,
     /// OutputFactory.pm:1774-1779); `None` without the flag.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub used_ref: Option<Arc<str>>,
     /// SIFT prediction and score.
     pub sift: Option<String>,
     /// PolyPhen prediction and score.
     pub polyphen: Option<String>,
+    /// The qualitative term behind `sift`, kept for the run statistics, which
+    /// count terms where the column may print a score alone. Never serialized.
+    pub sift_term: Option<PredictionTerm>,
+    /// The qualitative term behind `polyphen`; see `sift_term`. Never serialized.
+    pub polyphen_term: Option<PredictionTerm>,
+    /// The first residue the variant maps to, Ensembl VEP's `translation_start`
+    /// before the `Protein_position` column orders the span's ends (an
+    /// insertion's start is one past its end, so the column opens with the
+    /// end); `None` where no residue is mapped. Never serialized.
+    pub protein_start: Option<u32>,
     /// Overlapping protein domains.
     pub domains: Vec<(String, String)>,
     /// Feature type (Transcript, RegulatoryFeature, MotifFeature).
     pub feature_type: FeatureType,
-    /// Transcript flags (e.g., "cds_start_NF").
-    pub flags: Arc<[String]>,
-    /// Transcript Support Level (1-5).
-    pub tsl: Option<u8>,
-    /// MANE Select transcript ID, if this transcript carries the MANE_Select tag.
-    /// Used by `--pick`/`--pick_allele`/`flag_pick` to prefer MANE-curated transcripts
-    /// over Ensembl-canonical (Ensembl VEP `pick_order` slot 0).
-    pub mane_select: Option<String>,
-    /// MANE Plus Clinical transcript ID, if this transcript carries the
-    /// MANE_Plus_Clinical tag. Used by `--pick` (Ensembl VEP `pick_order` slot 1).
-    pub mane_plus_clinical: Option<String>,
-    /// APPRIS annotation (e.g. "principal1", "alternative2").
-    /// Used by `--pick` to prefer principal isoforms (Ensembl VEP `pick_order` slot 3).
-    pub appris: Option<String>,
-    /// CCDS ID.
-    pub ccds: Option<String>,
-    /// The transcript carries a `gencode_primary` attribute: the
-    /// `GENCODE_PRIMARY` column under `--flag_gencode_primary`.
-    #[serde(default)]
-    pub gencode_primary: bool,
-    /// UniProtKB/Swiss-Prot accession(s).
-    pub swissprot: Option<String>,
-    /// UniProtKB/TrEMBL accession(s).
-    pub trembl: Option<String>,
-    /// UniParc accession(s), comma-separated as the cache carries them.
-    #[serde(default)]
-    pub uniparc: Option<String>,
-    /// UniProtKB isoform accession(s), comma-separated as the cache carries them.
-    #[serde(default)]
-    pub uniprot_isoform: Option<String>,
-    /// RefSeq transcript ID.
-    pub refseq: Option<String>,
-    /// The transcript's stable-id version: the `.<version>` suffix of the
-    /// `Feature` column under `--transcript_version`.
-    #[serde(default)]
-    pub transcript_version: Option<u32>,
-    /// The gene's stable-id version: the `.<version>` suffix of the `Gene`
-    /// column under `--gene_version`.
-    #[serde(default)]
-    pub gene_version: Option<u32>,
-    /// The gene has at least one phenotype association: the `GENE_PHENO`
-    /// column under `--gene_phenotype`.
-    #[serde(default)]
-    pub gene_phenotype: bool,
+    /// Whether `--flag_pick`, `--flag_pick_allele` or `--flag_pick_allele_gene`
+    /// picked the row: the `PICK` column, and the `PICK` entry after the
+    /// transcript's flags in the serialized `flags`.
+    pub picked: bool,
     /// The miRNA secondary-structure elements the variant overlaps on a
     /// `miRNA` transcript, as the SO terms `miRNA_loop` and `miRNA_stem`: the
     /// `miRNA` column under `--mirna`. The terms come sorted, one per distinct
@@ -644,52 +703,85 @@ pub struct TranscriptConsequence {
     /// `miRNA_stem` twice, and a span reaching one position past the
     /// structure's end lists an empty term. Empty on every other transcript
     /// and when the variant lies outside the structure.
-    #[serde(default)]
     pub mirna: Vec<String>,
-    /// Length of the transcript's translateable sequence as the cache stores it,
-    /// `None` for a transcript without a translation. The `length` pick
-    /// criterion reads it (OutputFactory.pm:743-748 at release/116.2).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cds_length: Option<u32>,
-    /// The transcript's spliced length, the sum of its exon lengths
-    /// (`Bio::EnsEMBL::Transcript::length`), which the `length` pick criterion
-    /// reads for a transcript without a translation.
-    #[serde(default)]
-    pub cdna_length: u32,
-    /// The cache the transcript came from in a merged cache (`_source_cache`),
-    /// which the `ensembl` and `refseq` pick criteria read; `None` on every
-    /// single-source cache, where both criteria score alike.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_cache: Option<SourceCache>,
+    /// Whether the transcript's model was edited against the cache's alignment
+    /// file ([`Transcript::bam_edit_status`]): the `BAM_EDIT` column; `None` on
+    /// a transcript no alignment touched.
+    pub bam_edit_status: Option<BamEditStatus>,
+    /// The length change of the edits an `NM_` or `XM_` model's alignment
+    /// inserted or deleted upstream of the allele, Ensembl VEP's
+    /// `refseq_misalignment_offset` as `hgvs_transcript` sets it
+    /// (`REFSEQ_OFFSET`); the HGVSc is numbered against the edited model and
+    /// moves by nothing. `None` when no offset was computed or it is 0, which
+    /// prints nothing (OutputFactory.pm:1769).
+    pub refseq_offset: Option<i64>,
+    /// The alternate allele equals the bases of the transcript's first
+    /// `_rna_edit` on the codon path (`invalid_alleles`,
+    /// TranscriptVariationAllele.pm:826-837): the row the
+    /// `Transcript-assembly mismatch` warning names. Never serialized.
+    pub transcript_assembly_mismatch: bool,
     /// Plugin annotation data (transcript-consequence-level).
-    /// Keyed by field name (e.g., "REVEL_score"), value is the annotation string.
-    #[serde(default, skip_serializing_if = "indexmap::IndexMap::is_empty")]
+    /// Keyed by field name (e.g., "REVEL"), value is the annotation string.
     pub plugin_data: indexmap::IndexMap<String, String>,
+    /// The keys of `plugin_data` whose empty value on this row is Ensembl VEP's
+    /// empty string, an empty tab cell and `""` in JSON, rather than its
+    /// undefined value, `-` and no key: a plugin reading a table names the
+    /// columns a row has and leaves empty (TranscriptAnnotator.pm:245-250).
+    /// Empty on a row with no such key, and never serialized.
+    pub plugin_empty_strings: Vec<String>,
     /// Genomic span of the feature (1-based, inclusive), for the structural
     /// variant overlap fields; both zero when unknown.
-    #[serde(default)]
     pub feature_start: u64,
-    #[serde(default)]
     pub feature_end: u64,
     /// Transcript structural context for consequence-filtering plugins (LoFTEE).
     /// Populated at consequence-construction time only when such a plugin is
     /// active; `None` otherwise, and absent from the serialization unless set.
     /// See [`LofteeContext`].
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loftee_ctx: Option<Box<LofteeContext>>,
+    /// The transcript's exon stable ids in rank order, one per exon of
+    /// `loftee_ctx`, for the built-in plugins that print them (NearestExonJB);
+    /// attached with the context when the cache was loaded with the ids
+    /// (`Transcript::exon_ids`), `None` otherwise. Never serialized.
+    pub exon_ids: Option<Arc<[Arc<str>]>>,
+    /// The transcript's coding, 3' UTR and protein sequences for the built-in
+    /// plugins that translate a changed coding sequence (Downstream). Attached
+    /// at construction time to the rows `vep_effects::EffectsConfig`'s sequence
+    /// gate names, `None` on every other row. Never serialized.
+    pub transcript_sequences: Option<Box<TranscriptSequences>>,
     /// The motif fields of a `MotifFeature` row of a sequence variant
     /// (`MotifFeatureVariationAllele_to_output_hash`, OutputFactory.pm:1910-1942):
     /// `None` on every other row, a structural variant's motif row included.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub motif: Option<Box<MotifFields>>,
-    /// The source transcript's [`Transcript::id_rank`]: `transcript_id`'s
-    /// position in the byte order of its chromosome's transcript ids, so two
-    /// rows of one chromosome compare by rank as they compare by id; rows of
-    /// different chromosomes, an interchromosomal breakend's mate rows among
-    /// them, do not. Never serialized; 0 for a consequence built without a
-    /// loaded transcript.
-    #[serde(skip)]
+    /// The `CELL_TYPE` list of a `RegulatoryFeature` or `MotifFeature` row under
+    /// `--cell_type` (`get_cell_types`, OutputFactory.pm:1959-1969): for each
+    /// requested epigenome, in the order requested, the feature's activity in
+    /// it, an epigenome the feature's map lacks skipped. Empty on every motif
+    /// row, whose features carry no activity map; `None` on a transcript or
+    /// intergenic row and on every row of a run without the flag.
+    pub cell_type: Option<Box<[CellTypeActivity]>>,
+    /// The source transcript's [`Transcript::id_rank`]: the position of its
+    /// Ensembl VEP sort key (`transcript_id`, then `_` and the dbID when the
+    /// record carries one) in the byte order of its chromosome's keys, so two
+    /// rows of one chromosome compare by rank as Ensembl VEP orders them; rows
+    /// of different chromosomes, an interchromosomal breakend's mate rows among
+    /// them, do not. A `MotifFeature` row carries the rank of its motif's
+    /// database id, as a string, among its chromosome's motifs: Ensembl VEP
+    /// stores motif overlaps under that id and sorts the keys as strings
+    /// (`VariationFeature.pm:937`, `:750`). A structural variant's
+    /// `RegulatoryFeature` or `MotifFeature` row carries instead the rank of
+    /// its feature in the order the features were met, the order Ensembl VEP
+    /// lists such rows in (`StructuralVariationFeature.pm:495-509`): source by
+    /// source then in file order from the files of `--regulatory_gff` or a
+    /// cache baked from them, the cache's listing order from a converted cache.
+    /// Never serialized; 0 for a consequence built without a loaded
+    /// transcript or a motif without an id.
     pub id_rank: u32,
+    /// The database id of a `MotifFeature` row's motif, the key Ensembl VEP
+    /// stores the motif's overlap under (`MotifFeatureVariation.pm:70-76`,
+    /// `VariationFeature.pm:937`) and the part of [`Self::ensembl_vep_key`]
+    /// that is not a stable id. Never serialized; `None` on every other row
+    /// and on a motif from a source without one.
+    pub motif_db_id: Option<u64>,
     /// Whether the record's span, for an allele of a `--minimal` split
     /// ([`InputVariant::original_start`](crate::variant::InputVariant::original_start)
     /// to `original_end`), has a CDS coordinate on the transcript: the
@@ -698,20 +790,339 @@ pub struct TranscriptConsequence {
     /// the allele's own span after the rejoin and map the record's span in their
     /// place (OutputFactory.pm:297-323 and 490-502; BaseTranscriptVariation.pm:505-526
     /// and 662-665). `false` for every other row. Never serialized.
-    #[serde(skip)]
     pub record_span_in_cds: bool,
 }
 
+/// How a row prints the protein id of its transcript
+/// ([`TranscriptConsequence::protein_id`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ProteinIdDisplay {
+    /// The id as the cache carries it.
+    #[default]
+    AsCached,
+    /// No id: a breakend row against a transcript without a coding region.
+    Hidden,
+    /// The id with `.<version>` appended, the translation's version under
+    /// `--protein_version` on an id that carries none.
+    Versioned(u32),
+}
+
+/// The keys of a [`TranscriptConsequence`] document in the order they are
+/// written, each with whether it is written only when populated.
+pub const TRANSCRIPT_CONSEQUENCE_KEYS: [(&str, bool); 61] = [
+    ("transcript_id", false),
+    ("gene_id", false),
+    ("gene_symbol", false),
+    ("gene_symbol_source", false),
+    ("hgnc_id", false),
+    ("consequences", false),
+    ("impact", false),
+    ("biotype", false),
+    ("canonical", false),
+    ("cdna_position", false),
+    ("cds_position", false),
+    ("protein_position", false),
+    ("cdna_total", true),
+    ("cds_total", true),
+    ("protein_total", true),
+    ("own_span_positions", true),
+    ("amino_acids", false),
+    ("codons", false),
+    ("protein_id", false),
+    ("distance", false),
+    ("strand", false),
+    ("exon", false),
+    ("intron", false),
+    ("hgvsc", false),
+    ("hgvsp", false),
+    ("hgvs_offset", false),
+    ("shift_length", false),
+    ("shifted_allele", true),
+    ("used_ref", true),
+    ("sift", false),
+    ("polyphen", false),
+    ("domains", false),
+    ("feature_type", false),
+    ("flags", false),
+    ("tsl", false),
+    ("mane_select", false),
+    ("mane_plus_clinical", false),
+    ("appris", false),
+    ("ccds", false),
+    ("gencode_primary", false),
+    ("swissprot", false),
+    ("trembl", false),
+    ("uniparc", false),
+    ("uniprot_isoform", false),
+    ("refseq", false),
+    ("transcript_version", false),
+    ("gene_version", false),
+    ("gene_phenotype", false),
+    ("mirna", false),
+    ("cds_length", true),
+    ("cdna_length", false),
+    ("source_cache", true),
+    ("bam_edit_status", true),
+    ("refseq_match", true),
+    ("refseq_offset", true),
+    ("plugin_data", true),
+    ("feature_start", false),
+    ("feature_end", false),
+    ("loftee_ctx", true),
+    ("motif", true),
+    ("cell_type", true),
+];
+
+impl serde::Serialize for TranscriptConsequence {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+
+        let cds_length = self.cds_length();
+        let source_cache = self.source_cache();
+        let refseq_match = self.refseq_match();
+        let written = TRANSCRIPT_CONSEQUENCE_KEYS
+            .iter()
+            .filter(|(_, optional)| !optional)
+            .count()
+            + usize::from(self.cdna_total.is_some())
+            + usize::from(self.cds_total.is_some())
+            + usize::from(self.protein_total.is_some())
+            + usize::from(self.own_span_positions.is_some())
+            + usize::from(self.shifted_allele.is_some())
+            + usize::from(self.used_ref.is_some())
+            + usize::from(cds_length.is_some())
+            + usize::from(source_cache.is_some())
+            + usize::from(self.bam_edit_status.is_some())
+            + usize::from(refseq_match.is_some())
+            + usize::from(self.refseq_offset.is_some())
+            + usize::from(!self.plugin_data.is_empty())
+            + usize::from(self.loftee_ctx.is_some())
+            + usize::from(self.motif.is_some())
+            + usize::from(self.cell_type.is_some());
+        let mut state = serializer.serialize_struct("TranscriptConsequence", written)?;
+        state.serialize_field("transcript_id", self.transcript_id())?;
+        state.serialize_field("gene_id", self.gene_id())?;
+        state.serialize_field("gene_symbol", &self.gene_symbol())?;
+        state.serialize_field("gene_symbol_source", &self.gene_symbol_source())?;
+        state.serialize_field("hgnc_id", &self.hgnc_id())?;
+        state.serialize_field("consequences", &self.consequences)?;
+        state.serialize_field("impact", &self.impact)?;
+        state.serialize_field("biotype", &self.biotype())?;
+        state.serialize_field("canonical", &self.canonical)?;
+        state.serialize_field("cdna_position", &self.cdna_position)?;
+        state.serialize_field("cds_position", &self.cds_position)?;
+        state.serialize_field("protein_position", &self.protein_position)?;
+        optional_field(&mut state, "cdna_total", &self.cdna_total)?;
+        optional_field(&mut state, "cds_total", &self.cds_total)?;
+        optional_field(&mut state, "protein_total", &self.protein_total)?;
+        optional_field(&mut state, "own_span_positions", &self.own_span_positions)?;
+        state.serialize_field("amino_acids", &self.amino_acids)?;
+        state.serialize_field("codons", &self.codons)?;
+        state.serialize_field("protein_id", &self.protein_id())?;
+        state.serialize_field("distance", &self.distance)?;
+        state.serialize_field("strand", &self.strand)?;
+        state.serialize_field("exon", &self.exon)?;
+        state.serialize_field("intron", &self.intron)?;
+        state.serialize_field("hgvsc", &self.hgvsc)?;
+        state.serialize_field("hgvsp", &self.hgvsp)?;
+        state.serialize_field("hgvs_offset", &self.hgvs_offset)?;
+        state.serialize_field("shift_length", &self.shift_length)?;
+        optional_field(&mut state, "shifted_allele", &self.shifted_allele)?;
+        optional_field(&mut state, "used_ref", &self.used_ref)?;
+        state.serialize_field("sift", &self.sift)?;
+        state.serialize_field("polyphen", &self.polyphen)?;
+        state.serialize_field("domains", &self.domains)?;
+        state.serialize_field("feature_type", &self.feature_type)?;
+        state.serialize_field("flags", &FlagsDocument(self))?;
+        state.serialize_field("tsl", &TslDocument(self.tsl()))?;
+        state.serialize_field("mane_select", &self.mane_select())?;
+        state.serialize_field("mane_plus_clinical", &self.mane_plus_clinical())?;
+        state.serialize_field("appris", &self.appris())?;
+        state.serialize_field("ccds", &self.ccds())?;
+        state.serialize_field("gencode_primary", &self.gencode_primary())?;
+        state.serialize_field("swissprot", &self.swissprot())?;
+        state.serialize_field("trembl", &self.trembl())?;
+        state.serialize_field("uniparc", &self.uniparc())?;
+        state.serialize_field("uniprot_isoform", &self.uniprot_isoform())?;
+        state.serialize_field("refseq", &self.refseq())?;
+        state.serialize_field("transcript_version", &self.transcript_version())?;
+        state.serialize_field("gene_version", &self.gene_version())?;
+        state.serialize_field("gene_phenotype", &self.gene_phenotype())?;
+        state.serialize_field("mirna", &self.mirna)?;
+        optional_field(&mut state, "cds_length", &cds_length)?;
+        state.serialize_field("cdna_length", &self.cdna_length())?;
+        optional_field(&mut state, "source_cache", &source_cache)?;
+        optional_field(&mut state, "bam_edit_status", &self.bam_edit_status)?;
+        optional_field(&mut state, "refseq_match", &refseq_match)?;
+        optional_field(&mut state, "refseq_offset", &self.refseq_offset)?;
+        if self.plugin_data.is_empty() {
+            state.skip_field("plugin_data")?;
+        } else {
+            state.serialize_field("plugin_data", &self.plugin_data)?;
+        }
+        state.serialize_field("feature_start", &self.feature_start)?;
+        state.serialize_field("feature_end", &self.feature_end)?;
+        optional_field(&mut state, "loftee_ctx", &self.loftee_ctx)?;
+        optional_field(&mut state, "motif", &self.motif)?;
+        optional_field(&mut state, "cell_type", &self.cell_type)?;
+        state.end()
+    }
+}
+
+/// Writes an `Option` field as a derive writes one marked
+/// `skip_serializing_if = "Option::is_none"`: the value when `Some`, else the
+/// field is reported to the serializer as skipped.
+fn optional_field<S: serde::ser::SerializeStruct, T: serde::Serialize>(
+    state: &mut S,
+    key: &'static str,
+    value: &Option<T>,
+) -> Result<(), S::Error> {
+    match value {
+        Some(_) => state.serialize_field(key, value),
+        None => state.skip_field(key),
+    }
+}
+
+/// The `tsl` entry of a consequence document: the level as the number its
+/// digit run spells, the reading Ensembl VEP's JSON format gives the text
+/// (`numberify`, `Utils.pm:231`), exact within 64 bits and a double past
+/// them. A level whose double is not finite is the text itself, the form the
+/// JSON writer gives every value no JSON number holds; `null` without a level.
+struct TslDocument<'a>(Option<&'a str>);
+
+impl serde::Serialize for TslDocument<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let Some(digits) = self.0 else {
+            return serializer.serialize_none();
+        };
+        if let Ok(level) = digits.parse::<u64>() {
+            return serializer.serialize_u64(level);
+        }
+        match digits.parse::<f64>() {
+            Ok(level) if level.is_finite() => serializer.serialize_f64(level),
+            _ => serializer.serialize_str(digits),
+        }
+    }
+}
+
+/// The `flags` entry of a consequence document: the transcript's flags, then
+/// `PICK` on a picked row.
+struct FlagsDocument<'a>(&'a TranscriptConsequence);
+
+impl serde::Serialize for FlagsDocument<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+
+        let flags = self.0.flags();
+        let mut seq = serializer.serialize_seq(Some(flags.len() + usize::from(self.0.picked)))?;
+        for flag in flags {
+            seq.serialize_element(flag)?;
+        }
+        if self.0.picked {
+            seq.serialize_element("PICK")?;
+        }
+        seq.end()
+    }
+}
+
+/// The sequences of a transcript a plugin translates from: the translateable
+/// sequence as the cache stores it (`_variation_effect_feature_cache`, the
+/// start exon's phase padded as `N`), the 3' UTR, the protein and the codon
+/// table. The protein is `None` when the cache lacks it; the UTR when neither
+/// the cache nor the reference FASTA yields one ([`Self::from_transcript`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TranscriptSequences {
+    pub cds: Box<str>,
+    pub three_prime_utr: Option<Box<str>>,
+    pub peptide: Option<Box<str>>,
+    pub codon_table: u8,
+}
+
+impl TranscriptSequences {
+    /// The sequences of `transcript`; `None` for a transcript without a
+    /// translateable sequence. `three_prime_utr` is kept as the caller resolved
+    /// it, the cache's when it carries one, else the UTR read from the reference
+    /// FASTA (`vep_effects::coding::compute_three_prime_utr_sequence`).
+    pub fn from_transcript(
+        transcript: &Transcript,
+        three_prime_utr: Option<Vec<u8>>,
+    ) -> Option<Self> {
+        let vefc = transcript.vefc.as_ref()?;
+        let cds = vefc.translateable_seq.as_deref()?;
+        Some(Self {
+            cds: Box::from(cds),
+            three_prime_utr: three_prime_utr.map(|utr| Box::from(String::from_utf8_lossy(&utr))),
+            peptide: vefc.peptide.as_deref().map(Box::from),
+            codon_table: vefc.codon_table,
+        })
+    }
+}
+
 /// The fields a `MotifFeature` row of a sequence variant carries beside its
-/// terms: `MOTIF_NAME`, the binding matrix's stable id; `MOTIF_POS`, the
-/// variant's first base as a position in the matrix, counted along the motif's
-/// strand, `None` when it falls outside the matrix; `TRANSCRIPTION_FACTORS`,
-/// the matrix's factor names, which print as an empty value when there are none.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// terms (`MotifFeatureVariationAllele_to_output_hash`, OutputFactory.pm:1910-1942).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MotifFields {
+    /// `MOTIF_NAME`: the binding matrix's stable id.
     pub name: Arc<str>,
+    /// `MOTIF_POS`: the variant's first base as a position in the matrix,
+    /// counted along the motif's strand; `None` when it falls outside the
+    /// matrix.
     pub pos: Option<u32>,
+    /// `HIGH_INF_POS`: whether the variant changes one base at a position of
+    /// the matrix carrying more than
+    /// [`INFORMATIVE_BITS`](crate::binding_matrix::INFORMATIVE_BITS) of
+    /// information (`Y` or `N`); `None` for a matrix without counts, which
+    /// omits the field.
+    pub high_inf_pos: Option<bool>,
+    /// `MOTIF_SCORE_CHANGE`: the motif's relative similarity score with the
+    /// allele spliced in, minus its score as the cache stores it; `None` when
+    /// the allele changes the motif's length, lies outside the matrix, holds a
+    /// base other than A, C, G or T, or the matrix has no counts.
+    pub score_change: Option<f64>,
+    /// `TRANSCRIPTION_FACTORS`: the matrix's factor names, which print as an
+    /// empty value when there are none.
     pub factors: Arc<[Arc<str>]>,
+}
+
+/// The activity of a regulatory feature in one epigenome: the five values of
+/// the funcgen `regulatory_activity` table, printed as Ensembl VEP prints the
+/// value of the feature's activity map (`ACTIVE`, `INACTIVE`, `POISED`,
+/// `REPRESSED`, `NA`), and serialized as that spelling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Activity {
+    Active,
+    Inactive,
+    Poised,
+    Repressed,
+    Na,
+}
+
+impl Activity {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Activity::Active => "ACTIVE",
+            Activity::Inactive => "INACTIVE",
+            Activity::Poised => "POISED",
+            Activity::Repressed => "REPRESSED",
+            Activity::Na => "NA",
+        }
+    }
+}
+
+/// One entry of a row's `CELL_TYPE` list: an epigenome `--cell_type` named and
+/// the regulatory feature's activity in it, printed `<name>:<activity>`
+/// (OutputFactory.pm:1964-1966).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CellTypeActivity {
+    pub name: Arc<str>,
+    pub activity: Activity,
+}
+
+impl fmt::Display for CellTypeActivity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.name, self.activity.as_str())
+    }
 }
 
 /// Type of genomic feature that a consequence is annotated against.
@@ -752,6 +1163,75 @@ impl fmt::Display for FeatureType {
     }
 }
 
+/// The kind of row a plugin runs on: a consequence against a feature of one of
+/// the three [`FeatureType`] kinds, or the intergenic row of a variant that
+/// overlaps no transcript.
+///
+/// The names are the values Ensembl VEP's `feature_types` takes
+/// (`Bio::EnsEMBL::Variation::Utils::BaseVepPlugin`), which a shared library
+/// lists in `vep_plugin_feature_types` and a built-in plugin returns from
+/// `feature_types`; a plugin runs on a row only when its list names the row's
+/// kind (`OutputFactory.pm:2223`, `check_feature_type(ref($bvfoa->feature) ||
+/// 'Intergenic')`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RowKind {
+    Transcript,
+    RegulatoryFeature,
+    MotifFeature,
+    Intergenic,
+}
+
+impl RowKind {
+    /// Every kind, in the order Ensembl VEP's overlap list holds the rows.
+    pub const ALL: [RowKind; 4] = [
+        RowKind::Transcript,
+        RowKind::RegulatoryFeature,
+        RowKind::MotifFeature,
+        RowKind::Intergenic,
+    ];
+
+    /// The one kind a plugin runs on when it names none: Ensembl VEP's default
+    /// `feature_types` (`BaseVepPlugin.pm:99`).
+    pub const DEFAULT: [RowKind; 1] = [RowKind::Transcript];
+
+    /// The name a plugin lists, `None` for any other string.
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "Transcript" => Some(Self::Transcript),
+            "RegulatoryFeature" => Some(Self::RegulatoryFeature),
+            "MotifFeature" => Some(Self::MotifFeature),
+            "Intergenic" => Some(Self::Intergenic),
+            _ => None,
+        }
+    }
+
+    /// The name a plugin lists for this kind of row.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Transcript => "Transcript",
+            Self::RegulatoryFeature => "RegulatoryFeature",
+            Self::MotifFeature => "MotifFeature",
+            Self::Intergenic => "Intergenic",
+        }
+    }
+
+    /// The kind of a row: the feature's kind for a consequence row, the
+    /// intergenic kind for a row against no feature.
+    pub fn of_row(feature: Option<FeatureType>) -> Self {
+        feature.map_or(Self::Intergenic, Self::from)
+    }
+}
+
+impl From<FeatureType> for RowKind {
+    fn from(feature: FeatureType) -> Self {
+        match feature {
+            FeatureType::Transcript => Self::Transcript,
+            FeatureType::RegulatoryFeature => Self::RegulatoryFeature,
+            FeatureType::MotifFeature => Self::MotifFeature,
+        }
+    }
+}
+
 /// `cDNA_position`, `CDS_position` and `Protein_position` of an allele's own span
 /// ([`TranscriptConsequence::own_span_positions`]).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -761,26 +1241,14 @@ pub struct OwnSpanPositions {
     pub protein: Option<String>,
 }
 
-/// The cache a transcript of a merged cache came from: Ensembl VEP's
-/// `_source_cache` key, `Ensembl` or `RefSeq` (`Pipeline/DumpVEP/MergeVEP.pm`
-/// at release/116.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub enum SourceCache {
-    Ensembl,
-    RefSeq,
-}
-
 impl Default for TranscriptConsequence {
     fn default() -> Self {
         Self {
-            transcript_id: Arc::from(""),
-            gene_id: Arc::from(""),
-            gene_symbol: None,
-            gene_symbol_source: None,
-            hgnc_id: None,
+            transcript: None,
+            feature_id: None,
+            feature_biotype: None,
             consequences: SmallVec::new(),
             impact: Impact::MODIFIER,
-            biotype: None,
             canonical: false,
             cdna_position: None,
             cds_position: None,
@@ -791,7 +1259,7 @@ impl Default for TranscriptConsequence {
             own_span_positions: None,
             amino_acids: None,
             codons: None,
-            protein_id: None,
+            protein_id_display: ProteinIdDisplay::AsCached,
             distance: None,
             strand: 1,
             exon: None,
@@ -799,61 +1267,54 @@ impl Default for TranscriptConsequence {
             hgvsc: None,
             hgvsp: None,
             hgvs_offset: None,
+            hgvs_offset_of_hgvsc_alone: false,
+            hgvs_intron_offsets: None,
             shift_length: 0,
             shifted_allele: None,
             used_ref: None,
             sift: None,
             polyphen: None,
+            sift_term: None,
+            polyphen_term: None,
+            protein_start: None,
             domains: Vec::new(),
             feature_type: FeatureType::Transcript,
-            flags: Arc::from([]),
-            tsl: None,
-            mane_select: None,
-            mane_plus_clinical: None,
-            appris: None,
-            ccds: None,
-            gencode_primary: false,
-            swissprot: None,
-            trembl: None,
-            uniparc: None,
-            uniprot_isoform: None,
-            refseq: None,
-            transcript_version: None,
-            gene_version: None,
-            gene_phenotype: false,
+            picked: false,
             mirna: Vec::new(),
-            cds_length: None,
-            cdna_length: 0,
-            source_cache: None,
+            bam_edit_status: None,
+            refseq_offset: None,
+            transcript_assembly_mismatch: false,
             plugin_data: indexmap::IndexMap::new(),
+            plugin_empty_strings: Vec::new(),
             feature_start: 0,
             feature_end: 0,
             loftee_ctx: None,
+            exon_ids: None,
+            transcript_sequences: None,
             motif: None,
+            cell_type: None,
             id_rank: 0,
+            motif_db_id: None,
             record_span_in_cds: false,
         }
     }
 }
 
 impl TranscriptConsequence {
-    /// A consequence against `transcript` with every field the transcript
-    /// determines filled from it (ids, symbol, biotype, flags, pick criteria,
-    /// cross-references, strand, span, rank) and every field the variant
-    /// determines empty: no terms, `MODIFIER` impact, no positions, notations,
-    /// predictions or plugin data. Every field is spelled rather than taken
-    /// from `Self::default()`, whose placeholder `Arc`s would be allocated and
-    /// dropped per consequence.
-    pub fn for_transcript(transcript: &Transcript) -> Self {
+    /// A consequence against `transcript`, holding a shared handle on it, with
+    /// every field the transcript determines filled from it (canonical, strand,
+    /// span, edit status, rank) and every field the variant determines empty:
+    /// no terms, `MODIFIER` impact, no positions, notations, predictions or
+    /// plugin data. Built once per transcript a variant overlaps, so every field
+    /// is spelled rather than taken from `Self::default()`: the handle's
+    /// reference count is the row's whole cost, whatever a default value costs.
+    pub fn for_transcript(transcript: &Arc<Transcript>) -> Self {
         Self {
-            transcript_id: transcript.stable_id.clone(),
-            gene_id: transcript.gene_stable_id.clone(),
-            gene_symbol: transcript.gene_symbol.clone(),
-            gene_symbol_source: transcript.gene_symbol_source.clone(),
-            hgnc_id: transcript.hgnc_id.clone(),
+            transcript: Some(Arc::clone(transcript)),
+            feature_id: None,
+            feature_biotype: None,
             consequences: SmallVec::new(),
             impact: Impact::MODIFIER,
-            biotype: Some(transcript.biotype.clone()),
             canonical: transcript.canonical,
             cdna_position: None,
             cds_position: None,
@@ -864,7 +1325,7 @@ impl TranscriptConsequence {
             own_span_positions: None,
             amino_acids: None,
             codons: None,
-            protein_id: transcript.protein_id.clone(),
+            protein_id_display: ProteinIdDisplay::AsCached,
             distance: None,
             strand: transcript.strand.as_i8(),
             exon: None,
@@ -872,40 +1333,274 @@ impl TranscriptConsequence {
             hgvsc: None,
             hgvsp: None,
             hgvs_offset: None,
+            hgvs_offset_of_hgvsc_alone: false,
+            hgvs_intron_offsets: None,
             shift_length: 0,
             shifted_allele: None,
             used_ref: None,
             sift: None,
             polyphen: None,
+            sift_term: None,
+            polyphen_term: None,
+            protein_start: None,
             domains: Vec::new(),
             feature_type: FeatureType::Transcript,
-            flags: transcript.flags.clone(),
-            tsl: transcript.tsl,
-            mane_select: transcript.mane_select.clone(),
-            mane_plus_clinical: transcript.mane_plus_clinical.clone(),
-            appris: transcript.appris.clone(),
-            ccds: transcript.ccds.clone(),
-            gencode_primary: transcript.gencode_primary,
-            swissprot: transcript.swissprot.clone(),
-            trembl: transcript.trembl.clone(),
-            uniparc: transcript.uniparc.clone(),
-            uniprot_isoform: transcript.uniprot_isoform.clone(),
-            refseq: transcript.refseq.clone(),
-            transcript_version: transcript.version,
-            gene_version: transcript.gene_version,
-            gene_phenotype: transcript.gene_phenotype.is_some_and(|count| count > 0),
+            picked: false,
             mirna: Vec::new(),
-            cds_length: transcript.cds_length(),
-            cdna_length: transcript.spliced_length(),
-            source_cache: None,
+            bam_edit_status: transcript.bam_edit_status,
+            refseq_offset: None,
+            transcript_assembly_mismatch: false,
             plugin_data: indexmap::IndexMap::new(),
+            plugin_empty_strings: Vec::new(),
             feature_start: transcript.start,
             feature_end: transcript.end,
             loftee_ctx: None,
+            exon_ids: None,
+            transcript_sequences: None,
             motif: None,
+            cell_type: None,
             id_rank: transcript.id_rank,
+            motif_db_id: None,
             record_span_in_cds: false,
         }
+    }
+
+    /// The source transcript, `None` on a row against no transcript.
+    pub fn transcript(&self) -> Option<&Transcript> {
+        self.transcript.as_deref()
+    }
+
+    /// The key Ensembl VEP stores the row's feature variation under and sorts
+    /// a record's rows of one kind by, as bytes, without the prefix the rejoin
+    /// of a `--minimal` split puts before it (`OutputFactory.pm:2316`): a
+    /// transcript's stable id, then `_` and its database id when the cache
+    /// carries a non-zero one (`BaseVariationFeature.pm:310-320`, sorted at
+    /// `VariationFeature.pm:666`); a regulatory feature's stable id (`:918`,
+    /// `:710`); a motif's database id in decimal (`:937`, `:750`), or its stable
+    /// id when it has none. The byte order of these keys is the order
+    /// [`Self::id_rank`] ranks a sequence variant's rows in; a structural
+    /// variant's regulatory and motif rows carry the met rank instead
+    /// ([`Self::structural_feature_order`]).
+    pub fn ensembl_vep_key(&self) -> impl Iterator<Item = u8> + '_ {
+        let (stable_id, db_id) = match self.feature_type {
+            FeatureType::Transcript => (
+                self.transcript_id(),
+                self.transcript()
+                    .and_then(|transcript| transcript.db_id)
+                    .filter(|&db_id| db_id != 0),
+            ),
+            FeatureType::RegulatoryFeature => (self.transcript_id(), None),
+            FeatureType::MotifFeature => match self.motif_db_id {
+                Some(db_id) => ("", Some(db_id)),
+                None => (self.transcript_id(), None),
+            },
+        };
+        let separator =
+            (self.feature_type == FeatureType::Transcript && db_id.is_some()).then_some(b'_');
+        stable_id
+            .bytes()
+            .chain(separator)
+            .chain(db_id.into_iter().flat_map(decimal_digits))
+    }
+
+    /// The order of two of one structural variant's `RegulatoryFeature` or
+    /// `MotifFeature` rows of one kind, the order Ensembl VEP lists them in
+    /// (`StructuralVariationFeature.pm:495-509` reads the lists
+    /// `AnnotationType/RegFeat.pm:135` fills as the features are met): by
+    /// [`Self::id_rank`], the rank of the order the source lists the features
+    /// in, the record order of the files of `--regulatory_gff` or a cache baked
+    /// from them and the listing order of a converted cache, then by the
+    /// feature's start and its stable id for rows that share a rank.
+    pub fn structural_feature_order(&self, other: &Self) -> std::cmp::Ordering {
+        self.id_rank
+            .cmp(&other.id_rank)
+            .then_with(|| self.feature_start.cmp(&other.feature_start))
+            .then_with(|| self.transcript_id().cmp(other.transcript_id()))
+    }
+
+    /// The feature's stable id: the transcript's (`ENST00000366667`), a
+    /// regulatory or motif feature's (`ENSR00000000001`), or `""` on a row
+    /// against no feature.
+    pub fn transcript_id(&self) -> &str {
+        self.transcript_id_handle().map_or("", |id| id)
+    }
+
+    /// The shared string behind [`Self::transcript_id`]: every row of one
+    /// loaded feature returns the same allocation, so a reader may key on its
+    /// address. `None` on a row against no feature.
+    pub fn transcript_id_handle(&self) -> Option<&Arc<str>> {
+        match &self.transcript {
+            Some(transcript) => Some(&transcript.stable_id),
+            None => self.feature_id.as_ref(),
+        }
+    }
+
+    /// The gene's stable id (`ENSG00000142168`); `""` without a transcript.
+    pub fn gene_id(&self) -> &str {
+        self.gene_id_handle().map_or("", |id| id)
+    }
+
+    /// The shared string behind [`Self::gene_id`]; `None` without a transcript.
+    pub fn gene_id_handle(&self) -> Option<&Arc<str>> {
+        self.transcript().map(|t| &t.gene_stable_id)
+    }
+
+    /// The gene symbol (`SOD1`), `None` without one.
+    pub fn gene_symbol(&self) -> Option<&str> {
+        self.transcript()?.gene_symbol.as_deref()
+    }
+
+    /// The gene symbol's source (`HGNC`), `None` without one.
+    pub fn gene_symbol_source(&self) -> Option<&str> {
+        self.transcript()?.gene_symbol_source.as_deref()
+    }
+
+    /// The HGNC id, `None` without one.
+    pub fn hgnc_id(&self) -> Option<&str> {
+        self.transcript()?.hgnc_id.as_deref()
+    }
+
+    /// The feature's biotype: the transcript's (`protein_coding`), a regulatory
+    /// feature's (`promoter`), or `None` on a row that prints none.
+    pub fn biotype(&self) -> Option<&str> {
+        match &self.transcript {
+            Some(transcript) => Some(&transcript.biotype),
+            None => self.feature_biotype.as_deref(),
+        }
+    }
+
+    /// The protein id the row prints: the transcript's, with its translation
+    /// version appended under `--protein_version`, or `None` on a row that
+    /// prints none ([`ProteinIdDisplay`]).
+    pub fn protein_id(&self) -> Option<Cow<'_, str>> {
+        let id = self.transcript()?.protein_id.as_deref()?;
+        match self.protein_id_display {
+            ProteinIdDisplay::AsCached => Some(Cow::Borrowed(id)),
+            ProteinIdDisplay::Hidden => None,
+            ProteinIdDisplay::Versioned(version) => Some(Cow::Owned(format!("{id}.{version}"))),
+        }
+    }
+
+    /// The transcript's flags (`cds_start_NF`, `cds_end_NF`), empty without a
+    /// transcript; a picked row's `PICK` is [`Self::picked`].
+    pub fn flags(&self) -> &[String] {
+        self.transcript().map_or(&[], |t| &t.flags)
+    }
+
+    /// Transcript Support Level: the digit run of the transcript's `TSL`
+    /// attribute as text ([`Transcript::tsl`]), `None` without one.
+    pub fn tsl(&self) -> Option<&str> {
+        self.transcript()?.tsl.as_deref()
+    }
+
+    /// The `MANE_Select` attribute's value, `Some` when the transcript carries
+    /// the attribute, empty when it carries no value. `--pick`, `--pick_allele`
+    /// and `--flag_pick` prefer MANE-curated transcripts over Ensembl-canonical
+    /// ones (Ensembl VEP `pick_order` slot 0).
+    pub fn mane_select(&self) -> Option<&str> {
+        self.transcript()?.mane_select.as_deref()
+    }
+
+    /// The `MANE_Plus_Clinical` attribute's value, `Some` on presence as above
+    /// (Ensembl VEP `pick_order` slot 1).
+    pub fn mane_plus_clinical(&self) -> Option<&str> {
+        self.transcript()?.mane_plus_clinical.as_deref()
+    }
+
+    /// The APPRIS annotation as the cache spells it (`principal1`,
+    /// `alternative2`; Ensembl VEP `pick_order` slot 3).
+    pub fn appris(&self) -> Option<&str> {
+        self.transcript()?.appris.as_deref()
+    }
+
+    /// The CCDS id, `None` without one.
+    pub fn ccds(&self) -> Option<&str> {
+        self.transcript()?.ccds.as_deref()
+    }
+
+    /// The transcript carries a `gencode_primary` attribute: the
+    /// `GENCODE_PRIMARY` column under `--flag_gencode_primary`.
+    pub fn gencode_primary(&self) -> bool {
+        self.transcript().is_some_and(|t| t.gencode_primary)
+    }
+
+    /// UniProtKB/Swiss-Prot accession(s), comma-separated as the cache
+    /// carries them.
+    pub fn swissprot(&self) -> Option<&str> {
+        self.transcript()?.swissprot.as_deref()
+    }
+
+    /// UniProtKB/TrEMBL accession(s), comma-separated as the cache carries them.
+    pub fn trembl(&self) -> Option<&str> {
+        self.transcript()?.trembl.as_deref()
+    }
+
+    /// UniParc accession(s), comma-separated as the cache carries them.
+    pub fn uniparc(&self) -> Option<&str> {
+        self.transcript()?.uniparc.as_deref()
+    }
+
+    /// UniProtKB isoform accession(s), comma-separated as the cache carries them.
+    pub fn uniprot_isoform(&self) -> Option<&str> {
+        self.transcript()?.uniprot_isoform.as_deref()
+    }
+
+    /// RefSeq transcript id(s), comma-separated as the cache carries them.
+    pub fn refseq(&self) -> Option<&str> {
+        self.transcript()?.refseq.as_deref()
+    }
+
+    /// The transcript's stable-id version: the `.<version>` suffix of the
+    /// `Feature` column under `--transcript_version`.
+    pub fn transcript_version(&self) -> Option<u32> {
+        self.transcript()?.version
+    }
+
+    /// The gene's stable-id version: the `.<version>` suffix of the `Gene`
+    /// column under `--gene_version`.
+    pub fn gene_version(&self) -> Option<u32> {
+        self.transcript()?.gene_version
+    }
+
+    /// The gene has at least one phenotype association: the `GENE_PHENO`
+    /// column under `--gene_phenotype`. Perl truthiness on the cached count
+    /// (`$hash->{GENE_PHENO} = 1 if $self->{gene_phenotype} && $tr->{_gene_phenotype}`,
+    /// OutputFactory.pm:1586 at release/116.2): a count of zero reads as no
+    /// association.
+    pub fn gene_phenotype(&self) -> bool {
+        self.transcript()
+            .and_then(|t| t.gene_phenotype)
+            .is_some_and(|count| count > 0)
+    }
+
+    /// Length of the transcript's translateable sequence as the cache stores it,
+    /// `None` for a transcript without a translation. The `length` pick
+    /// criterion reads it (OutputFactory.pm:743-748 at release/116.2).
+    pub fn cds_length(&self) -> Option<u32> {
+        self.transcript()?.cds_length()
+    }
+
+    /// The transcript's spliced length, the sum of its exon lengths
+    /// (`Bio::EnsEMBL::Transcript::length`), which the `length` pick criterion
+    /// reads for a transcript without a translation; 0 without a transcript.
+    pub fn cdna_length(&self) -> u32 {
+        self.transcript().map_or(0, Transcript::spliced_length)
+    }
+
+    /// The cache the transcript came from in a merged cache (`_source_cache`),
+    /// which the `ensembl` and `refseq` pick criteria read; `None` on every
+    /// single-source cache, where both criteria score alike.
+    pub fn source_cache(&self) -> Option<&SourceCache> {
+        self.transcript()?.source_cache.as_ref()
+    }
+
+    /// The transcript's `rseq` match codes
+    /// ([`RefSeqAlignment::match_codes`](crate::transcript::RefSeqAlignment::match_codes)):
+    /// the `REFSEQ_MATCH` list under `--refseq` or `--merged`; `None` on a
+    /// transcript without one.
+    pub fn refseq_match(&self) -> Option<&[Box<str>]> {
+        let codes = self.transcript()?.rseq_codes();
+        (!codes.is_empty()).then_some(codes)
     }
 
     /// Base pairs of a structural variant's span that fall inside the feature
@@ -929,17 +1624,39 @@ impl TranscriptConsequence {
         // 14.375 the other, printed 14.37 and 14.38).
         Some((bp, 100.0 * (bp as f64 / feature_len as f64)))
     }
+
+    /// The reference and alternate peptides of the row's amino-acid change, the
+    /// two alleles Ensembl VEP's `peptide` reports for the reference and the
+    /// variant `TranscriptVariationAllele`: `amino_acids` is `ref/alt` when the
+    /// two differ and the one shared residue when they agree, so a synonymous
+    /// row returns that residue twice. `None` when the row carries no
+    /// amino-acid change.
+    pub fn peptides(&self) -> Option<(&str, &str)> {
+        let amino_acids = self.amino_acids.as_deref()?;
+        Some(match amino_acids.split_once('/') {
+            Some((reference, alternate)) => (reference, alternate),
+            None => (amino_acids, amino_acids),
+        })
+    }
+}
+
+/// The decimal digits of `n`, most significant first: the bytes of the string
+/// Perl sorts a database id as ([`TranscriptConsequence::ensembl_vep_key`]).
+fn decimal_digits(n: u64) -> impl Iterator<Item = u8> {
+    let count = n.checked_ilog10().map_or(1, |magnitude| magnitude + 1);
+    (0..count)
+        .rev()
+        .map(move |place| b'0' + ((n / 10u64.pow(place)) % 10) as u8)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::coordinate::Strand;
-    use crate::transcript::Exon;
+    use crate::transcript::{Attribute, Exon, TranscriptVEFC, Translation};
 
     fn exon(start: u64, end: u64, rank: u32) -> Exon {
         Exon {
-            stable_id: None,
             start,
             end,
             rank,
@@ -966,6 +1683,7 @@ mod tests {
             source: "Ensembl".into(),
             gene_symbol: None,
             gene_symbol_source: None,
+            gene_symbol_id: None,
             hgnc_id: None,
             gene_phenotype,
             canonical: false,
@@ -981,6 +1699,7 @@ mod tests {
             uniparc: Some("UPI0000000001".to_string()),
             uniprot_isoform: Some("P00001-2,P00001-3".to_string()),
             exons: vec![exon(100, 200, 1)],
+            exon_ids: None,
             introns: vec![],
             cdna_coding_start: None,
             cdna_coding_end: None,
@@ -996,31 +1715,396 @@ mod tests {
             gencode_primary: false,
             attributes: vec![],
             vefc: None,
+            source_cache: None,
+            bam_edit_status: None,
             derived: Default::default(),
             id_rank: 0,
         }
     }
 
-    /// The versions and UniProt cross-references copy over as the cache
-    /// carries them, the miRNA terms wait for the variant, and `GENE_PHENO`
-    /// follows Perl truthiness on the cached phenotype count
+    /// A consequence reads the transcript's versions, UniProt cross-references
+    /// and phenotype flag through its handle, as the cache carries them, the
+    /// miRNA terms wait for the variant, and `GENE_PHENO` follows Perl truthiness
+    /// on the cached phenotype count
     /// (`$hash->{GENE_PHENO} = 1 if $self->{gene_phenotype} && $tr->{_gene_phenotype}`,
     /// OutputFactory.pm:1586 at release/116.2): a count of zero reads as no
     /// association.
     #[test]
-    fn for_transcript_copies_versions_xrefs_and_phenotype_flag() {
-        let tc = TranscriptConsequence::for_transcript(&annotated_transcript(Some(3)));
-        assert_eq!(tc.transcript_version, Some(7));
-        assert_eq!(tc.gene_version, Some(12));
-        assert_eq!(tc.uniparc.as_deref(), Some("UPI0000000001"));
-        assert_eq!(tc.uniprot_isoform.as_deref(), Some("P00001-2,P00001-3"));
-        assert!(tc.gene_phenotype);
+    fn accessors_read_the_borrowed_transcript() {
+        let transcript = Arc::new(annotated_transcript(Some(3)));
+        let tc = TranscriptConsequence::for_transcript(&transcript);
+        assert!(Arc::ptr_eq(tc.transcript.as_ref().unwrap(), &transcript));
+        assert_eq!(tc.transcript_id(), "ENST00000000001");
+        assert_eq!(tc.gene_id(), "ENSG00000000001");
+        assert_eq!(tc.biotype(), Some("protein_coding"));
+        assert_eq!(tc.transcript_version(), Some(7));
+        assert_eq!(tc.gene_version(), Some(12));
+        assert_eq!(tc.uniparc(), Some("UPI0000000001"));
+        assert_eq!(tc.uniprot_isoform(), Some("P00001-2,P00001-3"));
+        assert_eq!(tc.cdna_length(), 101);
+        assert_eq!(tc.cds_length(), None);
+        assert!(tc.gene_phenotype());
         assert!(tc.mirna.is_empty());
+        assert!(tc.flags().is_empty());
+        assert_eq!(tc.protein_id(), None);
 
-        let zero = TranscriptConsequence::for_transcript(&annotated_transcript(Some(0)));
-        assert!(!zero.gene_phenotype);
-        let unknown = TranscriptConsequence::for_transcript(&annotated_transcript(None));
-        assert!(!unknown.gene_phenotype);
+        let zero = TranscriptConsequence::for_transcript(&Arc::new(annotated_transcript(Some(0))));
+        assert!(!zero.gene_phenotype());
+        let unknown = TranscriptConsequence::for_transcript(&Arc::new(annotated_transcript(None)));
+        assert!(!unknown.gene_phenotype());
+
+        let none = TranscriptConsequence::default();
+        assert_eq!(none.transcript_id(), "");
+        assert_eq!(none.gene_id(), "");
+        assert_eq!(none.biotype(), None);
+        assert_eq!(none.cdna_length(), 0);
+        let regulatory = TranscriptConsequence {
+            feature_id: Some(Arc::from("ENSR00000000001")),
+            feature_biotype: Some(Arc::from("promoter")),
+            feature_type: FeatureType::RegulatoryFeature,
+            ..TranscriptConsequence::default()
+        };
+        assert_eq!(regulatory.transcript_id(), "ENSR00000000001");
+        assert_eq!(regulatory.biotype(), Some("promoter"));
+        assert_eq!(regulatory.gene_id(), "");
+    }
+
+    /// The protein id prints as the cache carries it, with the translation's
+    /// version appended under `--protein_version`, or not at all on a row that
+    /// hides it.
+    #[test]
+    fn protein_id_follows_its_display() {
+        let mut transcript = annotated_transcript(None);
+        transcript.protein_id = Some("ENSP00000000001".into());
+        let mut tc = TranscriptConsequence::for_transcript(&Arc::new(transcript));
+        assert_eq!(tc.protein_id().as_deref(), Some("ENSP00000000001"));
+        tc.protein_id_display = ProteinIdDisplay::Versioned(3);
+        assert_eq!(tc.protein_id().as_deref(), Some("ENSP00000000001.3"));
+        tc.protein_id_display = ProteinIdDisplay::Hidden;
+        assert_eq!(tc.protein_id(), None);
+    }
+
+    /// A transcript carrying every attribute the document prints: the versions,
+    /// symbol, cross-references, pick criteria, flags, a translation of 300
+    /// bases, one exon of 1,500 bases and an `rseq` match code.
+    fn fully_annotated_transcript() -> Transcript {
+        Transcript {
+            stable_id: "ENST00000000001".into(),
+            version: Some(7),
+            gene_stable_id: "ENSG00000000001".into(),
+            gene_version: Some(12),
+            chr: "1".into(),
+            start: 100,
+            end: 1599,
+            strand: Strand::Reverse,
+            biotype: "protein_coding".into(),
+            source: "Ensembl".into(),
+            gene_symbol: Some("GENE1".into()),
+            gene_symbol_source: Some("HGNC".into()),
+            hgnc_id: Some("HGNC:1".into()),
+            gene_phenotype: Some(3),
+            canonical: true,
+            mane_select: Some("NM_000001.1".to_string()),
+            mane_plus_clinical: Some("NM_000002.1".to_string()),
+            tsl: Some("1".to_string()),
+            appris: Some("principal1".to_string()),
+            ccds: Some("CCDS1.1".to_string()),
+            protein_id: Some("ENSP00000000001".into()),
+            refseq: Some("NM_000001.1".to_string()),
+            swissprot: Some("P00001".to_string()),
+            trembl: Some("Q00001".to_string()),
+            uniparc: Some("UPI0000000001".to_string()),
+            uniprot_isoform: Some("P00001-2".to_string()),
+            exons: vec![Exon {
+                start: 100,
+                end: 1599,
+                rank: 1,
+                phase: 0,
+                end_phase: 0,
+            }],
+            cdna_coding_start: Some(1),
+            cdna_coding_end: Some(300),
+            coding_region_start: Some(100),
+            coding_region_end: Some(399),
+            translation_start: Some(100),
+            translation_end: Some(399),
+            translation: Some(Translation {
+                stable_id: "ENSP00000000001".into(),
+                version: Some(2),
+                db_id: None,
+                start: 1,
+                end: 300,
+                start_exon_index: 0,
+                end_exon_index: 0,
+                seq: None,
+            }),
+            flags: Arc::from(["cds_start_NF".to_string()]),
+            gencode_basic: true,
+            gencode_primary: true,
+            attributes: vec![Attribute {
+                code: "rseq_mrna_match".into(),
+                value: String::new(),
+            }],
+            vefc: Some(TranscriptVEFC {
+                translateable_seq: Some("A".repeat(300)),
+                ..Default::default()
+            }),
+            source_cache: Some(SourceCache::Ensembl),
+            bam_edit_status: Some(BamEditStatus::Ok),
+            id_rank: 5,
+            ..Transcript::default()
+        }
+    }
+
+    /// A consequence with every optional key populated, against
+    /// [`fully_annotated_transcript`].
+    fn fully_populated_consequence() -> TranscriptConsequence {
+        let transcript = Arc::new(fully_annotated_transcript());
+        let mut tc = TranscriptConsequence::for_transcript(&transcript);
+        tc.consequences = smallvec::smallvec![
+            Consequence::MissenseVariant,
+            Consequence::SpliceRegionVariant
+        ];
+        tc.impact = Impact::MODERATE;
+        tc.cdna_position = Some("428".into());
+        tc.cds_position = Some("301".into());
+        tc.protein_position = Some("101".into());
+        tc.cdna_total = Some(1500);
+        tc.cds_total = Some(300);
+        tc.protein_total = Some(99);
+        tc.own_span_positions = Some(Box::new(OwnSpanPositions {
+            cdna: Some("439".into()),
+            cds: Some("87".into()),
+            protein: Some("29".into()),
+        }));
+        tc.amino_acids = Some("A/V".into());
+        tc.codons = Some("gCc/gTc".into());
+        tc.distance = Some(5);
+        tc.exon = Some("3/5".into());
+        tc.intron = Some("2/4".into());
+        tc.hgvsc = Some("ENST00000000001.7:c.301G>A".into());
+        tc.hgvsp = Some("ENSP00000000001.2:p.Ala101Val".into());
+        tc.hgvs_offset = Some(2);
+        tc.shift_length = 1;
+        tc.shifted_allele = Some(Arc::from("GAA"));
+        tc.used_ref = Some(Arc::from("A"));
+        tc.sift = Some("deleterious(0.01)".into());
+        tc.polyphen = Some("probably_damaging(0.998)".into());
+        tc.domains = vec![("Pfam".to_string(), "PF00080".to_string())];
+        tc.mirna = vec!["miRNA_stem".to_string()];
+        tc.refseq_offset = Some(3);
+        tc.transcript_assembly_mismatch = true;
+        tc.plugin_data
+            .insert("REVEL_score".to_string(), "0.9".to_string());
+        tc.loftee_ctx = Some(Box::new(LofteeContext::from_transcript(&transcript)));
+        tc.motif = Some(Box::new(MotifFields {
+            name: Arc::from("ENSPFM0290"),
+            pos: Some(7),
+            high_inf_pos: Some(true),
+            score_change: Some(-0.5),
+            factors: Arc::from([Arc::from("HNF4A")]),
+        }));
+        tc.cell_type = Some(Box::from([CellTypeActivity {
+            name: Arc::from("HeLa-S3"),
+            activity: Activity::Active,
+        }]));
+        tc.record_span_in_cds = true;
+        tc
+    }
+
+    /// The top-level keys of a JSON object in document order.
+    struct KeyOrder(Vec<String>);
+
+    impl<'de> serde::Deserialize<'de> for KeyOrder {
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            struct Keys;
+            impl<'de> serde::de::Visitor<'de> for Keys {
+                type Value = KeyOrder;
+                fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    f.write_str("a JSON object")
+                }
+                fn visit_map<A: serde::de::MapAccess<'de>>(
+                    self,
+                    mut map: A,
+                ) -> Result<KeyOrder, A::Error> {
+                    let mut keys = Vec::new();
+                    while let Some(key) = map.next_key::<String>()? {
+                        map.next_value::<serde::de::IgnoredAny>()?;
+                        keys.push(key);
+                    }
+                    Ok(KeyOrder(keys))
+                }
+            }
+            deserializer.deserialize_map(Keys)
+        }
+    }
+
+    fn key_order(tc: &TranscriptConsequence) -> Vec<String> {
+        let text = serde_json::to_string(tc).unwrap();
+        serde_json::from_str::<KeyOrder>(&text).unwrap().0
+    }
+
+    /// The document of a consequence with every optional key populated carries
+    /// the keys of the fixture, in its order: the key list of a serde derive
+    /// over a row that holds the transcript's values as fields of its own. An
+    /// empty consequence carries the unconditional keys alone, in the same
+    /// order.
+    #[test]
+    fn serialize_emits_the_derive_key_set_in_order() {
+        let expected: Vec<&str> = include_str!("../tests/fixtures/transcript_consequence_keys.txt")
+            .lines()
+            .collect();
+        assert_eq!(key_order(&fully_populated_consequence()), expected);
+        let listed: Vec<&str> = TRANSCRIPT_CONSEQUENCE_KEYS
+            .iter()
+            .map(|(key, _)| *key)
+            .collect();
+        assert_eq!(listed, expected);
+        let unconditional: Vec<&str> = TRANSCRIPT_CONSEQUENCE_KEYS
+            .iter()
+            .filter(|(_, optional)| !optional)
+            .map(|(key, _)| *key)
+            .collect();
+        assert_eq!(key_order(&TranscriptConsequence::default()), unconditional);
+    }
+
+    /// The whole document text of the fully populated consequence and of the
+    /// empty one equals the fixture documents of that derive: every value read
+    /// through an accessor is encoded as the field of the same name is.
+    #[test]
+    fn serialize_writes_the_derive_document() {
+        assert_eq!(
+            serde_json::to_string(&fully_populated_consequence()).unwrap(),
+            include_str!("../tests/fixtures/transcript_consequence_document.json").trim_end()
+        );
+        assert_eq!(
+            serde_json::to_string(&TranscriptConsequence::default()).unwrap(),
+            include_str!("../tests/fixtures/transcript_consequence_empty.json").trim_end()
+        );
+        let mut picked =
+            TranscriptConsequence::for_transcript(&Arc::new(fully_annotated_transcript()));
+        picked.picked = true;
+        let value = serde_json::to_value(&picked).unwrap();
+        assert_eq!(value["flags"], serde_json::json!(["cds_start_NF", "PICK"]));
+    }
+
+    /// The document's `tsl` is the number the level's digit run spells: `007`
+    /// is 7, a run past 64 bits a double, one past the double's range the text
+    /// itself, and `null` without a level.
+    #[test]
+    fn serialize_writes_the_level_as_its_number() {
+        let tsl = |level: Option<&str>| {
+            let mut transcript = fully_annotated_transcript();
+            transcript.tsl = level.map(str::to_string);
+            let row = TranscriptConsequence::for_transcript(&Arc::new(transcript));
+            serde_json::to_value(&row).unwrap()["tsl"].clone()
+        };
+        assert_eq!(tsl(Some("007")), serde_json::json!(7));
+        assert_eq!(tsl(Some("00")), serde_json::json!(0));
+        assert_eq!(tsl(Some("999")), serde_json::json!(999));
+        assert_eq!(
+            tsl(Some("18446744073709551616")),
+            serde_json::json!(18446744073709551616.0)
+        );
+        let past_the_double = "9".repeat(400);
+        assert_eq!(
+            tsl(Some(&past_the_double)),
+            serde_json::Value::String(past_the_double)
+        );
+        assert_eq!(tsl(None), serde_json::Value::Null);
+    }
+
+    /// The coding sequence, protein and codon table come from
+    /// `_variation_effect_feature_cache` as the cache stores them, the 3' UTR
+    /// from the caller; a transcript whose cache lacks a translateable sequence,
+    /// or that has no cache, has no sequences.
+    #[test]
+    fn transcript_sequences_come_from_the_cache_and_the_callers_utr() {
+        let mut transcript = annotated_transcript(None);
+        transcript.vefc = Some(TranscriptVEFC {
+            codon_table: 2,
+            translateable_seq: Some("NNATGCCCTAA".to_string()),
+            peptide: Some("XP".to_string()),
+            ..Default::default()
+        });
+        let with_utr =
+            TranscriptSequences::from_transcript(&transcript, Some(b"GGGTAG".to_vec())).unwrap();
+        assert_eq!(
+            with_utr,
+            TranscriptSequences {
+                cds: Box::from("NNATGCCCTAA"),
+                three_prime_utr: Some(Box::from("GGGTAG")),
+                peptide: Some(Box::from("XP")),
+                codon_table: 2,
+            }
+        );
+        let without_utr = TranscriptSequences::from_transcript(&transcript, None).unwrap();
+        assert_eq!(
+            without_utr,
+            TranscriptSequences {
+                three_prime_utr: None,
+                ..with_utr
+            }
+        );
+
+        transcript.vefc.as_mut().unwrap().peptide = None;
+        assert_eq!(
+            TranscriptSequences::from_transcript(&transcript, None)
+                .unwrap()
+                .peptide,
+            None
+        );
+        transcript.vefc.as_mut().unwrap().translateable_seq = None;
+        assert_eq!(
+            TranscriptSequences::from_transcript(&transcript, Some(b"GGG".to_vec())),
+            None
+        );
+        transcript.vefc = None;
+        assert_eq!(
+            TranscriptSequences::from_transcript(&transcript, None),
+            None
+        );
+    }
+
+    /// `OVERLAP_CONSEQUENCES` (ensembl-variation `Utils/Constants.pm`) marks
+    /// thirteen terms `include => {coding => 1}`; `coding_transcript_variant`
+    /// is not among them.
+    #[test]
+    fn coding_include_terms_are_the_thirteen_of_overlap_consequences() {
+        let coding: Vec<&str> = Consequence::ALL
+            .iter()
+            .filter(|c| c.is_coding_include())
+            .map(|c| c.so_term())
+            .collect();
+        assert_eq!(
+            coding,
+            [
+                "stop_gained",
+                "frameshift_variant",
+                "stop_lost",
+                "start_lost",
+                "inframe_insertion",
+                "inframe_deletion",
+                "missense_variant",
+                "protein_altering_variant",
+                "incomplete_terminal_codon_variant",
+                "start_retained_variant",
+                "stop_retained_variant",
+                "synonymous_variant",
+                "coding_sequence_variant",
+            ]
+        );
+        assert!(!Consequence::CodingTranscriptVariant.is_coding_include());
+    }
+
+    /// `ALL` lists the terms in rank order, so a term's position is its
+    /// discriminant and one less than its rank.
+    #[test]
+    fn all_lists_every_term_in_rank_order() {
+        for (index, term) in Consequence::ALL.iter().enumerate() {
+            assert_eq!(*term as usize, index);
+            assert_eq!(term.rank() as usize, index + 1);
+        }
     }
 
     #[test]
@@ -1151,5 +2235,157 @@ mod tests {
                 FeatureType::MotifFeature
             ]
         );
+    }
+
+    /// The key Ensembl VEP 116.2 stores a row's feature variation under: a
+    /// transcript's stable id with `_` and its database id, which `sort keys`
+    /// orders before the stable id alone when that id is a prefix of the other
+    /// (`AT4G12020.10_118783` before `AT4G12020.1_118785`, `_` sorting after
+    /// every digit; BaseVariationFeature.pm:310-320, VariationFeature.pm:666); a
+    /// transcript with no database id or a zero one keeps its stable id alone,
+    /// as `if(my $dbID = $tr->dbID)` skips both; a regulatory feature's stable
+    /// id (VariationFeature.pm:918); a motif's database id as the digits Perl
+    /// sorts as a string (MotifFeatureVariation.pm:70-76, VariationFeature.pm:937),
+    /// and its stable id when it has none.
+    #[test]
+    fn ensembl_vep_key_is_the_stable_id_with_the_database_id() {
+        let key = |row: &TranscriptConsequence| {
+            String::from_utf8(row.ensembl_vep_key().collect()).unwrap()
+        };
+        let transcript = |stable_id: &str, db_id: Option<u64>| {
+            TranscriptConsequence::for_transcript(&Arc::new(Transcript {
+                stable_id: stable_id.into(),
+                db_id,
+                ..annotated_transcript(None)
+            }))
+        };
+        let ten = transcript("AT4G12020.10", Some(118783));
+        let one = transcript("AT4G12020.1", Some(118785));
+        assert_eq!(key(&ten), "AT4G12020.10_118783");
+        assert_eq!(key(&one), "AT4G12020.1_118785");
+        assert!(ten.ensembl_vep_key().lt(one.ensembl_vep_key()));
+        assert!(one.transcript_id() < ten.transcript_id());
+        assert_eq!(key(&transcript("ENST00000000001", None)), "ENST00000000001");
+        assert_eq!(
+            key(&transcript("ENST00000000001", Some(0))),
+            "ENST00000000001"
+        );
+
+        let feature = |stable_id: &str, feature_type: FeatureType, motif_db_id: Option<u64>| {
+            TranscriptConsequence {
+                feature_id: Some(stable_id.into()),
+                feature_type,
+                motif_db_id,
+                ..TranscriptConsequence::default()
+            }
+        };
+        assert_eq!(
+            key(&feature(
+                "ENSR21_BBBWM",
+                FeatureType::RegulatoryFeature,
+                Some(9)
+            )),
+            "ENSR21_BBBWM"
+        );
+        let motif = feature("ENSM00000575394", FeatureType::MotifFeature, Some(575394));
+        assert_eq!(key(&motif), "575394");
+        assert_eq!(
+            key(&feature("ENSM00000575394", FeatureType::MotifFeature, None)),
+            "ENSM00000575394"
+        );
+        assert_eq!(
+            key(&feature("ENSM_TEN", FeatureType::MotifFeature, Some(10))),
+            "10"
+        );
+        assert_eq!(
+            key(&feature(
+                "ENSM_MAX",
+                FeatureType::MotifFeature,
+                Some(u64::MAX)
+            )),
+            u64::MAX.to_string()
+        );
+    }
+
+    /// Database ids on both sides of six boundaries of the digit count, from
+    /// one digit to two up to nineteen to twenty, with a prefix pair, zero and
+    /// the largest value, sort by their `decimal_digits` as their decimal
+    /// strings do, the order of Perl's string sort. The regulatory index of
+    /// `vep-cli` holds its `decimal_string_order` to the same list and the same
+    /// expected order.
+    #[test]
+    fn database_ids_sort_as_their_decimal_strings() {
+        const IDS: [u64; 18] = [
+            0,
+            1,
+            9,
+            10,
+            11,
+            57,
+            99,
+            100,
+            570,
+            999,
+            1_000,
+            999_999,
+            1_000_000,
+            9_999_999_999,
+            10_000_000_000,
+            9_999_999_999_999_999_999,
+            10_000_000_000_000_000_000,
+            u64::MAX,
+        ];
+        const BY_DECIMAL_STRING: [u64; 18] = [
+            0,
+            1,
+            10,
+            100,
+            1_000,
+            1_000_000,
+            10_000_000_000,
+            10_000_000_000_000_000_000,
+            11,
+            u64::MAX,
+            57,
+            570,
+            9,
+            99,
+            999,
+            999_999,
+            9_999_999_999,
+            9_999_999_999_999_999_999,
+        ];
+        let mut as_strings = IDS;
+        as_strings.sort_by_cached_key(|id| id.to_string());
+        assert_eq!(as_strings, BY_DECIMAL_STRING);
+        let mut sorted = IDS;
+        sorted.sort_by(|a, b| decimal_digits(*a).cmp(decimal_digits(*b)));
+        assert_eq!(sorted, BY_DECIMAL_STRING);
+    }
+
+    /// `amino_acids` prints `ref/alt` for a change and the one residue for a
+    /// synonymous row, so the peptides are the two sides or that residue twice.
+    #[test]
+    fn peptides_split_the_amino_acid_change() {
+        let row = |amino_acids: Option<&str>| TranscriptConsequence {
+            amino_acids: amino_acids.map(str::to_string),
+            ..TranscriptConsequence::default()
+        };
+        assert_eq!(row(Some("A/V")).peptides(), Some(("A", "V")));
+        assert_eq!(row(Some("K")).peptides(), Some(("K", "K")));
+        assert_eq!(row(Some("-/H")).peptides(), Some(("-", "H")));
+        assert_eq!(row(Some("A/VX")).peptides(), Some(("A", "VX")));
+        assert_eq!(row(None).peptides(), None);
+    }
+
+    /// The plugin empty-string mark is a three-word list on the row and on the
+    /// record, so a row measures its fields' 704 bytes plus the list and a
+    /// record its 1280 plus the list on a 64-bit target.
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn plugin_empty_mark_costs_a_row_and_a_record_a_list() {
+        assert_eq!(size_of::<Vec<String>>(), 3 * size_of::<usize>());
+        assert_eq!(size_of::<TranscriptConsequence>(), 728);
+        assert_eq!(size_of::<crate::variant::InputVariant>(), 1304);
     }
 }

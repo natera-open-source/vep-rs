@@ -1,0 +1,32 @@
+entry = "utrannotator_annotation_pair_order"
+page = "docs/divergences/utrannotator-annotation-pair-order.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 574.2 per million by output rows · 4 flag sets, 2 corpora"
+notes = "The record is ClinVar variation 4159501, a substitution of the last base of an upstream ORF's start codon on ENST00000619120; both engines report the lost start codon with the same seven pairs. Ensembl VEP writes the pairs by walking a hash's keys (UTRAnnotator.pm:282-283): the order recorded here under the fixed seed of this run, and other orders under Perl's own seed. vep-rs writes them in byte order of their keys."
+
+[input]
+format = "vcf"
+text = """
+21	14516984	4159501	C	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-utr-annotator/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-utr-annotator/reference.fa.gz"
+
+[run]
+flags = ["--plugin", "UTRAnnotator,file={repo}/tests/golden/116/GRCh38-plugin-utr-annotator/data/uORF_5UTR_GRCh38_PUBLIC.chr21.txt"]
+format = "default"
+
+[compare]
+kind = "field"
+field = "5UTR_annotation"
+where = { record = "4159501", feature = "ENST00000619120" }
+
+[expected]
+ensembl_vep = ["KozakContext=ATAATGG:type=OutOfFrame_oORF:KozakStrength=Strong:DistanceToStop=24:DistanceToCDS=23:CapDistanceToStart=407:Evidence=False"]
+vep_rs = ["CapDistanceToStart=407:DistanceToCDS=23:DistanceToStop=24:Evidence=False:KozakContext=ATAATGG:KozakStrength=Strong:type=OutOfFrame_oORF"]

@@ -3,9 +3,10 @@
 
 //! Reference genome assembly identity.
 //!
-//! Several annotation databases ship a single file that carries coordinates for
-//! both GRCh37 and GRCh38 in different columns (REVEL, dbNSFP), or ship
-//! structurally different bundles per assembly (LoFTEE's GERP data is a tabix
+//! Several plugins read a single file that carries coordinates for both GRCh37
+//! and GRCh38 in different columns (REVEL, and dbNSFP as `dbNSFP.pm:316-334`
+//! reads it), or read structurally different bundles per assembly (LoFTEE's GERP
+//! data is a tabix
 //! TSV on GRCh37 and a bigWig on GRCh38). Such plugins cannot pick the right
 //! column or the right reader without knowing which assembly the run targets,
 //! so the resolved assembly is threaded from `--assembly` down into plugin
@@ -19,8 +20,8 @@ use std::fmt;
 
 /// A reference genome assembly.
 ///
-/// Parsed leniently from the `--assembly` CLI value so the common aliases all
-/// resolve: `GRCh37`/`grch37`/`hg19`/`37` and `GRCh38`/`grch38`/`hg38`/`38`.
+/// Parsed from the `--assembly` CLI value by its aliases, each whole and in any
+/// case: `GRCh37`/`hg19`/`37` and `GRCh38`/`hg38`/`38`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Assembly {
     /// GRCh37, also known as hg19.
@@ -34,19 +35,14 @@ impl Assembly {
     ///
     /// Returns `None` for anything unrecognized, so callers can distinguish
     /// "no assembly given" from "an unrecognized assembly" and decide
-    /// whether that is fatal for their purposes.
+    /// whether that is fatal for their purposes. Only a whole alias matches, so
+    /// another species' assembly whose name carries a human assembly's digits
+    /// (`GRCm38`) is unrecognized rather than read as the human one.
     pub fn parse(value: &str) -> Option<Self> {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            return None;
-        }
-        let lower = trimmed.to_ascii_lowercase();
-        if lower.contains("37") || lower.contains("hg19") {
-            Some(Assembly::Grch37)
-        } else if lower.contains("38") || lower.contains("hg38") {
-            Some(Assembly::Grch38)
-        } else {
-            None
+        match value.trim().to_ascii_lowercase().as_str() {
+            "grch37" | "hg19" | "37" => Some(Assembly::Grch37),
+            "grch38" | "hg38" | "38" => Some(Assembly::Grch38),
+            _ => None,
         }
     }
 
@@ -60,8 +56,9 @@ impl Assembly {
 
     /// The UCSC-style name (`hg19` or `hg38`).
     ///
-    /// Some upstream data files are named and self-describe with this spelling
-    /// (AlphaMissense's `genome` column, SpliceAI's filenames), so plugins that
+    /// Some data files are named and self-describe with this spelling
+    /// (AlphaMissense's `genome` column, the SpliceAI file names of the plugin's
+    /// usage example, SpliceAI.pm:117-129), so plugins that
     /// validate a file against the requested assembly need both forms.
     pub fn ucsc_name(&self) -> &'static str {
         match self {
@@ -101,11 +98,18 @@ mod tests {
         assert_eq!(Assembly::parse("38"), Some(Assembly::Grch38));
     }
 
+    /// Another species' assembly is unrecognized even when its name carries a
+    /// human assembly's digits, as the mouse `GRCm38` does, and so is a human
+    /// name with a patch suffix: a plugin reading the hint gets none rather
+    /// than the wrong human one.
     #[test]
     fn unrecognized_and_empty_values_are_none() {
         assert_eq!(Assembly::parse(""), None);
         assert_eq!(Assembly::parse("   "), None);
         assert_eq!(Assembly::parse("GRCm39"), None);
+        assert_eq!(Assembly::parse("GRCm38"), None);
+        assert_eq!(Assembly::parse("BDGP6.54"), None);
+        assert_eq!(Assembly::parse("GRCh38.p14"), None);
         assert_eq!(Assembly::parse("T2T-CHM13"), None);
     }
 

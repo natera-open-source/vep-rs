@@ -1,0 +1,64 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "14 hand-built VCF records on chromosome 21 of the release-116 GRCh38 cache: an intergenic SNV, an intronic SNV of a non-coding transcript, single-base substitutions called stop_lost, missense (one with two alternate alleles) on a reverse-strand transcript and start_lost, missense, synonymous (one lower-case), stop_gained on a forward-strand one, a two-base substitution, a start_lost SNV the score file leaves out, a deletion and an insertion",
+ "sha256": {
+  "default.txt": "4a7dbf009ddc64964bed97bccadac874130f6eda3fe9070d175047283f37820f",
+  "tab.txt": "87a0cb85392d65c02520657b1b09156d35106d6038dd7d1095615686c31beae8",
+  "vcf.vcf": "5d8db0ba5bacfcb0ac86f15c128472e752ed557fe0cd3b5c9513650e27552601",
+  "json.jsonl": "232c69c4189f1f81f5af68696c8c4cbf6af24b3b9237aee0e72213d74ea4859f"
+ },
+ "variants_vcf_sha256": "93b492d6382c05faa99de3f879c16edb935f83f2854d041f579a0d2df492fa40",
+ "plugin_fixtures": {
+  "BayesDel_170824_addAF_all_scores_synthetic.txt.gz": {
+   "generator": "scripts/fixtures/plugin_score_fixtures.py",
+   "shape": "bayesdel",
+   "seed": 38,
+   "chr_style": "bare",
+   "misses": [
+    "21:30642890"
+   ],
+   "variants_vcf_sha256": "93b492d6382c05faa99de3f879c16edb935f83f2854d041f579a0d2df492fa40",
+   "rows": {
+    "snv": 30,
+    "non_snv": 3,
+    "miss": 1
+   },
+   "files": {
+    "data/BayesDel_170824_addAF_all_scores_synthetic.txt.gz": "d1e7905f622d8ff4b242acca899784ec94f6226700efd185063090bd00c310bc",
+    "data/BayesDel_170824_addAF_all_scores_synthetic.txt.gz.tbi": "446106d1b5349dcb2912a7b24141dfbf34ce1c07cdbe5b5bb3684df4007965d3"
+   },
+   "tools": {
+    "bgzip": "bgzip (htslib) 1.22.1",
+    "tabix": "tabix (htslib) 1.22.1"
+   }
+  }
+ },
+ "flag_sets": {
+  "bayesdel": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin BayesDel,file={corpus}/data/BayesDel_170824_addAF_all_scores_synthetic.txt.gz [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_bayesdel",
+   "sha256": {
+    "default.txt": "98404dedd9cdd435de3e721d507eac58bb69e546892b1e99668cbade9218257c",
+    "tab.txt": "d3fba728cb4c5baae891782b52bc11043bc3b9f207f0a162298113e2698c80f2",
+    "vcf.vcf": "b5cb06fab77cf56d7504fdac1ef38e8e2d7f47fe9b7717c9f69a9407a9cb2ab3",
+    "json.jsonl": "ddc014bb893477ee7c31f51a300f5f7f04cf11ace621b3d1206b53c6e2df33fd"
+   }
+  }
+ },
+ "generator": "data/BayesDel_170824_addAF_all_scores_synthetic.txt.gz: scripts/fixtures/plugin_score_fixtures.py from variants.vcf, the layout the plugin's documentation prepares (BayesDel.pm:53-62 and 64-65), in the fixture a `#` header line and the columns `chr pos ref alt score`, with fabricated scores, one row per alternate base at every single-base site (the row the plugin must pick beside two it must not), plus one row per insertion, deletion and two-base substitution allele in the representation the plugin compares, no row at the unscored site, bgzip and tabix -s 1 -b 2 -e 2 (seed and digests under plugin_fixtures); the file's name is the name the plugin's documentation gives (BayesDel.pm:31), with the word `synthetic` added before the extension to say that the file is made up; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh38 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the manifest's run, and one Ensembl VEP 116.2 container run per format for each flag set from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus and the BayesDel plugin read from the container's plugin directory; manifest: scripts/golden/build_golden_corpus.py select --include for every record, flag-set, then classify for the manifest's run and each flag set against the committed tree's binary",
+ "pruned_cache_transcripts": {
+  "21": 5
+ }
+}

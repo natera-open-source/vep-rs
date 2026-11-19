@@ -1,0 +1,3 @@
+wrote per-class counts: {{SCRATCH}}/per_class.csv (17 rows vep-rs/ds_a)
+terms: 17  VEP tuples: 22  VEP-only: 11  engine-only: 20
+no term reaches 1000 VEP tuples on this dataset, so it contributes no per-dataset floor

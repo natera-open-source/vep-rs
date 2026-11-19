@@ -1,0 +1,28 @@
+entry = "empty_csq_entry_removal"
+page = "docs/divergences/empty-csq-entry.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.3 specification, section 1.6.1 \"Fixed fields\", INFO (format key[=value[,...,value]], a dot allowed in a key); not seen in the measured datasets; classed by its most reachable shape, an entry whose value is empty: an INFO column that begins with a semicolon breaks that format"
+notes = "The first mechanism of the entry: the input INFO `CSQ=;DP=4`. Ensembl VEP's substitution removes the empty CSQ entry together with `DP=4`, so the output INFO has no DP entry; vep-rs removes the empty entry alone and keeps DP=4 before the new CSQ entry."
+
+[input]
+format = "vcf"
+text = """
+21	5030602	empty_csq	A	G	.	.	CSQ=;DP=4
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-writers/json_cache"
+
+[compare]
+kind = "vcf"
+info = "DP"
+field = "DP"
+where = { record = "empty_csq" }
+
+[expected]
+ensembl_vep = ["-"]
+vep_rs = ["4"]

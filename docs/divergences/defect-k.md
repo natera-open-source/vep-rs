@@ -1,6 +1,6 @@
 # Defect K: a non-integer coordinate text is annotated and printed
 
-**The defect in one sentence.** Ensembl VEP annotates a record whose `INFO/END`, `SVLEN` or POS is a fraction, an exponent or `NaN` with the text in its Location and a fractional `DISTANCE`, checking only that the start and end look like numbers.
+**The defect in one sentence.** Ensembl VEP annotates a record whose `INFO/END`, `SVLEN` or POS is a fraction, an exponent or `NaN` with the text in its Location and a fractional `DISTANCE`, checking only that the start and end look like numbers. vep-rs refuses a non-integer `END` and reports the line, and reads `SVLEN` and POS at the number the text denotes.
 
 It takes `INFO/END`, `SVLEN` and POS as the text they are written in.
 

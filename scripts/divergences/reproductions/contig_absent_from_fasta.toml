@@ -1,0 +1,36 @@
+entry = "contig_absent_from_fasta"
+page = "docs/cache-setup.md#reference-fasta"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 390 of 487 MT records · 24 flag sets, 11 corpora"
+notes = "The corpus FASTA holds 21 and MT; the prepared copy ends before the MT record, so MT is a contig the FASTA lacks while both caches hold it. A one-base record at MT:1 under --lookup_ref: Ensembl VEP reads the placeholder slice's N as the reference and annotates, vep-rs skips the record with the could-not-fetch warning."
+# The FASTA cut after its first record, chromosome 21, with the index line of that record.
+prepare = [
+  "gunzip -c \"$CORPUS/reference.fa.gz\" | awk '/^>MT/ { exit } { print }' > \"$STAGE/chr21_only.fa\"",
+  "grep -v '^MT' \"$CORPUS/reference.fa.fai\" > \"$STAGE/chr21_only.fa.fai\"",
+]
+
+[input]
+format = "vcf"
+text = """
+MT	1	mt_position_1	G	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-input-hgvs/json_cache"
+fasta = "{stage}/chr21_only.fa"
+
+[run]
+flags = ["--lookup_ref", "--show_ref_allele"]
+
+[compare]
+kind = "rows"
+where = { record = "mt_position_1", feature = "ENST00000387314" }
+columns = ["Location", "Allele", "Feature", "Consequence", "REF_ALLELE"]
+
+[expected]
+ensembl_vep = ["MT:1 | A | ENST00000387314 | upstream_gene_variant | N"]
+vep_rs = []

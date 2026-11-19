@@ -18,7 +18,11 @@
   "default.txt": "845fda02368f148f721e49425fbd83db6b32c7dd38cc4b93507f488848c4f977",
   "tab.txt": "9ce4d00e6f590b09ff6e2f6de676d7242f490140465c5273263b969ca2cb8562",
   "vcf.vcf": "3bc6823d93dfc1c0b74c4e7699b29a7d08d7250690ef5701c8ef20aa43c977af",
-  "json.jsonl": "fc24a2f79d0eebd17179b821558ade5eedc5595229ab1a85134a6836a80ce4eb"
+  "json.jsonl": "fc24a2f79d0eebd17179b821558ade5eedc5595229ab1a85134a6836a80ce4eb",
+  "default.summary.log": "b159d2bbb07785dc1c7b21d1e2c09ebc5f99babdbc7214f02ef2cbfab51a4006",
+  "tab.summary.log": "e5107eb036f58bd43b52a63edb601b43e7a7a3ddecbc4aea77ce3e5faf21d2a3",
+  "vcf.summary.log": "5d498b49f7e53ec4a9e16247fedf662cb23111b02df6c65e6cfebbcd1f967e8b",
+  "json.summary.log": "0631256a1ba2ded069d811a80c167a3e6b386d678f76a3088655b2b69deb1bfb"
  },
  "variants_vcf_sha256": "2a8ff673f1f8cb210a5df88ce4bfbbfeb969e009e27cc42e52381435bfe86321",
  "generator": "candidate records on five non-primary contigs annotated with Ensembl VEP, then scripts/golden/build_golden_corpus.py select --k 1 --seed 1 --max-records 300 --cache <converted slice>; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the slice scripts/data/storable_to_json.pl converted from the Ensembl VEP cache's HG1012_PATCH, HSCHR17_1_CTG1, KI270728.1, GL000008.2 and LRG_1 directories (no GL000008.2 record was selected); scripts/golden/build_golden_corpus.py classify",
@@ -36,5 +40,9 @@
    "KI270728.1": 32,
    "LRG_1": 11
   }
+ },
+ "summary_log": {
+  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite [--tab|--vcf|--json]",
+  "annotation_rows": "equal to the expected outputs' rows; the two runs differ only in the header lines that name a time, the cache path or the command line"
  }
 }

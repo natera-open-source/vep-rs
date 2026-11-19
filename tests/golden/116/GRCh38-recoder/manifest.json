@@ -1,0 +1,84 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "covers": [
+  "variant_recoder",
+  "input-data-and-id"
+ ],
+ "tool": "variant_recoder",
+ "cache": "json_cache",
+ "fasta": "reference.fa.gz",
+ "synonyms": "chr_synonyms.txt",
+ "masks": [
+  "refseq_transcript_entries",
+  "lrg_transcript_entries",
+  "archive_dbsnp_synonyms",
+  "identifier_indel_transcript_notations"
+ ],
+ "excludes": {
+  "variation_records_named": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "reason": "COSMIC and HGMD-PUBLIC identifiers are not redistributed; the input records are chosen so that variant_recoder co-locates none of them, and the cache slice carries none"
+ },
+ "inputs": {
+  "variants.id.txt": "nine identifier lines: eight variants of the GRCh38-input-id corpus, the ones neither failed in dbSNP nor co-located with a COSMIC or HGMD-PUBLIC variant, one of them spelled in upper case as well",
+  "variants.hgvs.txt": "the same variants as HGVS notations: every genomic (g.) notation on the NC_000021.9 accession, one on the chromosome's own name, one transcript (c.) notation for every variant but the multi-allelic indel, on the MANE Select transcript where the variant has one, and the protein (p.) notations of the missense variant's two alleles; the deletion allele of the multi-allelic indel is written only as part of its identifier and VCF record, since variant_recoder attaches a multi-allelic known variant's identifier to an unmatched allele through the minimised form of its last alternate alone and so gives that allele none on its own",
+  "variants.spdi.txt": "the same variants as SPDI notations on the NC_000021.9 accession, one on the chromosome's own name, the multi-allelic indel's deletion allele left out as in variants.hgvs.txt",
+  "variants.recode.vcf": "the same variants as VCF records, each with its identifier in the ID column",
+  "json_cache": "the GRCh38-input-id corpus's transcripts with a variation slice of every row of the Ensembl GRCh38 cache starting within 2,000 bases of a record of this corpus or of the GRCh38-input-id corpus, the excluded identifiers left out, so the co-located variants a database-backed variant_recoder finds by span are in the cache",
+  "reference.fa.gz": "GRCh38 chromosome 21 with every base outside 2,000 bases of a record of this corpus or of the GRCh38-input-id corpus masked to N, bgzip-compressed, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form",
+  "chr_synonyms.txt": "the six lines of the Ensembl GRCh38 cache's chr_synonyms.txt that link chromosome 21's names (21, chr21, NC_000021.9, CM000683.2) to one another, read with --synonyms so HGVSg, SPDI and the GA4GH VRS allele name the chromosome by its accession"
+ },
+ "tool_cases": [
+  {
+   "name": "id",
+   "input": "variants.id.txt",
+   "args": [
+    "--vcf_string", "--var_synonyms", "--mane_select", "--ga4gh_vrs", "--pretty"
+   ],
+   "perl_args": [
+    "--db_version", "116"
+   ],
+   "perl_mode": "database",
+   "expected": "expected/recoder/id.json"
+  },
+  {
+   "name": "hgvs",
+   "input": "variants.hgvs.txt",
+   "args": [
+    "--vcf_string", "--var_synonyms", "--mane_select", "--ga4gh_vrs", "--pretty"
+   ],
+   "perl_args": [
+    "--db_version", "116"
+   ],
+   "perl_mode": "database",
+   "expected": "expected/recoder/hgvs.json"
+  },
+  {
+   "name": "spdi",
+   "input": "variants.spdi.txt",
+   "args": [
+    "--vcf_string", "--var_synonyms", "--mane_select", "--ga4gh_vrs", "--pretty"
+   ],
+   "perl_args": [
+    "--db_version", "116"
+   ],
+   "perl_mode": "database",
+   "expected": "expected/recoder/spdi.json"
+  },
+  {
+   "name": "vcf",
+   "input": "variants.recode.vcf",
+   "args": [
+    "--vcf_string", "--mane_select", "--ga4gh_vrs", "--pretty"
+   ],
+   "perl_args": [
+    "--db_version", "116"
+   ],
+   "perl_mode": "database",
+   "expected": "expected/recoder/vcf.json"
+  }
+ ]
+}

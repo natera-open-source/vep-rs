@@ -21,9 +21,9 @@
 //! spells each such option as the parser declares it, so `-cache`, `--CACHE`
 //! and `--offl` reach `--cache` and `--offline`. A name the parser's own flags leave
 //! ambiguous, or one it lacks, is read as Getopt::Long reads it against
-//! `@VEP_PARAMS`, so `--js` reaches `--json` and `-stats_html` is refused as the
-//! unknown `--stats_html` rather than read as `-s tats_html`. A token no option
-//! names is left as written for clap to read or refuse.
+//! `@VEP_PARAMS`, so `--js` reaches `--json`, and a one-dash long name such as
+//! `-cell_type x` is spelled `--cell_type=x` rather than read as `-c ell_type`.
+//! A token no option names is left as written for clap to read or refuse.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
@@ -450,6 +450,57 @@ pub fn parser_options(command: &Command) -> Vec<OptionNames> {
         .collect()
 }
 
+/// A companion tool's command line spelled as its parser declares it, as
+/// Getopt::Long reads `filter_vep`'s and `variant_recoder`'s: an option
+/// written after one dash or two, in any case, or as a prefix of one option's
+/// names, becomes `--<long>` with its attached value; the token after an
+/// option that takes a value is that value however it is spelled; `--` ends
+/// the options. A name no option has is left for clap to refuse.
+pub fn spell_as_declared(argv: &[OsString], command: &Command) -> Vec<OsString> {
+    let options = parser_options(command);
+    let takes_value = |long: &str| {
+        command
+            .get_arguments()
+            .find(|arg| arg.get_long() == Some(long))
+            .is_some_and(|arg| arg.get_num_args().is_some_and(|n| n.takes_values()))
+    };
+    let mut out = Vec::with_capacity(argv.len());
+    let mut value_next = false;
+    let mut after_separator = false;
+    for token in argv {
+        if value_next || after_separator {
+            value_next = false;
+            out.push(token.clone());
+            continue;
+        }
+        let Some(text) = token.to_str() else {
+            out.push(token.clone());
+            continue;
+        };
+        if text == "--" {
+            after_separator = true;
+            out.push(token.clone());
+            continue;
+        }
+        let Some((name, attached)) = option_parts(text) else {
+            out.push(token.clone());
+            continue;
+        };
+        match resolve(name, &options) {
+            Some(option) => {
+                let long = option.canonical.as_str();
+                out.push(OsString::from(match attached {
+                    Some(value) => format!("--{long}={value}"),
+                    None => format!("--{long}"),
+                }));
+                value_next = attached.is_none() && takes_value(long);
+            }
+            None => out.push(token.clone()),
+        }
+    }
+    out
+}
+
 /// The names the binary knows: every declared option, and every flag the error
 /// table refuses before parsing, which [`crate::config::parse_command_line`]
 /// finds by its double-dash spelling.
@@ -471,7 +522,7 @@ fn known_options(declared: &[Declared]) -> Vec<OptionNames> {
 /// failing that, the one Getopt::Long reaches against `@VEP_PARAMS`, so a
 /// prefix a flag vep-rs adds makes ambiguous (`js`: `json` and `json_cache`)
 /// reads as Ensembl VEP reads it, and an Ensembl VEP option the binary lacks
-/// is named in full for the parser to refuse (`stats_h`: `stats_html`).
+/// is named in full for the parser to refuse.
 pub fn resolve_spelling<'a>(
     name: &str,
     known: &'a [OptionNames],
@@ -538,6 +589,42 @@ pub fn unresolved_perl_spellings(command: &Command) -> Vec<UnresolvedSpelling> {
 pub(crate) fn truthy(value: &str) -> bool {
     !(value.is_empty() || value == "0")
 }
+
+/// The integer Getopt::Long stores for an `=i` value: an optional sign, then
+/// digits with `_` allowed before and among them and dropped, read as `0+$arg`,
+/// so `+1`, `01` and `_1` are 1 and `-0` and `0_0` are 0. One line feed closing
+/// the text is passed over, as the `$` of Getopt::Long's pattern passes it. A
+/// magnitude beyond `i64::MAX` reads as that bound, non-zero as the float Perl
+/// stores; `None` for a text Getopt::Long refuses as the option's value.
+pub(crate) fn getopt_integer(text: &str) -> Option<i64> {
+    let text = text.strip_suffix('\n').unwrap_or(text);
+    let (negative, unsigned) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text.strip_prefix('+').unwrap_or(text)),
+    };
+    let digits = unsigned.trim_start_matches('_');
+    let is_integer = digits.starts_with(|c: char| c.is_ascii_digit())
+        && digits.bytes().all(|b| b.is_ascii_digit() || b == b'_');
+    if !is_integer {
+        return None;
+    }
+    let magnitude = digits
+        .bytes()
+        .filter(u8::is_ascii_digit)
+        .fold(0i64, |number, digit| {
+            number
+                .saturating_mul(10)
+                .saturating_add(i64::from(digit - b'0'))
+        });
+    Some(if negative { -magnitude } else { magnitude })
+}
+
+/// The `=i` options Ensembl VEP reads for truth alone (`shift_3prime=i`,
+/// `shift_genomic=i`, `Config.pm:231-232`). The command line's value is the
+/// number Getopt::Long stores, while a value from a file or the environment
+/// stays the text its source holds (`Config.pm:1101, 1158`), true unless it is
+/// `0`, so `00` is off on the command line and on from a file.
+const READ_FOR_TRUTH: &[&str] = &["shift_3prime", "shift_genomic"];
 
 /// Whether a key names a flag the error table refuses before parsing, one the
 /// parser does not declare ([`known_options`] lists them).
@@ -662,19 +749,28 @@ fn split_config_line(line: &str) -> Vec<String> {
 }
 
 /// Reads one configuration file as `read_config_from_file` does
-/// (`Config.pm:1068-1110`): a line starting with `#`, or blank, is skipped; the
-/// first word, less one leading dash, is the key; the value of a repeatable key
-/// is every following word joined by one blank, of any other key the second word
-/// alone; a key with no value is dropped, as a key that names no option of
-/// Ensembl VEP's or the parser's is. The file is read as bytes, as Perl reads
-/// it; a byte that is not UTF-8 becomes the replacement character in a value
-/// and is skipped in a comment.
+/// (`Config.pm:1068-1110`): a path Perl reads as false (`0`, the empty value)
+/// is refused before any open, shown as the empty string (`:1073`); a
+/// directory opens and yields no line, so nothing is read (`:1075-1077`); a
+/// line starting with `#`, or blank, is skipped; the first word, less one
+/// leading dash, is the key; the value of a repeatable key is every following
+/// word joined by one blank, of any other key the second word alone; a key
+/// with no value is dropped, as a key that names no option of Ensembl VEP's or
+/// the parser's is. The file is read as bytes, as Perl reads it; a byte that
+/// is not UTF-8 becomes the replacement character in a value and is skipped in
+/// a comment.
 fn read_config_file(
     path: &Path,
     shown: &str,
     declared: &[Declared],
     perl: &BTreeSet<String>,
 ) -> Result<Settings, CliError> {
+    if !truthy(shown) {
+        return Err(CliError::new("config", "Could not open config file \"\""));
+    }
+    if path.is_dir() {
+        return Ok(Settings::default());
+    }
     let bytes = fs::read(path)
         .map_err(|_| CliError::new("config", format!("Could not open config file \"{shown}\"")))?;
     let text = String::from_utf8_lossy(&bytes);
@@ -833,7 +929,7 @@ fn glued_short<'a, 'n>(body: &'n str, declared: &'a [Declared]) -> Option<(&'a D
 /// pushes back a value that is not a number and passes an unknown option
 /// through (`--fork --help` and `--pipeline_depth --help` ask for the help); an
 /// option Ensembl VEP declares and the parser does not takes its value as
-/// `@VEP_PARAMS` declares it (`--gff --help` names the file `--help`), so the
+/// `@VEP_PARAMS` declares it (`--bigwig --help` names the file `--help`), so the
 /// parser refuses it by name; a name that is a prefix of several options is
 /// written with two dashes, so clap refuses it; a short flag with its value
 /// attached is written as the long form; `--` ends the options. Anything else,
@@ -946,7 +1042,8 @@ fn key_arity(declared: &[Declared], key: &str) -> Arity {
 /// Ensembl VEP option the parser lacks is added as its `@VEP_PARAMS` spec takes
 /// it, a switch's or a value's, for the parser to refuse; one of a flag the
 /// error table refuses before parsing is added as a switch, for the scan ahead
-/// of the parser to refuse.
+/// of the parser to refuse. A [`READ_FOR_TRUTH`] value that is true as text and
+/// zero as a number is added as `1`, the truth Ensembl VEP reads from it.
 fn tokens_of(settings: &Settings, declared: &[Declared]) -> (Vec<OsString>, Vec<OsString>) {
     let mut scalars = Vec::new();
     for (key, value) in &settings.scalars {
@@ -955,6 +1052,13 @@ fn tokens_of(settings: &Settings, declared: &[Declared]) -> (Vec<OsString>, Vec<
             (Arity::Switch, v) if !truthy(v) => continue,
             (Arity::Optional, "0") => continue,
             (Arity::Switch, _) | (Arity::Optional, "") => format!("--{name}"),
+            (Arity::Required, v)
+                if READ_FOR_TRUTH.contains(&key.as_str())
+                    && truthy(v)
+                    && getopt_integer(v) == Some(0) =>
+            {
+                format!("--{name}=1")
+            }
             (Arity::Optional | Arity::Required, v) => format!("--{name}={v}"),
         };
         scalars.push(token.into());
@@ -978,7 +1082,7 @@ pub const DEFINED_SWITCHES: &[&str] = &["var_synonyms"];
 /// The [`DEFINED_SWITCHES`] a source set to a false value, each with that value
 /// (`0` or the empty string a quoted value leaves), which [`tokens_of`] adds
 /// nothing for; `Config.pm:1101` and `:1158` store the value under the key.
-fn defined_off_switches(sources: &[&Settings], declared: &[Declared]) -> Vec<(String, String)> {
+fn defined_off_switches(sources: &[Settings], declared: &[Declared]) -> Vec<(String, String)> {
     DEFINED_SWITCHES
         .iter()
         .filter(|flag| key_arity(declared, flag) == Arity::Switch)
@@ -1018,6 +1122,198 @@ fn expand_tilde(path: &OsStr, home: &str) -> PathBuf {
         Some(text) => PathBuf::from(expand_tilde_text(text, home)),
         None => PathBuf::from(path),
     }
+}
+
+/// The environment as `%ENV` holds it, read as bytes (Config.pm:1137 skips the
+/// empty value alone); a byte that is not UTF-8 becomes the replacement
+/// character, as in a configuration file.
+fn environment_map<I>(env: I) -> BTreeMap<String, String>
+where
+    I: IntoIterator<Item = (OsString, OsString)>,
+{
+    env.into_iter()
+        .map(|(k, v)| {
+            (
+                k.to_string_lossy().into_owned(),
+                v.to_string_lossy().into_owned(),
+            )
+        })
+        .collect()
+}
+
+/// The three sources behind a command line, read as `Config->new` reads them
+/// (`Config.pm:701-708`): the `--config` file when `config` names one, then
+/// `<dir>/vep.ini` when it is a file, `<dir>` being `dir` when it reads as true
+/// (`$config->{dir} || $DEFAULTS{dir}`, `:704`), else the `--config` file's
+/// `dir`, else `~/.vep`, then the `VEP_*` variables of `env` (`:707`). A flag
+/// `named` by the command line is dropped from every source, and a flag a
+/// source names from the ones below it, so one value per flag remains and
+/// Ensembl VEP's priority holds. `HOME` is read from `env`.
+///
+/// # Errors
+///
+/// A `--config` file, or a `vep.ini` that is a file, that cannot be read
+/// ([`read_config_file`]).
+fn sources_behind(
+    config: Option<&OsStr>,
+    dir: Option<&OsStr>,
+    named: &BTreeSet<String>,
+    env: &BTreeMap<String, String>,
+    declared: &[Declared],
+    perl: &BTreeSet<String>,
+) -> Result<[Settings; 3], CliError> {
+    let home = env.get("HOME").map_or("", String::as_str);
+    let config_file = match config {
+        Some(shown) => read_config_file(
+            &expand_tilde(shown, home),
+            &shown.to_string_lossy(),
+            declared,
+            perl,
+        )?,
+        None => Settings::default(),
+    };
+    let ini_dir = dir
+        .filter(|d| truthy(&d.to_string_lossy()))
+        .map(OsStr::to_os_string)
+        .or_else(|| {
+            config_file
+                .scalars
+                .get("dir")
+                .filter(|d| truthy(d))
+                .map(OsString::from)
+        })
+        .unwrap_or_else(|| OsString::from(DEFAULT_DIR));
+    let ini_path = expand_tilde(&ini_dir, home).join(INI_FILE);
+    // Perl's `-e` then `open` on a directory reads nothing from it.
+    let ini = if ini_path.is_file() {
+        read_config_file(&ini_path, &ini_path.display().to_string(), declared, perl)?
+    } else {
+        Settings::default()
+    };
+    let environment = read_environment(env, declared, perl);
+
+    let mut named_by_a_higher_source = named.clone();
+    let mut sources = [config_file, ini, environment];
+    for source in sources.iter_mut() {
+        source
+            .scalars
+            .retain(|key, _| !named_by_a_higher_source.contains(key));
+        named_by_a_higher_source.extend(source.scalars.keys().cloned());
+    }
+    Ok(sources)
+}
+
+/// The command line clap parses, laid out as `Config->new` leaves the flags
+/// (`Config.pm:701-708`): the sources' scalar flags, lowest source first, then
+/// the command line's own tokens, then the sources' repeatable flags in Ensembl
+/// VEP's order, command line first (`:757`, `:1097`, `:1152`), then the tokens
+/// from a `--` separator on (`rest`).
+fn lay_out(
+    [config_file, ini, environment]: &[Settings; 3],
+    own: &[OsString],
+    rest: &[OsString],
+    declared: &[Declared],
+) -> Vec<OsString> {
+    let (config_scalars, config_lists) = tokens_of(config_file, declared);
+    let (ini_scalars, ini_lists) = tokens_of(ini, declared);
+    let (env_scalars, env_lists) = tokens_of(environment, declared);
+    let mut argv = env_scalars;
+    argv.extend(ini_scalars);
+    argv.extend(config_scalars);
+    argv.extend(own.iter().cloned());
+    argv.extend(config_lists);
+    argv.extend(ini_lists);
+    argv.extend(env_lists);
+    argv.extend(rest.iter().cloned());
+    argv
+}
+
+/// A companion tool's command line, spelled by [`spell_as_declared`], with the
+/// sources behind it read as `Config->new` reads them for `variant_recoder`
+/// (`Config.pm:701-708`, `:1068-1110`, [`sources_behind`]): the `--config` file
+/// it names, `<dir>/vep.ini` under the file's `dir` or `~/.vep`, then the
+/// `VEP_*` variables of `env`, laid out around the command line by
+/// [`lay_out`], the command line keeping its own value of a flag a source
+/// names (`:1101`, `:1158`). A key a source names that `command` has no option
+/// for is dropped, as `is_valid_param` drops a key `@VEP_PARAMS` lacks
+/// (`:1096`, `:1100`), a `config` key inside a file is dropped too, and so is
+/// every key of `preset`: the options the tool sets before `Config->new` runs,
+/// which Perl's `||=` leaves as set, and the ones it reads before the sources
+/// are open or does not know, so that a source's value never reaches them. A
+/// leading `~` in the file's path is expanded to the `HOME` of `env`. A command
+/// line naming `--help` comes back as spelled, no source read
+/// (`variant_recoder:97`).
+///
+/// # Errors
+///
+/// A `--config` file, or a `vep.ini` that is a file, that cannot be read:
+/// `ERROR: [config] Could not open config file "<path>"` (`Config.pm:1075`).
+pub fn with_config_file<I>(
+    command: &Command,
+    spelled: &[OsString],
+    env: I,
+    preset: &[&str],
+) -> Result<Vec<OsString>, CliError>
+where
+    I: IntoIterator<Item = (OsString, OsString)>,
+{
+    let separator = spelled
+        .iter()
+        .position(|t| t == "--")
+        .unwrap_or(spelled.len());
+    let (own, rest) = spelled.split_at(separator);
+    let declared = declared_options(command);
+    let mut config_path = None;
+    let mut named: BTreeSet<String> = BTreeSet::new();
+    let mut tokens = own.iter();
+    while let Some(token) = tokens.next() {
+        // An option `spell_as_declared` resolved is written `--<long>` or
+        // `--<long>=<value>`; every other token is a value or left for clap.
+        let Some((name, attached)) = token
+            .to_str()
+            .filter(|text| text.starts_with("--"))
+            .and_then(option_parts)
+        else {
+            continue;
+        };
+        let takes_value =
+            declared_option(&declared, name).is_some_and(|option| option.arity != Arity::Switch);
+        let value = match attached {
+            Some(value) => Some(OsString::from(value)),
+            None if takes_value => tokens.next().cloned(),
+            None => None,
+        };
+        if name == "config" {
+            config_path = value;
+        }
+        named.insert(name.to_string());
+    }
+    // `variant_recoder:97` prints its usage and exits before `Config->new`
+    // reads any file, so a `--help` leaves every source unread.
+    if named.contains("help") {
+        return Ok(spelled.to_vec());
+    }
+    // The sources are read with Ensembl VEP's own names, so a file's `dir`
+    // places `vep.ini` as `:704` places it; then every key `command` has no
+    // option for is dropped, the flags the error table refuses before parsing
+    // included, since the companion tool runs no such scan.
+    let sources = sources_behind(
+        config_path.as_deref(),
+        None,
+        &named,
+        &environment_map(env),
+        &declared,
+        &perl_canonicals(),
+    )?;
+    let settable = |key: &String| {
+        declared_for_key(&declared, key).is_some() && !preset.contains(&key.as_str())
+    };
+    let sources = sources.map(|mut source| {
+        source.scalars.retain(|key, _| settable(key));
+        source.lists.retain(|key, _| settable(key));
+        source
+    });
+    Ok(lay_out(&sources, own, rest, &declared))
 }
 
 /// The command line clap parses, from the one given and the sources behind it
@@ -1072,19 +1368,7 @@ where
     command.build();
     let declared = declared_options(&command);
     let perl = perl_canonicals();
-    // Read as bytes, as `%ENV` holds them (Config.pm:1137 skips the empty value
-    // alone); a byte that is not UTF-8 becomes the replacement character, as in
-    // a configuration file.
-    let env: BTreeMap<String, String> = env
-        .into_iter()
-        .map(|(k, v)| {
-            (
-                k.to_string_lossy().into_owned(),
-                v.to_string_lossy().into_owned(),
-            )
-        })
-        .collect();
-    let home = env.get("HOME").map_or("", String::as_str);
+    let env = environment_map(env);
 
     let mut argv = argv.into_iter();
     let program = argv.next().unwrap_or_else(|| "vep".into());
@@ -1101,71 +1385,29 @@ where
         });
     }
 
-    let config_file = match command_line_value(&tokens, "config") {
-        Some(shown) => read_config_file(
-            &expand_tilde(&shown, home),
-            &shown.to_string_lossy(),
-            &declared,
-            &perl,
-        )?,
-        None => Settings::default(),
-    };
-    // `$config->{dir} || $DEFAULTS{dir}` (Config.pm:704): a `dir` that reads as
-    // false, from either source, is the default.
-    let dir = command_line_value(&tokens, "dir")
-        .filter(|d| truthy(&d.to_string_lossy()))
-        .or_else(|| {
-            config_file
-                .scalars
-                .get("dir")
-                .filter(|d| truthy(d))
-                .map(OsString::from)
-        })
-        .unwrap_or_else(|| OsString::from(DEFAULT_DIR));
-    let ini_path = expand_tilde(&dir, home).join(INI_FILE);
-    // Perl's `-e` then `open` on a directory reads nothing from it.
-    let ini = if ini_path.is_file() {
-        read_config_file(&ini_path, &ini_path.display().to_string(), &declared, &perl)?
-    } else {
-        Settings::default()
-    };
-    let environment = read_environment(&env, &declared, &perl);
-
-    let mut named_by_a_higher_source: BTreeSet<String> = tokens
+    let named: BTreeSet<String> = tokens
         .iter()
         .filter_map(|t| match t {
             Token::Option { long, .. } => Some(long.clone()),
             _ => None,
         })
         .collect();
-    let mut sources = [config_file, ini, environment];
-    for source in sources.iter_mut() {
-        source
-            .scalars
-            .retain(|key, _| !named_by_a_higher_source.contains(key));
-        named_by_a_higher_source.extend(source.scalars.keys().cloned());
-    }
-    let [config_file, ini, environment] = sources;
-    let defined_off = defined_off_switches(&[&config_file, &ini, &environment], &declared);
-
-    let (config_scalars, config_lists) = tokens_of(&config_file, &declared);
-    let (ini_scalars, ini_lists) = tokens_of(&ini, &declared);
-    let (env_scalars, env_lists) = tokens_of(&environment, &declared);
-
+    let sources = sources_behind(
+        command_line_value(&tokens, "config").as_deref(),
+        command_line_value(&tokens, "dir").as_deref(),
+        &named,
+        &env,
+        &declared,
+        &perl,
+    )?;
+    let defined_off = defined_off_switches(&sources, &declared);
     let separator = spelled
         .iter()
         .position(|t| t == "--")
         .unwrap_or(spelled.len());
     let (own, rest) = spelled.split_at(separator);
     let mut argv = vec![program];
-    argv.extend(env_scalars);
-    argv.extend(ini_scalars);
-    argv.extend(config_scalars);
-    argv.extend(own.iter().cloned());
-    argv.extend(config_lists);
-    argv.extend(ini_lists);
-    argv.extend(env_lists);
-    argv.extend(rest.iter().cloned());
+    argv.extend(lay_out(&sources, own, rest, &declared));
     Ok(Prepassed { argv, defined_off })
 }
 
@@ -1471,10 +1713,10 @@ mod tests {
     /// another case and an indented line are dropped; a key with no value is
     /// dropped; a switch or `cache` set to `0` is off; a repeatable key takes
     /// the rest of its line and a double-quoted value keeps its blanks; a second
-    /// value of a key is dropped unless the first was `0`; a key of an Ensembl VEP
-    /// option the parser lacks is kept for the parser to refuse as its spec takes
-    /// it: `stats_html 1` and `phyloP x` kept, a switch's `0` (`no_progress 0`) off,
-    /// a value's `0` (`clin_sig_allele 0`) kept.
+    /// value of a key is dropped unless the first was `0`; a key is kept as its
+    /// `@VEP_PARAMS` spec takes it, a string option with its value (`cell_type
+    /// HUVEC`); declared or not, a switch's `0` (`no_progress 0`) is off and a
+    /// value's `0` (`clin_sig_allele 0`) is kept.
     #[test]
     fn config_unknown_key_is_dropped() {
         let dir = tempfile::tempdir().unwrap();
@@ -1485,7 +1727,7 @@ mod tests {
              CACHE 1\n  format vcf\nno_headers\nquiet 0\nplugin \"Foo,bar baz\" x\n\
              plugin Second,x\ntranscript_filter biotype is protein_coding\n\
              species 'mus_musculus'\nbuffer_size 0\nbuffer_size 500\nfork 4\nfork 8\ncache 0\n\
-             stats_html 1\nphyloP x\nno_progress 0\nclin_sig_allele 0\n",
+             cell_type HUVEC\nphyloP x\nno_progress 0\nclin_sig_allele 0\n",
         );
         let out = run(&["--config", &file], dir.path(), &[]);
         assert_eq!(
@@ -1493,11 +1735,11 @@ mod tests {
             owned(&[
                 "vep",
                 "--buffer_size=500",
+                "--cell_type=HUVEC",
                 "--clin_sig_allele=0",
                 "--dir_plugins=/single",
                 "--fork=4",
                 "--species=mus_musculus",
-                "--stats_html",
                 &format!("--config={file}"),
                 "--phyloP=x",
                 "--plugin=Foo,bar baz x",
@@ -1532,6 +1774,114 @@ mod tests {
                 "{line:?}"
             );
         }
+    }
+
+    /// Getopt::Long takes an `=i` value matching `[-+]?_*[0-9][0-9_]*` and stores
+    /// `0+$arg` with the underscores dropped; any other text is no integer.
+    #[test]
+    fn getopt_integer_reads_signs_zeros_and_underscores() {
+        for (text, number) in [
+            ("0", 0),
+            ("1", 1),
+            ("+1", 1),
+            ("-1", -1),
+            ("01", 1),
+            ("00", 0),
+            ("-0", 0),
+            ("1_0", 10),
+            ("_1", 1),
+            ("1_", 1),
+            ("-_1", -1),
+            ("0_0", 0),
+            ("1\n", 1),
+            ("0\n", 0),
+            ("9999999999999999999999", i64::MAX),
+            ("-9999999999999999999999", -i64::MAX),
+        ] {
+            assert_eq!(getopt_integer(text), Some(number), "{text:?}");
+        }
+        for text in [
+            "", "x", "1.5", "1e3", "_", "-", "+", "+-1", "_-1", " 1", "1 ", "0x1", "\n", "1\n\n",
+            "\n1",
+        ] {
+            assert_eq!(getopt_integer(text), None, "{text:?}");
+        }
+    }
+
+    /// A file's or the environment's `shift_3prime` and `shift_genomic` value
+    /// stays the text its source holds (`Config.pm:1101, 1158`), true unless it
+    /// is `0`, where the command line's is the number Getopt::Long stores: a
+    /// text that is zero as a number is laid out as `1`, any other as written,
+    /// and the command line's own value is left alone.
+    #[test]
+    fn a_lower_source_shift_value_is_read_as_text() {
+        let dir = tempfile::tempdir().unwrap();
+        for key in ["shift_3prime", "shift_genomic"] {
+            for (value, added) in [
+                ("00", "1"),
+                ("+0", "1"),
+                ("-0", "1"),
+                ("0_0", "1"),
+                ("0", "0"),
+                ("2", "2"),
+                ("01", "01"),
+                ("x", "x"),
+            ] {
+                let token = format!("--{key}={added}");
+                let file = write(dir.path(), "flags.ini", &format!("{key} {value}\n"));
+                assert_eq!(
+                    run(&["--config", &file], dir.path(), &[]),
+                    owned(&["vep", &token, &format!("--config={file}")]),
+                    "{key} {value}"
+                );
+                let variable = format!("VEP_{}", key.to_uppercase());
+                assert_eq!(
+                    run(&[], dir.path(), &[(&variable, value)]),
+                    owned(&["vep", &token]),
+                    "{variable}={value}"
+                );
+            }
+            let flag = format!("--{key}=00");
+            assert_eq!(run(&[&flag], dir.path(), &[]), owned(&["vep", &flag]));
+        }
+    }
+
+    /// A lower source's `convert` value reaches the parser as written, `0` and
+    /// the empty value included, so the deprecation check reads it as it reads
+    /// the command line's (`Config.pm:977`). A value the command line gives,
+    /// even a false one, keeps a lower source's from being read, where Ensembl
+    /// VEP's `||=` replaces a false value by the lower source's true one
+    /// (`Config.pm:1101, 1158`).
+    #[test]
+    fn a_lower_source_convert_value_is_laid_out_as_written() {
+        let dir = tempfile::tempdir().unwrap();
+        for (value, token) in [("0", "--convert=0"), ("vcf", "--convert=vcf")] {
+            let file = write(dir.path(), "flags.ini", &format!("convert {value}\n"));
+            assert_eq!(
+                run(&["--config", &file], dir.path(), &[]),
+                owned(&["vep", token, &format!("--config={file}")]),
+                "convert {value}"
+            );
+            assert_eq!(
+                run(&[], dir.path(), &[("VEP_CONVERT", value)]),
+                owned(&["vep", token]),
+                "VEP_CONVERT={value}"
+            );
+        }
+        let file = write(dir.path(), "flags.ini", "convert \"\"\n");
+        assert_eq!(
+            run(&["--config", &file], dir.path(), &[]),
+            owned(&["vep", "--convert=", &format!("--config={file}")])
+        );
+        let file = write(dir.path(), "flags.ini", "convert vcf\n");
+        assert_eq!(
+            run(
+                &["--convert", "0", "--config", &file],
+                dir.path(),
+                &[("VEP_CONVERT", "vcf")]
+            ),
+            owned(&["vep", "--convert=0", &format!("--config={file}")])
+        );
     }
 
     /// A key that is an Ensembl VEP option of its own but an alias here
@@ -1772,6 +2122,157 @@ mod tests {
         );
     }
 
+    /// A `--config` path that is a directory reads as nothing, as Perl's
+    /// two-argument `open` of a directory succeeds and its readline yields no
+    /// line (`Config.pm:1075-1077`), the run going on; a path Perl reads as
+    /// false, `0` or the empty value, is refused before any open with the
+    /// empty string shown (`:1073`).
+    #[test]
+    fn config_directory_reads_nothing_and_a_false_path_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        let as_dir = home.join("flags.d");
+        fs::create_dir_all(&as_dir).unwrap();
+        let as_dir = as_dir.display().to_string();
+        assert_eq!(
+            run(&["--config", &as_dir, "-i", "x.vcf"], home, &[]),
+            owned(&["vep", &format!("--config={as_dir}"), "--input_file=x.vcf"])
+        );
+        let tilde_dir = home.join("tilde.d");
+        fs::create_dir_all(&tilde_dir).unwrap();
+        assert_eq!(
+            run(&["--config=~/tilde.d"], home, &[]),
+            owned(&["vep", "--config=~/tilde.d"])
+        );
+
+        for false_path in ["0", ""] {
+            let err = prepass(
+                argv(&["vep", "--config", false_path, "-i", "x.vcf"]),
+                env(&[("HOME", home.to_str().unwrap())]),
+            )
+            .unwrap_err();
+            assert_eq!(
+                err.to_string(),
+                "ERROR: [config] Could not open config file \"\"",
+                "--config {false_path:?}"
+            );
+        }
+    }
+
+    /// The sources behind a companion tool's command line are the ones behind
+    /// `vep`'s, read for `variant_recoder` by the same `Config->new`
+    /// (`Config.pm:701-708`): the `--config` file, then `<dir>/vep.ini`, under
+    /// `~/.vep` or under the file's `dir`, then the `VEP_*` variables; the
+    /// command line beats the file, the file the ini, the ini the environment,
+    /// and a repeatable flag collects every source's values in that order. A
+    /// key the tool has no option for is dropped from every source, as is one
+    /// of the options the tool presets or reads before the sources (`fields`,
+    /// `buffer_size`, `ambiguous_hgvs`, `pretty`, `var_synonyms`:
+    /// `VariantRecoder.pm:96-152`), a false switch adds nothing, and `--help`
+    /// reads no source.
+    #[test]
+    fn companion_reads_vep_ini_and_the_environment_behind_the_config_file() {
+        use crate::recode_cli::{RecodeArgs, PRESET_OPTIONS};
+        use clap::CommandFactory;
+
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        fs::create_dir_all(home.join(".vep")).unwrap();
+        write(
+            &home.join(".vep"),
+            INI_FILE,
+            "input_data ini_input\nspecies ini_species\nshift_hgvs 0\nfields ini_fields\n\
+             buffer_size 2\nambiguous_hgvs 1\ndir_plugins /ini/plugins\n\
+             transcript_filter from_ini\n",
+        );
+        let config = write(
+            home,
+            "recode.ini",
+            "input_data config_input\nshift_hgvs 1\nminimal 1\npretty 1\nconfig other.ini\n\
+             transcript_filter from_config\n",
+        );
+        let mut command = RecodeArgs::command();
+        command.build();
+        let companion = |args: &[&str], extra: &[(&str, &str)]| {
+            let mut pairs = vec![("HOME", home.to_str().unwrap())];
+            pairs.extend(extra.iter().copied());
+            let spelled = spell_as_declared(&argv(args), &command);
+            strings(&with_config_file(&command, &spelled, env(&pairs), PRESET_OPTIONS).unwrap())
+        };
+        let variables = [
+            ("VEP_INPUT_DATA", "env_input"),
+            ("VEP_SPECIES", "env_species"),
+            ("VEP_SHIFT_HGVS", "0"),
+            ("VEP_ASSEMBLY", "GRCh38"),
+            ("VEP_FIELDS", "env_fields"),
+            ("VEP_VAR_SYNONYMS", "1"),
+            ("VEP_DIR_PLUGINS", "/env/plugins"),
+            ("VEP_MINIMAL", "0"),
+            ("VEP_TRANSCRIPT_FILTER", "from_env"),
+        ];
+        assert_eq!(
+            companion(
+                &[
+                    "--config",
+                    &config,
+                    "--id",
+                    "cmd_input",
+                    "--fields",
+                    "hgvsg"
+                ],
+                &variables
+            ),
+            owned(&[
+                "--assembly=GRCh38",
+                "--species=ini_species",
+                "--minimal",
+                "--shift_hgvs=1",
+                "--config",
+                &config,
+                "--input_data",
+                "cmd_input",
+                "--fields",
+                "hgvsg",
+                "--transcript_filter=from_config",
+                "--transcript_filter=from_ini",
+                "--transcript_filter=from_env",
+            ])
+        );
+        // No `--config`: the ini and the environment alone.
+        assert_eq!(
+            companion(&["--fields", "hgvsg"], &variables),
+            owned(&[
+                "--assembly=GRCh38",
+                "--input_data=ini_input",
+                "--shift_hgvs=0",
+                "--species=ini_species",
+                "--fields",
+                "hgvsg",
+                "--transcript_filter=from_ini",
+                "--transcript_filter=from_env",
+            ])
+        );
+        // The file's `dir` places `vep.ini`, though the tool has no `--dir`.
+        let other = home.join("other");
+        fs::create_dir_all(&other).unwrap();
+        write(&other, INI_FILE, "species other_species\n");
+        let placed = write(home, "placed.ini", &format!("dir {}\n", other.display()));
+        assert_eq!(
+            companion(&["--config", &placed, "--id", "rs1"], &[]),
+            owned(&[
+                "--species=other_species",
+                "--config",
+                &placed,
+                "--input_data",
+                "rs1",
+            ])
+        );
+        assert_eq!(
+            companion(&["--help", "--config", "/no/such.ini"], &variables),
+            owned(&["--help", "--config", "/no/such.ini"])
+        );
+    }
+
     /// `VEP_*` variables as `read_config_from_environment` reads them, each case
     /// checked against it (`Config.pm:1131-1161`): the name lower-cased, an
     /// empty value skipped, an unknown name, an alias and a prefix dropped,
@@ -1813,11 +2314,11 @@ mod tests {
     /// prefix (`-form`, `-sa`), any case, `=` values, the value after a flag left
     /// alone, a short cluster and a name no option has left as written, everything
     /// after `--` left as written. A name the parser's flags lack or leave
-    /// ambiguous is written as Getopt::Long reads it over `@VEP_PARAMS`: an option
-    /// the parser lacks in full, for clap to refuse (`-stats_html`); an option the
-    /// parser declares by its long name (`-ve` is `verbose`; `--js` and `--pa` are
-    /// `json` and `password`, which vep-rs's own flags make ambiguous; `-id` is the
-    /// `input_data` alias). The error table's `-af_exac` is written in full for
+    /// ambiguous is written as Getopt::Long reads it over `@VEP_PARAMS`: an
+    /// option the parser declares by its long name (`-cell_type` and `-ve` are
+    /// `cell_type` and `verbose`; `--js` and `--pa` are `json` and `password`,
+    /// which vep-rs's own flags make ambiguous; `-id` is the `input_data`
+    /// alias). The error table's `-af_exac` is written in full for
     /// its refusal. A short with its value attached is the long form; a one-dash
     /// prefix of several options (`-sh`, `-ou`) is written with two dashes for
     /// clap to refuse, never as a short with a value.
@@ -1840,7 +2341,8 @@ mod tests {
                 "-qv",
                 "--fo",
                 "-nonsense",
-                "-stats_html",
+                "-cell_type",
+                "HUVEC",
                 "-sa",
                 "-af_exac",
                 "-ve",
@@ -1874,7 +2376,7 @@ mod tests {
                 "-qv",
                 "--fo",
                 "-nonsense",
-                "--stats_html",
+                "--cell_type=HUVEC",
                 "--safe",
                 "--af_exac",
                 "--verbose",
@@ -1948,7 +2450,7 @@ mod tests {
     /// `pass_through` leaves in `@ARGV` with its would-be value unread; a string
     /// option takes the token as its value, as `=s` takes anything (`-i --help`
     /// names the file `--help`), an option of `@VEP_PARAMS` the parser lacks
-    /// included (`gff=s`, Config.pm:260), and a number is a number's value.
+    /// included (`bigwig=s`, Config.pm:262), and a number is a number's value.
     #[test]
     fn a_numeric_option_leaves_a_usage_token_unread() {
         let dir = tempfile::tempdir().unwrap();
@@ -1971,7 +2473,7 @@ mod tests {
                 &["--input_file", "--help"],
                 &["--symbol", "--input_file=--help"],
             ),
-            (&["--gff", "--help"], &["--symbol", "--gff=--help"]),
+            (&["--bigwig", "--help"], &["--symbol", "--bigwig=--help"]),
         ];
         for (args, expected) in cases {
             let mut argv = vec!["vep"];
@@ -2017,6 +2519,7 @@ mod tests {
         assert_eq!(spelled("vers"), Some("version"));
         assert_eq!(spelled("af_exac"), Some("af_exac"));
         assert_eq!(spelled("stats_h"), Some("stats_html"));
+        assert_eq!(spelled("cell_t"), Some("cell_type"));
         assert_eq!(spelled("fo"), None);
         assert_eq!(spelled("qv"), None);
     }

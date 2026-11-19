@@ -1,0 +1,31 @@
+entry = "frequency_filter_zero_value"
+page = "docs/divergences/frequency-filter-zero.md#1-a-frequency-of-exactly-zero"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 21,744 of 32,292 table rows · 5 flag sets, 12 corpora"
+notes = "rs1445461377 carries gnomADe_AFR G:0; under include a record whose allele fails the test is dropped before annotation, so Ensembl VEP writes no row and vep-rs writes the row with the zero it judged."
+
+[input]
+format = "vcf"
+text = """
+21	29025626	zero_af	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-freqfilter-include/json_cache"
+
+[run]
+flags = ["--check_frequency", "--freq_pop", "gnomADe_AFR", "--freq_freq", "0.05", "--freq_gt_lt", "lt", "--freq_filter", "include"]
+format = "default"
+
+[compare]
+kind = "field"
+field = "FREQS"
+where = { record = "zero_af", feature = "ENST00000334352" }
+
+[expected]
+ensembl_vep = []
+vep_rs = ["GNOMADE_AFR:G:0"]

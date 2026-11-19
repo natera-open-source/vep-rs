@@ -1,0 +1,33 @@
+entry = "nearest_exon_jb_shared_span_cache"
+page = "docs/divergences/nearest-exon-jb-shared-span-cache.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 121.0 per million · 1 flag set, 24 corpora"
+
+# The reference is CC at 36897131-36897132: the last base of ENSE00001282176 (ENST00000336648, reverse strand) and
+# the first intron base. Under --minimal, CT trims to a T at 36897132 and GC to a G at 36897131, so the alleles'
+# exon sets differ. Ensembl VEP's plugin caches the first row's items under the transcript and the record's span;
+# the G row runs first in this ALT order and the T row takes its value. vep-rs reads each allele's own exon set.
+[input]
+format = "vcf"
+text = """
+21	36897131	cc_ct_gc	CC	CT,GC	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-computed/json_cache"
+
+[run]
+flags = ["--minimal", "--plugin", "NearestExonJB"]
+
+[compare]
+kind = "rows"
+where = { record = "cc_ct_gc", feature = "ENST00000336648", allele = "T" }
+columns = ["Location", "Allele", "Feature", "Consequence", "NearestExonJB"]
+
+[expected]
+ensembl_vep = ["21:36897131-36897132 | T | ENST00000336648 | splice_acceptor_variant | ENSE00001282176|1|end|272"]
+vep_rs = ["21:36897131-36897132 | T | ENST00000336648 | splice_acceptor_variant | -"]

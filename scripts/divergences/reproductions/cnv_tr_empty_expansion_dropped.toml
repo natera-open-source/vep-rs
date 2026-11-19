@@ -1,0 +1,35 @@
+entry = "cnv_tr_empty_expansion_dropped"
+page = "docs/divergences/defect-l.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.4 specification, section 5.7 \"Representing tandem repeats\" (a <CNV:TR> allele whose repeat count equals the reference count); not seen in the measured datasets; classed by its most reachable shape, that unchanged count: a RUC that is no number breaks its Float type (section 3)"
+notes = "The run at 30425588-30425596 is three copies of AGC. With the FASTA Ensembl VEP expands RN=. to no alternate allele and RUC=3 to the reference run itself, and either record passes the parser with no allele to annotate: no row, no warning. vep-rs runs without a FASTA and writes the symbolic tandem_repeat rows over the run; with a FASTA it follows the expansion and writes what Ensembl VEP writes."
+
+[input]
+format = "vcf"
+text = """
+21	30425587	gain_rn_dot	N	<CNV:TR>	.	.	SVTYPE=CNV;END=30425596;SVLEN=9;RN=.;RUS=AGC;RUC=4
+21	30425587	same_ruc	N	<CNV:TR>	.	.	SVTYPE=CNV;END=30425596;SVLEN=9;RUS=AGC;RUC=3
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-release116/json_cache"
+
+[run]
+flags = []
+ensembl_vep_flags = ["--fasta", "{repo}/tests/golden/116/GRCh38-merged/reference.fa.gz"]
+
+[compare]
+kind = "rows"
+where = { record = ["gain_rn_dot", "same_ruc"], feature = "ENST00000390690" }
+columns = ["Uploaded_variation", "Location", "Allele", "Feature", "Consequence"]
+
+[expected]
+ensembl_vep = []
+vep_rs = [
+  "gain_rn_dot | 21:30425588-30425596 | tandem_repeat | ENST00000390690 | feature_elongation,coding_sequence_variant",
+  "same_ruc | 21:30425588-30425596 | tandem_repeat | ENST00000390690 | feature_elongation,coding_sequence_variant",
+]

@@ -1,0 +1,34 @@
+entry = "bnd_mate_32bit_buffer_intergenic"
+page = "docs/divergences/defect-g.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.3 specification, section 1.3 \"Data types\" (Integer is 32-bit signed; no clause bounds a coordinate by its sequence length); not seen in the measured datasets; classed by its most reachable shape, a coordinate to 2,147,483,647: a POS of 2,147,483,648 breaks the Integer type"
+notes = "The breakend's mate at 2,147,478,648 plus the 5,000-base flank reaches 2^31, and Ensembl VEP writes every record of the buffer as intergenic_variant, the duplication beside it included; vep-rs annotates the duplication against the transcripts it overlaps."
+
+[input]
+format = "vcf"
+text = """
+21	30425650	control_dup	N	<DUP>	.	.	SVTYPE=DUP;END=30425899
+21	30425650	end2_2147478648	N	<BND>	.	.	SVTYPE=BND;CHR2=21;END2=2147478648
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-release116/json_cache"
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = "control_dup" }
+columns = ["Location", "Allele", "Feature", "Consequence"]
+
+[expected]
+ensembl_vep = ["21:30425651-30425899 | duplication | - | intergenic_variant"]
+vep_rs = [
+  "21:30425651-30425899 | duplication | ENST00000334068 | upstream_gene_variant",
+  "21:30425651-30425899 | duplication | ENST00000390690 | feature_elongation,coding_sequence_variant",
+]

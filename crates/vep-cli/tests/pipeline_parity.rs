@@ -3,9 +3,9 @@
 
 //! Pipeline parity: the reader, coordinator and writer stages must produce the
 //! same bytes whatever the batch size, thread count, pipeline mode, pipeline
-//! depth, task size, writer strategy and decompression thread count, keep
-//! passthrough lines in input order, and fail cleanly rather than hang when a
-//! stage errors.
+//! depth, task size, writer strategy, decompression thread count and
+//! compression thread count, keep passthrough lines in input order, and fail
+//! cleanly rather than hang when a stage errors.
 
 mod common;
 
@@ -61,6 +61,34 @@ fn vep(input: &Path, json_cache: &Path, assembly: &str, out: &Path, args: &[&str
     run_command(vep_command(input, json_cache, assembly, out, args), out)
 }
 
+/// The `vep` invocation with `--verbose` in place of `--quiet`, so the debug
+/// lines the run's decisions write reach standard error.
+fn vep_verbose(input: &Path, json_cache: &Path, assembly: &str, out: &Path, args: &[&str]) -> Run {
+    let mut cmd = common::isolated_vep_anywhere();
+    cmd.arg("-i")
+        .arg(input)
+        .arg("-o")
+        .arg(out)
+        .arg("--offline")
+        .arg("--json_cache")
+        .arg(json_cache)
+        .args(["--species", "homo_sapiens", "--assembly", assembly])
+        .args(["--force_overwrite", "--no_stats", "--verbose"])
+        .args(args);
+    run_command(cmd, out)
+}
+
+/// The corpus the single-corpus cases run on: the first human corpus by name,
+/// whose records sit on one chromosome in position order and number several
+/// hundred, the shape the cases that index, truncate or splice the input need;
+/// every command here passes `--species homo_sapiens`.
+fn single_corpus() -> Corpus {
+    corpora()
+        .into_iter()
+        .find(|corpus| corpus.species == common::DEFAULT_SPECIES)
+        .expect("a human golden corpus")
+}
+
 /// Runs a `vep` command that writes to `out`, a path or `STDOUT`. A run to
 /// `STDOUT` writes its warnings file into the working directory, so it runs in
 /// a directory of its own rather than the crate's.
@@ -83,13 +111,19 @@ fn run_command(mut cmd: Command, out: &Path) -> Run {
     }
 }
 
+/// Runs `vep` over the corpus's `variants.vcf` with the arguments a RefSeq or
+/// merged corpus needs ahead of `args`: the cache declares its transcript set,
+/// which the run must select, and reads the reference for its edited models.
 fn run_corpus(corpus: &Corpus, out: &Path, args: &[&str]) -> Run {
+    let set_args = corpus.transcript_set_args();
+    let mut all: Vec<&str> = set_args.iter().map(String::as_str).collect();
+    all.extend_from_slice(args);
     vep(
         &corpus.dir.join("variants.vcf"),
         &corpus.cache_dir(),
         &corpus.assembly,
         out,
-        args,
+        &all,
     )
 }
 
@@ -229,6 +263,137 @@ fn variation_lookups_write_the_batched_bytes_whatever_the_mode_asks() {
     }
 }
 
+/// The corpus named `name` under `tests/golden`.
+fn corpus_named(name: &str) -> Corpus {
+    corpora()
+        .into_iter()
+        .find(|corpus| corpus.name == name)
+        .unwrap_or_else(|| panic!("no corpus {name} under tests/golden"))
+}
+
+/// A run whose sources are read ahead of its annotation (the variation files,
+/// a `--custom` VCF and bigWig, two plugins whose prefetch reads coordinates
+/// alone, gnomADc and REVEL, and one whose prefetch reads the consequence rows,
+/// ClinPred, whose slot the annotate phase fills) writes the bytes of its
+/// batched `--fork 4 --buffer_size 5000` run in the default and VCF formats
+/// whatever the mode, fork count, buffer size and pipeline depth, the pipeline
+/// depth of 1 included, which holds the read-ahead to one batch.
+#[test]
+fn read_ahead_sources_write_the_same_bytes_at_every_fork_buffer_and_depth() {
+    let tmp = tempfile::tempdir().unwrap();
+    let colocated = corpus_named("GRCh38-colocated");
+    let conservation = corpus_named("GRCh38-plugin-conservation");
+    let gnomadc = corpus_named("GRCh38-plugin-gnomadc");
+    let revel = corpus_named("GRCh38-plugin-revel");
+    let clinpred = corpus_named("GRCh38-plugin-clinpred-fixture");
+    // A `--custom` VCF of the conservation corpus's own records, each carrying
+    // one INFO field, beside the corpus's bigWig.
+    let custom_vcf = tmp.path().join("custom_sites.vcf.gz");
+    bgzip_with_index(&conservation.dir.join("variants.vcf"), &custom_vcf, 40, 1);
+    let custom_vcf = format!(
+        "file={},short_name=sites,format=vcf,type=exact,fields=PAD",
+        custom_vcf.display()
+    );
+    let bigwig = format!(
+        "file={},short_name=gerp,format=bigwig,type=overlap",
+        conservation
+            .dir
+            .join("plugin_data")
+            .join("gerp.bw")
+            .display()
+    );
+    let coverage = format!(
+        "gnomADc,{}",
+        gnomadc
+            .dir
+            .join("plugin_data")
+            .join("gnomad.coverage.tsv.gz")
+            .display()
+    );
+    let revel_file = format!(
+        "REVEL,file={}",
+        revel.dir.join("plugin_data").join("revel.tsv.gz").display()
+    );
+    let clinpred_file = format!(
+        "ClinPred,file={}",
+        clinpred
+            .dir
+            .join("data")
+            .join("ClinPred_hg38_sorted_tabbed_synthetic.tsv.gz")
+            .display()
+    );
+    let arms: [(&str, &Corpus, Vec<&str>); 5] = [
+        (
+            "variation",
+            &colocated,
+            vec!["--check_existing", "--af", "--pubmed"],
+        ),
+        (
+            "custom",
+            &conservation,
+            vec!["--custom", &custom_vcf, "--custom", &bigwig],
+        ),
+        ("gnomadc", &gnomadc, vec!["--plugin", &coverage]),
+        ("revel", &revel, vec!["--plugin", &revel_file]),
+        ("clinpred", &clinpred, vec!["--plugin", &clinpred_file]),
+    ];
+    for (arm, corpus, flags) in &arms {
+        for (name, format_flags) in [FORMATS[0], FORMATS[2]] {
+            let reference_out = tmp.path().join(format!("ahead_{arm}_{name}_reference.out"));
+            let mut args: Vec<&str> = flags.clone();
+            args.extend(format_flags);
+            args.extend([
+                "--pipeline_mode",
+                "batched",
+                "--fork",
+                "4",
+                "--buffer_size",
+                "5000",
+            ]);
+            let reference = run_corpus(corpus, &reference_out, &args);
+            assert!(
+                reference.success,
+                "{arm}/{name} reference: {}",
+                reference.stderr
+            );
+            let reference = without_run_headers(&reference.output);
+            assert!(
+                !reference.is_empty(),
+                "{arm}/{name} reference: empty output"
+            );
+            for (mode, mode_flags) in MODES {
+                for fork in ["1", "4"] {
+                    for buffer in ["5000", "7"] {
+                        for depth in ["1", "3"] {
+                            let out = tmp.path().join(format!(
+                                "ahead_{arm}_{name}_{mode}_{fork}_{buffer}_{depth}.out"
+                            ));
+                            let mut args: Vec<&str> = flags.clone();
+                            args.extend(format_flags);
+                            args.extend(mode_flags);
+                            args.extend(["--fork", fork, "--buffer_size", buffer]);
+                            args.extend(["--pipeline_depth", depth]);
+                            let run = run_corpus(corpus, &out, &args);
+                            assert!(
+                                run.success,
+                                "{arm}/{name} {mode} fork {fork} buffer {buffer} depth {depth}: {}",
+                                run.stderr
+                            );
+                            assert_same(
+                                &reference,
+                                &without_run_headers(&run.output),
+                                &format!(
+                                    "{arm}/{name}: {mode} --fork {fork} --buffer_size {buffer} --pipeline_depth {depth} differs from the batched --fork 4 --buffer_size 5000 output"
+                                ),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Every manifest run of every corpus, its own flags and each of its flag sets,
 /// writes the same default-format bytes under `streaming` as under `batched`.
 #[test]
@@ -333,7 +498,8 @@ fn with_intergenic_breakend(corpus: &Corpus, dir: &Path) -> std::path::PathBuf {
 
 /// The record step runs at the same point in both coordinator paths: the fused
 /// path a run without plugins takes and the batched path a plugin forces
-/// (`LoFTEE` loads with no data file and adds only its own `LoF` keys). With
+/// (`LoFTEE` under the percentile rule loads with no data file and adds only
+/// its own `LoF` keys). With
 /// `--flag_pick` the two paths mark the same row of every record, and with
 /// `--most_severe` they squash every record to the same row, once the plugin's
 /// keys are removed from the Extra column. The corpus's sequence variants read
@@ -393,7 +559,7 @@ fn pick_family_runs_at_the_same_point_in_both_coordinator_paths() {
             &[
                 flag,
                 "--plugin",
-                "LoFTEE",
+                "LoFTEE,use_gerp_end_trunc=0",
                 "--buffer_size",
                 "7",
                 "--fork",
@@ -452,7 +618,7 @@ fn fork_1_matches_fork_4_on_every_format_in_both_modes() {
 #[test]
 fn every_writer_strategy_writes_the_default_bytes() {
     let tmp = tempfile::tempdir().unwrap();
-    let corpus = &corpora()[0];
+    let corpus = &single_corpus();
     for (name, flags) in [FORMATS[0], FORMATS[2]] {
         let reference_out = tmp.path().join(format!("writer_{name}_reference.out"));
         let mut args: Vec<&str> = flags.to_vec();
@@ -503,7 +669,7 @@ fn compressed_output_decompresses_to_the_plain_bytes_in_both_modes() {
     use std::io::Read;
 
     let tmp = tempfile::tempdir().unwrap();
-    let corpus = &corpora()[0];
+    let corpus = &single_corpus();
     for (name, flags) in [FORMATS[0], FORMATS[2]] {
         let reference_out = tmp.path().join(format!("plain_{name}.out"));
         let mut args: Vec<&str> = flags.to_vec();
@@ -547,28 +713,66 @@ fn compressed_output_decompresses_to_the_plain_bytes_in_both_modes() {
     }
 }
 
-/// Whether `duckdb`, which finalizes a Parquet output, is on the PATH.
-fn duckdb_available() -> bool {
-    Command::new("duckdb")
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
+/// `--compress_output bgzip` under every form of `--compression_threads` (the
+/// single-threaded encoder, worker pools of two and three, and the `0` rule),
+/// in both modes, at fork 1 and 4, is a BGZF stream that decompresses to the
+/// bytes of the plain default run in the default and VCF formats. The
+/// compressed streams are not compared across runs: the header carries the
+/// run's command line, so they differ by the flag's own value.
+#[test]
+fn bgzip_output_decompresses_to_the_plain_bytes_at_every_compression_thread_count() {
+    use std::io::Read;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let corpus = &single_corpus();
+    for (name, flags) in [FORMATS[0], FORMATS[2]] {
+        let reference_out = tmp.path().join(format!("plain_threads_{name}.out"));
+        let mut args: Vec<&str> = flags.to_vec();
+        args.extend(["--buffer_size", "100", "--fork", "4"]);
+        let reference = run_corpus(corpus, &reference_out, &args);
+        assert!(reference.success, "{name} reference: {}", reference.stderr);
+        let reference = without_run_headers(&reference.output);
+        assert!(!reference.is_empty());
+        for (mode, mode_flags) in MODES {
+            for fork in ["1", "4"] {
+                for threads in ["1", "2", "3", "0"] {
+                    let out = tmp
+                        .path()
+                        .join(format!("bgzip_{name}_{mode}_{fork}_{threads}.out.gz"));
+                    let mut args: Vec<&str> = flags.to_vec();
+                    args.extend(["--buffer_size", "100", "--fork", fork]);
+                    args.extend(mode_flags);
+                    args.extend(["--compress_output", "bgzip"]);
+                    args.extend(["--compression_threads", threads]);
+                    let run = run_corpus(corpus, &out, &args);
+                    let case = format!(
+                        "{name}: {mode} --fork {fork} --compress_output bgzip --compression_threads {threads}"
+                    );
+                    assert!(run.success, "{case}: {}", run.stderr);
+                    assert_eq!(&run.output[..4], &[0x1f, 0x8b, 0x08, 0x04], "{case}");
+                    let mut plain = Vec::new();
+                    noodles_bgzf::io::Reader::new(&run.output[..])
+                        .read_to_end(&mut plain)
+                        .unwrap_or_else(|e| panic!("{case}: not a BGZF stream: {e}"));
+                    assert_same(
+                        &reference,
+                        &without_run_headers(&plain),
+                        &format!("{case} differs from the plain run once decompressed"),
+                    );
+                }
+            }
+        }
+    }
 }
 
 /// A Parquet run, in both modes and under every writer strategy, writes the
-/// same TSV intermediate (kept with `--keep_intermediate`) and the same rows
-/// once DuckDB has converted it; skipped when `duckdb` is not on the PATH.
+/// same rows in the same order, read back through the cell contract.
+#[cfg(feature = "parquet")]
 #[test]
 fn parquet_output_is_identical_in_both_modes_and_strategies() {
-    if !duckdb_available() {
-        eprintln!("skipped: duckdb not on PATH");
-        return;
-    }
     let tmp = tempfile::tempdir().unwrap();
-    let corpus = &corpora()[0];
-    let mut reference: Option<(Vec<u8>, String)> = None;
+    let corpus = &single_corpus();
+    let mut reference: Option<Vec<String>> = None;
     for (mode, mode_flags) in MODES {
         for strategy in WRITER_STRATEGIES {
             let out = tmp
@@ -577,9 +781,6 @@ fn parquet_output_is_identical_in_both_modes_and_strategies() {
             let mut args = vec![
                 "--output_format",
                 "parquet",
-                "--parquet_shape",
-                "flat",
-                "--keep_intermediate",
                 "--buffer_size",
                 "100",
                 "--fork",
@@ -589,45 +790,15 @@ fn parquet_output_is_identical_in_both_modes_and_strategies() {
             args.extend(["--writer_strategy", strategy]);
             let run = run_corpus(corpus, &out, &args);
             assert!(run.success, "{mode} {strategy}: {}", run.stderr);
-            let intermediate = fs::read(format!("{}.tsv.tmp", out.display())).unwrap();
-            assert!(
-                !intermediate.is_empty(),
-                "{mode} {strategy}: empty intermediate"
-            );
-            let sql = format!(
-                "SELECT * FROM read_parquet('{}/**/*.parquet', hive_partitioning = true) ORDER BY ALL",
-                out.display()
-            );
-            let query = Command::new("duckdb")
-                .args(["-csv", "-c", &sql])
-                .output()
-                .expect("duckdb runs");
-            assert!(
-                query.status.success(),
-                "{mode} {strategy}: duckdb failed: {}",
-                String::from_utf8_lossy(&query.stderr)
-            );
-            let rows = String::from_utf8_lossy(&query.stdout).into_owned();
-            assert!(
-                rows.lines().count() > 1,
-                "{mode} {strategy}: no Parquet rows"
-            );
+            let rows = vep_io::output::parquet::tab_rows(&out).unwrap();
+            assert!(!rows.is_empty(), "{mode} {strategy}: no Parquet rows");
             match &reference {
-                None => reference = Some((intermediate, rows)),
-                Some((expected_intermediate, expected_rows)) => {
-                    assert_same(
-                        expected_intermediate,
-                        &intermediate,
-                        &format!("{mode} {strategy}: the Parquet intermediate differs from batched buffered"),
-                    );
-                    assert_same(
-                        expected_rows.as_bytes(),
-                        rows.as_bytes(),
-                        &format!(
-                            "{mode} {strategy}: the Parquet rows differ from batched buffered"
-                        ),
-                    );
-                }
+                None => reference = Some(rows),
+                Some(expected) => assert_same(
+                    expected.join("\n").as_bytes(),
+                    rows.join("\n").as_bytes(),
+                    &format!("{mode} {strategy}: the Parquet rows differ from batched buffered"),
+                ),
             }
         }
     }
@@ -638,7 +809,7 @@ fn parquet_output_is_identical_in_both_modes_and_strategies() {
 #[test]
 fn pipeline_depth_and_task_size_leave_the_output_unchanged() {
     let tmp = tempfile::tempdir().unwrap();
-    let corpus = &corpora()[0];
+    let corpus = &single_corpus();
     for (name, flags) in [FORMATS[0], FORMATS[2]] {
         let reference_out = tmp.path().join(format!("depth_{name}_reference.out"));
         let mut args: Vec<&str> = flags.to_vec();
@@ -883,18 +1054,33 @@ fn bgzip_with_index(
 }
 
 /// A bgzipped, tabix-indexed copy of the corpus annotates to the plain file's
-/// bytes under every form of `--decompression_threads`, in both modes, whether
-/// its records inflate to a few hundred bytes or past the width that asks for
-/// the inflate-bound pool; the probe arm asserts which side of the threshold
-/// each copy's shape falls on and the count `auto` resolves there.
+/// bytes under every form of `--decompression_threads`, the flag absent
+/// included, and under `--fork 0`, in both modes, whether its records inflate
+/// to a few hundred bytes or past the width that asks for the inflate-bound
+/// pool; the probe arms assert which side of the threshold each copy's shape
+/// falls on, the count `auto` resolves there, the count the absent flag
+/// resolves (the architecture's default) and the annotator count `--fork 0`
+/// resolves beside those inflaters.
 #[test]
 fn bgzipped_input_matches_the_plain_file_under_every_decompression_thread_count() {
+    use vep_cli::config::{
+        reported_parallelism, resolve_fork_auto, DecompressionThreads, FORK_AUTO_CAP,
+    };
+    use vep_cli::input_shape::InputShape;
+
     let tmp = tempfile::tempdir().unwrap();
-    let corpus = &corpora()[0];
+    let corpus = &single_corpus();
     let cpus = vep_cli::config::host_parallelism();
     let bound = vep_cli::config::INFLATE_BOUND_BYTES_PER_RECORD;
     let host_capped = cpus.min(vep_cli::config::DECOMPRESSION_THREADS_AUTO_CAP);
     let inflate_bound = cpus.min(vep_cli::config::INFLATE_BOUND_INFLATERS);
+    let value_of = |resolved: &str, name: &str| -> u64 {
+        resolved
+            .lines()
+            .find_map(|line| line.strip_prefix(&format!("{name}\t")))
+            .and_then(|value| value.parse().ok())
+            .unwrap_or_else(|| panic!("no {name} count in {resolved}"))
+    };
     for (width, padding, auto_threads, inflated_bytes) in [
         ("narrow", 0usize, host_capped, 0..bound),
         ("wide", 8_192, inflate_bound, bound..u64::MAX),
@@ -918,14 +1104,94 @@ fn bgzipped_input_matches_the_plain_file_under_every_decompression_thread_count(
                 && resolved.contains("\ninput_shape\tindexed\n"),
             "{width}: {resolved}"
         );
-        let inflated: u64 = resolved
-            .lines()
-            .find_map(|line| line.strip_prefix("inflated_bytes_per_record\t"))
-            .and_then(|value| value.parse().ok())
-            .unwrap_or_else(|| panic!("{width}: {resolved}"));
+        let inflated = value_of(&resolved, "inflated_bytes_per_record");
         assert!(
             inflated_bytes.contains(&inflated),
             "{width}: {inflated} inflated bytes per record"
+        );
+        // The absent flag is the architecture's default, and `--fork 0` beside
+        // it resolves the annotators from the same shape and the inflaters the
+        // default leaves it.
+        let default_threads = match DecompressionThreads::default() {
+            DecompressionThreads::Auto => auto_threads,
+            DecompressionThreads::HostCapped => host_capped,
+            DecompressionThreads::Fixed(count) => count,
+        };
+        let probe = vep(
+            &gz,
+            &corpus.cache_dir(),
+            &corpus.assembly,
+            Path::new("STDOUT"),
+            &["--resolved_config", "--fork", "0"],
+        );
+        assert!(probe.success, "{width} default probe: {}", probe.stderr);
+        let resolved = String::from_utf8_lossy(&probe.output);
+        assert_eq!(
+            value_of(&resolved, "decompression_threads"),
+            default_threads as u64,
+            "{width}: the absent flag's count"
+        );
+        let shape = InputShape::Indexed {
+            inflated_bytes_per_record: inflated,
+            records_estimate: value_of(&resolved, "records_estimate"),
+            file_bytes: fs::metadata(&gz).unwrap().len(),
+        };
+        let inflaters = if default_threads > 1 {
+            default_threads
+        } else {
+            0
+        };
+        let fork = value_of(&resolved, "fork") as usize;
+        let host_cpus = reported_parallelism().unwrap_or(1);
+        let expected = resolve_fork_auto(&shape, inflaters, host_cpus);
+        assert_eq!(
+            fork, expected,
+            "{width}: fork 0 beside {inflaters} inflaters"
+        );
+        assert!((1..=FORK_AUTO_CAP).contains(&fork), "{width}: fork {fork}");
+        let host_rule = vep_cli::config::resolve_fork(0);
+        if width == "narrow" {
+            assert_eq!(fork, host_rule, "{width}: the host's rule");
+        }
+        // An inflater pool as wide as the host leaves the annotators the half
+        // floor on the wide copy, below the host's rule on any host of two or
+        // more CPUs, so the shape and the inflaters reach the rule whatever the
+        // host's width; the narrow copy keeps the host's rule.
+        let every_cpu = host_cpus.to_string();
+        let probe = vep(
+            &gz,
+            &corpus.cache_dir(),
+            &corpus.assembly,
+            Path::new("STDOUT"),
+            &[
+                "--resolved_config",
+                "--fork",
+                "0",
+                "--decompression_threads",
+                &every_cpu,
+            ],
+        );
+        assert!(probe.success, "{width} every-CPU probe: {}", probe.stderr);
+        let resolved = String::from_utf8_lossy(&probe.output);
+        let fork_every_cpu = value_of(&resolved, "fork") as usize;
+        if width == "wide" && host_cpus >= 2 {
+            assert_eq!(
+                fork_every_cpu,
+                (host_rule / 2).max(1),
+                "{width}: the half floor"
+            );
+            assert!(
+                fork_every_cpu < host_rule,
+                "{width}: {fork_every_cpu} below the host's {host_rule}"
+            );
+        } else {
+            assert_eq!(fork_every_cpu, host_rule, "{width}: the host's rule");
+        }
+        // The run's own pool, sized where the input opens, says what it
+        // resolved; the inflaters are every CPU when there are two or more.
+        let inflaters_every_cpu = if host_cpus > 1 { host_cpus } else { 0 };
+        let pool_line = format!(
+            "--fork 0 resolved {fork_every_cpu} annotators beside {inflaters_every_cpu} inflaters from an input of indexed shape"
         );
         for (name, flags) in [FORMATS[0], FORMATS[2]] {
             let reference_out = tmp.path().join(format!("gz_{width}_{name}_reference.out"));
@@ -946,27 +1212,214 @@ fn bgzipped_input_matches_the_plain_file_under_every_decompression_thread_count(
             let reference = without_run_headers(&reference.output);
             assert!(!reference.is_empty());
             for (mode, mode_flags) in MODES {
-                for threads in ["auto", "1", "0"] {
+                // (label, the decompression flag or none, the fork value)
+                for (label, threads, fork) in [
+                    ("auto", Some("auto"), "4"),
+                    ("1", Some("1"), "4"),
+                    ("0", Some("0"), "4"),
+                    ("default", None, "4"),
+                    ("fork-0", None, "0"),
+                    ("fork-0-every-cpu", Some(every_cpu.as_str()), "0"),
+                ] {
                     let out = tmp
                         .path()
-                        .join(format!("gz_{width}_{name}_{mode}_{threads}.out"));
+                        .join(format!("gz_{width}_{name}_{mode}_{label}.out"));
+                    let mut args: Vec<&str> = flags.to_vec();
+                    args.extend(["--buffer_size", "100", "--fork", fork]);
+                    args.extend(mode_flags);
+                    if let Some(threads) = threads {
+                        args.extend(["--decompression_threads", threads]);
+                    }
+                    let every_cpu_arm = label == "fork-0-every-cpu";
+                    let run = if every_cpu_arm {
+                        vep_verbose(&gz, &corpus.cache_dir(), &corpus.assembly, &out, &args)
+                    } else {
+                        vep(&gz, &corpus.cache_dir(), &corpus.assembly, &out, &args)
+                    };
+                    assert!(run.success, "{width}/{name} {mode} {label}: {}", run.stderr);
+                    if every_cpu_arm {
+                        assert!(
+                            run.stderr.contains(&pool_line),
+                            "{width}/{name} {mode}: expected {pool_line:?} in {}",
+                            run.stderr
+                        );
+                    }
+                    assert_same(
+                        &reference,
+                        &without_run_headers(&run.output),
+                        &format!(
+                            "{width}/{name}: {mode} {label} on the bgzipped copy differs from the plain file"
+                        ),
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// A bgzipped, indexed copy of the corpus that spans every chromosome of its
+/// cache annotates to the plain file's bytes under every `--prewarm_ahead`
+/// value (none ahead, one, two, every indexed contig at the start) and under a
+/// pinned `--parse_threads`, in both modes: the order the chromosomes' shards
+/// are parsed in, and the pool that parses them, change no output.
+#[test]
+fn prewarm_ahead_and_parse_threads_write_the_plain_bytes_across_chromosomes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let corpus = &corpus_named("GRCh38");
+    let gz = tmp.path().join("chromosomes.vcf.gz");
+    let plain = bgzip_with_index(&corpus.dir.join("variants.vcf"), &gz, 20, 0);
+    let order = vep(
+        &gz,
+        &corpus.cache_dir(),
+        &corpus.assembly,
+        Path::new("STDOUT"),
+        &["--resolved_config"],
+    );
+    assert!(order.success, "{}", order.stderr);
+    assert!(
+        String::from_utf8_lossy(&order.output).contains("\ninput_shape\tindexed\n"),
+        "{}",
+        String::from_utf8_lossy(&order.output)
+    );
+    for (name, flags) in [FORMATS[0], FORMATS[2]] {
+        let reference_out = tmp.path().join(format!("chromosomes_{name}_reference.out"));
+        let mut args: Vec<&str> = flags.to_vec();
+        args.extend(["--buffer_size", "50", "--fork", "4"]);
+        let reference = vep(
+            &plain,
+            &corpus.cache_dir(),
+            &corpus.assembly,
+            &reference_out,
+            &args,
+        );
+        assert!(reference.success, "{name} reference: {}", reference.stderr);
+        let reference = without_run_headers(&reference.output);
+        assert!(!reference.is_empty());
+        for (mode, mode_flags) in MODES {
+            for (ahead, parse_threads) in [
+                ("0", "0"),
+                ("1", "0"),
+                ("2", "0"),
+                ("all", "0"),
+                ("1", "1"),
+                ("all", "2"),
+            ] {
+                let out = tmp.path().join(format!(
+                    "chromosomes_{name}_{mode}_{ahead}_{parse_threads}.out"
+                ));
+                let mut args: Vec<&str> = flags.to_vec();
+                args.extend(["--buffer_size", "50", "--fork", "4"]);
+                args.extend(mode_flags);
+                args.extend(["--prewarm_ahead", ahead, "--parse_threads", parse_threads]);
+                let run = vep(&gz, &corpus.cache_dir(), &corpus.assembly, &out, &args);
+                assert!(
+                    run.success,
+                    "{name} {mode} --prewarm_ahead {ahead} --parse_threads {parse_threads}: {}",
+                    run.stderr
+                );
+                assert_same(
+                    &reference,
+                    &without_run_headers(&run.output),
+                    &format!(
+                        "{name}: {mode} --prewarm_ahead {ahead} --parse_threads {parse_threads} differs from the plain file"
+                    ),
+                );
+            }
+        }
+    }
+}
+
+/// Every form of `--reader_core` writes the plain file's bytes on the wide
+/// bgzipped copy (the inflate-bound shape, where `auto` may reserve a core) and
+/// on the plain file, in both modes; under `--verbose` the run says what it
+/// decided, and a fixed CPU says it reserved its core exactly when the rule
+/// reserves one on this host (the CPU and its core's other CPUs allowed, with a
+/// CPU left over), else that no core was reserved.
+#[test]
+fn reader_core_forms_write_the_same_bytes_and_say_what_they_reserved() {
+    use vep_cli::config::{reserve_reader_core, ReaderCore};
+    use vep_cli::input_shape::CpuTopology;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let corpus = &single_corpus();
+    let gz = tmp.path().join("wide.vcf.gz");
+    let plain = bgzip_with_index(&corpus.dir.join("variants.vcf"), &gz, 40, 8_192);
+    let allowed = vep_cli::affinity::allowed_cpus().unwrap_or_default();
+    let topology = CpuTopology::read();
+    let fixed_cpu = allowed.first().copied();
+    let fixed = fixed_cpu.map(|cpu| cpu.to_string());
+    let mut forms = vec!["none", "auto"];
+    if let Some(cpu) = fixed.as_deref() {
+        forms.push(cpu);
+    }
+    for (name, flags) in [FORMATS[0], FORMATS[2]] {
+        let reference_out = tmp.path().join(format!("core_{name}_reference.out"));
+        let mut args: Vec<&str> = flags.to_vec();
+        args.extend(["--buffer_size", "100", "--fork", "4"]);
+        let reference = vep(
+            &plain,
+            &corpus.cache_dir(),
+            &corpus.assembly,
+            &reference_out,
+            &args,
+        );
+        assert!(reference.success, "{name} reference: {}", reference.stderr);
+        let reference = without_run_headers(&reference.output);
+        for (input, label) in [(&gz, "wide"), (&plain, "plain")] {
+            for (mode, mode_flags) in MODES {
+                for form in &forms {
+                    let out = tmp
+                        .path()
+                        .join(format!("core_{name}_{label}_{mode}_{form}.out"));
                     let mut args: Vec<&str> = flags.to_vec();
                     args.extend(["--buffer_size", "100", "--fork", "4"]);
                     args.extend(mode_flags);
-                    args.extend(["--decompression_threads", threads]);
-                    let run = vep(&gz, &corpus.cache_dir(), &corpus.assembly, &out, &args);
+                    args.extend(["--reader_core", form]);
+                    let run =
+                        vep_verbose(input, &corpus.cache_dir(), &corpus.assembly, &out, &args);
                     assert!(
                         run.success,
-                        "{width}/{name} {mode} --decompression_threads {threads}: {}",
+                        "{name}/{label} {mode} --reader_core {form}: {}",
                         run.stderr
                     );
                     assert_same(
                         &reference,
                         &without_run_headers(&run.output),
                         &format!(
-                            "{width}/{name}: {mode} --decompression_threads {threads} on the bgzipped copy differs from the plain file"
+                            "{name}/{label}: {mode} --reader_core {form} differs from the plain default"
                         ),
                     );
+                    let decided = format!("--reader_core {form}: ");
+                    match (*form, fixed_cpu) {
+                        ("none", _) => assert!(
+                            !run.stderr.contains(&decided),
+                            "{name}/{label} {mode}: none decided something: {}",
+                            run.stderr
+                        ),
+                        ("auto", _) => {}
+                        (_, Some(cpu)) => {
+                            let reserved = reserve_reader_core(
+                                ReaderCore::Fixed(cpu),
+                                topology.as_ref(),
+                                &allowed,
+                                4,
+                                0,
+                                0,
+                            );
+                            let expected = match reserved {
+                                Some(reservation) => {
+                                    format!("{decided}reader on CPU {}", reservation.reader_cpu)
+                                }
+                                None => format!("{decided}no core reserved"),
+                            };
+                            assert!(
+                                run.stderr.contains(&expected),
+                                "{name}/{label} {mode}: expected {expected:?} in {}",
+                                run.stderr
+                            );
+                        }
+                        (_, None) => unreachable!("a fixed form needs an allowed CPU"),
+                    }
                 }
             }
         }
@@ -999,7 +1452,7 @@ fn output_within(mut cmd: Command, limit: Duration) -> std::process::Output {
 #[test]
 fn dont_skip_reports_the_malformed_line_in_a_later_batch_and_exits() {
     let tmp = tempfile::tempdir().unwrap();
-    let corpus = &corpora()[0];
+    let corpus = &single_corpus();
     let text = fs::read_to_string(corpus.dir.join("variants.vcf")).unwrap();
     let header: Vec<&str> = text.lines().filter(|l| l.starts_with('#')).collect();
     let data: Vec<&str> = text.lines().filter(|l| !l.starts_with('#')).collect();
@@ -1094,7 +1547,7 @@ fn skipped_rows(skipped: &[u8]) -> Vec<u64> {
 #[test]
 fn skipped_records_are_listed_in_input_order_in_both_modes() {
     let tmp = tempfile::tempdir().unwrap();
-    let corpus = &corpora()[0];
+    let corpus = &single_corpus();
     let text = fs::read_to_string(corpus.dir.join("variants.vcf")).unwrap();
     let data: Vec<&str> = text.lines().filter(|l| !l.starts_with('#')).collect();
     assert!(
@@ -1186,6 +1639,270 @@ fn skipped_records_are_listed_in_input_order_in_both_modes() {
     }
 }
 
+/// The GRCh38 corpus built with `--refseq` alone: its stored warnings log names
+/// two records that draw `Transcript-assembly mismatch`.
+fn refseq_corpus() -> Corpus {
+    corpora()
+        .into_iter()
+        .find(|corpus| corpus.assembly == "GRCh38" && corpus.transcript_set_flags() == ["--refseq"])
+        .expect("a GRCh38 RefSeq golden corpus")
+}
+
+/// The records a warnings file's `Transcript-assembly mismatch in
+/// <Uploaded_variation>` lines name, in file order. A forked Ensembl VEP run
+/// opens a child's lines with its process id (`WARNING: <pid> : WARNING: ...`,
+/// Runner.pm:565), which is not part of the record's name.
+fn mismatch_warnings(warnings: &str) -> Vec<String> {
+    warnings
+        .lines()
+        .filter_map(|line| {
+            line.rsplit_once("Transcript-assembly mismatch in ")
+                .map(|(_, record)| record.trim().to_string())
+        })
+        .collect()
+}
+
+/// Each line of a warnings file as a label: `skip N` for a skipped record's
+/// line, the record's name for a `Transcript-assembly mismatch` line; any other
+/// line is unexpected here.
+fn warning_labels(warnings: &str) -> Vec<String> {
+    warnings
+        .lines()
+        .map(|line| {
+            if let Some(rest) = line.strip_prefix("WARNING: line ") {
+                let number = rest.split(' ').next().unwrap_or_default();
+                return format!("skip {number}");
+            }
+            line.rsplit_once("Transcript-assembly mismatch in ")
+                .map(|(_, record)| record.trim().to_string())
+                .unwrap_or_else(|| panic!("unexpected warning line: {line}"))
+        })
+        .collect()
+}
+
+/// In both modes the warnings file lists the warnings a record draws while it is
+/// annotated in input order, and a streaming run lists them the same way every
+/// time: Ensembl VEP writes `Transcript-assembly mismatch in
+/// <Uploaded_variation>` as it renders each record of the buffer, in buffer
+/// order (OutputFactory.pm:300-303, :1718), and the corpus's stored log holds
+/// the two records that draw it in that order. At `--fork 4 --buffer_size 1`
+/// every record is a batch of its own, so a warning written as it was drawn
+/// would land in task-completion order.
+#[test]
+fn record_warnings_are_listed_in_input_order_in_both_modes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let corpus = refseq_corpus();
+    let reference =
+        fs::read_to_string(corpus.dir.join("expected").join("default.warnings.log")).unwrap();
+    let expected = mismatch_warnings(&reference);
+    assert!(expected.len() >= 2, "{}: {reference}", corpus.name);
+
+    let mut batched: Option<Vec<u8>> = None;
+    for (mode, mode_flags) in MODES {
+        let repeats = if mode == "streaming" { 12 } else { 1 };
+        for repeat in 0..repeats {
+            let name = format!("{mode} run {repeat}");
+            let out = tmp.path().join(format!("corpus_{mode}_{repeat}.out"));
+            let mut args = vec!["--fork", "4", "--buffer_size", "1"];
+            args.extend(mode_flags);
+            let run = run_corpus(&corpus, &out, &args);
+            assert!(run.success, "{name}: {}", run.stderr);
+            let warnings = fs::read(format!("{}_warnings.txt", out.display())).unwrap();
+            assert_eq!(
+                mismatch_warnings(&String::from_utf8_lossy(&warnings)),
+                expected,
+                "{name}"
+            );
+            match &batched {
+                None => batched = Some(warnings),
+                Some(reference) => assert_same(
+                    reference,
+                    &warnings,
+                    &format!("{name}: warnings file differs from batched"),
+                ),
+            }
+        }
+    }
+}
+
+/// A record's warning keeps its place among the skips in both modes. Ensembl
+/// VEP's parser warns about a skipped record while the buffer fills
+/// (Parser.pm:189, Runner.pm:423) and the renderer warns about a record once
+/// the buffer is annotated (Runner.pm:443, OutputFactory.pm:1718): at
+/// `--buffer_size 1` every record is a buffer, so the two kinds alternate in
+/// input order, and at a buffer size past the input the batch's skip comes
+/// first and the records' warnings follow in record order. Forty copies of the
+/// corpus's two records that draw the warning, each under a name of its own,
+/// the thirtieth line with a POS that is not a number: the one batch is cut
+/// into five tasks of eight (`--render_task_records 8`), so the skip sits in
+/// the fourth, after the warnings of three tasks that a writer reporting them
+/// as each chunk comes due would list first.
+#[test]
+fn record_warnings_keep_their_place_among_the_skips_in_both_modes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let corpus = refseq_corpus();
+    let reference =
+        fs::read_to_string(corpus.dir.join("expected").join("default.warnings.log")).unwrap();
+    let drawing = mismatch_warnings(&reference);
+    assert!(drawing.len() >= 2, "{}: {reference}", corpus.name);
+    let text = fs::read_to_string(corpus.dir.join("variants.vcf")).unwrap();
+    let record_line = |id: &str| -> Vec<String> {
+        text.lines()
+            .find(|line| !line.starts_with('#') && line.split('\t').nth(2) == Some(id))
+            .unwrap_or_else(|| panic!("{}: no record {id}", corpus.name))
+            .split('\t')
+            .map(str::to_string)
+            .collect()
+    };
+    let (first, second) = (record_line(&drawing[0]), record_line(&drawing[1]));
+    let mut lines: Vec<String> = text
+        .lines()
+        .filter(|l| l.starts_with('#'))
+        .map(str::to_string)
+        .collect();
+    let mut in_input_order: Vec<String> = Vec::new();
+    for record in 1..=40usize {
+        let mut fields = if record <= 20 {
+            first.clone()
+        } else {
+            second.clone()
+        };
+        fields[2] = format!("m{record:02}");
+        if record == 30 {
+            fields[1] = "abc".to_string();
+            in_input_order.push("skip 30".to_string());
+        } else {
+            in_input_order.push(fields[2].clone());
+        }
+        lines.push(fields.join("\t"));
+    }
+    let input = tmp.path().join("mismatches.vcf");
+    fs::write(&input, lines.join("\n") + "\n").unwrap();
+    let mut skip_first = vec!["skip 30".to_string()];
+    skip_first.extend(in_input_order.iter().filter(|l| *l != "skip 30").cloned());
+    let set_args = corpus.transcript_set_args();
+
+    for (buffer_size, expected) in [("1", &in_input_order), ("5000", &skip_first)] {
+        let mut batched: Option<Vec<u8>> = None;
+        for (mode, mode_flags) in MODES {
+            let repeats = if mode == "streaming" { 8 } else { 1 };
+            for repeat in 0..repeats {
+                let name = format!("{mode} run {repeat} at --buffer_size {buffer_size}");
+                let out = tmp
+                    .path()
+                    .join(format!("mismatches_{buffer_size}_{mode}_{repeat}.out"));
+                let mut args: Vec<&str> = set_args.iter().map(String::as_str).collect();
+                args.extend(["--fork", "4", "--render_task_records", "8"]);
+                args.extend(["--buffer_size", buffer_size]);
+                args.extend(mode_flags);
+                let run = vep(&input, &corpus.cache_dir(), &corpus.assembly, &out, &args);
+                assert!(run.success, "{name}: {}", run.stderr);
+                let warnings = fs::read(format!("{}_warnings.txt", out.display())).unwrap();
+                assert_eq!(
+                    &warning_labels(&String::from_utf8_lossy(&warnings)),
+                    expected,
+                    "{name}"
+                );
+                match &batched {
+                    None => batched = Some(warnings),
+                    Some(reference) => assert_same(
+                        reference,
+                        &warnings,
+                        &format!("{name}: warnings file differs from batched"),
+                    ),
+                }
+            }
+        }
+    }
+}
+
+/// In both modes, a warnings file that cannot be written ends the run at the
+/// batch whose record drew the first warning, with that batch written and
+/// nothing after it, as it does for a skip: the RefSeq corpus's first record to
+/// draw `Transcript-assembly mismatch` is the last one written at
+/// `--buffer_size 1`, so a clean run over the records through it is the
+/// reference for both.
+#[test]
+fn unwritable_warnings_file_ends_both_modes_at_the_record_that_warned() {
+    let tmp = tempfile::tempdir().unwrap();
+    let corpus = refseq_corpus();
+    let reference_log =
+        fs::read_to_string(corpus.dir.join("expected").join("default.warnings.log")).unwrap();
+    let first_warned = mismatch_warnings(&reference_log)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| panic!("{}: {reference_log}", corpus.name));
+    let text = fs::read_to_string(corpus.dir.join("variants.vcf")).unwrap();
+    let header: Vec<&str> = text.lines().filter(|l| l.starts_with('#')).collect();
+    let data: Vec<&str> = text.lines().filter(|l| !l.starts_with('#')).collect();
+    let through = data
+        .iter()
+        .position(|line| line.split('\t').nth(2) == Some(first_warned.as_str()))
+        .unwrap_or_else(|| panic!("{}: no record {first_warned}", corpus.name));
+    let mut lines: Vec<String> = header.iter().map(|l| l.to_string()).collect();
+    lines.extend(data[..=through].iter().map(|l| l.to_string()));
+    let clean = tmp.path().join("clean.vcf");
+    fs::write(&clean, lines.join("\n") + "\n").unwrap();
+    let warnings = tmp.path().join("missing").join("w.txt");
+    let set_args = corpus.transcript_set_args();
+    let set_args: Vec<&str> = set_args.iter().map(String::as_str).collect();
+
+    let reference_out = tmp.path().join("clean.out");
+    let mut args = set_args.clone();
+    args.extend(["--buffer_size", "1", "--fork", "4"]);
+    let reference = vep(
+        &clean,
+        &corpus.cache_dir(),
+        &corpus.assembly,
+        &reference_out,
+        &args,
+    );
+    assert!(reference.success, "clean run: {}", reference.stderr);
+    let reference = without_run_headers(&reference.output);
+    assert!(!reference.is_empty());
+
+    let mut error_lines: Vec<String> = Vec::new();
+    for (mode, mode_flags) in MODES {
+        let out = tmp.path().join(format!("warned_{mode}.out"));
+        let mut args = set_args.clone();
+        args.extend([
+            "--buffer_size",
+            "1",
+            "--fork",
+            "4",
+            "--warning_file",
+            warnings.to_str().unwrap(),
+        ]);
+        args.extend(mode_flags);
+        let cmd = vep_command(
+            &corpus.dir.join("variants.vcf"),
+            &corpus.cache_dir(),
+            &corpus.assembly,
+            &out,
+            &args,
+        );
+        let output = output_within(cmd, Duration::from_secs(120));
+        assert!(
+            !output.status.success(),
+            "{mode}: a warnings file that cannot be written must fail the run"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        error_lines.push(
+            stderr
+                .lines()
+                .find(|l| l.starts_with("ERROR: [output] Could not write to warnings file"))
+                .unwrap_or_else(|| panic!("{mode}: no warnings-file ERROR line:\n{stderr}"))
+                .to_string(),
+        );
+        assert_same(
+            &reference,
+            &without_run_headers(&fs::read(&out).unwrap()),
+            &format!("{mode}: the output is not the records through the one that warned"),
+        );
+    }
+    assert_eq!(error_lines[0], error_lines[1]);
+}
+
 /// In both modes, a warnings file that cannot be written ends the run with the
 /// same error line and the same output: the batch whose skip met the failure is
 /// written and nothing after it. The skipped record (a chromosome the cache
@@ -1194,7 +1911,7 @@ fn skipped_records_are_listed_in_input_order_in_both_modes() {
 #[test]
 fn unwritable_warnings_file_ends_both_modes_at_the_same_batch() {
     let tmp = tempfile::tempdir().unwrap();
-    let corpus = &corpora()[0];
+    let corpus = &single_corpus();
     let text = fs::read_to_string(corpus.dir.join("variants.vcf")).unwrap();
     let header: Vec<&str> = text.lines().filter(|l| l.starts_with('#')).collect();
     let data: Vec<&str> = text.lines().filter(|l| !l.starts_with('#')).collect();
@@ -1266,11 +1983,13 @@ fn unwritable_warnings_file_ends_both_modes_at_the_same_batch() {
 /// the header lines, which the direct and vectored strategies put on the
 /// output before the pipeline starts, fail as the buffered strategy's write or
 /// final flush does. The warnings go to standard error, so the default warnings
-/// file beside the unwritable output is not what fails first.
-#[cfg(unix)]
+/// file beside the unwritable output is not what fails first. The output is
+/// Linux's `/dev/full`, which opens and then fails every write; macOS has no
+/// such device.
+#[cfg(target_os = "linux")]
 #[test]
 fn unwritable_output_fails_instead_of_hanging() {
-    let corpus = &corpora()[0];
+    let corpus = &single_corpus();
     for (mode, mode_flags) in MODES {
         for strategy in WRITER_STRATEGIES {
             let mut args = vec![
@@ -1301,6 +2020,137 @@ fn unwritable_output_fails_instead_of_hanging() {
                     || stderr.contains("Failed to flush output"),
                 "{mode} {strategy}: stderr does not name the output failure:\n{stderr}"
             );
+        }
+    }
+}
+
+/// The statistics report without the rows that name the run rather than its
+/// counts: the command line (which carries the knobs under test), the three
+/// times and the output path.
+fn without_run_rows(summary: &str) -> String {
+    summary
+        .lines()
+        .filter(|line| {
+            ![
+                "Command line options\t",
+                "Start time\t",
+                "End time\t",
+                "Run time\t",
+                "Output file\t",
+            ]
+            .iter()
+            .any(|prefix| line.starts_with(prefix))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Runs `vep --stats_text` on `corpus` with `args` and returns the report.
+fn summary_of(corpus: &Corpus, out: &Path, args: &[&str]) -> String {
+    let mut cmd = common::isolated_vep_anywhere();
+    cmd.arg("-i")
+        .arg(corpus.dir.join("variants.vcf"))
+        .arg("-o")
+        .arg(out)
+        .arg("--offline")
+        .arg("--json_cache")
+        .arg(corpus.cache_dir())
+        .args(["--species", "homo_sapiens", "--assembly", &corpus.assembly])
+        .args(["--force_overwrite", "--stats_text", "--quiet"])
+        .args(corpus.transcript_set_args())
+        .args(args);
+    let result = cmd.output().expect("vep binary runs");
+    assert!(
+        result.status.success(),
+        "{} {args:?}: {}",
+        corpus.name,
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let summary = out.with_file_name(format!(
+        "{}_summary.txt",
+        out.file_name().unwrap().to_string_lossy()
+    ));
+    fs::read_to_string(summary).unwrap()
+}
+
+/// The statistics report is the same whatever the thread count, buffer size,
+/// pipeline mode, task size and output format: the chunks' counts merge into one
+/// run, and the chart rows are ordered by rule, never by the order the chunks
+/// finished in.
+#[test]
+fn summary_text_is_identical_across_fork_counts() {
+    let tmp = tempfile::tempdir().unwrap();
+    for corpus in &corpora() {
+        let out = tmp.path().join(format!("{}_reference.out", corpus.name));
+        let reference = without_run_rows(&summary_of(
+            corpus,
+            &out,
+            &[
+                "--fork",
+                "1",
+                "--buffer_size",
+                "5000",
+                "--pipeline_mode",
+                "batched",
+            ],
+        ));
+        let variants: [&[&str]; 3] = [
+            &[
+                "--fork",
+                "4",
+                "--buffer_size",
+                "7",
+                "--pipeline_mode",
+                "streaming",
+            ],
+            &[
+                "--fork",
+                "4",
+                "--buffer_size",
+                "500",
+                "--pipeline_mode",
+                "batched",
+            ],
+            &[
+                "--fork",
+                "3",
+                "--buffer_size",
+                "64",
+                "--render_task_records",
+                "1",
+            ],
+        ];
+        for (i, args) in variants.iter().enumerate() {
+            let out = tmp.path().join(format!("{}_{i}.out", corpus.name));
+            let candidate = without_run_rows(&summary_of(corpus, &out, args));
+            assert_eq!(
+                candidate, reference,
+                "{}: {args:?} differs from fork 1 batched",
+                corpus.name
+            );
+        }
+    }
+    let corpus = corpora()
+        .into_iter()
+        .find(|corpus| corpus.name == "GRCh38-statistics")
+        .expect("the statistics corpus");
+    let out = tmp.path().join("statistics_default.out");
+    let reference = without_run_rows(&summary_of(&corpus, &out, &["--fork", "1"]));
+    for (name, flags) in FORMATS {
+        for (mode, mode_flags) in MODES {
+            for fork in ["1", "4"] {
+                let out = tmp
+                    .path()
+                    .join(format!("statistics_{name}_{mode}_{fork}.out"));
+                let mut args: Vec<&str> = flags.to_vec();
+                args.extend(["--fork", fork, "--buffer_size", "50"]);
+                args.extend(mode_flags);
+                let candidate = without_run_rows(&summary_of(&corpus, &out, &args));
+                assert_eq!(
+                    candidate, reference,
+                    "GRCh38-statistics {name} {mode} --fork {fork} differs from the default run"
+                );
+            }
         }
     }
 }

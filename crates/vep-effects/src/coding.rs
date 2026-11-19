@@ -3,10 +3,10 @@
 
 //! Coding-region effect analysis: codon extraction, translation, and amino acid comparison.
 //!
-//! Given a variant position within the CDS, this module extracts the affected codon(s),
-//! translates them using the standard genetic code, and compares reference vs alternate
-//! amino acids. Handles SNVs, inframe indels, and frameshifts, mirroring the Ensembl VEP
-//! `TranscriptVariationAllele` codon/peptide logic for concordance.
+//! Given a variant position within the CDS, this module extracts the affected codon(s), translates
+//! them under the transcript's genetic code (SNV path and `PerlCodingEval`) or the standard one,
+//! and compares reference vs alternate amino acids. Handles SNVs, inframe indels, and frameshifts,
+//! mirroring the Ensembl VEP `TranscriptVariationAllele` codon/peptide logic for concordance.
 //!
 //! Perl citations name modules of ensembl-variation release/116
 //! (`Bio/EnsEMBL/Variation/...`); `TranscriptMapper` is in ensembl core release/116.
@@ -17,7 +17,9 @@
 //! - [`compute_peptide_alleles`]: full CDS translation with trimmed peptide comparison
 //! - [`compute_codon_window_peptide_alleles`]: Perl-style local codon-window translation
 
-use vep_core::codon::{seq_is_dna, translate_codon, translate_codon_with_table};
+use vep_core::codon::{
+    is_start_codon, is_ter_codon, seq_is_dna, translate_codon, translate_codon_with_table,
+};
 use vep_core::transcript::Transcript;
 use vep_core::variant::InputVariant;
 
@@ -477,6 +479,45 @@ pub(crate) fn feature_seq<'a>(
     } else {
         Cow::Borrowed(allele)
     }
+}
+
+/// Rotates `allele`, written on `allele_strand`, as a 3' shift of `shift` bases
+/// along a transcript on `transcript_strand` moves it (`shift_feature_seqs`,
+/// TranscriptVariationAllele.pm:1330-1345): read on the transcript's strand,
+/// the first base moves to the end once per base of the shift, so an allele
+/// written on the transcript's strand rotates left by the shift modulo its
+/// length and one written on the other strand rotates right by it, the
+/// reverse complement of that left rotation. A shift of the allele's length, or
+/// of any multiple of it, leaves the allele as written; a longer shift rotates
+/// by the remainder, so the bases placed at the shifted position are the ones
+/// the variant produces there. Ensembl VEP counts the places from the
+/// transcript's strand alone, `shift_length` on a forward-strand transcript and
+/// `seq_length - shift_length` on a reverse-strand one (`:1337-1338`), so it
+/// rotates an allele written on the reverse strand the wrong way and, along a
+/// reverse-strand transcript, rotates nothing once the shift exceeds the
+/// allele, two defects that splice bases the variant never produces. Returns
+/// the number of left-rotation steps applied, 0 for an allele left as written.
+pub(crate) fn rotate_shifted_allele(
+    allele: &mut [u8],
+    shift: u64,
+    allele_strand: Strand,
+    transcript_strand: Strand,
+) -> usize {
+    let length = allele.len() as u64;
+    if length == 0 {
+        return 0;
+    }
+    let remainder = (shift % length) as usize;
+    if remainder == 0 {
+        return 0;
+    }
+    let steps = if allele_strand == transcript_strand {
+        remainder
+    } else {
+        allele.len() - remainder
+    };
+    allele.rotate_left(steps);
+    steps
 }
 
 /// Compute the 5' UTR sequence, preferring cached UTR (`vefc.five_prime_utr`)
@@ -1317,8 +1358,9 @@ pub fn get_codon_change(
 /// NCBI translation table for a transcript, defaulting to 1 as Perl does.
 ///
 /// Perl reads this per transcript in `BaseTranscriptVariation::_codon_table`
-/// (`$attrib ? $attrib->value : 1`). Human vertebrate-mitochondrial transcripts
-/// carry table 2; every other transcript is table 1.
+/// (`$attrib ? $attrib->value : 1`), the `codon_table` attribute of the
+/// transcript's sequence region: 2 on a vertebrate's mitochondrion, 5 on an
+/// invertebrate's, 3 on a yeast's, 11 on a plastid, 1 elsewhere.
 pub(crate) fn codon_table_for(transcript: &Transcript) -> u8 {
     transcript
         .vefc
@@ -1638,7 +1680,7 @@ use std::borrow::Cow;
 
 use vep_core::consequence::Consequence;
 use vep_core::coordinate::Strand;
-use vep_core::transcript::{ExonCoordMapper, SeqEdit};
+use vep_core::transcript::{BamEditStatus, ExonCoordMapper, MapperPair, SeqEdit};
 
 /// One element of a `Bio::EnsEMBL::Mapper` result list, in transcript order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1789,6 +1831,29 @@ fn perl_genomic2cdna(ecm: &ExonCoordMapper, start: i64, end: i64, strand: i8) ->
     }
 }
 
+/// Whether the genome is the reference sequence of `transcript`: a model the
+/// cache marks `failed`, whose sequence the alignment's correction did not
+/// make the aligned one (AnnotationType/Transcript.pm:579, 619-625). A base
+/// its mapper holds and the genome lacks is then no base of the transcript.
+pub(crate) fn genome_is_reference(transcript: &Transcript) -> bool {
+    transcript.bam_edit_status == Some(BamEditStatus::Failed)
+}
+
+/// The two halves `map_insert` gives an insertion between two exonic bases
+/// (Mapper.pm:522-542), cut down to the first, the point after the base 5'
+/// of it, when the mapper numbers the two bases more than one apart. The
+/// halves then span the bases the model holds between them, bases a model
+/// the genome is the reference of ([`genome_is_reference`]) does not have.
+fn insertion_point_on_the_genome(cdna: &mut Vec<PerlMapSeg>) {
+    let spans_model_bases = matches!(
+        cdna.as_slice(),
+        [PerlMapSeg::Coord { start, .. }, PerlMapSeg::Coord { end, .. }] if start <= end
+    );
+    if spans_model_bases {
+        cdna.truncate(1);
+    }
+}
+
 /// `TranscriptMapper::genomic2cds`: cDNA segments clipped to the coding region, a
 /// UTR overhang becoming a gap on that side.
 fn perl_genomic2cds(cdna: &[PerlMapSeg], cstart: i64, cend: i64) -> Vec<PerlMapSeg> {
@@ -1834,7 +1899,10 @@ fn perl_genomic2cds(cdna: &[PerlMapSeg], cstart: i64, cend: i64) -> Vec<PerlMapS
 /// Project an allele span the way `BaseTranscriptVariation` does: `cdna_start` /
 /// `cdna_end` from the first / last cDNA segment, `cds_start` / `cds_end` from the
 /// first / last CDS segment plus the start-exon phase, `translation_start` /
-/// `translation_end` from `genomic2pep`.
+/// `translation_end` from `genomic2pep`. On a model the genome is the
+/// reference of, an insertion between two bases the mapper numbers more than
+/// one apart is projected at the point after the base 5' of it
+/// (`insertion_point_on_the_genome`).
 ///
 /// `None` when the transcript has no coding model or no mapper.
 pub fn perl_span(transcript: &Transcript, span_start: u64, span_end: u64) -> Option<PerlSpan> {
@@ -1847,7 +1915,10 @@ pub fn perl_span(transcript: &Transcript, span_start: u64, span_end: u64) -> Opt
     transcript.translation.as_ref()?;
     let strand = transcript.strand.as_i8();
     let (start, end) = (span_start as i64, span_end as i64);
-    let cdna = perl_genomic2cdna(ecm, start, end, strand);
+    let mut cdna = perl_genomic2cdna(ecm, start, end, strand);
+    if start == end + 1 && genome_is_reference(transcript) {
+        insertion_point_on_the_genome(&mut cdna);
+    }
     let cstart = mapper.cdna_coding_start as i64;
     let cend = mapper.cdna_coding_end as i64;
     let cds = perl_genomic2cds(&cdna, cstart, cend);
@@ -1875,6 +1946,191 @@ pub fn perl_span(transcript: &Transcript, span_start: u64, span_end: u64) -> Opt
 /// `Bio::EnsEMBL::Variation::Utils::VariationEffect::overlap`.
 fn perl_overlap(f1_start: i64, f1_end: i64, f2_start: i64, f2_end: i64) -> bool {
     f1_end >= f2_start && f1_start <= f2_end
+}
+
+/// Whether the span `v_start..=v_end` overlaps a genomic base of the stop
+/// codon: a base the mapper pairs `pairs` hold for one of the last three cDNA
+/// positions of the coding sequence `cdna_coding_start..=cdna_coding_end`.
+/// Ensembl VEP reads the last three genomic positions of the coding region
+/// (VariationEffect.pm:1418-1422). On a stop codon an intron splits those are
+/// one or two intron bases beside the codon's last, and miss the stop bases
+/// that end the exon before; on a model whose stop codon an `_rna_edit`
+/// completes they are the stop bases the genome holds and the one or two
+/// sense bases before them. Each run of adjacent stop bases is one range of
+/// Ensembl VEP's `overlap` (:1424-1427), so the range an insertion is given,
+/// whose start lies past its end, overlaps the run that holds both ends, as
+/// it overlaps a whole codon in Ensembl VEP.
+fn overlaps_stop_codon_bases(
+    pairs: &[MapperPair],
+    (cdna_coding_start, cdna_coding_end): (i64, i64),
+    (v_start, v_end): (i64, i64),
+) -> bool {
+    let mut bases = [0i64; 3];
+    let mut held = 0;
+    for cdna in cdna_coding_start.max(cdna_coding_end - 2)..=cdna_coding_end {
+        let Some(p) = pairs
+            .iter()
+            .find(|p| p.from_start as i64 <= cdna && cdna <= p.from_end as i64)
+        else {
+            continue;
+        };
+        let offset = cdna - p.from_start as i64;
+        bases[held] = if p.ori >= 0 {
+            p.to_start as i64 + offset
+        } else {
+            p.to_end as i64 - offset
+        };
+        held += 1;
+    }
+    let bases = &mut bases[..held];
+    bases.sort_unstable();
+    bases
+        .chunk_by(|a, b| b - a == 1)
+        .any(|run| perl_overlap(v_start, v_end, run[0], run[run.len() - 1]))
+}
+
+/// Whether `edited`, the coding sequence with an allele written in at CDS
+/// position `cds_start`, reads the reference's residue at every codon of `cds`
+/// before the old stop position, the last three bases of `cds`. A codon whose
+/// bases differ keeps its residue where both codons translate to one residue.
+/// `edited` is at least as long as `cds`, and `cds` holds a codon.
+fn residues_before_stop_kept(cds: &[u8], edited: &[u8], cds_start: i64, table: u8) -> bool {
+    let stop_idx = cds.len() - 3;
+    let first = ((cds_start - 1).max(0) as usize / 3 * 3).min(stop_idx);
+    let whole = first + (stop_idx - first) / 3 * 3;
+    let same_residue = |i: usize| {
+        let (reference, read) = (&cds[i..i + 3], &edited[i..i + 3]);
+        reference.eq_ignore_ascii_case(read) || {
+            let residue = perl_translate_codon(read, table);
+            residue != b'X' && residue == perl_translate_codon(reference, table)
+        }
+    };
+    (first..whole).step_by(3).all(same_residue)
+        && cds[whole..stop_idx].eq_ignore_ascii_case(&edited[whole..stop_idx])
+}
+
+/// What the sequence a record gives shows at the old stop position, for a
+/// length-changing span that holds the whole stop codon and has no coordinates
+/// for the stop codon edit test ([`PerlCodingEval::removed_stop_codon`]).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum GivenStopCodon {
+    /// No stop codon is shown there, or the given sequence ends before it.
+    Lost,
+    /// A stop codon is shown there behind the reference's residues, or the
+    /// edit can be written where it takes no coding base and no stop base.
+    Retained,
+    /// A stop codon is shown there and a residue before it differs.
+    Changed,
+}
+
+/// How many positions a deletion is followed along the reference sequence in
+/// each direction for the other places the same edit can be written at.
+const EQUIVALENT_SITES_LIMIT: i64 = 10_000;
+
+/// The exons of a transcript on an axis that runs in its own direction: the
+/// genomic coordinate on the forward strand, its negative on the reverse.
+struct ExonAxis {
+    /// `(first position, last position, first cDNA position)` of each exon.
+    exons: Vec<(i64, i64, i64)>,
+    cdna_coding_start: i64,
+    cdna_coding_end: i64,
+}
+
+impl ExonAxis {
+    /// `None` unless the mapper pairs are the transcript's exons in cDNA order
+    /// from position 1, each on `strand` and as long on the genome as in the
+    /// cDNA.
+    fn new(
+        pairs: &[MapperPair],
+        strand: i8,
+        (cdna_coding_start, cdna_coding_end): (i64, i64),
+    ) -> Option<Self> {
+        let mut sorted: Vec<&MapperPair> = pairs.iter().collect();
+        sorted.sort_by_key(|p| p.from_start);
+        let mut exons: Vec<(i64, i64, i64)> = Vec::with_capacity(sorted.len());
+        let mut next_cdna = 1;
+        for p in sorted {
+            let (from_start, from_end) = (p.from_start as i64, p.from_end as i64);
+            let (to_start, to_end) = (p.to_start as i64, p.to_end as i64);
+            if p.ori != strand
+                || from_start != next_cdna
+                || from_end - from_start != to_end - to_start
+            {
+                return None;
+            }
+            let (first, last) = if strand == 1 {
+                (to_start, to_end)
+            } else {
+                (-to_end, -to_start)
+            };
+            if exons.last().is_some_and(|&(_, before, _)| before >= first) {
+                return None;
+            }
+            exons.push((first, last, from_start));
+            next_cdna = from_end + 1;
+        }
+        (!exons.is_empty()).then_some(Self {
+            exons,
+            cdna_coding_start,
+            cdna_coding_end,
+        })
+    }
+
+    /// The cDNA position of the axis position `pos`, `None` off the exons.
+    fn cdna(&self, pos: i64) -> Option<i64> {
+        self.exons
+            .iter()
+            .find(|&&(first, last, _)| first <= pos && pos <= last)
+            .map(|&(first, _, cdna)| cdna + pos - first)
+    }
+
+    /// The axis position of the cDNA position `cdna`.
+    fn position(&self, cdna: i64) -> Option<i64> {
+        self.exons
+            .iter()
+            .find(|&&(first, last, start)| start <= cdna && cdna <= start + last - first)
+            .map(|&(first, _, start)| first + cdna - start)
+    }
+
+    /// The number of exon bases before the axis position `pos`.
+    fn exonic_before(&self, pos: i64) -> usize {
+        self.exons
+            .iter()
+            .map(|&(first, last, _)| (last.min(pos - 1) - first + 1).max(0))
+            .sum::<i64>() as usize
+    }
+
+    /// Of the axis positions `lo..=hi`: the coding bases, the stop codon's
+    /// among them, and the exon bases.
+    fn taken(&self, lo: i64, hi: i64) -> (i64, i64) {
+        let (mut coding, mut exonic) = (0, 0);
+        for &(first, last, cdna) in &self.exons {
+            let (x, y) = (first.max(lo), last.min(hi));
+            if y < x {
+                continue;
+            }
+            exonic += y - x + 1;
+            let (c1, c2) = (cdna + x - first, cdna + y - first);
+            coding += (c2.min(self.cdna_coding_end) - c1.max(self.cdna_coding_start) + 1).max(0);
+        }
+        (coding, exonic)
+    }
+}
+
+/// Whether two stretches of coding sequence of one length, each beginning
+/// `filler` bases into a codon, read the same residue at every codon. A codon
+/// whose bases differ keeps its residue where both codons translate to one
+/// residue; a codon cut short at either end is compared base for base.
+fn same_residues(a: &[u8], b: &[u8], filler: usize, table: u8) -> bool {
+    let head = ((3 - filler % 3) % 3).min(a.len());
+    a[..head].eq_ignore_ascii_case(&b[..head])
+        && a[head..].chunks(3).zip(b[head..].chunks(3)).all(|(x, y)| {
+            x.eq_ignore_ascii_case(y)
+                || (x.len() == 3 && {
+                    let residue = perl_translate_codon(x, table);
+                    residue != b'X' && residue == perl_translate_codon(y, table)
+                })
+        })
 }
 
 /// Perl-truthy integer: defined and non-zero.
@@ -1926,7 +2182,7 @@ fn iupac_bases(b: u8) -> &'static [u8] {
         b'D' => b"AGT",
         b'H' => b"ACT",
         b'V' => b"ACG",
-        b'N' => b"ACGT",
+        b'N' | b'X' => b"ACGT",
         _ => b"",
     }
 }
@@ -1971,19 +2227,11 @@ fn perl_translate_codon(codon: &[u8], table: u8) -> u8 {
 }
 
 fn perl_translate(seq: &[u8], table: u8) -> Vec<u8> {
-    seq.chunks_exact(3)
+    seq.as_chunks::<3>()
+        .0
+        .iter()
         .map(|c| perl_translate_codon(c, table))
         .collect()
-}
-
-/// `Bio::Tools::CodonTable::is_start_codon` for the two tables VEP uses.
-fn perl_is_start_codon(codon: &[u8], table: u8) -> bool {
-    let upper: Vec<u8> = codon.iter().map(u8::to_ascii_uppercase).collect();
-    if table == 2 {
-        matches!(upper.as_slice(), b"ATT" | b"ATC" | b"ATA" | b"ATG" | b"GTG")
-    } else {
-        matches!(upper.as_slice(), b"TTG" | b"CTG" | b"ATG")
-    }
 }
 
 /// `TranscriptVariationAllele::peptide` applies the translation's SeqEdits to the
@@ -2022,7 +2270,7 @@ pub(crate) fn initial_met_edit(cds: &[u8], pep_seq: &[u8], table: u8) -> Option<
     let first = cds.get(..3)?;
     if pep_seq.first() != Some(&b'M')
         || perl_translate_codon(first, table) == b'M'
-        || perl_is_start_codon(first, table)
+        || is_start_codon(first, table)
     {
         return None;
     }
@@ -2100,7 +2348,7 @@ pub(crate) fn edit_reference_peptide(
 /// [`PerlCodingEval::peptide`] is untouched, as Perl's `peptide` is.
 fn with_initial_met<'a>(pep: &'a [u8], cds: &[u8], table: u8) -> Cow<'a, [u8]> {
     match (pep.first(), cds.get(..3)) {
-        (Some(&first), Some(codon)) if first != b'M' && perl_is_start_codon(codon, table) => {
+        (Some(&first), Some(codon)) if first != b'M' && is_start_codon(codon, table) => {
             let mut owned = pep.to_vec();
             owned[0] = b'M';
             Cow::Owned(owned)
@@ -2119,10 +2367,10 @@ fn perl_transcript_peptide(cds: &[u8], table: u8) -> Vec<u8> {
         return Vec::new();
     }
     let mut pep = perl_translate(whole, table);
-    if perl_translate_codon(&whole[whole.len() - 3..], table) == b'*' {
+    if is_ter_codon(&whole[whole.len() - 3..], table) {
         pep.pop();
     }
-    if pep.first().is_some_and(|&a| a != b'M') && perl_is_start_codon(&whole[..3], table) {
+    if pep.first().is_some_and(|&a| a != b'M') && is_start_codon(&whole[..3], table) {
         pep[0] = b'M';
     }
     pep
@@ -2148,8 +2396,22 @@ pub fn is_perl_coding_term(c: Consequence) -> bool {
     )
 }
 
+/// What the stop codon edit test of [`PerlCodingEval::edited_stop_codon`] finds.
+enum EditedStopCodon {
+    /// The test is not made: the variant is neither an insertion nor a
+    /// deletion, its span lacks a cDNA coordinate at one end or a CDS start, or
+    /// the CDS is shorter than a codon.
+    NotMade,
+    /// The edited sequence is shorter than the CDS (VariationEffect.pm:1524).
+    Shorter,
+    /// The three bases the edited sequence holds at the old stop position,
+    /// and whether every codon before them reads the reference's residue.
+    Read { codon: [u8; 3], residues_kept: bool },
+}
+
 /// One `TranscriptVariationAllele` evaluation with Perl's `_predicate_cache`.
 struct PerlCodingEval<'a> {
+    transcript: &'a Transcript,
     cds: &'a [u8],
     pep_seq: Cow<'a, [u8]>,
     seq_edits: &'a [SeqEdit],
@@ -2157,8 +2419,8 @@ struct PerlCodingEval<'a> {
     utr3: Option<Vec<u8>>,
     table: u8,
     span: PerlSpan,
-    /// The transcript's strand, which places the stop codon in genomic
-    /// coordinates.
+    /// The transcript's strand, the direction an inserted allele's length
+    /// moves the variant start in (`_overlaps_stop_codon_cil`).
     strand: i8,
     /// Whether the alleles were given on the strand opposite the transcript's
     /// and so read reverse-complemented (`feature_seq`).
@@ -2180,6 +2442,10 @@ struct PerlCodingEval<'a> {
     ref_allele: &'a [u8],
     alt_allele: &'a [u8],
     feature_seq: Vec<u8>,
+    /// The variant's chromosome and the reference sequence, read for the other
+    /// places a deletion can be written at ([`Self::equivalent_sites`]).
+    chr: &'a str,
+    fasta: Option<&'a vep_fasta::IndexedFasta>,
     seq_length: Option<i64>,
     snp: bool,
     insertion: bool,
@@ -2188,12 +2454,12 @@ struct PerlCodingEval<'a> {
     codon_memo: [Option<Option<Vec<u8>>>; 2],
     peptide_memo: [Option<Option<Vec<u8>>>; 2],
     peps_memo: Option<Option<(Vec<u8>, Vec<u8>)>>,
-    partial_codon_memo: Option<bool>,
     overlaps_stop_memo: Option<bool>,
     overlaps_stop_cil_memo: Option<bool>,
     overlaps_start_memo: Option<bool>,
     ins_del_stop_altered_memo: Option<bool>,
-    ins_del_stop_altered_cil_memo: Option<bool>,
+    edited_stop_codon_kept_cil_memo: Option<bool>,
+    removed_stop_codon_memo: Option<Option<GivenStopCodon>>,
     ins_del_start_altered_memo: Option<bool>,
     inv_start_altered_memo: Option<bool>,
     snp_start_altered_memo: Option<bool>,
@@ -2212,14 +2478,10 @@ impl<'a> PerlCodingEval<'a> {
         }
     }
 
-    /// `_get_alternate_cds` for the alt allele: upstream + allele + downstream,
-    /// the incomplete-codon trim (a no-op past 2 bp: `return $seq if
-    /// $full_length = $keep_length` assigns), then the 3' UTR.
-    fn alternate_cds(&self) -> Option<Vec<u8>> {
-        let cds_start = self.span.cds_start?;
-        let cds_end = self.span.cds_end?;
-        let up_end = ((cds_start - 1).max(0) as usize).min(self.cds.len());
-        let down_start = (cds_end.max(0) as usize).min(self.cds.len());
+    /// The bases of the alt allele as the transcript reads them: the first `-`
+    /// dropped, the rest reverse-complemented when the alleles are given on the
+    /// other strand.
+    fn alt_allele_on_transcript(&self) -> Vec<u8> {
         let mut a: Vec<u8> = Vec::with_capacity(self.alt_allele.len());
         let mut dash_removed = false;
         for &b in self.alt_allele {
@@ -2232,6 +2494,18 @@ impl<'a> PerlCodingEval<'a> {
         if !a.is_empty() && self.opposite_strand {
             a = reverse_complement(&a);
         }
+        a
+    }
+
+    /// `_get_alternate_cds` for the alt allele: upstream + allele + downstream,
+    /// the incomplete-codon trim (a no-op past 2 bp: `return $seq if
+    /// $full_length = $keep_length` assigns), then the 3' UTR.
+    fn alternate_cds(&self) -> Option<Vec<u8>> {
+        let cds_start = self.span.cds_start?;
+        let cds_end = self.span.cds_end?;
+        let up_end = ((cds_start - 1).max(0) as usize).min(self.cds.len());
+        let down_start = (cds_end.max(0) as usize).min(self.cds.len());
+        let a = self.alt_allele_on_transcript();
         let mut alt = Vec::with_capacity(self.cds.len() + a.len() + 8);
         alt.extend_from_slice(&self.cds[..up_end]);
         alt.extend_from_slice(&a);
@@ -2366,19 +2640,9 @@ impl<'a> PerlCodingEval<'a> {
         Some((strip(ref_codon), strip(alt_codon)))
     }
 
-    fn partial_codon(&mut self) -> bool {
-        if let Some(v) = self.partial_codon_memo {
-            return v;
-        }
-        self.partial_codon_memo = Some(false);
-        let Some(tl_start) = self.span.tl_start else {
-            return false;
-        };
-        let codon_cds_start = tl_start * 3 - 2;
-        let last = self.cds.len() as i64 - (codon_cds_start - 1);
-        let v = last < 3 && last > 0;
-        self.partial_codon_memo = Some(v);
-        v
+    fn partial_codon(&self) -> bool {
+        let translation_start = self.span.tl_start.and_then(|t| u64::try_from(t).ok());
+        crate::mapper::partial_codon(self.transcript, translation_start)
     }
 
     fn overlaps_stop_codon(&mut self) -> bool {
@@ -2398,24 +2662,89 @@ impl<'a> PerlCodingEval<'a> {
         v
     }
 
-    /// `_overlaps_stop_codon_cil` (VariationEffect.pm:1389-1431): the stop codon
-    /// overlap read in genomic coordinates, with an inserted allele's length
-    /// added to the variant start on the forward strand and subtracted on the
-    /// reverse. Only the start moves, so the test is strand-asymmetric: on the
-    /// forward strand only a 1-base insertion between the stop's first and
-    /// second base overlaps, on the reverse strand an insertion anywhere inside
-    /// the codon or up to `L - 1` bases upstream of it does.
+    /// The stop codon overlap behind the second arm of `stop_retained`
+    /// (VariationEffect.pm:1318). A span with reference bases is read at the
+    /// stop codon's own genomic bases ([`overlaps_stop_codon_bases`]), an
+    /// insertion on the coding sequence
+    /// ([`Self::insertion_reaches_stop_codon`]). Ensembl VEP's
+    /// `_overlaps_stop_codon_cil` (:1389-1431) moves an insertion's start by
+    /// the inserted length, forward on the forward strand and back on the
+    /// reverse (:1408-1415), so one coding position overlaps on the reverse
+    /// strand from `L - 1` bases before the codon whatever is inserted, and on
+    /// the forward strand only between the codon's first and second base.
     fn overlaps_stop_codon_cil(&mut self) -> bool {
         if let Some(v) = self.overlaps_stop_cil_memo {
             return v;
         }
         self.overlaps_stop_cil_memo = Some(false);
-        if self.cds_end_nf {
+        let Some(span) = self.stop_codon_cil_span() else {
             return false;
+        };
+        if self.coding_region.is_none() {
+            return false;
+        }
+        let Some(mapper) = self
+            .transcript
+            .vefc
+            .as_ref()
+            .and_then(|v| v.mapper.as_ref())
+        else {
+            return false;
+        };
+        let v = if self.vf_end < self.vf_start {
+            self.insertion_reaches_stop_codon()
+        } else {
+            overlaps_stop_codon_bases(
+                &mapper.exon_coord_mapper.pairs,
+                (self.cdna_coding_start, self.cdna_coding_end),
+                span,
+            )
+        };
+        self.overlaps_stop_cil_memo = Some(v);
+        v
+    }
+
+    /// Whether an insertion lies before or inside the stop codon and leaves
+    /// every residue before the codon as the reference has it. `f` is the
+    /// coding position that follows the insertion (the CDS start, where the
+    /// edit of VariationEffect.pm:1521 is anchored) and `n` the coding length.
+    /// The test is `f <= n` and, in the sequence that edit gives
+    /// ([`Self::edited_stop_codon`]), the reference's residue at every codon
+    /// before the old stop position, the same for one coding position on
+    /// either strand. Inserted bases that repeat the coding bases from `f` up
+    /// to the codon leave every base before it in place; bases that differ
+    /// keep a codon's residue where both codons translate to one residue.
+    fn insertion_reaches_stop_codon(&self) -> bool {
+        let Some(f) = truthy(self.span.cds_start) else {
+            return false;
+        };
+        let n = self.cds.len() as i64;
+        if f < 1 || f > n {
+            return false;
+        }
+        if self.feature_seq_bases().is_empty() {
+            return f >= n - 2;
+        }
+        matches!(
+            self.edited_stop_codon(),
+            EditedStopCodon::Read {
+                residues_kept: true,
+                ..
+            }
+        )
+    }
+
+    /// The span `_overlaps_stop_codon_cil` tests (VariationEffect.pm:1400-1415):
+    /// the variant's, an inserted allele's length added to its start on the
+    /// forward strand and subtracted on the reverse; `None` on a `cds_end_NF`
+    /// transcript and for a span without coordinates.
+    fn stop_codon_cil_span(&self) -> Option<(i64, i64)> {
+        if self.cds_end_nf {
+            return None;
         }
         let (mut v_start, v_end) = (self.vf_start, self.vf_end);
         if v_start == 0 || v_end == 0 {
-            return false;
+            return None;
         }
         let inserted = &self.feature_seq;
         if v_end < v_start
@@ -2431,7 +2760,45 @@ impl<'a> PerlCodingEval<'a> {
                 v_start -= len;
             }
         }
-        let Some((crs, cre)) = self.coding_region else {
+        Some((v_start, v_end))
+    }
+
+    /// Whether Ensembl VEP's `stop_retained` holds on this allele for want of
+    /// a test alone. An insertion or deletion whose alternate peptide is
+    /// undefined or partial, whose span overlaps the last three genomic
+    /// positions of the coding region (VariationEffect.pm:1418-1427) and
+    /// lacks a cDNA coordinate at one end or a CDS start, leaves the stop
+    /// codon edit test before it edits anything (:1508), and :1318 reads a
+    /// stop codon kept. `false` where the sequence the record gives is read
+    /// instead ([`Self::removed_stop_codon`]). The overlap is the one Ensembl
+    /// VEP reads, not the codon's own bases: on a stop codon an intron splits,
+    /// a span that takes the stop bases before the intron and none of those
+    /// three positions is no stop codon kept there, so no row takes a
+    /// notation that neither engine writes. Under `--shift_3prime 1` every
+    /// term and every notation is read at the site the flag moves the edit to.
+    fn untested_stop_codon_kept_in_ensembl_vep(&mut self) -> bool {
+        if !(self.insertion || self.deletion)
+            || self.partial_codon()
+            || self.stop_lost()
+            || self.removed_stop_codon().is_some()
+        {
+            return false;
+        }
+        if matches!(
+            self.peptide_alleles(),
+            Some((_, alt_pep)) if !alt_pep.is_empty() && !alt_pep.contains(&b'X')
+        ) {
+            return false;
+        }
+        if truthy(self.span.cdna_start).is_some()
+            && truthy(self.span.cdna_end).is_some()
+            && truthy(self.span.cds_start).is_some()
+        {
+            return false;
+        }
+        let (Some((v_start, v_end)), Some((crs, cre))) =
+            (self.stop_codon_cil_span(), self.coding_region)
+        else {
             return false;
         };
         let (stop_start, stop_end) = if self.strand == -1 {
@@ -2439,9 +2806,27 @@ impl<'a> PerlCodingEval<'a> {
         } else {
             (cre - 2, cre)
         };
-        let v = perl_overlap(v_start, v_end, stop_start, stop_end);
-        self.overlaps_stop_cil_memo = Some(v);
-        v
+        perl_overlap(v_start, v_end, stop_start, stop_end)
+    }
+
+    /// Whether the span lies inside one exon: every base of it, or the base on
+    /// each side of an insertion.
+    fn within_one_exon(&self) -> bool {
+        let (lo, hi) = (
+            self.vf_start.min(self.vf_end),
+            self.vf_start.max(self.vf_end),
+        );
+        self.transcript
+            .vefc
+            .as_ref()
+            .and_then(|v| v.mapper.as_ref())
+            .is_some_and(|mapper| {
+                mapper
+                    .exon_coord_mapper
+                    .pairs
+                    .iter()
+                    .any(|p| p.to_start as i64 <= lo && hi <= p.to_end as i64)
+            })
     }
 
     fn overlaps_start_codon(&mut self) -> bool {
@@ -2486,40 +2871,70 @@ impl<'a> PerlCodingEval<'a> {
         v
     }
 
-    /// `_ins_del_stop_altered_cil` (VariationEffect.pm:1488-1539): the same edit
-    /// test behind the genomic-coordinate gate of [`Self::overlaps_stop_codon_cil`].
-    fn ins_del_stop_altered_cil(&mut self) -> bool {
-        if let Some(v) = self.ins_del_stop_altered_cil_memo {
+    /// The edit test of `_ins_del_stop_altered_cil` (VariationEffect.pm:1488-1539)
+    /// behind the genomic-coordinate gate of [`Self::overlaps_stop_codon_cil`],
+    /// as `stop_retained` reads it: `true` only where the test is made, the
+    /// three bases the edited sequence holds at the old stop position are a
+    /// stop codon and every codon before them reads the reference's residue.
+    /// Ensembl VEP's routine returns 0 before it edits anything for an allele
+    /// holding a letter that names no base (:1498) and for a span without
+    /// cDNA or CDS coordinates (:1508), and :1318 reads that 0 as a stop codon
+    /// kept; here a letter counts only among the bases read, and a test that
+    /// cannot be made keeps nothing. Ensembl VEP reads the three bases alone
+    /// (:1528-1535), so a deletion that takes coding bases with the stop codon
+    /// and leaves a stop codon of the 3' UTR at the old position is kept there.
+    fn edited_stop_codon_kept_cil(&mut self) -> bool {
+        if let Some(v) = self.edited_stop_codon_kept_cil_memo {
             return v;
         }
-        self.ins_del_stop_altered_cil_memo = Some(false);
-        if !is_perl_unambiguous_dna(self.alt_allele) {
-            return false;
-        }
+        self.edited_stop_codon_kept_cil_memo = Some(false);
         if !self.overlaps_stop_codon_cil() {
             return false;
         }
-        let v = self.edited_stop_codon_altered();
-        self.ins_del_stop_altered_cil_memo = Some(v);
+        let v = match self.edited_stop_codon() {
+            EditedStopCodon::Read {
+                codon,
+                residues_kept,
+            } => {
+                residues_kept
+                    && codon
+                        .iter()
+                        .all(|b| matches!(b.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T'))
+                    && perl_translate_codon(&codon, self.table) == b'*'
+            }
+            EditedStopCodon::NotMade | EditedStopCodon::Shorter => false,
+        };
+        self.edited_stop_codon_kept_cil_memo = Some(v);
         v
     }
 
-    /// The body `_ins_del_stop_altered` and its `_cil` twin share after their
-    /// overlap gates: the allele written into the translateable sequence plus 3'
-    /// UTR at the CDS start, then the codon left at the old stop position read;
-    /// `true` when the edited sequence is shorter than the CDS or that codon is
-    /// not a stop, `false` for a variant that is neither an insertion nor a
-    /// deletion or lacks cDNA or CDS coordinates.
+    /// The verdict of `_ins_del_stop_altered` after its overlap gate
+    /// (VariationEffect.pm:1453-1484): `true` when the edited sequence is
+    /// shorter than the CDS or the codon left at the old stop position is not a
+    /// stop, `false` where the test is not made, which `stop_lost` (:1263)
+    /// reads as a stop codon that is not lost.
     fn edited_stop_codon_altered(&self) -> bool {
+        match self.edited_stop_codon() {
+            EditedStopCodon::NotMade => false,
+            EditedStopCodon::Shorter => true,
+            EditedStopCodon::Read { codon, .. } => perl_translate_codon(&codon, self.table) != b'*',
+        }
+    }
+
+    /// The edit `_ins_del_stop_altered` and its `_cil` twin share after their
+    /// overlap gates (VariationEffect.pm:1521-1529): the allele written into
+    /// the translateable sequence plus 3' UTR at the CDS start, over the cDNA
+    /// length of the span, then the three bases left at the old stop position.
+    fn edited_stop_codon(&self) -> EditedStopCodon {
         if !(self.insertion || self.deletion) {
-            return false;
+            return EditedStopCodon::NotMade;
         }
         let (Some(cdna_start), Some(cdna_end), Some(cds_start)) = (
             truthy(self.span.cdna_start),
             truthy(self.span.cdna_end),
             truthy(self.span.cds_start),
         ) else {
-            return false;
+            return EditedStopCodon::NotMade;
         };
         let mut s = self.cds.to_vec();
         if let Some(utr) = self.utr3.as_ref() {
@@ -2528,13 +2943,277 @@ impl<'a> PerlCodingEval<'a> {
         let fs = self.feature_seq_bases();
         perl_substr_assign(&mut s, cds_start - 1, cdna_end - cdna_start + 1, fs);
         if s.len() < self.cds.len() {
-            return true;
+            return EditedStopCodon::Shorter;
         }
         if self.cds.len() < 3 {
-            return false;
+            return EditedStopCodon::NotMade;
         }
         let stop_idx = self.cds.len() - 3;
-        perl_translate_codon(&s[stop_idx..stop_idx + 3], self.table) != b'*'
+        EditedStopCodon::Read {
+            codon: [s[stop_idx], s[stop_idx + 1], s[stop_idx + 2]],
+            residues_kept: residues_before_stop_kept(self.cds, &s, cds_start, self.table),
+        }
+    }
+
+    /// What the sequence the record gives shows at the old stop position, for
+    /// an insertion's or deletion's span that holds all three bases of the stop
+    /// codon and lacks a cDNA coordinate at one end or a CDS start, so that
+    /// the stop codon edit test cannot be made; `None` for any other span.
+    /// The condition is Ensembl VEP's own, `return 0 unless $cdna_start &&
+    /// $cdna_end && $cds_start;` (VariationEffect.pm:1508, and :1453 behind
+    /// `stop_lost`): a CDS end alone does not make the test. Ensembl VEP
+    /// writes `stop_retained_variant` on every such row (:1508 read at
+    /// :1318). Here the stop codon is lost unless it is shown kept, and
+    /// nothing is read of bases no record gives:
+    ///
+    /// 1. A deletion that can be written where it takes no coding base and no
+    ///    stop base keeps the codon.
+    /// 2. Where, at one of the places the edit can be written, an exon base
+    ///    stands at or beside each of its ends, the transcript's sequence
+    ///    across the edit is given: the exon bases before it, the alternate
+    ///    bases and the exon bases after it. The codon is kept where that
+    ///    sequence holds a stop codon at the old stop position behind the
+    ///    reference's residues, lost where it holds none or ends before it.
+    /// 3. Otherwise the edit takes a splice site or the transcript's end with
+    ///    exon bases, and only the exon bases before it and, behind an exon
+    ///    base, the alternate bases are given; they are read the same way.
+    /// 4. A record whose two alleles share every reference base removes
+    ///    nothing and is read as the bases it adds
+    ///    ([`Self::inserted_alone_stop_codon`]).
+    ///
+    /// Three bounds are vep-rs's own. The places a deletion can be written at
+    /// are read from the reference sequence up to [`EQUIVALENT_SITES_LIMIT`]
+    /// positions each way; a place further off is not read, so a deletion
+    /// that takes no coding base only there is read at the places within
+    /// reach and is `stop_lost` unless one of them shows the codon kept.
+    /// Without a reference sequence the record's own place alone is read.
+    /// A base that is none of `A`, `C`, `G` and `T` ends the search
+    /// ([`Self::equivalent_sites`]).
+    fn removed_stop_codon(&mut self) -> Option<GivenStopCodon> {
+        if let Some(v) = self.removed_stop_codon_memo {
+            return v;
+        }
+        let v = self.given_stop_codon();
+        self.removed_stop_codon_memo = Some(v);
+        v
+    }
+
+    fn given_stop_codon(&self) -> Option<GivenStopCodon> {
+        if !(self.insertion || self.deletion) || self.cds_end_nf || self.vf_start < 1 {
+            return None;
+        }
+        if truthy(self.span.cdna_start).is_some()
+            && truthy(self.span.cdna_end).is_some()
+            && truthy(self.span.cds_start).is_some()
+        {
+            return None;
+        }
+        let mapper = self.transcript.vefc.as_ref()?.mapper.as_ref()?;
+        let strand = self.transcript.strand.as_i8();
+        let (coding_start, coding_end) = (self.cdna_coding_start, self.cdna_coding_end);
+        let axis = ExonAxis::new(
+            &mapper.exon_coord_mapper.pairs,
+            strand,
+            (coding_start, coding_end),
+        )?;
+        let (mut s, mut e) = if strand == 1 {
+            (self.vf_start, self.vf_end)
+        } else {
+            (-self.vf_end, -self.vf_start)
+        };
+        if coding_start < 1 || coding_end - 2 < coding_start {
+            return None;
+        }
+        for cdna in coding_end - 2..=coding_end {
+            let stop_base = axis.position(cdna)?;
+            if stop_base < s || stop_base > e {
+                return None;
+            }
+        }
+        // The transcript's sequence: the 5' UTR, the coding sequence without
+        // the filler a start phase puts before it, and the 3' UTR.
+        let filler =
+            usize::try_from(self.cds.len() as i64 - (coding_end - coding_start + 1)).ok()?;
+        let utr5 = self.utr5.as_deref().unwrap_or_default();
+        if utr5.len() as i64 != coding_start - 1 {
+            return None;
+        }
+        let mut cdna_seq = utr5.to_vec();
+        cdna_seq.extend_from_slice(&self.cds[filler..]);
+        cdna_seq.extend_from_slice(self.utr3.as_deref().unwrap_or_default());
+        // The edit, with the bases its two alleles share taken off both ends.
+        let reference = if self.opposite_strand {
+            reverse_complement(self.ref_allele)
+        } else {
+            self.ref_allele.to_vec()
+        };
+        let (mut removed, mut alt): (&[u8], &[u8]) = (&reference, self.feature_seq_bases());
+        if removed.len() as i64 == e - s + 1 {
+            while let (Some(r), Some(a)) = (removed.first(), alt.first()) {
+                if !r.eq_ignore_ascii_case(a) {
+                    break;
+                }
+                (removed, alt, s) = (&removed[1..], &alt[1..], s + 1);
+            }
+            while let (Some(r), Some(a)) = (removed.last(), alt.last()) {
+                if !r.eq_ignore_ascii_case(a) {
+                    break;
+                }
+                (removed, alt, e) = (&removed[..removed.len() - 1], &alt[..alt.len() - 1], e - 1);
+            }
+        }
+        if e < s {
+            return (!alt.is_empty())
+                .then(|| self.inserted_alone_stop_codon(&axis, &cdna_seq, s, alt, filler));
+        }
+        let (along, back) = if alt.is_empty() {
+            self.equivalent_sites(s, e, strand)
+        } else {
+            (0, 0)
+        };
+        // A place takes the fewest coding bases, then the fewest exon bases,
+        // then lies furthest along the transcript.
+        let key = |j: &i64| {
+            let (coding, exonic) = axis.taken(s + j, e + j);
+            (coding, exonic, -j)
+        };
+        let best = (-back..=along).min_by_key(key).unwrap_or(0);
+        if axis.taken(s + best, e + best).0 == 0 {
+            return Some(GivenStopCodon::Retained);
+        }
+        let before = |pos: i64| axis.exonic_before(pos).min(cdna_seq.len());
+        let across = (-back..=along)
+            .filter(|j| {
+                let (first, last) = (s + j, e + j);
+                (axis.cdna(first - 1).is_some() || axis.cdna(first).is_some())
+                    && (axis.cdna(last).is_some() || axis.cdna(last + 1).is_some())
+            })
+            .min_by_key(key);
+        let given = match across {
+            Some(j) => [
+                &cdna_seq[..before(s + j)],
+                alt,
+                &cdna_seq[before(e + j + 1)..],
+            ]
+            .concat(),
+            None => {
+                let mut given = cdna_seq[..before(s + best)].to_vec();
+                if axis.cdna(s + best - 1).is_some() {
+                    given.extend_from_slice(alt);
+                }
+                given
+            }
+        };
+        let (coding_start, coding_end) = (coding_start as usize, coding_end as usize);
+        if given.len() < coding_end || cdna_seq.len() < coding_end {
+            return Some(GivenStopCodon::Lost);
+        }
+        let (given, reference) = (&given[..coding_end], &cdna_seq[..coding_end]);
+        if given.eq_ignore_ascii_case(reference) {
+            return Some(GivenStopCodon::Retained);
+        }
+        if perl_translate_codon(&given[coding_end - 3..], self.table) != b'*' {
+            return Some(GivenStopCodon::Lost);
+        }
+        let kept = given[..coding_start - 1].eq_ignore_ascii_case(&reference[..coding_start - 1])
+            && same_residues(
+                &given[coding_start - 1..coding_end - 3],
+                &reference[coding_start - 1..coding_end - 3],
+                filler,
+                self.table,
+            );
+        Some(if kept {
+            GivenStopCodon::Retained
+        } else {
+            GivenStopCodon::Changed
+        })
+    }
+
+    /// The reading of [`Self::removed_stop_codon`] for a record whose two
+    /// alleles share every reference base: no base is removed, and `alt`, the
+    /// alternate's further bases, stands before the axis position `s`. Away
+    /// from the exons, in the 5' UTR and after the stop codon those bases
+    /// leave the coding sequence and the codon as they were. Inside the
+    /// coding sequence the transcript's sequence is given whole: the codon is
+    /// kept where a stop codon stands at the old stop position behind the
+    /// reference's residues and lost where bases written between the codon's
+    /// own leave none there; bases written before the codon that leave none
+    /// there change the frame or a residue, which is neither.
+    fn inserted_alone_stop_codon(
+        &self,
+        axis: &ExonAxis,
+        cdna_seq: &[u8],
+        s: i64,
+        alt: &[u8],
+        filler: usize,
+    ) -> GivenStopCodon {
+        let (coding_start, coding_end) = (
+            self.cdna_coding_start as usize,
+            self.cdna_coding_end as usize,
+        );
+        let point = axis.exonic_before(s).min(cdna_seq.len());
+        let beside_exon = axis.cdna(s - 1).is_some() || axis.cdna(s).is_some();
+        if !beside_exon
+            || point < coding_start
+            || point >= coding_end
+            || cdna_seq.len() < coding_end
+        {
+            return GivenStopCodon::Retained;
+        }
+        let given = [&cdna_seq[..point], alt, &cdna_seq[point..]].concat();
+        let (given, reference) = (&given[..coding_end], &cdna_seq[..coding_end]);
+        if given.eq_ignore_ascii_case(reference) {
+            return GivenStopCodon::Retained;
+        }
+        if perl_translate_codon(&given[coding_end - 3..], self.table) != b'*' {
+            return if point > coding_end - 3 {
+                GivenStopCodon::Lost
+            } else {
+                GivenStopCodon::Changed
+            };
+        }
+        let kept = same_residues(
+            &given[coding_start - 1..coding_end - 3],
+            &reference[coding_start - 1..coding_end - 3],
+            filler,
+            self.table,
+        );
+        if kept {
+            GivenStopCodon::Retained
+        } else {
+            GivenStopCodon::Changed
+        }
+    }
+
+    /// How far a deletion of the axis positions `s..=e` can be written along
+    /// the transcript and back against it without changing the edited genome,
+    /// read from the reference sequence up to [`EQUIVALENT_SITES_LIMIT`]
+    /// positions each way; `(0, 0)` without a reference sequence. A base that
+    /// is none of `A`, `C`, `G` and `T` ends the walk: an unknown base is no
+    /// evidence that the bases repeat, so no place is read beyond one.
+    fn equivalent_sites(&self, s: i64, e: i64, strand: i8) -> (i64, i64) {
+        let Some(fasta) = self.fasta else {
+            return (0, 0);
+        };
+        let base = |pos: i64| {
+            let genomic = if strand == 1 { pos } else { -pos };
+            u64::try_from(genomic)
+                .ok()
+                .filter(|&g| g > 0)
+                .and_then(|g| fasta.base(self.chr, g))
+        };
+        let repeats = |from: i64, onto: i64, step: i64| {
+            (0..EQUIVALENT_SITES_LIMIT)
+                .take_while(|i| {
+                    matches!(
+                        (base(from + step * i), base(onto + step * i)),
+                        (Some(x), Some(y))
+                            if x == y && matches!(x.to_ascii_uppercase(), b'A' | b'C' | b'G' | b'T')
+                    )
+                })
+                .count() as i64
+        };
+        (repeats(s, e + 1, 1), repeats(e, s - 1, -1))
     }
 
     fn ins_del_start_altered(&mut self) -> bool {
@@ -2688,7 +3367,11 @@ impl<'a> PerlCodingEval<'a> {
     /// `stop_lost` (VariationEffect.pm:1234-1288): never on a partial codon
     /// (:1240, ahead of the cache); the peptide comparison decides unless the
     /// alternate peptide carries an `X` (:1259), when the edited stop codon of
-    /// `_ins_del_stop_altered` decides instead.
+    /// `_ins_del_stop_altered` decides instead. That routine returns 0 for a
+    /// span without coordinates (:1376, :1453), which :1263 reads as a stop
+    /// codon that is not lost although the span may hold the whole codon;
+    /// such a span is lost unless the sequence the record gives shows the
+    /// stop codon kept ([`Self::removed_stop_codon`]).
     fn stop_lost(&mut self) -> bool {
         if self.partial_codon() {
             return false;
@@ -2701,7 +3384,10 @@ impl<'a> PerlCodingEval<'a> {
             Some((ref_pep, alt_pep)) if !alt_pep.contains(&b'X') => {
                 !alt_pep.contains(&b'*') && ref_pep.contains(&b'*')
             }
-            _ => self.ins_del_stop_altered(),
+            _ => {
+                self.ins_del_stop_altered()
+                    || self.removed_stop_codon() == Some(GivenStopCodon::Lost)
+            }
         };
         self.stop_lost_memo = Some(v);
         v
@@ -2741,8 +3427,11 @@ impl<'a> PerlCodingEval<'a> {
 
     /// `stop_retained` (VariationEffect.pm:1290-1324): `ref_eq_alt_sequence`
     /// for an alternate peptide without an `X` (:1313); otherwise an insertion
-    /// or deletion that overlaps the stop codon in genomic coordinates and
-    /// leaves a stop codon in place (:1318, the `_cil` helpers).
+    /// or deletion that overlaps the stop codon in genomic coordinates and is
+    /// tested and found to leave a stop codon in place (:1318, the `_cil`
+    /// helpers; [`Self::edited_stop_codon_kept_cil`] for the untested span),
+    /// or an untested span holding the whole stop codon that the sequence the
+    /// record gives shows kept ([`Self::removed_stop_codon`]).
     fn stop_retained(&mut self) -> bool {
         if self.partial_codon() {
             return false;
@@ -2759,9 +3448,10 @@ impl<'a> PerlCodingEval<'a> {
                 self.ref_eq_alt_sequence()
             }
             _ => {
-                (self.insertion || self.deletion)
+                ((self.insertion || self.deletion)
                     && self.overlaps_stop_codon_cil()
-                    && !self.ins_del_stop_altered_cil()
+                    && self.edited_stop_codon_kept_cil())
+                    || self.removed_stop_codon() == Some(GivenStopCodon::Retained)
             }
         };
         self.stop_retained_memo = Some(v);
@@ -2972,8 +3662,47 @@ impl<'a> PerlCodingEval<'a> {
             || self.stop_lost())
     }
 
+    /// Whether an allele longer than its genomic span is as long as the CDS
+    /// span it stands on. Where an edited model holds bases the genome lacks,
+    /// the genomic bases on either side map to CDS positions that are not
+    /// neighbours, so the span of an insertion between them is the model's
+    /// bases (`perl_map_insert`) and the alternate coding sequence carries the
+    /// allele in their place: such an allele replaces them base for base.
+    /// Ensembl VEP reads the length class from the genomic span alone
+    /// (`_bvf_preds`), so `missense_variant`, which excludes
+    /// `increase_length` (Utils/Constants.pm), is never asked of the row, and
+    /// one whose residues change takes the default `intergenic_variant`
+    /// (BaseVariationFeatureOverlapAllele.pm:285).
+    fn stands_on_as_many_model_bases(&self) -> bool {
+        self.insertion
+            && matches!(
+                (self.span.cds_start, self.span.cds_end, self.seq_length),
+                (Some(start), Some(end), Some(allele_len)) if allele_len == end - start + 1
+            )
+    }
+
+    /// Whether an allele longer than its genomic span is shorter than the CDS
+    /// span it stands on: among the bases an edited model holds and the genome
+    /// lacks ([`Self::stands_on_as_many_model_bases`]) it brings fewer bases than
+    /// it replaces, so the model loses bases where the genome gains them. Ensembl
+    /// VEP asks `inframe_deletion` only of an allele shorter than its genomic span
+    /// (`deletion`, Utils/Constants.pm) and withholds `protein_altering_variant`
+    /// where that predicate holds (VariationEffect.pm:388): the row reads
+    /// `protein_altering_variant` where the reference codons, read with the span
+    /// cut out (TranscriptVariationAllele.pm:872-873), fail it, and otherwise the
+    /// default `intergenic_variant` (BaseVariationFeatureOverlapAllele.pm:285).
+    fn stands_on_more_model_bases(&self) -> bool {
+        self.insertion
+            && matches!(
+                (self.span.cds_start, self.span.cds_end, self.seq_length),
+                (Some(start), Some(end), Some(allele_len)) if allele_len < end - start + 1
+            )
+    }
+
     /// The coding terms, evaluated in `%OVERLAP_CONSEQUENCES` rank order with each
-    /// predicate's `include` filter applied.
+    /// predicate's `include` filter applied; `missense_variant` is also asked of
+    /// an allele that [`Self::stands_on_as_many_model_bases`], and
+    /// `inframe_deletion` of one that [`Self::stands_on_more_model_bases`].
     fn terms(&mut self) -> Vec<Consequence> {
         let mut out = Vec::new();
         if self.stop_gained() {
@@ -2991,10 +3720,10 @@ impl<'a> PerlCodingEval<'a> {
         if self.insertion && self.inframe_insertion() {
             out.push(Consequence::InframeInsertion);
         }
-        if self.deletion && self.inframe_deletion() {
+        if (self.deletion || self.stands_on_more_model_bases()) && self.inframe_deletion() {
             out.push(Consequence::InframeDeletion);
         }
-        if self.snp && self.missense_variant() {
+        if (self.snp || self.stands_on_as_many_model_bases()) && self.missense_variant() {
             out.push(Consequence::MissenseVariant);
         }
         if self.protein_altering_variant() {
@@ -3069,17 +3798,49 @@ pub fn perl_codon_peptides(
 /// CDS is a frameshift there even where the annotated allele straddles an exon
 /// boundary.
 ///
-/// `None` where Perl returns `undef`: the annotated allele does not overlap the
-/// coding sequence, the (shifted) span has no translation start or end, or its
-/// reference peptide is undefined. The alternate-CDS translations inside use
-/// codon table 1 whatever the transcript's table, as BioPerl's argument-less
-/// `translate()` does at 2333, 2450, 2492 and 2555; the transcript's own
-/// peptide keeps its table (Ensembl `Transcript::translate`).
+/// An allele annotated in an intron inside the coding region fails that `coding`
+/// test, so where the shift carries it wholly into the coding sequence Ensembl
+/// VEP writes the shifted HGVSc and no HGVSp, except on a transcript with a
+/// frameshift intron, whose exons the test reads 12 bases wider
+/// (BaseTranscriptVariation.pm 861-866). The shifted allele has a protein
+/// notation, the one written for the same allele given at the shifted position,
+/// so every verdict is then the shifted allele's, as under the flag. An
+/// insertion the shift leaves between the intron's last base and the first base
+/// of the next exon ([`inserted_at_the_end_of_an_intron`]) is a change at the
+/// junction, for which HGVS predicts no protein consequence: it keeps the
+/// verdicts of the allele as annotated, and with them the empty HGVSp. So does
+/// an allele that changes a residue before the stop codon
+/// ([`changes_no_residue_before_the_stop_codon`]) on a transcript whose coding
+/// sequence is incomplete ([`coding_sequence_is_complete`]), unless the allele
+/// as annotated passes Ensembl VEP's own test on the wider exons of a
+/// frameshift-intron transcript. An allele annotated in an intron outside the
+/// coding region reads `utr` and keeps the verdicts of the allele as annotated.
 ///
-/// One intended divergence: Perl prints `Met1?` whenever its `start_lost`
-/// predicate holds (2161), including the start co-emission pairs on which this
-/// engine keeps `start_retained_variant` and drops `start_lost`; the port fires
-/// that short-circuit only when it emits `start_lost` itself.
+/// On a span whose stop codon edit test is not made, Ensembl VEP's
+/// `stop_retained` holds for want of the test (VariationEffect.pm:1508 read at
+/// :1318) and guards `frameshift` (:1549). That guard stands here where the
+/// allele, as the notation places it, runs across exons: the notation is
+/// Ensembl VEP's. It is dropped where the placed allele lies inside one exon,
+/// whose alternate CDS shows the altered stop codon.
+///
+/// `None` where Perl returns `undef`: the allele the verdicts are read from does
+/// not overlap the coding sequence, the shift leaves the allele outside the
+/// transcript, the (shifted) span has no translation start or end, or its
+/// reference peptide is undefined. `None` as well for an insertion the input
+/// writes at the end of an intron, in a form
+/// [`intron_end_insertion_has_no_protein_notation`] names, and for one the 3'
+/// shift leaves at the start of an intron
+/// ([`insertion_left_at_the_start_of_an_intron`]).
+///
+/// Two more intended divergences. The translations inside follow the transcript's
+/// codon table (`hgvsp_fs_peptides`), where BioPerl's argument-less
+/// `translate()` of the alternate CDS at 2333, 2492 and 2555 and of the
+/// reference CDS at 2450 reads table 1 whatever the transcript's table, against
+/// a reference peptide of that table (Ensembl `Transcript::translate`). And
+/// Perl prints `Met1?` whenever its `start_lost` predicate holds (2161),
+/// including the start co-emission pairs on which this engine keeps
+/// `start_retained_variant` and drops `start_lost`; the port fires that
+/// short-circuit only when it emits `start_lost` itself.
 pub fn perl_hgvs_protein(
     variant: &InputVariant,
     shifted: Option<(&InputVariant, u64, u64)>,
@@ -3087,6 +3848,81 @@ pub fn perl_hgvs_protein(
     fasta: Option<&vep_fasta::IndexedFasta>,
     predicates_on_shifted: bool,
 ) -> Option<String> {
+    hgvs_protein(
+        variant,
+        shifted,
+        transcript,
+        fasta,
+        predicates_on_shifted,
+        false,
+    )
+}
+
+/// [`perl_hgvs_protein`] of an insertion that is described where its record
+/// is written although the genome's 3' shift moves it: one standing on bases
+/// an edited model holds and the genome lacks. The notation is read from the
+/// row's own span. Where those bases open the coding sequence that span has
+/// no translation start ([`span_on_opening_coding_bases`]), and the notation
+/// reads the coding span of the bases themselves, under the verdicts of the
+/// row. Ensembl VEP reads the shifted span there (1711, 1724-1733), past
+/// the model's bases, and adds the residues of the whole allele after them.
+pub(crate) fn hgvs_protein_where_written(
+    variant: &InputVariant,
+    transcript: &Transcript,
+    fasta: Option<&vep_fasta::IndexedFasta>,
+) -> Option<String> {
+    hgvs_protein(variant, None, transcript, fasta, false, true)
+}
+
+/// The span [`perl_span`] gives an insertion between two exonic bases, read
+/// on the bases the model holds between them where they open the coding
+/// sequence: the first of them is the model's first coding base. `map_insert`
+/// ends the insertion's first half on the base before them (Mapper.pm:522-542),
+/// a base of the 5' UTR, which `genomic2cds` makes a gap
+/// (TranscriptMapper.pm:441-443): the span has no CDS start and no
+/// translation start, although every base it stands on is coding. The span
+/// returned starts on the first coding base. `None` for any other span.
+fn span_on_opening_coding_bases(transcript: &Transcript, span: &PerlSpan) -> Option<PerlSpan> {
+    let mapper = transcript.vefc.as_ref()?.mapper.as_ref()?;
+    let coding_start = mapper.cdna_coding_start as i64;
+    let [PerlMapSeg::Gap { .. }, last @ PerlMapSeg::Coord { .. }] = span.cds_coords.as_slice()
+    else {
+        return None;
+    };
+    let stands_on_opening_bases = span.cdna_start == Some(coding_start)
+        && span.cdna_end.is_some_and(|end| end >= coding_start);
+    if !stands_on_opening_bases {
+        return None;
+    }
+    let phase = i64::from(mapper.start_phase.max(0));
+    Some(PerlSpan {
+        cds_start: Some(1 + phase),
+        tl_start: Some((3 + phase).div_euclid(3)),
+        cds_coords: vec![PerlMapSeg::Coord { start: 1, end: 0 }, *last],
+        ..span.clone()
+    })
+}
+
+/// [`perl_hgvs_protein`], and [`hgvs_protein_where_written`] with
+/// `where_written`.
+fn hgvs_protein(
+    variant: &InputVariant,
+    shifted: Option<(&InputVariant, u64, u64)>,
+    transcript: &Transcript,
+    fasta: Option<&vep_fasta::IndexedFasta>,
+    predicates_on_shifted: bool,
+    where_written: bool,
+) -> Option<String> {
+    let predicates_on_shifted = predicates_on_shifted
+        || shifted.is_some_and(|(allele, start, end)| {
+            annotated_in_coding_intron(transcript, variant.start, variant.end)
+                && !inserted_at_the_end_of_an_intron(allele, transcript)
+                && (coding_sequence_is_complete(transcript)
+                    || crate::consequences::intronic_allele_reads_as_coding(transcript, variant)
+                    || changes_no_residue_before_the_stop_codon(
+                        allele, start, end, transcript, fasta,
+                    ))
+        });
     let (predicate_variant, predicate_start, predicate_end) = match shifted {
         Some((shifted_variant, start, end)) if predicates_on_shifted => {
             (shifted_variant, start, end)
@@ -3103,17 +3939,50 @@ pub fn perl_hgvs_protein(
     if !ev.coding_pred(transcript) {
         return None;
     }
+    // Tested before every description built below, the stop codon's included:
+    // an insertion before an exon that opens inside the stop codon is described
+    // at the end of the intron, as before any other coding exon.
+    if intron_end_insertion(variant, transcript, fasta)
+        .is_some_and(intron_end_insertion_has_no_protein_notation)
+    {
+        return None;
+    }
+    if insertion_left_at_the_start_of_an_intron(variant, shifted, transcript, fasta) {
+        return None;
+    }
     let frameshift_guard =
         ev.partial_codon() || ev.stop_retained() || ev.ref_peptide_starts_with_stop();
+    let untested_stop_kept = ev.untested_stop_codon_kept_in_ensembl_vep();
     let stop_lost = ev.stop_lost();
     let start_lost = ev.start_lost() && !ev.start_retained_variant();
     if let Some((shifted_variant, span_start, span_end)) = shifted {
         if !predicates_on_shifted {
+            // The shift follows the genome, and a place it reaches outside the
+            // transcript has no translation coordinates (1730-1737): so too the
+            // place after the last genomic base of a transcript whose coding
+            // sequence runs past that base, on a stop codon an edit completes.
+            if !perl_overlap(
+                span_start as i64,
+                span_end as i64,
+                transcript.start as i64,
+                transcript.end as i64,
+            ) {
+                return None;
+            }
             ev = PerlCodingEval::new(shifted_variant, transcript, span_start, span_end, fasta)?;
         }
     }
+    if let Some(span) = where_written
+        .then(|| span_on_opening_coding_bases(transcript, &ev.span))
+        .flatten()
+    {
+        ev = PerlCodingEval::new(variant, transcript, variant.start, variant.end, fasta)?;
+        ev.span = span;
+    }
     let preds = HgvsPredicates {
-        frameshift: !frameshift_guard && ev.frameshift_by_length(),
+        frameshift: !frameshift_guard
+            && !(untested_stop_kept && !ev.within_one_exon())
+            && ev.frameshift_by_length(),
         stop_lost,
         start_lost,
     };
@@ -3137,13 +4006,305 @@ pub fn perl_hgvs_protein(
     if n.kind == HgvspKind::Unset {
         return None;
     }
-    hgvsp_peptides(&ev, &preds, &mut n)?;
-    Some(hgvsp_format(&ev, &preds, &n))
+    let description = match hgvsp_peptides(&ev, &preds, &mut n) {
+        Some(()) => hgvsp_format(&ev, &preds, &n),
+        None => hgvsp_of_an_insertion_no_residue_follows(&ev, &n)?,
+    };
+    (!names_a_stop_the_reference_lacks(&ev, &description)).then_some(description)
+}
+
+/// The forms of an insertion that the input writes between an intron's last
+/// base and the first base of the next exon, told apart by the inserted bases
+/// as the transcript's strand reads them and the reference bases before the
+/// gap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IntronEndInsertion {
+    /// One inserted base, equal to the intron's last base.
+    CopyOfTheLastBase,
+    /// Two or more inserted bases, equal to the bases of the intron that end
+    /// on its last base.
+    DuplicationOfTheLastBases,
+    /// Bases that are no copy of the bases before the gap and cannot be the
+    /// intron's new end: one base, or bases that do not end in the two bases
+    /// that end an intron.
+    CannotEndTheIntron,
+    /// Bases that are no copy of the bases before the gap and end in the two
+    /// bases that end an intron.
+    EndsInAnAcceptorPair,
+}
+
+/// The insertion an allele makes, as the coding notation reads it: the inserted
+/// bases on the transcript's strand and the two positions they lie between,
+/// the lower first. `variant` is an allele on the forward strand. A pure
+/// insertion gives its own bases and gap. An allele the record holds with
+/// reference bases, as a record that carries another allele beside an
+/// insertion holds it with the base they share, is clipped as `_clip_alleles`
+/// (TranscriptVariationAllele.pm 2188) clips it for `hgvs_transcript`: the
+/// shared bases from the front and then from the back, on the transcript's
+/// strand. It is an insertion where no reference base remains, lying after
+/// the bases clipped from the front. `None` for every other allele.
+fn clipped_insertion(variant: &InputVariant, reverse: bool) -> Option<(Vec<u8>, u64, u64)> {
+    let on_transcript = |allele: &[u8]| {
+        let mut bases = allele.to_ascii_uppercase();
+        bases.retain(|&base| base != b'-');
+        if reverse {
+            reverse_complement(&bases)
+        } else {
+            bases
+        }
+    };
+    let reference = on_transcript(&variant.ref_allele);
+    let alternate = on_transcript(variant.alt_allele());
+    let front = reference
+        .iter()
+        .zip(&alternate)
+        .take_while(|(reference, alternate)| reference == alternate)
+        .count();
+    let (reference, alternate) = (&reference[front..], &alternate[front..]);
+    let back = reference
+        .iter()
+        .rev()
+        .zip(alternate.iter().rev())
+        .take_while(|(reference, alternate)| reference == alternate)
+        .count();
+    if back != reference.len() || back == alternate.len() {
+        return None;
+    }
+    let inserted = alternate[..alternate.len() - back].to_vec();
+    // The record spans `start..=end`, no base for a pure insertion, and the
+    // transcript reads the span from `end` down on the reverse strand.
+    let front = front as u64;
+    let (low, high) = if reverse {
+        (variant.end.checked_sub(front)?, variant.end - front + 1)
+    } else {
+        (
+            (variant.start + front).checked_sub(1)?,
+            variant.start + front,
+        )
+    };
+    Some((inserted, low, high))
+}
+
+/// The form of an insertion written at the end of an intron: `variant`, the
+/// allele as the input placed it, on the forward strand, lies between an
+/// intron's last base and the first base of the next exon in the transcript's
+/// direction, that base is inside the coding region, and the 3' rule of the
+/// HGVS nomenclature leaves the insertion in that gap, its first base
+/// differing from the exon's first base. The insertion is read as the coding
+/// notation reads the allele ([`clipped_insertion`]), so a record that holds
+/// it with a base it shares with the reference has the form of the same
+/// insertion written alone.
+///
+/// `None` for every other allele: one the input places anywhere else, wherever
+/// the 3' shift carries it; one whose first base equals the exon's first base,
+/// which the 3' rule describes inside the exon; one at the end of an intron of
+/// at most 13 bases, which Ensembl VEP reads with the exons beside it
+/// (`_frameshift`, `BaseTranscriptVariation::_create_intron_trees`); a copy of
+/// bases that reach back past the intron's first base; and any allele where no
+/// reference gives the bases beside the gap.
+fn intron_end_insertion(
+    variant: &InputVariant,
+    transcript: &Transcript,
+    fasta: Option<&vep_fasta::IndexedFasta>,
+) -> Option<IntronEndInsertion> {
+    let fasta = fasta?;
+    let reverse = transcript.strand == Strand::Reverse;
+    let (inserted, gap_low, gap_high) = clipped_insertion(variant, reverse)?;
+    // The gap lies between `gap_low` and `gap_high`, and the intron's last base
+    // is the one of the two the transcript reads first.
+    let intron = transcript.introns.iter().find(|intron| {
+        intron.start <= intron.end
+            && if reverse {
+                intron.start == gap_high
+            } else {
+                intron.end == gap_low
+            }
+    })?;
+    if intron.end - intron.start <= 12 {
+        return None;
+    }
+    let exon_first = if reverse { gap_low } else { gap_high };
+    let opens_an_exon = transcript.exons.iter().any(|exon| {
+        if reverse {
+            exon.end == exon_first
+        } else {
+            exon.start == exon_first
+        }
+    });
+    let coding = matches!(
+        (transcript.coding_region_start, transcript.coding_region_end),
+        (Some(start), Some(end)) if start <= exon_first && exon_first <= end
+    );
+    if !opens_an_exon || !coding {
+        return None;
+    }
+
+    let on_transcript = |forward: Vec<u8>| {
+        if reverse {
+            reverse_complement(&forward)
+        } else {
+            forward
+        }
+    };
+    if !is_perl_unambiguous_dna(&inserted) {
+        return None;
+    }
+    let exon_first_base = on_transcript(fasta.sequence(&variant.chr, exon_first, exon_first)?);
+    if inserted.first() == exon_first_base.first() {
+        return None;
+    }
+    let length = inserted.len() as u64;
+    let (before_start, before_end) = if reverse {
+        (intron.start, intron.start.checked_add(length - 1)?)
+    } else {
+        ((intron.end + 1).checked_sub(length)?, intron.end)
+    };
+    let before = on_transcript(fasta.sequence(&variant.chr, before_start, before_end)?);
+    if inserted == before {
+        return match length {
+            _ if length > intron.end - intron.start + 1 => None,
+            1 => Some(IntronEndInsertion::CopyOfTheLastBase),
+            _ => Some(IntronEndInsertion::DuplicationOfTheLastBases),
+        };
+    }
+    // The two bases that end an intron of the major kind and of the minor kind.
+    let ends_an_intron = inserted.ends_with(b"AG") || inserted.ends_with(b"AC");
+    Some(if length == 1 || !ends_an_intron {
+        IntronEndInsertion::CannotEndTheIntron
+    } else {
+        IntronEndInsertion::EndsInAnAcceptorPair
+    })
+}
+
+/// Whether an insertion written at the end of an intron carries no protein
+/// notation, where the codon window would read the inserted bases as the
+/// exon's first. Each arm is one form of [`IntronEndInsertion`].
+fn intron_end_insertion_has_no_protein_notation(form: IntronEndInsertion) -> bool {
+    match form {
+        // A duplication of the intron's last position: the description names
+        // no coding position, and for a change of an intron's last two
+        // positions the HGVS nomenclature gives no predicted protein
+        // consequence, only the unknown-effect form `p.?`.
+        IntronEndInsertion::CopyOfTheLastBase => true,
+
+        // A duplication of two or more intron positions: the description
+        // names no coding position, the two bases before the exon stand as
+        // they were, and a change that brings a second pair of an intron's
+        // end bases beside the first may affect splicing, for which the HGVS
+        // nomenclature gives no predicted protein consequence.
+        IntronEndInsertion::DuplicationOfTheLastBases => true,
+
+        // An insertion between the intron's last position and the exon's
+        // first that leaves the intron without its two end bases: read as the
+        // intron's end it changes the intron's last two positions, read as
+        // the exon's start it changes the exon's first base, and the HGVS
+        // nomenclature gives neither reading a predicted protein consequence.
+        IntronEndInsertion::CannotEndTheIntron => true,
+
+        // An insertion between the same two positions whose last two bases
+        // can stand as the intron's end: read so, it puts a second pair of
+        // end bases before the exon and moves the intron's own upstream;
+        // read as the exon's start, it changes the exon's first bases. The
+        // HGVS nomenclature gives neither reading a predicted protein
+        // consequence.
+        IntronEndInsertion::EndsInAnAcceptorPair => true,
+    }
+}
+
+/// Whether an insertion lies, where the 3' shift of the HGVS notations leaves
+/// it, between a coding exon's last base and the first base of the intron
+/// after it, the 3' rule of the HGVS nomenclature carrying it no further, and
+/// its bases are no copy of the reference bases before that gap. Such an
+/// insertion is described between the exon's last position and the intron's
+/// first, and carries no protein notation: read as the intron's start it
+/// changes the intron's first two positions, read as the exon's end it changes
+/// the exon's last base, and the nomenclature gives neither reading a
+/// predicted protein consequence.
+///
+/// `variant` is the allele as the input placed it and `shifted` the allele the
+/// 3' shift moved; an allele written in the exon that the shift carries to the
+/// gap is read at the gap. An allele the record holds with a base it shares
+/// with the reference, which no shift moves, is read as the coding notation
+/// clips it ([`clipped_insertion`]). A copy of the bases before the gap is a
+/// duplication of coding positions and keeps its notation, also where it is
+/// longer than its exon: the copy is told from the reference, base by base, and
+/// not from the exon's bounds. `false` for an insertion whose first base
+/// equals the intron's first base, which the 3' rule describes inside the
+/// intron, and where no reference gives the bases beside the gap.
+fn insertion_left_at_the_start_of_an_intron(
+    variant: &InputVariant,
+    shifted: Option<(&InputVariant, u64, u64)>,
+    transcript: &Transcript,
+    fasta: Option<&vep_fasta::IndexedFasta>,
+) -> bool {
+    let Some(fasta) = fasta else {
+        return false;
+    };
+    let reverse = transcript.strand == Strand::Reverse;
+    let placed = shifted.map_or(variant, |(moved, ..)| moved);
+    let Some((inserted, end, start)) = clipped_insertion(placed, reverse) else {
+        return false;
+    };
+    // The gap lies between `end` and `start`, and the intron's first base is
+    // the one of the two the transcript reads last.
+    let opens_an_intron = transcript.introns.iter().any(|intron| {
+        intron.start <= intron.end
+            && if reverse {
+                intron.end == end
+            } else {
+                intron.start == start
+            }
+    });
+    let (exon_last, intron_first) = if reverse { (start, end) } else { (end, start) };
+    let closes_an_exon = transcript.exons.iter().any(|exon| {
+        if reverse {
+            exon.start == exon_last
+        } else {
+            exon.end == exon_last
+        }
+    });
+    let coding = matches!(
+        (transcript.coding_region_start, transcript.coding_region_end),
+        (Some(first), Some(last)) if first <= exon_last && exon_last <= last
+    );
+    if !opens_an_intron || !closes_an_exon || !coding {
+        return false;
+    }
+
+    let on_transcript = |forward: Vec<u8>| {
+        if reverse {
+            reverse_complement(&forward)
+        } else {
+            forward
+        }
+    };
+    if !is_perl_unambiguous_dna(&inserted) {
+        return false;
+    }
+    let Some(intron_first_base) = fasta.sequence(&variant.chr, intron_first, intron_first) else {
+        return false;
+    };
+    if inserted.first() == on_transcript(intron_first_base).first() {
+        return false;
+    }
+    let length = inserted.len() as u64;
+    let before = if reverse {
+        exon_last
+            .checked_add(length - 1)
+            .and_then(|last| fasta.sequence(&variant.chr, exon_last, last))
+    } else {
+        (exon_last + 1)
+            .checked_sub(length)
+            .filter(|&first| first >= 1)
+            .and_then(|first| fasta.sequence(&variant.chr, first, exon_last))
+    };
+    before.is_some_and(|before| inserted != on_transcript(before))
 }
 
 /// The three predicate verdicts `hgvs_protein` reads: `stop_lost` and
 /// `start_lost` from Perl's `_predicate_cache` (the allele as the input placed
-/// it, or the shifted allele under `--shift_3prime 1`), `frameshift`
+/// it, or the shifted allele under `--shift_3prime 1` and for an allele the
+/// input placed in an intron), `frameshift`
 /// recomputed on the shifted span behind the cached `partial_codon`,
 /// `stop_retained` and leading-stop guards. `start_lost` already carries the
 /// start co-emission gate of this engine.
@@ -3338,7 +4499,7 @@ fn hgvsp_peptides(
     n: &mut HgvsProteinNotation,
 ) -> Option<()> {
     match n.kind {
-        HgvspKind::Fs => hgvsp_fs_peptides(ev, n)?,
+        HgvspKind::Fs => hgvsp_fs_peptides(ev, n, preds.start_lost)?,
         HgvspKind::Ins => {
             hgvsp_post_var_shift(ev, n);
             if !n.alt_pep.as_deref().unwrap_or(b"").contains(&b'*') {
@@ -3395,11 +4556,28 @@ fn hgvsp_peptides(
     Some(())
 }
 
-/// `_get_fs_peptides` (2320): the first residue at which the table-1 translation
-/// of the alternate CDS (3' UTR appended) differs from the reference peptide plus
-/// its stop, from `translation_start`. `Del` when the alternate translation ends
+/// `_get_fs_peptides` (2320): the first residue at which the translation of the
+/// alternate CDS (3' UTR appended) differs from the reference peptide plus its
+/// stop, from `translation_start`. `Del` when the alternate translation ends
 /// before that position; `Eq` when both sides reach a stop together.
-fn hgvsp_fs_peptides(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -> Option<()> {
+///
+/// Ensembl VEP translates the alternate CDS here, and in the three paths below,
+/// with `translate()` bare, the standard code, while its reference peptide
+/// follows the transcript's codon table; a mitochondrial frameshift so compares
+/// a table-2 reference with a table-1 alternate. The transcript's table is used
+/// on both sides (`docs/intended-divergences.md`).
+///
+/// Under `start_lost` the description is the lost start, `Met1?` (2161-2165),
+/// and residue 1 is compared as Ensembl VEP compares it, under the standard
+/// code, so the walk passes residue 1 only where Ensembl VEP's does: a table-2
+/// `ATA` first codon, Met under the table and Ile under the standard code,
+/// stops it there. The residues after it follow the transcript's table like the
+/// rest of the walk.
+fn hgvsp_fs_peptides(
+    ev: &PerlCodingEval<'_>,
+    n: &mut HgvsProteinNotation,
+    start_lost: bool,
+) -> Option<()> {
     let alt_cds = ev.alternate_cds()?;
     if !alt_cds
         .iter()
@@ -3407,9 +4585,12 @@ fn hgvsp_fs_peptides(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -> Op
     {
         return None;
     }
-    let alt_trans = perl_translate(&alt_cds, 1);
+    let alt_trans = perl_translate(&alt_cds, ev.table);
     let mut ref_trans = ev.pep_seq.to_vec();
     ref_trans.push(b'*');
+    let standard_code_differs_at_one = || {
+        alt_cds.get(..3).map(|codon| perl_translate_codon(codon, 1)) != ref_trans.first().copied()
+    };
     n.start = truthy(ev.span.tl_start)?;
     if n.start > alt_trans.len() as i64 {
         n.alt_pep = Some(b"del".to_vec());
@@ -3426,7 +4607,12 @@ fn hgvsp_fs_peptides(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -> Op
             n.kind = HgvspKind::Eq;
             return Some(());
         }
-        if r != a {
+        let differs = if start_lost && n.start == 1 {
+            standard_code_differs_at_one()
+        } else {
+            r != a
+        };
+        if differs {
             break;
         }
         n.start += 1;
@@ -3466,11 +4652,12 @@ fn hgvsp_surrounding(
 }
 
 /// `_check_for_peptide_duplication` (2442): an inserted peptide equal to the
-/// residues just before it (the table-1 reference translation plus `preseq`)
-/// becomes a `Dup` of those residues, three-lettered here and not again.
+/// residues just before it (the reference CDS translated with the transcript's
+/// table, plus `preseq`) becomes a `Dup` of those residues, three-lettered here
+/// and not again.
 fn hgvsp_check_duplication(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) {
     let alt: &[u8] = n.alt_pep.as_deref().unwrap_or_default();
-    let mut upstream = perl_translate(ev.cds, 1);
+    let mut upstream = perl_translate(ev.cds, ev.table);
     upstream.truncate((n.start - 1).max(0) as usize);
     upstream.extend_from_slice(&n.preseq);
     let test_new_start = n.start - alt.len() as i64 - 1;
@@ -3486,14 +4673,15 @@ fn hgvsp_check_duplication(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation)
 }
 
 /// `_stop_loss_extra_AA` (2477): residues from the variant to the first stop of
-/// the table-1 alternate translation; counted from `ref_var_pos` for a
-/// frameshift, else past the reference peptide's end. `None` unless positive.
+/// the alternate translation under the transcript's table; counted from
+/// `ref_var_pos` for a frameshift, else past the reference peptide's end. `None`
+/// unless positive.
 fn hgvsp_stop_loss_extra_aa(ev: &PerlCodingEval<'_>, ref_var_pos: i64, fs: bool) -> Option<i64> {
     if ref_var_pos == 0 {
         return None;
     }
     let alt_cds = ev.alternate_cds()?;
-    let alt_trans = perl_translate(&alt_cds, 1);
+    let alt_trans = perl_translate(&alt_cds, ev.table);
     let stop_end = alt_trans.iter().position(|&b| b == b'*')? as i64 + 1;
     let extra = if fs {
         stop_end - ref_var_pos
@@ -3505,12 +4693,13 @@ fn hgvsp_stop_loss_extra_aa(ev: &PerlCodingEval<'_>, ref_var_pos: i64, fs: bool)
 
 /// `_get_del_peptides` (2544), Perl's path for a deletion whose reference peptide
 /// window is empty: both peptides from `translation_start` to the end (the alternate
-/// side cut at its first stop), clipped, three-lettered.
+/// side, translated under the transcript's table, cut at its first stop), clipped,
+/// three-lettered.
 fn hgvsp_del_peptides(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) -> Option<()> {
     let alt_cds = ev.alternate_cds()?;
     let tl_start = truthy(ev.span.tl_start)?;
     let start0 = ((tl_start - 1).max(0)) as usize;
-    let alt_trans = perl_translate(&alt_cds, 1);
+    let alt_trans = perl_translate(&alt_cds, ev.table);
     let alt_tail = alt_trans.get(start0..).unwrap_or(b"");
     let alt: Vec<u8> = alt_tail
         .split(|&b| b == b'*')
@@ -3555,8 +4744,499 @@ fn hgvsp_post_var_shift(ev: &PerlCodingEval<'_>, n: &mut HgvsProteinNotation) {
     }
 }
 
+/// What a change does to the protein at the stop codon, read from the reference
+/// protein and the alternate protein alone, as the HGVS nomenclature describes a
+/// protein change: by comparing the two sequences, whatever the change is on the
+/// DNA level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StopCodonChange {
+    /// The alternate protein is the reference protein, its stop at the same
+    /// residue.
+    Unchanged,
+    /// The whole reference protein is kept and residues follow it: `first`
+    /// stands in the stop's place and `added` counts the residues up to the new
+    /// stop, the one in the stop's place included, `None` where the transcript
+    /// holds no new stop. `stop_inserted` is whether the new stop codon lies
+    /// wholly inside the inserted bases.
+    Extended {
+        first: u8,
+        added: Option<usize>,
+        stop_inserted: bool,
+    },
+}
+
+/// The forms in which the description built from the codon window names the
+/// stop of the reference protein at its own residue, inserts a stop that
+/// stands at that residue, or reads an insertion after the last residue and
+/// describes nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WrittenAtStop {
+    /// A deletion-insertion of the stop alone.
+    Replaced,
+    /// An insertion between the last residue and the stop.
+    InsertedBefore,
+    /// An insertion before the last residue that ends in a stop of its own,
+    /// which the residues inserted before it put at the stop's residue.
+    InsertedWithItsStop,
+    /// An insertion between two bases of the last residue's codon, of a
+    /// length that is no whole number of codons, that keeps that residue: the
+    /// codon window reads an insertion after the last residue, and
+    /// [`hgvsp_peptides`] names no residue after it and gives no description.
+    InsertedInTheLastCodon,
+    /// The stop written as unchanged; `stop_lost` is the allele's own
+    /// `stop_lost` predicate, the verdict the row's terms carry.
+    Unchanged { stop_lost: bool },
+    /// The stop written as deleted, with the count of an extension after it
+    /// and no residue in the stop's place.
+    DeletedWithExtension,
+}
+
+impl PerlCodingEval<'_> {
+    /// The half-open range of the alternate coding sequence that the inserted
+    /// bases fill, less the bases the two alleles share at either end.
+    fn inserted_cds_bases(&self, cds_start: i64, cds_end: i64) -> std::ops::Range<usize> {
+        let up_end = (cds_start - 1) as usize;
+        let deleted = &self.cds[up_end..cds_end as usize];
+        let inserted = self.alt_allele_on_transcript();
+        let front = deleted
+            .iter()
+            .zip(&inserted)
+            .take_while(|(d, i)| d == i)
+            .count();
+        let back = deleted[front..]
+            .iter()
+            .rev()
+            .zip(inserted[front..].iter().rev())
+            .take_while(|(d, i)| d == i)
+            .count();
+        up_end + front..up_end + inserted.len() - back
+    }
+
+    /// Whether the allele lies inside one exon: every base it replaces, or for
+    /// an insertion both bases it lies between.
+    fn inside_one_exon(&self) -> bool {
+        let (first, last) = (
+            self.vf_start.min(self.vf_end),
+            self.vf_start.max(self.vf_end),
+        );
+        let mapper = self
+            .transcript
+            .vefc
+            .as_ref()
+            .and_then(|v| v.mapper.as_ref());
+        mapper.is_some_and(|mapper| {
+            mapper
+                .exon_coord_mapper
+                .pairs
+                .iter()
+                .any(|exon| exon.to_start as i64 <= first && last <= exon.to_end as i64)
+        })
+    }
+
+    /// The allele's span in the coding sequence, where the alternate protein
+    /// can be held against the reference protein: the transcript's peptide is
+    /// the translation of a coding sequence that one stop codon closes, and the
+    /// allele lies inside one exon and inside the coding sequence (at an exon's
+    /// edge the spliced sequence is not known). `None` anywhere else.
+    fn span_where_the_proteins_compare(&self) -> Option<(i64, i64)> {
+        let residues = self.pep_seq.len();
+        let reference = perl_translate(self.cds, self.table);
+        if self.cds.len() != 3 * (residues + 1)
+            || reference[..residues] != self.pep_seq[..]
+            || reference[residues] != b'*'
+            || self.pep_seq.contains(&b'*')
+            || !is_perl_unambiguous_dna(self.alt_allele)
+            || !self.inside_one_exon()
+        {
+            return None;
+        }
+        let (cds_start, cds_end) = (self.span.cds_start?, self.span.cds_end?);
+        if cds_start < 1 || cds_end > self.cds.len() as i64 || cds_start > cds_end + 1 {
+            return None;
+        }
+        Some((cds_start, cds_end))
+    }
+
+    /// The frameshift that a change reaching from before the stop codon into it
+    /// is, where the HGVS nomenclature decides it: the first changed residue
+    /// (1-based), the residues the alternate protein holds from it up to its
+    /// new stop, and whether the transcript holds that stop. The nomenclature
+    /// describes deletions "starting 5' of and including the translation
+    /// termination (stop) codon" as a frameshift, says the same of
+    /// deletion-insertions, and defines a frameshift by translation that
+    /// "shifts to another reading frame", so the change, less the bases its two
+    /// alleles share at either end, either runs to the stop codon's last base
+    /// or is not a whole number of codons. `None` where the proteins are not
+    /// compared ([`Self::span_where_the_proteins_compare`]), where no residue
+    /// before the stop changes, where the alternate protein keeps the
+    /// reference's length and its stop's own residue, and where the first
+    /// changed residue is itself a stop.
+    fn frameshift_through_the_stop(&self) -> Option<(usize, Vec<u8>, bool)> {
+        let residues = self.pep_seq.len();
+        let (cds_start, cds_end) = self.span_where_the_proteins_compare()?;
+        let stop_codon = self.cds.len() as i64 - 3;
+        let inserted = self.alt_allele_on_transcript().len() as i64;
+        // The change itself, however the record writes it: the span less the
+        // bases the two alleles share at either end.
+        let kept = self.inserted_cds_bases(cds_start, cds_end);
+        let shared_before = kept.start as i64 - (cds_start - 1);
+        let shared_after = cds_start - 1 + inserted - kept.end as i64;
+        let (first, last) = (cds_start + shared_before, cds_end - shared_after);
+        let whole_stop_codon = last == self.cds.len() as i64;
+        let out_of_frame = (cds_end - cds_start + 1 - inserted) % 3 != 0;
+        if first > stop_codon || last <= stop_codon || !(whole_stop_codon || out_of_frame) {
+            return None;
+        }
+        let alternate = perl_translate(&self.alternate_cds()?, self.table);
+        let same = alternate
+            .iter()
+            .zip(self.pep_seq.iter())
+            .take_while(|(alt, reference)| alt == reference)
+            .count();
+        let new_stop = alternate.iter().position(|&aa| aa == b'*');
+        let end = new_stop.unwrap_or(alternate.len());
+        if same >= residues || new_stop == Some(residues) || end <= same {
+            return None;
+        }
+        Some((same + 1, alternate[same..end].to_vec(), new_stop.is_some()))
+    }
+
+    /// Whether the allele is an insertion between two bases of the last
+    /// residue's codon whose length is no whole number of codons.
+    fn inserts_out_of_frame_in_the_last_residues_codon(&self) -> bool {
+        let (Some(cds_start), Some(cds_end)) = (self.span.cds_start, self.span.cds_end) else {
+            return false;
+        };
+        let last_codon_end = 3 * self.pep_seq.len() as i64;
+        cds_start == cds_end + 1
+            && last_codon_end - 2 <= cds_end
+            && cds_start <= last_codon_end
+            && !self.alt_allele_on_transcript().len().is_multiple_of(3)
+    }
+
+    /// Whether a stop codon closes the coding sequence: its last three bases
+    /// are a stop codon, and either the transcript's peptide holds one residue
+    /// for every codon before it or no other stop codon lies in the frame that
+    /// codon sets.
+    fn stop_codon_closes_the_coding_sequence(&self) -> bool {
+        let Some(last_codon) = self.cds.len().checked_sub(3) else {
+            return false;
+        };
+        if perl_translate_codon(&self.cds[last_codon..], self.table) != b'*' {
+            return false;
+        }
+        self.cds.len() == 3 * (self.pep_seq.len() + 1)
+            || !self.cds[self.cds.len() % 3..last_codon]
+                .chunks_exact(3)
+                .any(|codon| perl_translate_codon(codon, self.table) == b'*')
+    }
+
+    /// The count of residues that follow the whole reference protein up to a
+    /// new stop, where the coding sequence holds stop codons that the
+    /// transcript's peptide reads as residues and the allele replaces bases of
+    /// the closing stop codon by as many. The peptide is the reference protein,
+    /// and a stop codon inside the coding sequence reads as the peptide reads
+    /// it, where a translation of the bases ends at the first of them. `None`
+    /// where the coding sequence is not of that kind, where the transcript holds
+    /// no new stop, and where the new stop is a codon that the peptide reads as
+    /// a residue inside the coding sequence: whether such a codon ends the
+    /// protein in the 3' UTR is not known from the model.
+    fn residues_added_past_stops_read_as_residues(&self) -> Option<i64> {
+        let residues = self.pep_seq.len();
+        let reference = perl_translate(self.cds, self.table);
+        if self.cds.len() != 3 * (residues + 1)
+            || reference[residues] != b'*'
+            || self.pep_seq.contains(&b'*')
+            || !is_perl_unambiguous_dna(self.alt_allele)
+            || !self.inside_one_exon()
+        {
+            return None;
+        }
+        let read_as_residues: Vec<usize> =
+            (0..residues).filter(|&at| reference[at] == b'*').collect();
+        let fits =
+            (0..residues).all(|at| reference[at] == b'*' || reference[at] == self.pep_seq[at]);
+        if read_as_residues.is_empty() || !fits {
+            return None;
+        }
+        let (cds_start, cds_end) = (self.span.cds_start?, self.span.cds_end?);
+        let stop_codon = self.cds.len() as i64 - 3;
+        let replaced = cds_end - cds_start + 1;
+        if cds_start <= stop_codon
+            || cds_end > self.cds.len() as i64
+            || replaced != self.alt_allele_on_transcript().len() as i64
+        {
+            return None;
+        }
+        let alternate_cds = self.alternate_cds()?;
+        let alternate = perl_translate(&alternate_cds, self.table);
+        let added = alternate
+            .get(residues..)?
+            .iter()
+            .position(|&aa| aa == b'*')?;
+        let new_stop = alternate_cds.get(3 * (residues + added)..3 * (residues + added) + 3)?;
+        let read_as_a_residue_inside = read_as_residues
+            .iter()
+            .any(|&at| self.cds[3 * at..3 * at + 3].eq_ignore_ascii_case(new_stop));
+        (added > 0 && !read_as_a_residue_inside).then_some(added as i64)
+    }
+
+    /// The change at the stop codon that comparing the alternate protein with
+    /// the reference protein shows. The reference protein is the transcript's
+    /// peptide where it is the translation of a coding sequence that one stop
+    /// codon closes; the alternate protein is the translation of the alternate
+    /// coding sequence, read on through the 3' UTR to its first stop. `None`
+    /// where the proteins are not compared
+    /// ([`Self::span_where_the_proteins_compare`]), where a residue of the
+    /// reference protein changes, and where no whole codon follows the
+    /// reference protein.
+    fn stop_codon_change(&self) -> Option<StopCodonChange> {
+        let residues = self.pep_seq.len();
+        let (cds_start, cds_end) = self.span_where_the_proteins_compare()?;
+        let alternate = perl_translate(&self.alternate_cds()?, self.table);
+        let tail = alternate.strip_prefix(&self.pep_seq[..])?;
+        let first = *tail.first()?;
+        let added = tail.iter().position(|&aa| aa == b'*');
+        if added == Some(0) {
+            return Some(StopCodonChange::Unchanged);
+        }
+        let stop_inserted = added.is_some_and(|added| {
+            let new_stop = 3 * (residues + added);
+            let inserted = self.inserted_cds_bases(cds_start, cds_end);
+            inserted.start <= new_stop && new_stop + 3 <= inserted.end
+        });
+        Some(StopCodonChange::Extended {
+            first,
+            added,
+            stop_inserted,
+        })
+    }
+}
+
+/// Whether a form written at the stop codon gives way to the description the
+/// two proteins bear out. Each arm is one form: the description built from the
+/// codon window, or its lack of one, on the left, what the comparison of the
+/// proteins shows on the right.
+fn written_at_stop_gives_way(written: WrittenAtStop, change: StopCodonChange) -> bool {
+    match (written, change) {
+        // A deletion-insertion that replaces the stop by a stop, where the
+        // protein does not change.
+        (WrittenAtStop::Replaced, StopCodonChange::Unchanged) => true,
+
+        // A deletion-insertion of the stop alone, where the whole protein is
+        // kept and residues follow it up to a stop of the 3' UTR or to the
+        // transcript's end.
+        (
+            WrittenAtStop::Replaced,
+            StopCodonChange::Extended {
+                stop_inserted: false,
+                ..
+            },
+        ) => true,
+
+        // The same where the new stop lies wholly inside the inserted bases.
+        (
+            WrittenAtStop::Replaced,
+            StopCodonChange::Extended {
+                stop_inserted: true,
+                ..
+            },
+        ) => true,
+
+        // An insertion between the last residue and the stop, where the whole
+        // protein is kept and residues follow it.
+        (WrittenAtStop::InsertedBefore, StopCodonChange::Extended { .. }) => true,
+
+        // An insertion that ends in a stop of its own at the stop's residue,
+        // where the protein does not change: the nomenclature describes an
+        // insertion only for a protein that gains residues.
+        (WrittenAtStop::InsertedWithItsStop, StopCodonChange::Unchanged) => true,
+
+        // An insertion inside the last residue's codon that the codon window
+        // leaves without a description, where the protein does not change:
+        // the nomenclature describes the two proteins, and they are equal.
+        (WrittenAtStop::InsertedInTheLastCodon, StopCodonChange::Unchanged) => true,
+
+        // The stop written as unchanged on an allele whose own verdict is
+        // `stop_lost`, where residues follow the whole protein.
+        (WrittenAtStop::Unchanged { stop_lost: true }, StopCodonChange::Extended { .. }) => true,
+
+        // The stop written as deleted with an extension count, where the whole
+        // protein is kept and residues follow it: the extension names the
+        // residue that stands in the stop's place.
+        (WrittenAtStop::DeletedWithExtension, StopCodonChange::Extended { .. }) => true,
+
+        _ => false,
+    }
+}
+
+/// The residue number at which the stop of an insertion's own residues
+/// stands: the number of the residue before the insertion, the residues
+/// inserted before their first stop, and one. `None` for a description that
+/// is no insertion between two neighbouring residues and for inserted
+/// residues that hold no stop. The inserted residues are read in their
+/// three-letter names, as [`hgvsp_peptides`] leaves them.
+fn residue_of_the_inserted_stop(n: &HgvsProteinNotation) -> Option<i64> {
+    let (first, last) = (n.start.min(n.end), n.start.max(n.end));
+    if n.kind != HgvspKind::Ins || last != first + 1 {
+        return None;
+    }
+    let inserted = n.alt_pep.as_deref()?;
+    let before_the_stop = inserted.chunks(3).position(|name| name == b"Ter")?;
+    Some(first + before_the_stop as i64 + 1)
+}
+
+/// The notation of a change at the stop codon as the HGVS nomenclature gives it
+/// for the two proteins, in place of a form of [`WrittenAtStop`] that the
+/// codon window's description takes and
+/// [`written_at_stop_gives_way`] names: the stop at its residue number as
+/// unchanged where the protein does not change, and an extension named at the
+/// stop (the stop's residue number, the first new residue, the count of
+/// residues added or `?` where the transcript holds no new stop) where the
+/// whole reference protein is kept and residues are added after it.
+/// `unchanged` is whether the codon window's description reads the two
+/// peptides as equal. `None` leaves that description as it is.
+fn hgvsp_at_stop_codon(
+    ev: &PerlCodingEval<'_>,
+    preds: &HgvsPredicates,
+    n: &HgvsProteinNotation,
+    unchanged: bool,
+) -> Option<String> {
+    let stop = ev.pep_seq.len() as i64 + 1;
+    let (first, last) = (n.start.min(n.end), n.start.max(n.end));
+    let written = if unchanged && n.start == stop {
+        WrittenAtStop::Unchanged {
+            stop_lost: preds.stop_lost,
+        }
+    } else if unchanged {
+        return None;
+    } else if n.kind == HgvspKind::Delins && first == stop && last == stop {
+        WrittenAtStop::Replaced
+    } else if n.kind == HgvspKind::Ins && first + 1 == stop && last == stop {
+        WrittenAtStop::InsertedBefore
+    } else if residue_of_the_inserted_stop(n) == Some(stop) {
+        WrittenAtStop::InsertedWithItsStop
+    } else if n.kind == HgvspKind::Del && first == stop && last == stop && preds.stop_lost {
+        WrittenAtStop::DeletedWithExtension
+    } else {
+        return None;
+    };
+    hgvsp_the_proteins_bear_out(ev, written)
+}
+
+/// The notation of an insertion that [`hgvsp_peptides`] leaves without one,
+/// naming no residue after the last, where it is
+/// [`WrittenAtStop::InsertedInTheLastCodon`] and the protein does not change:
+/// the stop at its residue number as unchanged. `None` for every other
+/// description [`hgvsp_peptides`] gives up, and for that form where the
+/// proteins are not compared or differ.
+fn hgvsp_of_an_insertion_no_residue_follows(
+    ev: &PerlCodingEval<'_>,
+    n: &HgvsProteinNotation,
+) -> Option<String> {
+    if n.kind != HgvspKind::Ins || !ev.inserts_out_of_frame_in_the_last_residues_codon() {
+        return None;
+    }
+    hgvsp_the_proteins_bear_out(ev, WrittenAtStop::InsertedInTheLastCodon)
+}
+
+/// The notation that the two proteins bear out in place of the form `written`,
+/// where [`written_at_stop_gives_way`] names the pair. `None` where the
+/// proteins are not compared and where the form stands.
+fn hgvsp_the_proteins_bear_out(ev: &PerlCodingEval<'_>, written: WrittenAtStop) -> Option<String> {
+    let stop = ev.pep_seq.len() as i64 + 1;
+    let change = ev.stop_codon_change()?;
+    if !written_at_stop_gives_way(written, change) {
+        return None;
+    }
+    Some(match change {
+        StopCodonChange::Unchanged => format!("Ter{stop}="),
+        StopCodonChange::Extended { first, added, .. } => {
+            let residue = crate::hgvs::amino_acid_three_letter(first.to_ascii_uppercase());
+            let count = added.map_or("?".to_string(), |added| added.to_string());
+            format!("Ter{stop}{residue}extTer{count}")
+        }
+    })
+}
+
+/// The frameshift notation of a change that the codon window writes as a
+/// deletion-insertion of a range ending at the stop, where
+/// [`PerlCodingEval::frameshift_through_the_stop`] names one: the first changed
+/// residue with its number, the new residue, and the new stop's position
+/// counted from the first changed residue as 1, `?` where the transcript holds
+/// no new stop. `None` leaves the codon window's description as it is.
+fn hgvsp_frameshift_through_the_stop(
+    ev: &PerlCodingEval<'_>,
+    n: &HgvsProteinNotation,
+) -> Option<String> {
+    let stop = ev.pep_seq.len() as i64 + 1;
+    if n.kind != HgvspKind::Delins || n.start >= n.end || n.end != stop {
+        return None;
+    }
+    let (first, new_residues, stop_met) = ev.frameshift_through_the_stop()?;
+    let three = |aa: u8| crate::hgvs::amino_acid_three_letter(aa.to_ascii_uppercase());
+    let count = if stop_met {
+        (new_residues.len() + 1).to_string()
+    } else {
+        "?".to_string()
+    };
+    Some(format!(
+        "{}{first}{}fsTer{count}",
+        three(ev.pep_seq[first - 1]),
+        three(new_residues[0])
+    ))
+}
+
+/// The residue number of a description that names the stop alone, and whether
+/// it writes the stop as unchanged: `Ter<N>=`, the stop deleted (`Ter<N>del`),
+/// replaced by one residue (`Ter<N><Xaa>`) or extended
+/// (`Ter<N><Xaa>extTer<count>`). `None` for every other description.
+fn stop_named_alone(description: &str) -> Option<(i64, bool)> {
+    let rest = description.strip_prefix("Ter")?;
+    let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+    let residue = rest[..digits].parse::<i64>().ok()?;
+    let change = &rest[digits..];
+    let residue_name = |text: &str| {
+        let name = text.as_bytes();
+        name.len() == 3
+            && name[0].is_ascii_uppercase()
+            && name[1..].iter().all(u8::is_ascii_lowercase)
+    };
+    let extension = change.split_once("extTer").is_some_and(|(first, count)| {
+        residue_name(first)
+            && (count == "?" || (!count.is_empty() && count.bytes().all(|b| b.is_ascii_digit())))
+    });
+    (change == "=" || change == "del" || residue_name(change) || extension)
+        .then_some((residue, change == "="))
+}
+
+/// Whether a description names, alone, a stop that the reference protein does
+/// not hold. The codon window writes a partial codon and an unknown residue as
+/// the stop, so it names a stop on a coding sequence that no stop codon closes
+/// and at residue 1 of one that opens inside its first codon. The HGVS
+/// nomenclature takes as a reference only a transcript with "a complete CDS",
+/// whose "translation termination codon" and "first three nucleotides of the
+/// CDS" are annotated, so it gives no description of such a stop. That is: one
+/// of the four descriptions of [`stop_named_alone`] on a coding sequence that
+/// no stop codon closes, at a residue where the transcript's peptide carries
+/// no stop; and the stop written as unchanged at residue 1 of a protein that
+/// holds a residue there.
+fn names_a_stop_the_reference_lacks(ev: &PerlCodingEval<'_>, description: &str) -> bool {
+    let Some((residue, unchanged)) = stop_named_alone(description) else {
+        return false;
+    };
+    if ev.stop_codon_closes_the_coding_sequence() {
+        return unchanged && residue == 1 && !ev.pep_seq.is_empty();
+    }
+    !usize::try_from(residue - 1)
+        .ok()
+        .and_then(|at| ev.pep_seq.get(at))
+        .is_some_and(|&aa| aa == b'*')
+}
+
 /// `_get_hgvs_protein_format` (1898) with three-letter conversion on and no
-/// prediction parentheses.
+/// prediction parentheses, behind [`hgvsp_at_stop_codon`] and
+/// [`hgvsp_frameshift_through_the_stop`].
 fn hgvsp_format(
     ev: &PerlCodingEval<'_>,
     preds: &HgvsPredicates,
@@ -3568,13 +5248,26 @@ fn hgvsp_format(
     let text = |s: &[u8]| String::from_utf8_lossy(s).into_owned();
     let first3 = |s: &[u8]| text(&s[..3.min(s.len())]);
     let last3 = |s: &[u8]| text(&s[s.len().saturating_sub(3)..]);
-    if ref_pep == alt && kind != HgvspKind::Fs && kind != HgvspKind::Ins {
+    let unchanged = ref_pep == alt && kind != HgvspKind::Fs && kind != HgvspKind::Ins;
+    if let Some(at_stop) = hgvsp_at_stop_codon(ev, preds, n, unchanged) {
+        return at_stop;
+    }
+    if let Some(frameshift) = hgvsp_frameshift_through_the_stop(ev, n) {
+        return frameshift;
+    }
+    if unchanged {
         format!("{}{start}=", text(ref_pep))
     } else if preds.stop_lost && (kind == HgvspKind::Del || kind == HgvspKind::Sub) {
-        let aa_til_stop = match hgvsp_stop_loss_extra_aa(ev, start - 1, false) {
-            Some(extra) => extra.to_string(),
-            None => "?".to_string(),
-        };
+        // `_stop_loss_extra_AA` ends at the first stop codon of the bases, so a
+        // stop codon the peptide reads as a residue leaves the count unknown.
+        let extra = hgvsp_stop_loss_extra_aa(ev, start - 1, false).or_else(|| {
+            let at_the_closing_stop =
+                kind == HgvspKind::Sub && start == ev.pep_seq.len() as i64 + 1;
+            at_the_closing_stop
+                .then(|| ev.residues_added_past_stops_read_as_residues())
+                .flatten()
+        });
+        let aa_til_stop = extra.map_or("?".to_string(), |extra| extra.to_string());
         let alt = format!("{}extTer{aa_til_stop}", first3(alt));
         if ref_pep.len() > 3 && kind == HgvspKind::Del {
             format!("{}{start}_{}{end}{alt}", first3(ref_pep), last3(ref_pep))
@@ -3653,7 +5346,7 @@ impl<'a> PerlCodingEval<'a> {
         transcript: &'a Transcript,
         span_start: u64,
         span_end: u64,
-        fasta: Option<&vep_fasta::IndexedFasta>,
+        fasta: Option<&'a vep_fasta::IndexedFasta>,
     ) -> Option<Self> {
         let vefc = transcript.vefc.as_ref()?;
         let cds = vefc.translateable_seq.as_ref()?.as_bytes();
@@ -3735,6 +5428,7 @@ impl<'a> PerlCodingEval<'a> {
             (cdna_len > mapper.cdna_coding_end).then(|| padding(cdna_len - mapper.cdna_coding_end))
         });
         Some(Self {
+            transcript,
             cds,
             pep_seq,
             seq_edits: &vefc.seq_edits,
@@ -3756,6 +5450,8 @@ impl<'a> PerlCodingEval<'a> {
             ref_allele,
             alt_allele,
             feature_seq,
+            chr: &variant.chr,
+            fasta,
             seq_length,
             snp: alt_length == ref_length,
             insertion: ref_length < alt_length,
@@ -3763,12 +5459,12 @@ impl<'a> PerlCodingEval<'a> {
             codon_memo: [None, None],
             peptide_memo: [None, None],
             peps_memo: None,
-            partial_codon_memo: None,
             overlaps_stop_memo: None,
             overlaps_stop_cil_memo: None,
             overlaps_start_memo: None,
             ins_del_stop_altered_memo: None,
-            ins_del_stop_altered_cil_memo: None,
+            edited_stop_codon_kept_cil_memo: None,
+            removed_stop_codon_memo: None,
             ins_del_start_altered_memo: None,
             inv_start_altered_memo: None,
             snp_start_altered_memo: None,
@@ -3817,6 +5513,125 @@ fn coding_span_pred(transcript: &Transcript, vf_start: i64, vf_end: i64) -> bool
         .pairs
         .iter()
         .any(|p| perl_overlap(lo, hi, p.to_start as i64, p.to_end as i64))
+}
+
+/// Whether an allele annotated at `start..=end` lies on the transcript, inside
+/// its coding region, and overlaps none of its exons, so `_bvfo_preds` reads it
+/// `non_coding` (BaseVariationFeatureOverlapAllele.pm:535-537); outside the
+/// coding region it reads `utr` (:523-525). `within_feature` is read from the
+/// coordinates as given, the coding region and the exons from the ordered span,
+/// which for an insertion holds both flanking bases.
+pub(crate) fn annotated_in_coding_intron(transcript: &Transcript, start: u64, end: u64) -> bool {
+    let (crs, cre) = match (transcript.coding_region_start, transcript.coding_region_end) {
+        (Some(s), Some(e)) if s > 0 && e > 0 => (s as i64, e as i64),
+        _ => return false,
+    };
+    let (vf_start, vf_end) = (start as i64, end as i64);
+    if !perl_overlap(
+        vf_start,
+        vf_end,
+        transcript.start as i64,
+        transcript.end as i64,
+    ) {
+        return false;
+    }
+    let (lo, hi) = (vf_start.min(vf_end), vf_start.max(vf_end));
+    if !perl_overlap(lo, hi, crs, cre) {
+        return false;
+    }
+    let Some(mapper) = transcript.vefc.as_ref().and_then(|v| v.mapper.as_ref()) else {
+        return false;
+    };
+    !mapper
+        .exon_coord_mapper
+        .pairs
+        .iter()
+        .any(|p| perl_overlap(lo, hi, p.to_start as i64, p.to_end as i64))
+}
+
+/// Whether `allele`, an insertion as the 3' shift left it, lies between an
+/// intron's last base and the first base of the exon after it, in the
+/// transcript's direction.
+///
+/// HGVS describes a change there by the intron's last positions (a duplication
+/// ending on them) or by the two positions that flank the junction (any other
+/// insertion), and its recommendations on splicing give such a change no
+/// definite protein consequence. A record written between those two bases is
+/// annotated on the exon: in a form
+/// [`intron_end_insertion_has_no_protein_notation`] names it has no protein
+/// notation either, and otherwise it keeps the notation read from the exon.
+fn inserted_at_the_end_of_an_intron(allele: &InputVariant, transcript: &Transcript) -> bool {
+    if allele.start != allele.end + 1 {
+        return false;
+    }
+    let Some(mapper) = transcript.vefc.as_ref().and_then(|v| v.mapper.as_ref()) else {
+        return false;
+    };
+    let pairs = &mapper.exon_coord_mapper.pairs;
+    let exonic = |pos: u64| pairs.iter().any(|p| p.to_start <= pos && pos <= p.to_end);
+    match transcript.strand {
+        Strand::Forward => pairs.iter().any(|p| p.to_start == allele.start) && !exonic(allele.end),
+        Strand::Reverse => pairs.iter().any(|p| p.to_end == allele.end) && !exonic(allele.start),
+    }
+}
+
+/// Whether the transcript's coding sequence is complete: it carries neither the
+/// `cds_start_NF` nor the `cds_end_NF` flag, and its last three bases are a stop
+/// codon of the transcript's codon table.
+///
+/// On a coding sequence that lacks its start, its end or its closing stop codon,
+/// an allele the 3' shift carries out of an intron onto a residue before the
+/// stop codon keeps the empty HGVSp Ensembl VEP writes for it.
+fn coding_sequence_is_complete(transcript: &Transcript) -> bool {
+    if transcript
+        .flags
+        .iter()
+        .any(|flag| flag == "cds_start_NF" || flag == "cds_end_NF")
+    {
+        return false;
+    }
+    transcript
+        .vefc
+        .as_ref()
+        .and_then(|vefc| vefc.translateable_seq.as_deref())
+        .is_some_and(|cds| {
+            let cds = cds.as_bytes();
+            cds.len() >= 3
+                && translate_codon_with_table(&cds[cds.len() - 3..], codon_table_for(transcript))
+                    == b'*'
+        })
+}
+
+/// Whether `allele`, read at `start..=end`, changes no residue before the stop
+/// codon: the transcript's coding sequence is a whole number of codons, the last
+/// of them a stop codon, and translates to the same residues before it with the
+/// allele applied. The first residue such an allele changes is the stop codon or
+/// lies past it. `false` on a coding sequence that no stop codon closes, and on
+/// one whose length is not a multiple of three, whatever its last three bases
+/// spell: the codons are the triplets from the first base, which the start
+/// exon's phase pads into frame (`"N" x $start_phase`, Transcript.pm
+/// `translateable_seq`).
+fn changes_no_residue_before_the_stop_codon(
+    allele: &InputVariant,
+    start: u64,
+    end: u64,
+    transcript: &Transcript,
+    fasta: Option<&vep_fasta::IndexedFasta>,
+) -> bool {
+    let Some(ev) = PerlCodingEval::new(allele, transcript, start, end, fasta) else {
+        return false;
+    };
+    let Some(alternate) = ev.alternate_cds() else {
+        return false;
+    };
+    if ev.cds.len() % 3 != 0 {
+        return false;
+    }
+    let reference = perl_translate(ev.cds, ev.table);
+    let Some((&b'*', before_the_stop)) = reference.split_last() else {
+        return false;
+    };
+    perl_translate(&alternate, ev.table).starts_with(before_the_stop)
 }
 
 /// Whether the genomic position of an SNV maps into the transcript's first
@@ -3920,7 +5735,8 @@ pub fn perl_coding_terms(
 mod tests {
     use super::*;
     use crate::test_helpers::{
-        insertion_after_cds, make_single_exon_transcript, make_test_transcript,
+        cds_ending_in, deletion_of_cds, insertion_after_cds, make_single_exon_transcript,
+        make_test_transcript,
     };
     use vep_core::coordinate::Strand;
 
@@ -4596,16 +6412,13 @@ mod tests {
     }
 
     /// A 9bp insertion two bases into codon 3 (GGA = G) resolves a one-residue ref
-    /// window; the stop check runs only when the alt window carries a `*`.
+    /// window.
     ///
     /// Bounds `cds_start: 9, cds_end: 8` splice "AAATAAGCT" in at 0-based CDS index
     /// 8, so the 12-byte alt window is GG + AAATAAGCT + A = "GGAAATAAGCTA" →
-    /// [G, N, K, L]: the TAA is out of frame and the window has no stop, so the
-    /// guarded assertion does not run. Net insertion = 9 nt = 3 AAs, so the capped
-    /// scan would cover `1 + 3 = 4` AAs.
+    /// [G, N, K, L]: the TAA is out of frame and the window has no stop.
     #[test]
     fn test_stop_retained_condition1_nine_bp_insertion_resolves_single_residue_ref_window() {
-        use crate::consequences::is_stop_retained_insertion;
         let tx = make_test_transcript();
 
         let variant = InputVariant::new(
@@ -4625,21 +6438,8 @@ mod tests {
 
         let peps = compute_codon_window_peptide_alleles(&variant, &tx, &bounds);
         assert!(peps.is_some());
-        let (ref_pep, alt_pep) = peps.unwrap();
+        let (ref_pep, _) = peps.unwrap();
         assert_eq!(ref_pep.len(), 1);
-
-        // A stop in alt_pep must be detected, by condition 1 (ref_pep[0] ==
-        // alt_pep[0] and the stop within the scan window) or by condition 3.
-        if alt_pep.contains(&b'*') {
-            let result = is_stop_retained_insertion(&variant, &tx, &bounds, true);
-            // At least one condition fires when the window has a stop
-            assert!(
-                result || !ref_pep.is_empty(),
-                "stop_retained should detect stop in alt_pep: ref={:?} alt={:?}",
-                ref_pep,
-                alt_pep
-            );
-        }
     }
 
     #[test]
@@ -4762,7 +6562,7 @@ mod tests {
         use crate::consequences::{calculate_consequences, EffectsConfig};
         use vep_core::consequence::Consequence::*;
 
-        let tx = make_test_transcript();
+        let tx = std::sync::Arc::new(make_test_transcript());
         let config = EffectsConfig::default();
         struct Case {
             span: (u64, u64),
@@ -4911,6 +6711,124 @@ mod tests {
         assert_eq!(&*feature_seq(b"<DEL>", Reverse, Forward), b"<DEL>");
     }
 
+    /// [`rotate_shifted_allele`] on `GATC` written on `allele_strand`, returning
+    /// the rotated bases and the left-rotation steps applied.
+    fn rotated(shift: u64, allele_strand: Strand, transcript_strand: Strand) -> (String, usize) {
+        let mut allele = b"GATC".to_vec();
+        let steps = rotate_shifted_allele(&mut allele, shift, allele_strand, transcript_strand);
+        (String::from_utf8(allele).unwrap(), steps)
+    }
+
+    /// The four strand pairs: the allele written on the transcript's strand
+    /// (forward on forward, reverse on reverse) and on the other strand.
+    const STRAND_PAIRS: [(Strand, Strand); 4] = [
+        (Strand::Forward, Strand::Forward),
+        (Strand::Reverse, Strand::Reverse),
+        (Strand::Forward, Strand::Reverse),
+        (Strand::Reverse, Strand::Forward),
+    ];
+
+    /// A shift of zero leaves the allele as written on either strand, as
+    /// `shift_feature_seqs` runs its loop no times (TranscriptVariationAllele.pm:1339),
+    /// and so do an empty allele and a single base, which no rotation changes.
+    #[test]
+    fn a_zero_shift_rotates_nothing_on_either_strand() {
+        use Strand::{Forward, Reverse};
+        for (allele_strand, transcript_strand) in STRAND_PAIRS {
+            assert_eq!(
+                rotated(0, allele_strand, transcript_strand),
+                ("GATC".to_string(), 0)
+            );
+        }
+        assert_eq!(rotate_shifted_allele(&mut [], 3, Forward, Forward), 0);
+        let mut base = b"A".to_vec();
+        assert_eq!(rotate_shifted_allele(&mut base, 3, Forward, Reverse), 0);
+        assert_eq!(base, b"A");
+    }
+
+    /// A shift of the allele's length brings every base back to its place on
+    /// either strand: along a forward-strand transcript the loop runs the length
+    /// (TranscriptVariationAllele.pm:1339-1342), along a reverse-strand one
+    /// `seq_length - shift_length` is zero (`:1338`).
+    #[test]
+    fn a_shift_of_the_alleles_length_leaves_it_as_written() {
+        for (allele_strand, transcript_strand) in STRAND_PAIRS {
+            assert_eq!(
+                rotated(4, allele_strand, transcript_strand),
+                ("GATC".to_string(), 0)
+            );
+        }
+    }
+
+    /// A shift of a multiple of the allele's length leaves it as written on
+    /// either strand: the forward-strand loop wraps the allele whole
+    /// (TranscriptVariationAllele.pm:1339-1342) and the reverse-strand count is
+    /// negative (`:1338`), a rotation of nothing that here is the right one.
+    #[test]
+    fn a_shift_of_a_multiple_of_the_alleles_length_leaves_it_as_written() {
+        for shift in [8, 12] {
+            for (allele_strand, transcript_strand) in STRAND_PAIRS {
+                assert_eq!(
+                    rotated(shift, allele_strand, transcript_strand),
+                    ("GATC".to_string(), 0)
+                );
+            }
+        }
+    }
+
+    /// A shift longer than the allele and not a multiple of its length rotates
+    /// by the remainder, as a shift of the remainder does, read on the
+    /// transcript's strand: `GATC` moved five bases is `ATCG` when written on
+    /// the transcript's strand and `CGAT` when written on the other, the bases a
+    /// one-base shift gives. Ensembl VEP 116.2 counts the places from the
+    /// transcript's strand alone (TranscriptVariationAllele.pm:1337-1338): it
+    /// agrees on a forward-written allele along a forward-strand transcript,
+    /// where the loop wraps, leaves a forward-written allele along a
+    /// reverse-strand transcript as written, its count `seq_length -
+    /// shift_length` being negative (`:1339`), and turns an allele written on
+    /// the reverse strand the wrong way at any shift; each splices bases the
+    /// variant never produces.
+    #[test]
+    fn a_shift_longer_than_the_allele_rotates_by_the_remainder_on_both_strands() {
+        use Strand::{Forward, Reverse};
+        for (allele_strand, transcript_strand) in [(Forward, Forward), (Reverse, Reverse)] {
+            assert_eq!(
+                rotated(1, allele_strand, transcript_strand),
+                ("ATCG".to_string(), 1)
+            );
+            assert_eq!(
+                rotated(5, allele_strand, transcript_strand),
+                ("ATCG".to_string(), 1)
+            );
+            assert_eq!(
+                rotated(6, allele_strand, transcript_strand),
+                ("TCGA".to_string(), 2)
+            );
+            assert_eq!(
+                rotated(11, allele_strand, transcript_strand),
+                ("CGAT".to_string(), 3)
+            );
+        }
+        for (allele_strand, transcript_strand) in [(Forward, Reverse), (Reverse, Forward)] {
+            assert_eq!(
+                rotated(1, allele_strand, transcript_strand),
+                ("CGAT".to_string(), 3)
+            );
+            assert_eq!(
+                rotated(5, allele_strand, transcript_strand),
+                ("CGAT".to_string(), 3)
+            );
+            assert_eq!(
+                rotated(6, allele_strand, transcript_strand),
+                ("TCGA".to_string(), 2)
+            );
+            assert_eq!(
+                rotated(11, allele_strand, transcript_strand),
+                ("ATCG".to_string(), 1)
+            );
+        }
+    }
+
     /// The per-transcript evaluation reads an opposite-strand allele through
     /// Ensembl's `reverse_comp`, IUPAC letters included (`_get_alternate_cds`,
     /// TranscriptVariationAllele.pm:2413-2417): `A/R` written on the reverse
@@ -5053,5 +6971,324 @@ mod tests {
             Some(vec![Consequence::StopRetainedVariant])
         );
         assert_eq!(terms("CA", "CG", false), Some(vec![Consequence::StopLost]));
+    }
+
+    /// The start and stop predicates read the transcript's own table, as
+    /// `Transcript::translate` does through `is_start_codon` and `is_ter_codon`:
+    /// `TTG` opens a peptide with `M` under tables 1, 5 and 11 and with `L`
+    /// under table 3, where it is no start; `ATT` opens with `M` under tables 2,
+    /// 5 and 11 and with `I` under table 1; a terminal `TGA` is dropped under
+    /// table 1 and kept as `W` under tables 3 and 5, a terminal `AGA` dropped
+    /// under table 2 and kept as `S` under table 5; an ambiguous terminal `TAR`
+    /// is dropped under table 1 and `TRA` kept as `X` under table 2, and an `X`
+    /// base reads as any base, as BioPerl's `iupac_iub` lists it, so `GCX` is
+    /// `A`. The cached-peptide readers follow: `GTG` under table 11 is a start,
+    /// so a cached `M` over it is the dump's rewrite and no edit, and `ATT`
+    /// under table 11 likewise.
+    #[test]
+    fn start_codon_predicates_follow_the_transcripts_table() {
+        let starts = |codon: &[u8]| -> Vec<u8> {
+            [1u8, 2, 3, 5, 11, 12]
+                .into_iter()
+                .filter(|&table| is_start_codon(codon, table))
+                .collect()
+        };
+        assert_eq!(starts(b"TTG"), [1, 5, 11]);
+        assert_eq!(starts(b"CTG"), [1, 11, 12]);
+        assert_eq!(starts(b"ATT"), [2, 5, 11]);
+        assert_eq!(starts(b"ATA"), [2, 3, 5, 11]);
+        assert_eq!(starts(b"GTG"), [2, 5, 11]);
+        assert_eq!(starts(b"ATG"), [1, 2, 3, 5, 11, 12]);
+        assert_eq!(starts(b"GCT"), []);
+
+        let peptide =
+            |cds: &[u8], table: u8| String::from_utf8(perl_transcript_peptide(cds, table)).unwrap();
+        assert_eq!(peptide(b"TTGGCTTGA", 1), "MA");
+        assert_eq!(peptide(b"TTGGCTTGA", 3), "LAW");
+        assert_eq!(peptide(b"TTGGCTTGA", 5), "MAW");
+        assert_eq!(peptide(b"TTGGCTTGA", 11), "MA");
+        assert_eq!(peptide(b"ATTGCTAGA", 1), "IAR");
+        assert_eq!(peptide(b"ATTGCTAGA", 2), "MA");
+        assert_eq!(peptide(b"ATTGCTAGA", 5), "MAS");
+        assert_eq!(peptide(b"ATTGCTAGA", 11), "MAR");
+        assert_eq!(peptide(b"CTTGCTTAA", 1), "LA");
+        assert_eq!(peptide(b"CTTGCTTAA", 3), "TA");
+        assert_eq!(peptide(b"ATGGCTTAR", 1), "MA");
+        assert_eq!(peptide(b"ATGGCTTRA", 1), "MA");
+        assert_eq!(peptide(b"ATGGCTTRA", 2), "MAX");
+        assert_eq!(peptide(b"ATGGCXTAA", 1), "MA");
+        assert_eq!(perl_translate_codon(b"GCX", 1), b'A');
+        assert_eq!(perl_translate_codon(b"TAX", 1), b'X');
+
+        assert_eq!(with_initial_met(b"VAW", b"GTGGCTTGG", 11).as_ref(), b"MAW");
+        assert_eq!(with_initial_met(b"VAW", b"GTGGCTTGG", 1).as_ref(), b"VAW");
+        assert_eq!(initial_met_edit(b"ATTAACGAA", b"MNE", 1), Some(b'M'));
+        assert_eq!(initial_met_edit(b"ATTAACGAA", b"MNE", 11), None);
+        assert_eq!(initial_met_edit(b"ATTAACGAA", b"MNE", 2), None);
+    }
+
+    /// `hgvsp_del_peptides` reads the alternate sequence under the transcript's
+    /// table: coding sequence `ATG GCT AAA TAA` with 3' UTR `TGA GCA AGA CCC TAA`
+    /// and the stop codon deleted translates on from residue 4 through `TGA`
+    /// (Trp under code 2) and `GCA` to the code-2 stop `AGA`, so the alternate
+    /// peptide is `TrpAla`; the standard code stops at the `TGA` at once and
+    /// leaves it empty. The reference peptide ends before residue 4 either way.
+    #[test]
+    fn del_peptides_follow_the_transcripts_table() {
+        for (table, alt) in [(2u8, &b"TrpAla"[..]), (1, &b""[..])] {
+            let mut tx =
+                make_single_exon_transcript(Strand::Forward, "ATGGCTAAATAA", "TGAGCAAGACCCTAA");
+            tx.vefc.as_mut().unwrap().codon_table = table;
+            let variant = deletion_of_cds(&tx, 10, 12, "TAA");
+            let ev = PerlCodingEval::new(&variant, &tx, variant.start, variant.end, None).unwrap();
+            let mut n = HgvsProteinNotation {
+                ref_pep: None,
+                alt_pep: None,
+                start: 0,
+                end: 0,
+                kind: HgvspKind::Del,
+                original_ref: Vec::new(),
+                preseq: Vec::new(),
+            };
+            assert_eq!(hgvsp_del_peptides(&ev, &mut n), Some(()));
+            assert_eq!(n.alt_pep.as_deref(), Some(alt), "table {table}");
+            assert_eq!(n.ref_pep.as_deref(), Some(&b""[..]), "table {table}");
+            assert_eq!(n.start, 4, "table {table}");
+        }
+    }
+
+    fn pair(from_start: u64, from_end: u64, to_start: u64, to_end: u64, ori: i8) -> MapperPair {
+        MapperPair {
+            from_start,
+            from_end,
+            to_start,
+            to_end,
+            ori,
+        }
+    }
+
+    /// The stop codon overlap reads the codon's own genomic bases
+    /// (`_overlaps_stop_codon_cil`, VariationEffect.pm:1418-1422, reads the last
+    /// three positions of the genomic coding region): on a codon an intron
+    /// splits, the stop bases that end the exon before overlap and the intron
+    /// bases beside the codon's last do not, on either strand; a whole codon
+    /// reads as its three positions, and an insertion's range overlaps it as
+    /// `overlap` reads a range (:1424-1427); and of a codon an edit completes,
+    /// only the bases a pair holds overlap, not the sense bases before them.
+    #[test]
+    fn the_stop_codon_overlap_reads_the_codons_own_bases() {
+        // Forward: cDNA 1..=100 on 100..=199 and 101..=200 on 300..=399.
+        let forward = [pair(1, 100, 100, 199, 1), pair(101, 200, 300, 399, 1)];
+        let overlaps = |coding_end: i64, v: (i64, i64)| {
+            overlaps_stop_codon_bases(&forward, (51, coding_end), v)
+        };
+        // The codon on 198, 199 and 300.
+        for (v, expected) in [
+            ((198, 198), true),
+            ((199, 199), true),
+            ((300, 300), true),
+            ((298, 299), false),
+            ((197, 197), false),
+            ((301, 301), false),
+        ] {
+            assert_eq!(overlaps(101, v), expected, "forward 2+1 {v:?}");
+        }
+        // The codon on 199, 300 and 301.
+        for (v, expected) in [((199, 199), true), ((299, 299), false), ((301, 301), true)] {
+            assert_eq!(overlaps(102, v), expected, "forward 1+2 {v:?}");
+        }
+        // A whole codon on 300..=302.
+        for (v, expected) in [((300, 302), true), ((299, 299), false), ((199, 199), false)] {
+            assert_eq!(overlaps(103, v), expected, "forward whole {v:?}");
+        }
+        // An insertion's range, its start past its end: between the whole
+        // codon's first two bases, as given (301, 300) and with the start moved
+        // by one inserted base (302, 300); between its last two, moved (303, 301).
+        for (v, expected) in [((301, 300), true), ((302, 300), true), ((303, 301), false)] {
+            assert_eq!(overlaps(103, v), expected, "forward insertion {v:?}");
+        }
+        // The same range between the two stop bases that end the exon, and
+        // between the exon's last base and the intron.
+        for (v, expected) in [((199, 198), true), ((200, 199), false)] {
+            assert_eq!(overlaps(101, v), expected, "forward 2+1 insertion {v:?}");
+        }
+        // Reverse: cDNA 1..=100 on 399..=300 and 101..=200 on 199..=100.
+        let reverse = [pair(1, 100, 300, 399, -1), pair(101, 200, 100, 199, -1)];
+        let overlaps = |coding_end: i64, v: (i64, i64)| {
+            overlaps_stop_codon_bases(&reverse, (51, coding_end), v)
+        };
+        // The codon's first two bases on 301 and 300, its last on 199.
+        for (v, expected) in [
+            ((199, 199), true),
+            ((200, 201), false),
+            ((300, 300), true),
+            ((301, 301), true),
+            ((302, 302), false),
+        ] {
+            assert_eq!(overlaps(101, v), expected, "reverse 2+1 {v:?}");
+        }
+        // A whole codon on 150..=152.
+        for (v, expected) in [((150, 152), true), ((153, 153), false), ((149, 149), false)] {
+            assert_eq!(overlaps(150, v), expected, "reverse whole {v:?}");
+        }
+        // A one-base exon inside the codon: 199, 250 and 300.
+        let three = [
+            pair(1, 100, 100, 199, 1),
+            pair(101, 101, 250, 250, 1),
+            pair(102, 200, 300, 398, 1),
+        ];
+        for (v, expected) in [((250, 250), true), ((199, 199), true), ((198, 198), false)] {
+            assert_eq!(
+                overlaps_stop_codon_bases(&three, (51, 102), v),
+                expected,
+                "three exons {v:?}"
+            );
+        }
+        // A coding sequence of two bases reads no base before its first.
+        assert!(!overlaps_stop_codon_bases(&forward, (99, 100), (197, 197)));
+        // A codon an edit completes after its first base, the transcript ending
+        // on 199: the pair holds cDNA 100 alone of 100..=102.
+        let edited = [pair(1, 100, 100, 199, 1)];
+        for (v, expected) in [((199, 199), true), ((197, 198), false), ((200, 201), false)] {
+            assert_eq!(
+                overlaps_stop_codon_bases(&edited, (51, 102), v),
+                expected,
+                "edited {v:?}"
+            );
+        }
+    }
+
+    /// [`make_test_transcript`] with a 549-base coding sequence whose stop codon
+    /// `stop` has its first two bases on the last two of exon 2 and its third on
+    /// the first of exon 3, followed by a 3' UTR beginning `utr3_start`.
+    fn make_transcript_with_split_stop_codon(stop: &str, utr3_start: &str) -> Transcript {
+        let mut tx = make_test_transcript();
+        let vefc = tx.vefc.as_mut().unwrap();
+        vefc.translateable_seq = Some(format!("ATG{}{stop}", "GCT".repeat(181)));
+        vefc.three_prime_utr = Some(format!("{utr3_start}{}", "GCA".repeat(667)));
+        let mapper = vefc.mapper.as_mut().unwrap();
+        mapper.cdna_coding_start = 53;
+        mapper.cdna_coding_end = 601;
+        tx.cdna_coding_start = Some(53);
+        tx.cdna_coding_end = Some(601);
+        tx.coding_region_start = Some(25_000_052);
+        tx.coding_region_end = Some(25_004_000);
+        tx.translation_start = tx.coding_region_start;
+        tx.translation_end = tx.coding_region_end;
+        tx
+    }
+
+    /// A deletion of the second base of a stop codon an intron splits after it
+    /// is tested on the edited sequence: `TAG` before a 3' UTR beginning `A`
+    /// leaves `TGA` and is `stop_retained_variant`, before one beginning `C` it
+    /// leaves `TGC` and is `stop_lost`. Ensembl VEP's genomic overlap holds the
+    /// intron's last two bases in place of the deleted base, so it writes
+    /// `coding_sequence_variant` for the first. Intended divergence.
+    #[test]
+    fn a_deletion_in_a_split_stop_codon_is_tested_on_the_codons_own_bases() {
+        let deleted = |tx: &Transcript| {
+            let variant = InputVariant::new(
+                "21".into(),
+                25_002_299,
+                25_002_299,
+                b"A".to_vec(),
+                b"-".to_vec(),
+            );
+            perl_coding_terms(&variant, tx, variant.start, variant.end, None)
+        };
+        assert_eq!(
+            deleted(&make_transcript_with_split_stop_codon("TAG", "A")),
+            Some(vec![Consequence::StopRetainedVariant])
+        );
+        assert_eq!(
+            deleted(&make_transcript_with_split_stop_codon("TAG", "C")),
+            Some(vec![Consequence::StopLost])
+        );
+    }
+
+    /// A single-exon model whose stop codon an edit completes after its first
+    /// `held` bases, beside its twin with the whole codon on the genome: the
+    /// twin is [`make_single_exon_transcript`] without a 3' UTR, and the edited
+    /// model has the same coding sequence and ends `3 - held` genomic bases
+    /// earlier, its mapper pair holding the bases the genome has.
+    fn make_stop_completing_edit_twins(
+        strand: Strand,
+        cds: &str,
+        held: u64,
+    ) -> (Transcript, Transcript) {
+        let twin = make_single_exon_transcript(strand, cds, "");
+        let mut edited = twin.clone();
+        let cut = 3 - held;
+        if strand == Strand::Reverse {
+            edited.start += cut;
+            edited.exons[0].start += cut;
+            edited.coding_region_start = edited.coding_region_start.map(|s| s + cut);
+            edited.translation_start = edited.coding_region_start;
+        } else {
+            edited.end -= cut;
+            edited.exons[0].end -= cut;
+            edited.coding_region_end = edited.coding_region_end.map(|e| e - cut);
+            edited.translation_end = edited.coding_region_end;
+        }
+        let exons = edited.exons.clone();
+        let vefc = edited.vefc.as_mut().unwrap();
+        vefc.sorted_exons = exons;
+        let mapper = vefc.mapper.as_mut().unwrap();
+        let mut pairs = mapper.exon_coord_mapper.pairs.clone();
+        pairs[0].from_end -= cut;
+        if strand == Strand::Reverse {
+            pairs[0].to_start += cut;
+        } else {
+            pairs[0].to_end -= cut;
+        }
+        mapper.exon_coord_mapper = ExonCoordMapper::new(pairs);
+        (edited, twin)
+    }
+
+    /// An insertion before a stop codon an edit completes reads as on the twin
+    /// whose whole codon is on the genome. Ensembl VEP's genomic overlap
+    /// (VariationEffect.pm:1418-1422) holds the stop bases the genome has and
+    /// the sense bases before them, so on the reverse strand it accepts an
+    /// insertion `3 - held` bases further from the codon than on the twin, and
+    /// on the forward strand one base inserted before the codon, and writes
+    /// `stop_retained_variant` where the twin is a frameshift. Intended
+    /// divergence.
+    #[test]
+    fn an_insertion_before_a_stop_codon_an_edit_completes_reads_as_on_its_whole_twin() {
+        let terms = |variant: &InputVariant, tx: &Transcript| {
+            perl_coding_terms(variant, tx, variant.start, variant.end, None)
+        };
+        // Four bases inserted with `TAA` left at the old stop position: the twin
+        // accepts the sites up to three bases before the codon.
+        let cds = cds_ending_in("AAG", "TAA");
+        for held in [1, 2] {
+            let (edited, twin) = make_stop_completing_edit_twins(Strand::Reverse, &cds, held);
+            for after in 58..=66 {
+                assert_eq!(
+                    terms(&insertion_after_cds(&edited, after, "CCTC"), &edited),
+                    terms(&insertion_after_cds(&twin, after, "CCTC"), &twin),
+                    "reverse, held {held}, after {after}"
+                );
+            }
+            assert_eq!(
+                terms(&insertion_after_cds(&twin, 62, "CCTC"), &twin),
+                Some(vec![Consequence::FrameshiftVariant]),
+                "reverse twin, held {held}"
+            );
+        }
+        // The vertebrate mitochondrial code, the stop codon `AGA` held for two
+        // bases: `T` inserted before it leaves `TAG` at the old stop position.
+        let cds = cds_ending_in("GCT", "AGA");
+        let (mut edited, mut twin) = make_stop_completing_edit_twins(Strand::Forward, &cds, 2);
+        for tx in [&mut edited, &mut twin] {
+            tx.vefc.as_mut().unwrap().codon_table = 2;
+        }
+        for after in 62..=66 {
+            assert_eq!(
+                terms(&insertion_after_cds(&edited, after, "T"), &edited),
+                terms(&insertion_after_cds(&twin, after, "T"), &twin),
+                "forward, held 2, after {after}"
+            );
+        }
     }
 }

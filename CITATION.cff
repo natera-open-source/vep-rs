@@ -3,8 +3,8 @@
 # repository's "Cite this repository" entry; Zenodo reads .zenodo.json instead.
 cff-version: 1.2.0
 message: >-
-  If you use vep-rs in your work, please cite the software (this file) and, once
-  it is published, the article named in the README's Citing section.
+  If you use vep-rs in your work, please cite the software (this file) and the
+  article named in the README's Citing section.
 type: software
 title: vep-rs
 abstract: >-
@@ -33,8 +33,9 @@ authors:
     affiliation: Natera, Inc.
 license: Apache-2.0
 repository-code: https://github.com/natera-open-source/vep-rs
-version: 0.5.0
-date-released: 2026-10-25
+url: https://natera-open-source.github.io/vep-rs/
+version: 0.6.0
+date-released: 2026-11-12
 doi: 10.5281/zenodo.22837896
 identifiers:
   - type: doi

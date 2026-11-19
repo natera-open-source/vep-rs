@@ -11,10 +11,17 @@ Run:
 
 from __future__ import annotations
 
+import dataclasses
+import gzip
+import io
+import json
+import shutil
 import sys
 import tempfile
 import unittest
+from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -301,11 +308,11 @@ class IntendedDivergenceDirectionTests(unittest.TestCase):
         )
 
     def test_does_not_mask_vep_rs_under_annotation(self):
-        """vep-rs names FEWER transcripts: the OPPOSITE shape, an open vep-rs gap.
+        """The Perl-side arm masks nothing when vep-rs names FEWER transcripts.
 
         Reproduces the shape of the 25 kb <DEL> at 21:23699593-23724683 (Perl 122
-        transcripts vs vep-rs 2). Masking this direction converts a coverage gap
-        into an excluded transcript-selection divergence and inflates adjusted F1.
+        transcripts vs vep-rs 2). Masking this direction would exclude rows the
+        transcript-selection class does not cover and inflate adjusted F1.
         """
         csq = "feature_truncation,coding_sequence_variant"
         loc = "21:23699593-23724683"
@@ -350,7 +357,7 @@ class IntendedDivergenceDirectionTests(unittest.TestCase):
         self.assertEqual(len(ex_perl), 0)
 
 
-# Consequence-normalization mask
+# The cross-chromosome mask
 
 
 class CrossChromosomeMaskTests(unittest.TestCase):
@@ -493,9 +500,8 @@ class SvFilterSetTests(unittest.TestCase):
     Every mask is a function of that name shape and every function of that name
     shape is a mask, so the set of names is the set of masks: two full masks
     (giant-SV transcript selection, cross-chromosome annotation) and one partial
-    (<CNV:TR>). A mask over pairs on which the two engines AGREE is unreachable by
-    construction and would hide a divergence rather than mask one, so no
-    consequence-normalisation mask exists.
+    (<CNV:TR>). A mask over pairs on which the two engines agree would hide a
+    divergence, so two tests of this class assert that none is defined.
     """
 
     def test_there_is_no_consequence_divergence_filter(self) -> None:
@@ -815,9 +821,8 @@ class AggregateBasisEndToEndTests(unittest.TestCase):
         adj = self.report["adjusted"]
         self.assertEqual(adj["excluded_divergences"], 0)
         self.assertEqual(adj["excluded_cnvtr_rust"], 0)
-        # The report carries no `excluded_csq_rust` or Perl twin, because there is no
-        # BND non-coding normalisation layer. Their absence is asserted so an added
-        # field cannot quietly start reporting a mask the taxonomy lacks.
+        # The report carries no `excluded_csq_rust` or `excluded_csq_perl`: a field of
+        # either name would report a mask the comparator does not define.
         self.assertNotIn("excluded_csq_rust", adj)
         self.assertNotIn("excluded_csq_perl", adj)
         self.assertAlmostEqual(adj["f1"], self.report["overall"]["f1"], places=6)
@@ -2501,6 +2506,17 @@ class RecordAllelesTests(unittest.TestCase):
         )
         self.assertEqual(C.record_alleles(REC(100, "T", ".T", "SVTYPE=BND")), {".T", "chromosome_breakpoint", "N.", ".N", "T."})
 
+    def test_an_svtype_of_zero_is_false_as_perl_reads_it(self) -> None:
+        """`21 1000 x N <BND>,A . . SVTYPE=0`: Ensembl VEP reads `$info->{SVTYPE}` as false
+        (Parser/VCF.pm:473), so the record's type string is the ALT list `<BND>/A`, which has
+        no term, and no engine writes an allele built from the `0`: neither `<0>` nor the type
+        string is an allele of the record."""
+        alleles = C.record_alleles(REC(1000, "N", "<BND>,A", "SVTYPE=0"))
+        self.assertNotIn("<0>", alleles)
+        self.assertNotIn("<BND>/A", alleles)
+        self.assertNotIn("0", alleles)
+        self.assertEqual(C.perl_skip_route(REC(1000, "N", "<BND>,A", "SVTYPE=0")), "unsupported_type")
+
 
 class InfoValueTests(unittest.TestCase):
     def test_an_info_value_is_read_to_a_second_equals_sign(self) -> None:
@@ -2543,6 +2559,18 @@ class RecordLocationTests(unittest.TestCase):
         self.assertEqual(C.record_location(REC(30165850, "N", "<DEL>", "SVTYPE=DEL")), ("21", 30165851, 30165851))
         self.assertEqual(C.record_location(REC(18457512, "N", "<BND>", "END=18457513;SVLEN=14027179;CHR2=21;END2=32484692")), ("21", 18457513, 32484691))
         self.assertEqual(C.record_location(REC(18457512, "N", "<BND>", "END=18457513;CHR2=21;END2=32484692")), ("21", 18457513, 18457513), "a breakend's END is discarded")
+
+    def test_a_symbolic_bnd_without_svtype_discards_its_end(self) -> None:
+        """`21 1000 x N <BND> . . END=5000`: with no SVTYPE the type string is the ALT, whose
+        term is `chromosome_breakpoint`, so Ensembl VEP deletes INFO/END and `get_end` returns
+        the start (Parser/VCF.pm:484-489); the type string decides, not the ALT's spelling or
+        SVTYPE alone, so a bracket ALT under `SVTYPE=DEL` keeps its END and `SVTYPE=BND` beside a
+        `<DEL>` ALT, a VCF 4.4 form, is a deletion."""
+        self.assertEqual(C.record_location(REC(1000, "N", "<BND>", "END=5000")), ("21", 1001, 1001))
+        self.assertEqual(C.record_location(REC(1000, "N", "<BND>", "END=5000;SVTYPE=0")), ("21", 1001, 1001), "a false SVTYPE leaves the ALT")
+        self.assertEqual(C.record_location(REC(1000, "N", "N[22:5000[", "END=5000;SVTYPE=DEL")), ("21", 1001, 5000))
+        self.assertEqual(C.record_location(REC(1000, "N", "<DEL>", "END=5000;SVTYPE=BND")), ("21", 1001, 5000))
+        self.assertEqual(C.record_location(REC(1000, "N", "<DEL>", "END=5000;SVTYPE=BND")), C.record_location(REC(1000, "N", "<DEL>", "END=5000;SVTYPE=DEL")))
 
     def test_an_infinite_svlen_or_end_is_a_saturated_integer_end(self) -> None:
         """Perl reads `1e400` as `Inf` (`abs("1e400")` is `Inf`) and Ensembl VEP 116.2 skips the
@@ -3327,6 +3355,74 @@ class SkipRouteCrossCheckTests(unittest.TestCase):
         rust = perl | {T("21:45716816-45730272", "CPX", "ENST_C", "intron_variant")}
         self.assertEqual(C.check_skip_routes([cpx, kept], perl, rust), [])
 
+    def test_a_foreign_engine_counts_the_skip_residue_instead_of_stopping(self) -> None:
+        """Two kept records, a `<DEL>` both sides wrote and a `<DUP>` the reference wrote nothing
+        for: the scored engine's `duplication` row at `21:5001-6000` is on no skip route. For
+        vep-rs that is the residue problem and the comparison stops; for another scored engine
+        it is the engine's own disagreement, returned as the fourth member, counted in the
+        report under `scored_engine_skip_route_residue` and left in both figures, so the run
+        exits 0 with the row scored as a miss. The other problems are the reference's and stop
+        every engine."""
+        import json
+        import shutil
+        import tempfile
+
+        del_rec = self.rec(1000, "N", "<DEL>", "SVTYPE=DEL;END=2000", vid="del")
+        dup_rec = self.rec(5000, "N", "<DUP>", "SVTYPE=DUP;END=6000", vid="dup")
+        perl = {T("21:1001-2000", "deletion", "ENST_D", "feature_truncation")}
+        residue = T("21:5001-6000", "duplication", "ENST_U", "intron_variant")
+        rust = perl | {residue}
+        self.assertEqual(len(C.check_skip_routes([del_rec, dup_rec], perl, rust)), 1)
+        self.assertEqual(C.check_skip_routes([del_rec, dup_rec], perl, rust, scored_engine="fastvep"), [])
+        self.assertEqual(C.skipped_record_rows([del_rec, dup_rec], perl, rust, scored_engine="fastvep"), (set(), 0, [], {residue}))
+        excluded, records, problems, counted = C.skipped_record_rows([del_rec, dup_rec], perl, rust)
+        self.assertEqual((excluded, records, counted), (set(), 0, set()))
+        self.assertEqual(problems, ["21:5001-6000 duplication: the reference wrote nothing at this Location and no input record on a skip route starts there"])
+        cpx = self.rec(45716815, "N", "<CPX>", "END=45730272;SVTYPE=CPX", vid="cpx")
+        kept_cpx = {T("21:45716816-45730272", "CPX", "ENST_C", "intron_variant")}
+        self.assertEqual(len(C.check_skip_routes([cpx], kept_cpx, kept_cpx, scored_engine="fastvep")), 1, "a reference that kept a skip-route record stops every engine")
+        masks = C.apply_masks(perl, rust, "116.2", {}, {}, {}, "fastvep", [del_rec, dup_rec])
+        self.assertEqual((masks.skipped_problems, masks.scored_engine_skip_residue, masks.all_rust()), ([], {residue}, set()))
+
+        fixture = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, fixture, True)
+        for sub in ("in", "perl", "rust", "out"):
+            (fixture / sub).mkdir()
+        (fixture / "in" / "two.vcf").write_text(
+            "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+            "21\t1000\tdel\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;END=2000\n"
+            "21\t5000\tdup\tN\t<DUP>\t.\tPASS\tSVTYPE=DUP;END=6000\n"
+        )
+        header = "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\n"
+        deletion = "del\t21:1001-2000\tdeletion\tG\tENST_D\tTranscript\tfeature_truncation\n"
+        duplication = "dup\t21:5001-6000\tduplication\tG\tENST_U\tTranscript\tintron_variant\n"
+        (fixture / "perl" / "two.txt").write_text(header + deletion)
+        (fixture / "rust" / "two.txt").write_text(header + deletion + duplication)
+        argv = sys.argv
+        base = ["compare_sv_concordance.py", "--reference-release", "116.2", "--assembly", "grch38",
+                "--input-dir", str(fixture / "in"), "--perl-dir", str(fixture / "perl"),
+                "--rust-dir", str(fixture / "rust"), "--output-dir", str(fixture / "out")]
+        try:
+            sys.argv = base
+            with self.assertRaises(SystemExit) as stop:
+                C.main()
+            self.assertEqual(stop.exception.code, 1)
+            self.assertFalse((fixture / "out" / "concordance_report.json").exists())
+            sys.argv = base + ["--scored-engine", "fastvep"]
+            C.main()
+        finally:
+            sys.argv = argv
+        report = json.loads((fixture / "out" / "concordance_report.json").read_text())
+        self.assertEqual((report["overall"]["perl_tuples"], report["overall"]["rust_tuples"], report["overall"]["intersection"]), (1, 2, 1))
+        adj = report["adjusted"]
+        self.assertEqual((adj["scored_engine"], adj["scored_engine_skip_route_residue_rows"]), ("fastvep", 1))
+        self.assertEqual(adj["scored_engine_skip_route_residue_by_file"], {"two": 1})
+        self.assertEqual((adj["rust_tuples"], adj["only_rust"], adj["excluded_rust_extra"]), (2, 1, 0), "counted, not set aside")
+        self.assertEqual((report["overall"]["f1"], adj["f1"]), (0.666667, 0.666667))
+        md = (fixture / "out" / "concordance_report.md").read_text()
+        self.assertIn("`scored_engine_skip_route_residue` 1 scored-engine rows at Locations the reference wrote nothing for counted, none set aside", md)
+        self.assertEqual((fixture / "out" / "discordant_adjusted.tsv").read_text().count("\n"), 2, "the header and the counted row")
+
 
 def VCF(*records: tuple[str, ...]) -> list[C.VcfVariant]:
     """The records of a VCF written from its eight-column data lines, read as `parse_vcf` reads them."""
@@ -4046,6 +4142,489 @@ class RnZeroAlleleDroppedTests(unittest.TestCase):
         record = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + "RN=0,1;RUS=AGC;RUC=4")
         symbolic = {T(self.RUN, "tandem_repeat", "ENST00000390690", "feature_elongation,coding_sequence_variant")}
         self.assertEqual(C.filter_cnv_tr_rn_zero_allele_dropped(symbolic, self.rust(), [record]), set())
+
+    def test_dropped_literal_and_direction_judge_the_same_shapes(self) -> None:
+        """`cnv_tr_rn_zero_dropped_direction` and `cnv_tr_rn_zero_dropped_literal` read a record
+        through one guard, `_two_allele_cnv_tr_rn`: a record it refuses (one ALT, no RN, an RN
+        part of `.`, no RUS, neither RUC nor RB) is None to both. A record it admits each judges
+        on its own rule: the literal names the real allele behind a leading `RN=0` whatever its
+        direction (`RUC=2`, a loss the direction reader cannot tell from the `RN=0` allele's rows;
+        `RUC=3`, the unchanged run), the direction names the dropped allele's rows under a
+        trailing `RN=0` where no literal is dropped, and two empty parts or none are nothing to
+        either. A repeat sequence of more bases than `--max_sv_size`, its unit length times its
+        count as written (`RUC=1e400`, which Perl reads as infinite; `RUC=1e18`; `RB=10000002`;
+        `RUC=3333333.9`, whose product is 10,000,001.7 before Perl's `x` truncates the count),
+        leaves the record unexpanded (Parser/VCF.pm:417-418, 428): the literal is None while the
+        direction reader, which sums integers, still reads a gain; two sequences of 6,000,000 bases
+        each are expanded, since the cap binds each sequence and not their sum. The cap is the
+        run's: -1 expands nothing (`-1 || 5000` in Perl is -1) and 0 reads as 5000."""
+        refused = (("<CNV:TR>", "RN=0;RUS=AGC;RUC=4"), ("<CNV:TR>,<CNV:TR>", "RUS=AGC;RUC=4"),
+                   ("<CNV:TR>,<CNV:TR>", "RN=.,1;RUS=AGC;RUC=4"), ("<CNV:TR>,<CNV:TR>", "RN=0,1;RUC=4"),
+                   ("<CNV:TR>,<CNV:TR>", "RN=0,1;RUS=AGC"), ("<CNV:TR>,<CNV:TR>,<CNV:TR>", "RN=0,1,1;RUS=AGC;RUC=4"))
+        for alt, info in refused:
+            with self.subTest(alt=alt, info=info):
+                record = REC(30425587, "N", alt, self.INFO + info)
+                self.assertIsNone(C._two_allele_cnv_tr_rn(record))
+                self.assertIsNone(C.cnv_tr_rn_zero_dropped_direction(record))
+                self.assertIsNone(C.cnv_tr_rn_zero_dropped_literal(record))
+        judged = (("RN=0,1;RUS=AGC;RUC=4", "gain", "AGCAGCAGCAGC"), ("RN=0,1;RUS=AGC;RUC=3", "gain", "AGCAGCAGC"),
+                  ("RN=0,1;RUS=AGC;RUC=2", None, "AGCAGC"), ("RN=0,1;RUS=AGC;RB=12", "gain", "AGCAGCAGCAGC"),
+                  ("RN=1,0;RUS=AGC;RUC=4", "loss", None), ("RN=2,0;RUS=AGC,AGC;RUC=2,2", "loss", None),
+                  ("RN=1,0;RUS=AGC;RUC=3", None, None), ("RN=0,0;RUS=AGC;RUC=4", None, None),
+                  ("RN=1,1;RUS=AGC,AGC;RUC=4,2", None, None),
+                  ("RN=0,1;RUS=AGC;RUC=1e400", "gain", None), ("RN=0,1;RUS=AGC;RUC=1e18", "gain", None),
+                  ("RN=0,1;RUS=AGC;RB=10000002", "gain", None), ("RN=0,1;RUS=AGC;RUC=3333333.9", "gain", None),
+                  ("RN=0,1;RUS=AGC;RB=9999999", "gain", "AGC" * 3333333),
+                  ("RN=0,2;RUS=AGC,AGC;RUC=2000000,2000000", "gain", "AGC" * 4000000))
+        for info, direction, literal in judged:
+            with self.subTest(info=info):
+                record = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + info)
+                self.assertIsNotNone(C._two_allele_cnv_tr_rn(record))
+                self.assertEqual(C.cnv_tr_rn_zero_dropped_direction(record), direction)
+                self.assertEqual(C.cnv_tr_rn_zero_dropped_literal(record), literal)
+        gain = REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + "RN=0,1;RUS=AGC;RUC=2000")
+        self.assertEqual(C.cnv_tr_rn_zero_dropped_literal(gain, 6000), "AGC" * 2000)
+        self.assertIsNone(C.cnv_tr_rn_zero_dropped_literal(gain, 5999))
+        self.assertIsNone(C.cnv_tr_rn_zero_dropped_literal(gain, -1))
+        self.assertIsNone(C.cnv_tr_rn_zero_dropped_literal(gain, 0), "a cap of 0 reads as 5000, under the 6,000 bases")
+        perl = {T(self.RUN, "-", "ENST00000334068", "upstream_gene_variant"), T(self.RUN, "-", "ENST00000390690", "inframe_deletion")}
+        row = T(self.RUN, "AGC" * 2000, "ENST00000390690", "protein_altering_variant")
+        self.assertEqual(C.filter_cnv_tr_rn_zero_allele_dropped(perl, perl | {row}, [gain], 6000), {row})
+        self.assertEqual(C.filter_cnv_tr_rn_zero_allele_dropped(perl, perl | {row}, [gain], 5999), set())
+        self.assertEqual(ADJUSTED(perl, perl | {row}, [gain], 6000)[2].rn_zero_rust, {row}, "apply_masks hands the run's cap on")
+        self.assertEqual(ADJUSTED(perl, perl | {row}, [gain], 5999)[2].rn_zero_rust, set())
+        rus, ruc, rb, counts = C._two_allele_cnv_tr_rn(REC(30425587, "N", "<CNV:TR>,<CNV:TR>", self.INFO + "RN=0,2.9;RUS=AGC,AG;RB=6,4"))
+        self.assertEqual((rus, ruc, rb, counts), ("AGC,AG", None, "6,4", [0, 2]), "RN counts are numified as Perl's `for (1 .. $records)` reads them")
+
+
+ROW_COLS = (
+    "#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\t"
+    "CDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tExtra\n"
+)
+
+
+def stop_codon_row(allele: str, consequence: str, cdna: str, cds: str, location: str = "19:13208046-13208050",
+                   feature_type: str = "Transcript", name: str = "1993671", feature: str = "ENST00000635895") -> str:
+    """One fabricated row of the default format, as the format comparator's stop codon tests
+    write it."""
+    return (f"{name}\t{location}\t{allele}\tENSG1\t{feature}\t{feature_type}\t{consequence}\t{cdna}\t{cds}"
+            "\t-\t-\t-\t-\tIMPACT=LOW;STRAND=-1\n")
+
+
+def row_outputs(test: unittest.TestCase, perl: str, rust: str, cols: str = ROW_COLS):
+    """One fabricated output pair on disk: both paths and both tuple sets as the comparator
+    parses them."""
+    tmp = Path(tempfile.mkdtemp())
+    test.addCleanup(shutil.rmtree, tmp, True)
+    paths = []
+    for side, rows in (("perl", perl), ("rust", rust)):
+        paths.append(tmp / f"{side}.txt")
+        paths[-1].write_text(cols + rows, encoding="utf-8")
+    return paths[0], paths[1], C.parse_vep_output(paths[0])[0], C.parse_vep_output(paths[1])[0]
+
+
+def fabricated_row_rule(predicate):
+    return C.ExclusionRule(bucket="fabricated_row_shape", predicate=predicate, classifies=True, excludes=True,
+                           taxonomy_class="fabricated_row_shape", row_aware=True)
+
+
+@contextmanager
+def row_pair_rules(*rules):
+    """The 116.2 registry with ``rules`` as its row-aware pair rules."""
+    registry = dataclasses.replace(C.REFERENCE_REGISTRIES["116.2"], row_pair_rules=rules)
+    with mock.patch.dict(C.REFERENCE_REGISTRIES, {"116.2": registry}):
+        yield
+
+
+class RowAwareRegistryPairTests(unittest.TestCase):
+    """The registry's row-aware pair rules in this comparator: a pair none of
+    `compare_vep_outputs.EXCLUDING_RULES` takes is put to them on the rows of the two outputs
+    that carry its tuples. Every row is fabricated."""
+
+    def test_a_row_aware_rule_is_handed_the_named_columns_of_the_two_rows_of_an_unmatched_pair(self) -> None:
+        seen: list[tuple] = []
+        name = "19_13208045_GACCTG/G"
+        perl_path, rust_path, perl, rust = row_outputs(
+            self,
+            stop_codon_row("-", "stop_retained_variant", "?-7057", "-", name=name),
+            stop_codon_row("-", "stop_lost", "?-7057/7140", "-/7023", name=name),
+        )
+        rule = fabricated_row_rule(lambda e, a: seen.append((e, a)) or True)
+        ex_rust, ex_perl, buckets = C.filter_registry_swap_pairs(perl, rust, (rule,), [perl_path], [rust_path])
+        ((e, a),) = seen
+        self.assertEqual(
+            (e.key, e.location, e.allele, e.consequence, e.fields, e.indel),
+            ("19:13208046-13208050|-|ENST00000635895|Transcript", "19:13208046-13208050", "-",
+             "stop_retained_variant", {"cDNA_position": "?-7057", "CDS_position": "-"}, True),
+        )
+        self.assertEqual((a.consequence, a.fields, a.indel),
+                         ("stop_lost", {"cDNA_position": "?-7057/7140", "CDS_position": "-/7023"}, True))
+        self.assertEqual((ex_rust, ex_perl), (rust, perl))
+        self.assertEqual(buckets["fabricated_row_shape"], 1)
+        self.assertEqual(list(buckets)[-1], "fabricated_row_shape")
+
+    def test_only_an_unmatched_pair_no_earlier_rule_takes_reaches_a_row_aware_rule(self) -> None:
+        seen: list[tuple] = []
+        matched = stop_codon_row("-", "missense_variant", "10-12", "4-6", feature="ENST00000000001")
+        perl_path, rust_path, perl, rust = row_outputs(
+            self,
+            matched
+            + stop_codon_row("-", "stop_retained_variant", "20-22", "14-16", feature="ENST00000000002")
+            + stop_codon_row("-", "intron_variant", "-", "-", feature="ENST00000000004"),
+            matched
+            + stop_codon_row("-", "stop_lost", "20-22", "14-16", feature="ENST00000000003")
+            + stop_codon_row("-", "intron_variant,splice_region_variant", "-", "-", feature="ENST00000000004"),
+        )
+        rule = fabricated_row_rule(lambda e, a: seen.append((e, a)) or True)
+        ex_rust, ex_perl, buckets = C.filter_registry_swap_pairs(perl, rust, (rule,), [perl_path], [rust_path])
+        self.assertEqual(seen, [], "a matched tuple, a tuple one engine alone writes and a pair an earlier rule takes")
+        self.assertEqual((buckets["fabricated_row_shape"], buckets["covered_splice_region_swap"]), (0, 1))
+        self.assertEqual({t[2] for t in ex_rust | ex_perl}, {"ENST00000000004"})
+
+    def test_the_rows_of_one_tuple_stand_or_fall_together(self) -> None:
+        perl_path, rust_path, perl, rust = row_outputs(
+            self,
+            stop_codon_row("-", "stop_retained_variant", "10-12", "4-6", name="first")
+            + stop_codon_row("-", "stop_retained_variant", "20-22", "14-16", name="second")
+            + stop_codon_row("-", "stop_retained_variant", "10-12", "4-6", name="third"),
+            stop_codon_row("-", "stop_lost", "10-12", "4-6", name="first"),
+        )
+        for refused, expected in ((None, 1), ("20-22", 0)):
+            seen: list[str] = []
+
+            def shape(e, a, refused=refused, seen=seen) -> bool:
+                seen.append(e.fields["cDNA_position"])
+                return e.fields["cDNA_position"] != refused
+
+            ex_rust, ex_perl, buckets = C.filter_registry_swap_pairs(
+                perl, rust, (fabricated_row_rule(shape),), [perl_path], [rust_path])
+            self.assertEqual(seen, ["10-12", "20-22"], "each distinct row of the reference's tuple, once")
+            self.assertEqual((buckets["fabricated_row_shape"], len(ex_rust), len(ex_perl)), (expected, expected, expected), refused)
+
+    def test_a_row_of_fewer_than_nine_columns_is_put_to_no_row_aware_rule(self) -> None:
+        seen: list[tuple] = []
+        short = "1993671\t19:13208046-13208050\t-\tENSG1\tENST00000635895\tTranscript\t{}\t?-7057\n"
+        perl_path, rust_path, perl, rust = row_outputs(
+            self, short.format("stop_retained_variant"), short.format("stop_lost"), "\t".join(ROW_COLS.split("\t")[:8]) + "\n")
+        rule = fabricated_row_rule(lambda e, a: seen.append((e, a)) or True)
+        ex_rust, ex_perl, buckets = C.filter_registry_swap_pairs(perl, rust, (rule,), [perl_path], [rust_path])
+        self.assertEqual((seen, ex_rust, ex_perl, buckets["fabricated_row_shape"]), ([], set(), set(), 0))
+
+    def test_without_a_row_aware_rule_no_output_is_read_again(self) -> None:
+        perl_path, rust_path, perl, rust = row_outputs(
+            self, stop_codon_row("-", "stop_retained_variant", "?-7057", "-"), stop_codon_row("-", "stop_lost", "?-7057", "-"))
+        with mock.patch.object(C, "pair_rows_by_tuple", side_effect=AssertionError("read")):
+            ex_rust, ex_perl, buckets = C.filter_registry_swap_pairs(perl, rust, (), [perl_path], [rust_path])
+            self.assertEqual(C.filter_registry_swap_pairs(perl, rust)[2], buckets)
+        self.assertEqual((ex_rust, ex_perl), (set(), set()))
+        from compare_vep_outputs import EXCLUDING_RULES
+
+        self.assertEqual(list(buckets), [r.bucket for r in EXCLUDING_RULES])
+
+    def test_the_masks_of_a_release_ask_its_row_aware_rules(self) -> None:
+        seen: list[tuple] = []
+        perl_path, rust_path, perl, rust = row_outputs(
+            self, stop_codon_row("-", "stop_retained_variant", "?-7057", "-"), stop_codon_row("-", "stop_lost", "?-7057", "-"))
+        with row_pair_rules(fabricated_row_rule(lambda e, a: seen.append((e, a)) or True)):
+            masks = C.apply_masks(perl, rust, "116.2", {}, {}, {}, "vep-rs", [], perl_paths=[perl_path], rust_paths=[rust_path])
+            self.assertEqual((masks.swap_rust, masks.swap_perl, masks.swap_by_bucket["fabricated_row_shape"]), (rust, perl, 1))
+            self.assertEqual(len(seen), 1)
+            published = C.apply_masks(perl, rust, "115.2", {}, {}, {}, "vep-rs", [], perl_paths=[perl_path], rust_paths=[rust_path])
+        self.assertEqual((published.swap_rust, published.swap_perl, len(seen)), (set(), set(), 1))
+        self.assertNotIn("fabricated_row_shape", published.swap_by_bucket)
+        self.assertEqual(C.REFERENCE_REGISTRIES["115.2"].row_pair_rules, ())
+
+
+class RowPairRuleChecks:
+    """The four checks of one row-aware pair rule of the 116.2 registry in this comparator, on
+    the fabricated rows the format comparator's test of the same class builds: the rule's
+    pair is set aside; the pair with one further differing term, and the pair with a position
+    column outside the rule's condition, stay differences; and beside the pair a tuple vep-rs
+    lacks and a tuple of other terms stay differences."""
+
+    bucket: str
+    reference: str
+    candidate: str
+    further_term: str
+    other_column: tuple[str, str]
+
+    MATCHED = stop_codon_row("-", "missense_variant", "10-12", "4-6", location="21:5000-5002", feature="ENST00000000001")
+
+    def masked(self, perl_rows: str, rust_rows: str):
+        """The registry pair mask of the 116.2 release over one fabricated output pair: the
+        rule's count, and the tuples of each side the mask leaves charged."""
+        perl_path, rust_path, perl, rust = row_outputs(self, self.MATCHED + perl_rows, self.MATCHED + rust_rows)
+        masks = C.apply_masks(perl, rust, "116.2", {}, {}, {}, "vep-rs", [], perl_paths=[perl_path], rust_paths=[rust_path])
+        return masks.swap_by_bucket[self.bucket], (perl - rust) - masks.swap_perl, (rust - perl) - masks.swap_rust
+
+    def test_the_pair_of_rows_is_set_aside(self) -> None:
+        self.assertEqual(self.masked(self.reference, self.candidate), (1, set(), set()))
+
+    def test_one_further_differing_term_stays_a_difference(self) -> None:
+        count, perl_open, rust_open = self.masked(self.reference, self.further_term)
+        self.assertEqual((count, len(perl_open), len(rust_open)), (0, 1, 1))
+
+    def test_a_column_outside_the_condition_stays_a_difference(self) -> None:
+        count, perl_open, rust_open = self.masked(*self.other_column)
+        self.assertEqual((count, len(perl_open), len(rust_open)), (0, 1, 1))
+
+    def test_a_missing_tuple_and_a_wrong_tuple_stay_differences(self) -> None:
+        missing = stop_codon_row("-", "intron_variant", "-", "-", location="21:5000-5002", feature="ENST00000000002")
+        wrong = "21:7000-7002"
+        count, perl_open, rust_open = self.masked(
+            self.reference + missing + stop_codon_row("-", "missense_variant", "30-32", "24-26", location=wrong),
+            self.candidate + stop_codon_row("-", "synonymous_variant", "30-32", "24-26", location=wrong),
+        )
+        self.assertEqual(count, 1)
+        self.assertEqual(sorted(t[0] for t in perl_open), ["21:5000-5002", wrong])
+        self.assertEqual([t[0] for t in rust_open], [wrong])
+
+
+class StopCodonOverlapGenomicSpanRuleTests(RowPairRuleChecks, unittest.TestCase):
+    """`stop_codon_overlap_genomic_span`: the reference's coding_sequence_variant against
+    vep-rs's stop_retained_variant beside splice_region_variant, on a row whose stop codon
+    test is made."""
+
+    bucket = "stop_codon_overlap_genomic_span"
+    terms = "splice_region_variant,{},NMD_transcript_variant"
+    reference = stop_codon_row("-", terms.format("coding_sequence_variant"), "1705", "1630", "3:36993663")
+    candidate = stop_codon_row("-", terms.format("stop_retained_variant"), "1705", "1630", "3:36993663")
+    further_term = stop_codon_row("-", terms.format("stop_retained_variant,stop_lost"), "1705", "1630", "3:36993663")
+    other_column = (
+        stop_codon_row("-", terms.format("coding_sequence_variant"), "1705-?", "1630-?", "3:36993663"),
+        stop_codon_row("-", terms.format("stop_retained_variant"), "1705-?", "1630-?", "3:36993663"),
+    )
+
+
+class StopRetainedWithoutStopCodonTestRuleTests(RowPairRuleChecks, unittest.TestCase):
+    """`stop_retained_without_stop_codon_test`: the reference's stop_retained_variant against
+    nothing, coding_sequence_variant or frameshift_variant, on rows whose stop codon test is
+    not made."""
+
+    bucket = "stop_retained_without_stop_codon_test"
+    terms = "splice_acceptor_variant,{}"
+    reference = stop_codon_row("-", terms.format("stop_retained_variant"), "?-7057", "-")
+    candidate = stop_codon_row("-", terms.format("coding_sequence_variant"), "?-7057", "-")
+    further_term = stop_codon_row("-", terms.format("coding_sequence_variant,frameshift_variant"), "?-7057", "-")
+    other_column = (reference, stop_codon_row("-", terms.format("coding_sequence_variant"), "7055-7059", "6978-6982"))
+
+
+class StopRetainedThreeBaseStopCodonTestRuleTests(RowPairRuleChecks, unittest.TestCase):
+    """`stop_retained_three_base_stop_codon_test`: the reference's stop_retained_variant
+    against coding_sequence_variant, or against frameshift_variant with or without
+    stop_gained, on rows whose stop codon test is made."""
+
+    bucket = "stop_retained_three_base_stop_codon_test"
+    terms = "{},3_prime_UTR_variant"
+    location = "2:190970701-190970707"
+    reference = stop_codon_row("-", terms.format("stop_retained_variant"), "2558-2564", "2249-?", location)
+    candidate = stop_codon_row("-", terms.format("coding_sequence_variant"), "2558-2564", "2249-?", location)
+    further_term = stop_codon_row("-", terms.format("coding_sequence_variant,frameshift_variant"), "2558-2564", "2249-?", location)
+    other_column = (reference, stop_codon_row("-", terms.format("coding_sequence_variant"), "2558-?", "2249-?", location))
+
+
+class StopCodonRemovedWithoutStopCodonTestRuleTests(RowPairRuleChecks, unittest.TestCase):
+    """`stop_codon_removed_without_stop_codon_test`: the reference's stop_retained_variant
+    against vep-rs's stop_lost, on rows without a cDNA position at one end or a CDS start."""
+
+    bucket = "stop_codon_removed_without_stop_codon_test"
+    terms = "splice_acceptor_variant,{}"
+    reference = stop_codon_row("-", terms.format("stop_retained_variant"), "?-7057", "-")
+    candidate = stop_codon_row("-", terms.format("stop_lost"), "?-7057", "-")
+    further_term = stop_codon_row("-", terms.format("stop_lost,frameshift_variant"), "?-7057", "-")
+    other_column = (
+        stop_codon_row("-", terms.format("stop_retained_variant"), "7055-7059", "6978-6982"),
+        stop_codon_row("-", terms.format("stop_lost"), "7055-7059", "6978-6982"),
+    )
+
+
+class StopCodonOverlapInsertionRangeRuleTests(RowPairRuleChecks, unittest.TestCase):
+    """`stop_codon_overlap_insertion_range`: the reference's coding_sequence_variant, or its
+    frameshift_variant with or without stop_gained, against vep-rs's stop_retained_variant on
+    an insertion's row with both cDNA positions and a CDS start."""
+
+    bucket = "stop_codon_overlap_insertion_range"
+    location = "19:13208046-13208047"
+    reference = stop_codon_row("TTGA", "inframe_insertion,coding_sequence_variant", "7054-7055", "6977-6978", location)
+    candidate = stop_codon_row("TTGA", "inframe_insertion,stop_retained_variant", "7054-7055", "6977-6978", location)
+    further_term = stop_codon_row("TTGA", "inframe_insertion,stop_retained_variant,stop_lost", "7054-7055", "6977-6978", location)
+    other_column = (
+        stop_codon_row("TTGA", "inframe_insertion,coding_sequence_variant", "7054-?", "6977-?", location),
+        stop_codon_row("TTGA", "inframe_insertion,stop_retained_variant", "7054-?", "6977-?", location),
+    )
+
+
+class SpliceTermPastTheRecordSpanRuleTests(RowPairRuleChecks, unittest.TestCase):
+    """`splice_term_past_the_record_span`: the reference's splice_donor_variant and
+    intron_variant against vep-rs's splice_region_variant, on a row under an identifier, which
+    carries no record: its three positions lie in the transcript's sequence under an allele of
+    five. This comparator names no class of the row-aware pair rules: it asks the ones the
+    registry holds, on the rows `pair_row` builds."""
+
+    bucket = "splice_term_past_the_record_span"
+    location = "7:100998-101000"
+    reference = stop_codon_row("GTTCA", "splice_donor_variant,frameshift_variant,intron_variant", "998-1000", "898-900", location)
+    candidate = stop_codon_row("GTTCA", "frameshift_variant,splice_region_variant", "998-1000", "898-900", location)
+    further_term = stop_codon_row("GTTCA", "stop_gained,frameshift_variant,splice_region_variant", "998-1000", "898-900", location)
+    other_column = (
+        stop_codon_row("GTTCA", "splice_donor_variant,frameshift_variant,intron_variant", "999-?", "899-?", location),
+        stop_codon_row("GTTCA", "frameshift_variant,splice_region_variant", "999-?", "899-?", location),
+    )
+
+    def test_the_pair_is_set_aside_through_the_registry_s_rule_alone(self) -> None:
+        rules = C.REFERENCE_REGISTRIES["116.2"].row_pair_rules
+        self.assertIn(self.bucket, [rule.bucket for rule in rules])
+        with row_pair_rules(*(rule for rule in rules if rule.bucket != self.bucket)):
+            perl_path, rust_path, perl, rust = row_outputs(self, self.reference, self.candidate)
+            masks = C.apply_masks(perl, rust, "116.2", {}, {}, {}, "vep-rs", [], perl_paths=[perl_path], rust_paths=[rust_path])
+        self.assertNotIn(self.bucket, masks.swap_by_bucket)
+        self.assertEqual((masks.swap_perl, masks.swap_rust), (set(), set()))
+
+    def test_a_row_whose_first_column_spells_the_alleles_is_set_aside_at_two_positions(self) -> None:
+        rules = C.REFERENCE_REGISTRIES["116.2"].row_pair_rules
+        terms = ("splice_donor_variant,frameshift_variant,splice_donor_region_variant,intron_variant",
+                 "frameshift_variant,splice_region_variant")
+        # Two bases at an exon's end replaced by five: the first column gives the row its record's two reference
+        # bases, and the same two rows under an identifier have an insertion's columns.
+        for name, count in (("7_100999_AC/GTTCA", 1), ("1993671", 0)):
+            perl_path, rust_path, perl, rust = row_outputs(
+                self, *(stop_codon_row("GTTCA", row, "999-1000", "899-900", "7:100999-101000", name=name) for row in terms))
+            ex_rust, ex_perl, buckets = C.filter_registry_swap_pairs(perl, rust, rules, [perl_path], [rust_path])
+            self.assertEqual((buckets[self.bucket], ex_perl, ex_rust), (count, perl if count else set(), rust if count else set()), name)
+
+
+class InputRecordHandOverTests(unittest.TestCase):
+    """The reference bases of a row under an identifier, read by position from the input VCF
+    its output was written from before the registry's row-aware pair rules are asked. The
+    pair is the one `SpliceTermPastTheRecordSpanRuleTests` holds under an identifier at two
+    positions. Every row and every input line is fabricated."""
+
+    BUCKET = "splice_term_past_the_record_span"
+    LOCATION = "7:100999-101000"
+    TERMS = ("splice_donor_variant,frameshift_variant,splice_donor_region_variant,intron_variant",
+             "frameshift_variant,splice_region_variant")
+    VCF_HEAD = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+    # Two bases replaced by five, and five bases inserted after the first of the two: both
+    # records give their rows the same Location and the same allele.
+    REPLACED = "7\t100999\t1993671\tAC\tGTTCA\t.\tPASS\t.\n"
+    INSERTED = "7\t100999\t1993671\tA\tAGTTCA\t.\tPASS\t.\n"
+
+    def rows(self, feature: str = "ENST00000635895") -> tuple[str, str]:
+        """The reference's row and vep-rs's row of the pair on one transcript."""
+        reference, candidate = (
+            stop_codon_row("GTTCA", terms, "999-1000", "899-900", self.LOCATION, feature=feature) for terms in self.TERMS
+        )
+        return reference, candidate
+
+    def folder(self) -> Path:
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        return tmp
+
+    def input_file(self, record: str, name: str = "in.vcf", folder: Path | None = None) -> Path:
+        path = (folder or self.folder()) / name
+        with (gzip.open if name.endswith(".gz") else open)(path, "wt", encoding="utf-8") as fh:
+            fh.write(self.VCF_HEAD + record)
+        return path
+
+    def scored(self, record: str, input_name: str = "one.vcf") -> tuple[dict, list[str]]:
+        """The report and the lines of ``discordant_adjusted.tsv`` the program's entry point
+        writes for a folder of one input and two outputs: the pair's two rows beside a row
+        both engines write."""
+        fixture = self.folder()
+        for sub in ("in", "perl", "rust", "out"):
+            (fixture / sub).mkdir()
+        self.input_file(record, input_name, fixture / "in")
+        matched = stop_codon_row("GTTCA", "intron_variant", "-", "-", self.LOCATION, feature="ENST00000000009")
+        for side, row in zip(("perl", "rust"), self.rows()):
+            (fixture / side / "one.txt").write_text(ROW_COLS + matched + row, encoding="utf-8")
+        argv = sys.argv
+        sys.argv = ["compare_sv_concordance.py", "--reference-release", "116.2", "--assembly", "grch38",
+                    "--input-dir", str(fixture / "in"), "--perl-dir", str(fixture / "perl"),
+                    "--rust-dir", str(fixture / "rust"), "--output-dir", str(fixture / "out")]
+        try:
+            with redirect_stdout(io.StringIO()):
+                C.main()
+        except SystemExit as exc:
+            if exc.code not in (0, None):
+                raise
+        finally:
+            sys.argv = argv
+        report = json.loads((fixture / "out" / "concordance_report.json").read_text())
+        return report, (fixture / "out" / "discordant_adjusted.tsv").read_text().splitlines()
+
+    def assert_set_aside(self, report: dict, adjusted_lines: list[str]) -> None:
+        adjusted = report["adjusted"]
+        self.assertEqual(adjusted["excluded_registry_swap_by_bucket"][self.BUCKET], 1)
+        self.assertEqual(len(adjusted_lines), 1, "the header alone")
+        self.assertEqual((adjusted["only_perl"], adjusted["only_rust"], adjusted["f1"]), (0, 0, 1.0))
+        self.assertEqual(report["per_file_adjusted"]["one"]["f1"], 1.0)
+        self.assertEqual((report["overall"]["only_perl"], report["overall"]["only_rust"]), (1, 1))
+
+    def test_a_row_under_an_identifier_is_set_aside_where_its_input_is_handed(self) -> None:
+        rules = C.REFERENCE_REGISTRIES["116.2"].row_pair_rules
+        perl_path, rust_path, perl, rust = row_outputs(self, *self.rows())
+        inputs = dict.fromkeys((perl_path, rust_path), self.input_file(self.REPLACED))
+        ex_rust, ex_perl, buckets = C.filter_registry_swap_pairs(
+            perl, rust, rules, [perl_path], [rust_path], input_by_output=inputs)
+        self.assertEqual((buckets[self.BUCKET], ex_perl, ex_rust), (1, perl, rust))
+        masks = C.apply_masks(perl, rust, "116.2", {}, {}, {}, "vep-rs", [], perl_paths=[perl_path],
+                              rust_paths=[rust_path], input_by_output=inputs)
+        self.assertEqual((masks.swap_by_bucket[self.BUCKET], masks.swap_perl, masks.swap_rust), (1, perl, rust))
+
+    def test_the_entry_point_reads_the_record_from_the_input_folder(self) -> None:
+        self.assert_set_aside(*self.scored(self.REPLACED))
+
+    def test_a_gzipped_input_reads_as_a_plain_one(self) -> None:
+        self.assert_set_aside(*self.scored(self.REPLACED, "one.vcf.gz"))
+
+    def test_an_insertion_s_pair_stays_a_difference_with_its_record_handed(self) -> None:
+        report, adjusted_lines = self.scored(self.INSERTED)
+        adjusted = report["adjusted"]
+        self.assertEqual(adjusted["excluded_registry_swap_by_bucket"][self.BUCKET], 0)
+        self.assertEqual((adjusted["only_perl"], adjusted["only_rust"], len(adjusted_lines)), (1, 1, 3))
+
+    def test_each_row_reads_the_input_of_its_own_output_in_either_order_of_the_files(self) -> None:
+        # The first file's record replaces two bases and the second file's inserts at the same
+        # Location. Each file's outputs carry the pair on a transcript of its own, and both
+        # carry it on a third, whose row then has two readings.
+        own = ("ENST00000000001", "ENST00000000002")
+        files = []
+        for record, feature in zip((self.REPLACED, self.INSERTED), own):
+            reference, candidate = ("".join(rows) for rows in zip(self.rows(feature), self.rows("ENST00000000003")))
+            perl_path, rust_path, perl, rust = row_outputs(self, reference, candidate)
+            files.append((perl_path, rust_path, perl, rust, self.input_file(record)))
+        perl, rust = files[0][2] | files[1][2], files[0][3] | files[1][3]
+        inputs = {path: f[4] for f in files for path in f[:2]}
+        for order in (files, files[::-1]):
+            masks = C.apply_masks(perl, rust, "116.2", {}, {}, {}, "vep-rs", [], perl_paths=[f[0] for f in order],
+                                  rust_paths=[f[1] for f in order], input_by_output=inputs)
+            self.assertEqual(masks.swap_by_bucket[self.BUCKET], 1)
+            self.assertEqual({t[2] for t in masks.swap_perl}, {own[0]}, "the pair of the file whose record replaces")
+            self.assertEqual({t[2] for t in masks.swap_rust}, {own[0]})
+        for f in files:
+            alone = C.apply_masks(f[2], f[3], "116.2", {}, {}, {}, "vep-rs", [], perl_paths=[f[0]], rust_paths=[f[1]],
+                                  input_by_output=inputs)
+            self.assertEqual(alone.swap_by_bucket[self.BUCKET], 2 if f is files[0] else 0, "one file reads its own input alone")
+
+    def test_the_input_is_opened_only_where_a_row_asks(self) -> None:
+        rules = C.REFERENCE_REGISTRIES["116.2"].row_pair_rules
+        missing = self.folder() / "absent.vcf"
+
+        def masked(perl_rows: str, rust_rows: str, row_rules=rules) -> dict[str, int]:
+            perl_path, rust_path, perl, rust = row_outputs(self, perl_rows, rust_rows)
+            inputs = dict.fromkeys((perl_path, rust_path), missing)
+            return C.filter_registry_swap_pairs(perl, rust, row_rules, [perl_path], [rust_path], input_by_output=inputs)[2]
+
+        reference, candidate = self.rows()
+        with self.assertRaises(FileNotFoundError, msg="a row under an identifier asks"):
+            masked(reference, candidate)
+        self.assertNotIn(self.BUCKET, masked(reference, candidate, ()), "no row-aware rule")
+        self.assertEqual(masked(reference, reference)[self.BUCKET], 0, "no unmatched pair")
+        covered = (stop_codon_row("-", "intron_variant", "-", "-"), stop_codon_row("-", "intron_variant,splice_region_variant", "-", "-"))
+        self.assertEqual(masked(*covered)["covered_splice_region_swap"], 1, "a pair an earlier rule takes")
+        spelled = [row.replace("1993671", "7_100999_AC/GTTCA") for row in (reference, candidate)]
+        self.assertEqual(masked(*spelled)[self.BUCKET], 1, "a first column that spells the alleles")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,32 @@
+entry = "json_terms_label_without_rank"
+page = "docs/divergences/json-terms-vocabulary.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --terms option, whose valid values are SO, display and NCBI (Bio::EnsEMBL::VEP::Config, %VALID, terms), with the JSON output of --json; not seen in the measured datasets"
+notes = "The record's five transcript entries carry six terms. Under `--terms display` Ensembl VEP's JSON factory collects the printed labels (OutputFactory/JSON.pm:374) and sorts them by the rank of a table keyed by SO term (:387-388), so the first label it ranks is undefined there and the run dies with `Can't call method \"rank\" on an undefined value`, writing no object; vep-rs ranks by the SO term and prints the label, `5PRIME_UTR`, the term both engines' `--most_severe` row prints in the tab format."
+
+[input]
+format = "vcf"
+text = """
+21	45573402	utr_and_intron	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-pick-summary/json_cache"
+
+[run]
+flags = ["--terms", "display"]
+format = "json"
+
+[compare]
+kind = "json"
+path = "most_severe_consequence"
+where = { id = "utr_and_intron" }
+
+[expected]
+ensembl_vep_exit = 255
+ensembl_vep = []
+vep_rs = ["5PRIME_UTR"]

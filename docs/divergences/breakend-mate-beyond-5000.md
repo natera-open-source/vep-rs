@@ -1,6 +1,6 @@
 # A breakend mate between 5,000 bases and `--distance` of a transcript
 
-A difference in which records are written, under a `--distance` above 5,000 on a breakend whose mate lies between 5,000 bases and that distance from a transcript; nothing is set aside, since no measured run names the flag.
+A difference in which records are written, under a `--distance` above 5,000 on a breakend whose mate lies between 5,000 bases and that distance from a transcript; nothing is set aside, since no measured run names the flag. Ensembl VEP writes no row at all for such a record; vep-rs writes the bracket allele's row with the mate's distance to the transcript.
 
 `--distance` rewrites the two package variables that size a transcript's flanks (`BaseRunner.pm` lines 511-512). Ensembl VEP collects the transcripts of a buffer through those flanks (`AnnotationType/Transcript.pm` lines 96-108), and a bracket breakend sits in the buffer's tree at its mate's coordinate as well as its own (`InputBuffer.pm` lines 387-389). So a transcript within `--distance` of the mate collects the record and is given a `TranscriptStructuralVariation` for it (`AnnotationType/Transcript.pm` lines 145-151).
 

@@ -1,0 +1,93 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 63,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species arabidopsis_thaliana --assembly TAIR10 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "arabidopsis_thaliana/63_TAIR10",
+ "fasta": "the three contigs the records sit on (4, Mt and Pt) at their full length from Arabidopsis_thaliana.TAIR10.dna.toplevel.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 402 records, 223 on chromosome 4, 136 on the mitochondrion Mt and 43 on the plastid Pt. 175 come from the Ensembl Plants release 63 variation set of Arabidopsis thaliana (the 1001 Genomes Project records; the set names no Mt or Pt record), their IDs the set's; 227 are designed records derived from the reference FASTA, their IDs naming the set, chromosome, position and alleles: every single-nucleotide substitution inside each Pt and Mt transcript's span with 200 bases of flank, a family of deletions of 1 to 4 bases, insertions of 1 to 3 and a two-base substitution every 29th position of those windows, and the same single-nucleotide and indel probes at fixed strides across the transcript windows of chromosome 4. Two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term, plus the records the manifest's included_records name (58): the plastid's start codon shapes under genetic code table 11 (the ATG start read as ATA, ATT, ATC, ACG, GTG, TTG and CTG, a GTG start read as ATG, CTG, TTG and GAG, an insertion into the start codon), the same shapes on the mitochondrion under table 1, stop codons retained and lost, an incomplete terminal codon, splice sites and the indel classes of both organelles. Indels within 1,000 bases of a sequence region's edge and the record ENSVATH09011708 were left out of the selection. Pt translates under genetic code table 11 and Mt under table 1, each transcript's codon_table in the cache",
+ "sha256": {
+  "default.txt": "3f468fba89b81f3ffd95088a559a4fef6c63a38966832841734ec33134909375",
+  "tab.txt": "623a86ed44f3bb10d311ee2c36aca0d904a2edfe4f8a15af9de57f543661d7e4",
+  "vcf.vcf": "4444ca106ca71fdca4395b20cbe128efc3583b3659f809444c16718562ac4b30",
+  "json.jsonl": "bbc465cae1abd6291822575a9c5159c4ffc1c2670ed7cf13331959b67a2d73be"
+ },
+ "variants_vcf_sha256": "5ae1bf02db0d0bcf4280c2680345913746559e0f0c9a44bdab9ae7ef35c8a5f9",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species arabidopsis_thaliana --assembly TAIR10 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "arabidopsis_thaliana/63_TAIR10",
+   "fasta": "reference.fa.gz beside this file, decompressed, on both sides",
+   "input": "variants.vcf; the cache carries SIFT matrices and no PolyPhen matrices, so Ensembl VEP reports disabling PolyPhen and the SIFT column is compared; the cache names variants on chromosome 4 alone, so Existing_variation is populated there and empty on Mt and Pt, and every frequency, phenotype and PolyPhen column is empty on both sides; --regulatory finds no regulatory data in the cache",
+   "sha256": {
+    "default.txt": "a2a16b6e70a1563c3a66d3336b5a96ecc0c0f8a6b7d3bbace1815ff19e7d84b6",
+    "tab.txt": "b201b9d683f46bb463d3ab090f83c047cecb8714df45404320e124f24bf53608",
+    "vcf.vcf": "3cdc8d7dc1880ef4fa51078183a8319c1cf1caf6fd767fc3b50db1d1801dbe09",
+    "json.jsonl": "6ff9c830db1a9beb4c202e430f54fc018516a499c5d34f5ce4505dbd90c5f01b"
+   }
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species arabidopsis_thaliana --assembly TAIR10 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "arabidopsis_thaliana/63_TAIR10",
+   "fasta": "reference.fa.gz beside this file, decompressed, on both sides",
+   "input": "variants.vcf; the Pt records' HGVSp follow genetic code table 11 and the Mt records' table 1",
+   "sha256": {
+    "default.txt": "f26e1542975696693ac4f4e43bc8859f36c47cba6b038caf72784286ec8ec9e9",
+    "tab.txt": "128f479b64b31c7af6aa754c32ee1120fcf0cf3229985f0aee0778cc7de004de",
+    "vcf.vcf": "ebd9e0364b25801b8a6fcdac466b0629a0efef9acfe1a1dae45795f1697d906c",
+    "json.jsonl": "50f19f21837e744d79bb6282ab0630e076745f5d1934bf51be47228d5b039e17"
+   }
+  },
+  "per-gene-biotype": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 63,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 63 --species arabidopsis_thaliana --assembly TAIR10 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --per_gene --pick_order biotype [--tab|--vcf|--json]",
+   "perl_cache": "arabidopsis_thaliana/63_TAIR10",
+   "fasta": "reference.fa.gz",
+   "input": "variants.vcf",
+   "sha256": {
+    "default.txt": "49f4f96e57351f07d4df45f40bdfc8da3734743026bf443f9982ac7044a7dc49",
+    "tab.txt": "c4346d5166db674026d7ac3726c3bc1511d79fa6269dbd2ef4065c509ecbb3df",
+    "vcf.vcf": "e8c6d123ac1c677a9797a0ae19303a3ffe3fe0f469e542da1193be0ad169a296",
+    "json.jsonl": "1c680c07834641ee44e765d0cd42857262803d92fe740dc4f0189e7e8f428f31",
+    "default.summary.log": "456213765951f1681436a56a95960c251d26f6e494a6e793bc8bb9d04a0b4c25",
+    "tab.summary.log": "cd1633541fdea3b64f516c4475fd0fb39aa51fb11a936d035b486c0160510fd6",
+    "vcf.summary.log": "91c6472964a8c9085d774e11ee21e49c7efd3663ac93c7dd94c72192f07c7ae0",
+    "json.summary.log": "565aea1841f43ebf7a096e03a5a3d220b2457d8843bdf8f09b93209368e28521"
+   },
+   "flags": [
+    "--per_gene",
+    "--pick_order",
+    "biotype"
+   ],
+   "expected_dir": "expected_per-gene-biotype"
+  }
+ },
+ "generator": "Ensembl VEP over the two inputs under the corpus flags; scripts/golden/build_golden_corpus.py select --release 63 --assembly TAIR10 --species arabidopsis_thaliana --suite 1001g_chr4=<reference>=<the chromosome 4 records> --suite probe=<reference>=<the designed records> --k 2 --seed 1 --max-span 1000000 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-arabidopsis-tair10 --covers genetic-code-tables --matrix tests/parity/matrix.tsv --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 63 --variations <cache>/variations over the whole cache scripts/data/storable_to_json.pl converted from the Ensembl Plants release 63 TAIR10 cache (protein features and the SIFT matrices kept for the DOMAINS and SIFT columns of the everything set; the Mt and Pt variation slices are the empty indexed files the cache carries, copied beside the pruned chromosome 4 slice); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and the everything and hgvs sets, and without --no-stats for the per-gene-biotype set, which keeps its four statistics reports; scripts/golden/build_golden_corpus.py flag-set (everything, hgvs, per-gene-biotype) and classify (the manifest's run and the three flag sets, --field HGVSc --field HGVSp for the hgvs set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "4": 960,
+   "Mt": 137,
+   "Pt": 86
+  },
+  "shards": 21,
+  "synonym_lines": 7,
+  "variation_records_per_chromosome": {
+   "4": 270,
+   "Mt": 0,
+   "Pt": 0
+  },
+  "variation_slices": "chromosome 4's records within one base of a corpus record under variations/4/, bgzip-compressed with a .csi; under variations/Mt/ and variations/Pt/ the empty bgzip file with its index that the Ensembl VEP cache carries for the two organelles, which name no variant"
+ }
+}

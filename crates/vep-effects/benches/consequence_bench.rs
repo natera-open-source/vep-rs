@@ -8,6 +8,7 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
+use std::sync::Arc;
 
 use vep_core::coordinate::Strand;
 use vep_core::transcript::*;
@@ -38,7 +39,6 @@ fn build_bench_transcript() -> Transcript {
 
     let exons = vec![
         Exon {
-            stable_id: Some("ENSE00000000001".into()),
             start: 25_000_000,
             end: 25_000_299,
             rank: 1,
@@ -46,7 +46,6 @@ fn build_bench_transcript() -> Transcript {
             end_phase: 0,
         },
         Exon {
-            stable_id: Some("ENSE00000000002".into()),
             start: 25_002_000,
             end: 25_002_299,
             rank: 2,
@@ -54,7 +53,6 @@ fn build_bench_transcript() -> Transcript {
             end_phase: 0,
         },
         Exon {
-            stable_id: Some("ENSE00000000003".into()),
             start: 25_004_000,
             end: 25_006_000,
             rank: 3,
@@ -106,6 +104,7 @@ fn build_bench_transcript() -> Transcript {
         three_prime_utr: None,
         translateable_seq: Some(cds),
         peptide: None,
+        spliced_seq: None,
         introns: introns.clone(),
         sorted_exons: exons.clone(),
         mapper: Some(TranscriptMapper {
@@ -133,6 +132,7 @@ fn build_bench_transcript() -> Transcript {
         source: "Ensembl".into(),
         gene_symbol: Some("TEST1".into()),
         gene_symbol_source: Some("HGNC".into()),
+        gene_symbol_id: None,
         hgnc_id: Some("HGNC:0001".into()),
         gene_phenotype: None,
         canonical: true,
@@ -148,6 +148,7 @@ fn build_bench_transcript() -> Transcript {
         uniparc: None,
         uniprot_isoform: None,
         exons: exons.clone(),
+        exon_ids: None,
         introns,
         cdna_coding_start: Some(51),
         cdna_coding_end: Some(900),
@@ -172,13 +173,15 @@ fn build_bench_transcript() -> Transcript {
         gencode_primary: false,
         attributes: vec![],
         vefc: Some(vefc),
+        source_cache: None,
+        bam_edit_status: None,
         derived: Default::default(),
         id_rank: 0,
     }
 }
 
 fn consequence_benchmark(c: &mut Criterion) {
-    let transcript = build_bench_transcript();
+    let transcript = Arc::new(build_bench_transcript());
     let config = EffectsConfig::default();
 
     let snv = InputVariant::new(
@@ -229,7 +232,7 @@ fn consequence_benchmark(c: &mut Criterion) {
         b.iter(|| calculate_consequences(black_box(&upstream), black_box(&transcript), &config))
     });
 
-    let transcripts = vec![transcript];
+    let transcripts = vec![Arc::unwrap_or_clone(transcript)];
     c.bench_function("find_overlapping_transcripts", |b| {
         b.iter(|| {
             find_overlapping_transcripts(

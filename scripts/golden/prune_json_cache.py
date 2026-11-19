@@ -5,11 +5,18 @@ vep-rs annotates a variant against every transcript whose span, extended by the
 up/downstream flank (5,000 bp on both sides), overlaps the variant. A fixture cache therefore
 needs exactly those transcripts and nothing else. This script reads one or more VCFs, keeps
 every transcript record of the source cache whose extended span overlaps any record span
-(symbolic alleles use END or SVLEN; breakend mates count as one-base spans on their own
-chromosome; a record's chromosome name is resolved to the cache's as the runtime resolves it,
-through the cache's `chr_synonyms.txt` and the `chr` prefix), and writes the survivors into
+(symbolic alleles use END or SVLEN; breakend mates count as spans on their own chromosome,
+one base for a mate in bracket notation and, for a mate the CHR2 INFO key names, the span
+from the lesser to the greater of POS2 and END2 (one base when the record carries one of
+the two); a record's chromosome name is resolved to the cache's as the runtime resolves it,
+through the cache's `chr_synonyms.txt`, or the file `--synonyms` names in its place as a run
+under `--synonyms` reads, and the `chr` prefix), and writes the survivors into
 shards named exactly as in the source so a transcript the source stores in two shards is kept
-in both. Chromosome directories with no
+in both. When a shard's kept transcripts carry a gene symbol without an HGNC id and none carries
+it with one, every transcript of the shard sharing the symbol that carries an id is kept beside
+them: the engines give a model the HGNC id of a same-symbol model of its region file
+(`AnnotationType/Transcript.pm:290, 305`), so a merged cache's RefSeq models print an id their
+records alone would never pull into the slice. Chromosome directories with no
 surviving transcript are omitted. The summary printed at the end counts, per chromosome,
 the transcripts kept and the spans searched: one span per record, one per breakend mate and
 one per same-chromosome breakend pair covering both ends, so a chromosome's spans outnumber
@@ -26,7 +33,10 @@ protein features and prediction matrices of the transcripts its records test and
 chromosome a record touches, and the records whose start lies within `--variation-flank`
 (1 bp by default, the window vep-rs and Ensembl VEP query) of a record span are written as
 `<dst>/variations/<chr>/all_vars.gz`, bgzip-compressed and indexed by a `.csi` on the start
-column, the layout and index the Ensembl VEP dumper writes. The start column is read from
+column, the layout and index the Ensembl VEP dumper writes; a chromosome whose source file
+holds no record near a span keeps an empty slice (the bgzf end-of-file block alone, as the
+dumper writes for a chromosome without variants) under an index that names the sequence and
+no record, so the runtime opens a slice rather than finding none. The start column is read from
 `variation_cols` of the `info.json` being written. `--exclude-variation <regex>` (repeatable)
 drops every record whose name matches, so a slice can leave out identifiers that are not
 redistributable; the summary counts the records kept and excluded per chromosome.
@@ -35,9 +45,19 @@ when it is not the cache the rest of `info.json` describes (a native cache's `va
 beside an Ensembl cache's `info.txt`): its `variation_cols` and `var_type` are written in
 place of the others', so the columns `info.json` declares are the columns the slice has.
 
+`--regulatory` prunes the regulatory tree beside the transcripts: every feature of
+`<cache>/regulatory/<chr>/<start>-<end>.json[.gz]` whose span, extended by `--flank`, overlaps a
+record span is written into a shard named as in the source, with `regulatory/binding_matrices.json`
+cut to the matrices the kept motifs name, so a slice carries the regulatory and motif features
+its records reach and `info.json` declares `regulatory` (with the regulatory schema and cell-type
+list, taken from the source cache's own `info.json` when `--perl-info` supplies the rest, since an
+Ensembl VEP `info.txt` carries neither) only when the output holds such a shard; an `--info-only`
+refresh over a directory holding regulatory shards keeps the two from the metadata it replaces.
+
 `info.json` is the cache metadata vep-rs prints in its output headers. It is built from the
 Ensembl VEP cache's `info.txt` when `--perl-info` names one (every `source_<key>` line
-becomes a `source_versions` entry, `variation_cols` becomes a list, `cell_types` is dropped), else
+becomes a `source_versions` entry, `variation_cols` becomes a list, `regulatory_schema` a whole
+number, `cell_types` is dropped), else
 copied from the source cache, else written from `--species`, `--assembly` and
 `--cache-version`. `variation_cols` and `var_type` are kept only when the output carries a
 variation slice, so a cache's metadata never advertises variation data its directory lacks, and
@@ -54,9 +74,9 @@ that file alone for a cache directory assembled by other means.
 Usage:
     prune_json_cache.py --cache <src-dir> --out <dst-dir> --vcf <a.vcf> [--vcf <b.vcf.gz>]
         [--flank 5000] [--gzip] [--drop sorted_exons ...] [--drop-except <ids.txt>]
-        [--perl-info <cache>/info.txt]
+        [--synonyms <file>] [--perl-info <cache>/info.txt]
         [--variations <dir> [--variation-flank 1] [--exclude-variation <regex> ...]
-         [--variation-info <cache>/info.json]]
+         [--variation-info <cache>/info.json]] [--regulatory]
         [--species homo_sapiens --assembly GRCh37 --cache-version 116]
     prune_json_cache.py --info-only --out <dst-dir> --perl-info <cache>/info.txt --cache-version 116
     prune_json_cache.py --manifest-only --out <cache-dir>
@@ -83,7 +103,8 @@ BND_MATE = re.compile(r"[\[\]]([^:\[\]]+):(\d+)[\[\]]")
 
 
 def opener(path: Path):
-    return gzip.open if str(path).endswith(".gz") else open
+    """`gzip.open` for a `.gz` or `.bgz` (BGZF is gzip), else `open`."""
+    return gzip.open if str(path).endswith((".gz", ".bgz")) else open
 
 
 def record_spans(vcf: Path) -> dict[str, list[tuple[int, int]]]:
@@ -141,8 +162,25 @@ def read_shard(shard: Path) -> list:
 
 def prune(cache: Path, out: Path, spans: dict[str, list[tuple[int, int]]], flank: int, compress: bool = False, drop: tuple[str, ...] = (),
           drop_except: frozenset[str] = frozenset()) -> dict:
+    def donor_symbols_of(reachable: list) -> set[str]:
+        """The symbols the reachable transcripts carry without an HGNC id and none carries with
+        one: the shard's other transcripts with such a symbol and an id are kept beside them,
+        since the engines copy the id across a shard's same-symbol models."""
+        without_id: set[str] = set()
+        with_id: set[str] = set()
+        for transcript in reachable:
+            symbol = transcript.get("gene_symbol")
+            if not symbol:
+                continue
+            if transcript.get("gene_hgnc_id"):
+                with_id.add(symbol)
+            else:
+                without_id.add(symbol)
+        return without_id - with_id
+
     kept: dict[str, int] = {}
     shards_written = 0
+    donors = 0
     for chrom, chrom_spans in sorted(spans.items()):
         src_dir = cache / "transcripts" / chrom
         if not src_dir.is_dir():
@@ -151,15 +189,22 @@ def prune(cache: Path, out: Path, spans: dict[str, list[tuple[int, int]]], flank
         shards = sorted(list(src_dir.glob("*.json")) + list(src_dir.glob("*.json.gz")))
         for shard in shards:
             records = read_shard(shard)
-            survivors = [t for t in records if overlaps(int(t["start"]), int(t["end"]), chrom_spans, flank)]
-            if not survivors:
+            reachable = [t for t in records if overlaps(int(t["start"]), int(t["end"]), chrom_spans, flank)]
+            if not reachable:
                 continue
+            donor_symbols = donor_symbols_of(reachable)
+            reachable_ids = {id(t) for t in reachable}
+            survivors = [
+                t for t in records
+                if id(t) in reachable_ids or (t.get("gene_symbol") in donor_symbols and t.get("gene_hgnc_id"))
+            ]
+            donors += len(survivors) - len(reachable)
             for t in survivors:
                 vefc = t.get("variation_effect_feature_cache")
                 if isinstance(vefc, dict) and t.get("stable_id") not in drop_except:
                     for key in drop:
                         vefc.pop(key, None)
-            name = shard.name[: -len(".gz")] if shard.name.endswith(".gz") else shard.name
+            name = shard.name.removesuffix(".gz")
             dst = out / "transcripts" / chrom / (name + ".gz" if compress else name)
             dst.parent.mkdir(parents=True, exist_ok=True)
             payload = json.dumps(survivors, separators=(",", ":"), ensure_ascii=False) + "\n"
@@ -171,7 +216,55 @@ def prune(cache: Path, out: Path, spans: dict[str, list[tuple[int, int]]], flank
                 dst.write_text(payload, encoding="utf-8")
             kept[chrom] = kept.get(chrom, 0) + len(survivors)
             shards_written += 1
-    return {"transcripts_per_chromosome": kept, "shards": shards_written}
+    return {"transcripts_per_chromosome": kept, "shards": shards_written, "hgnc_donors": donors}
+
+
+BINDING_MATRICES = "binding_matrices.json"
+
+
+def prune_regulatory(cache: Path, out: Path, spans: dict[str, list[tuple[int, int]]], flank: int,
+                     compress: bool = False) -> dict:
+    """Writes the regulatory and motif features within `flank` of a record span, shard by shard
+    as the transcripts are written, and `regulatory/binding_matrices.json` cut to the matrices
+    the kept motifs name (an empty table when none survives, since the runtime opens the table
+    of every regulatory tree); a chromosome or shard with no such feature is omitted."""
+    kept: dict[str, int] = {}
+    shards_written = 0
+    matrices_named: set[str] = set()
+    for chrom, chrom_spans in sorted(spans.items()):
+        src_dir = cache / "regulatory" / chrom
+        if not src_dir.is_dir():
+            continue
+        chrom_spans = sorted(chrom_spans)
+        shards = sorted(list(src_dir.glob("*.json")) + list(src_dir.glob("*.json.gz")))
+        for shard in shards:
+            survivors = [f for f in read_shard(shard) if overlaps(int(f["start"]), int(f["end"]), chrom_spans, flank)]
+            if not survivors:
+                continue
+            name = shard.name.removesuffix(".gz")
+            dst = out / "regulatory" / chrom / (name + ".gz" if compress else name)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            payload = json.dumps(survivors, separators=(",", ":"), ensure_ascii=False) + "\n"
+            if compress:
+                with gzip.GzipFile(dst, "wb", compresslevel=9, mtime=0) as fh:
+                    fh.write(payload.encode("utf-8"))
+            else:
+                dst.write_text(payload, encoding="utf-8")
+            kept[chrom] = kept.get(chrom, 0) + len(survivors)
+            shards_written += 1
+            for feature in survivors:
+                if feature.get("feature_type") == "MotifFeature" and "matrix" in feature:
+                    matrices_named.add(feature["matrix"])
+    table_src = cache / "regulatory" / BINDING_MATRICES
+    matrices_written = 0
+    if shards_written and table_src.is_file():
+        table = json.loads(table_src.read_text(encoding="utf-8"))
+        kept_table = {name: table[name] for name in sorted(matrices_named) if name in table}
+        (out / "regulatory" / BINDING_MATRICES).write_text(
+            json.dumps(kept_table, separators=(",", ":"), ensure_ascii=False) + "\n", encoding="utf-8")
+        matrices_written = len(kept_table)
+    return {"regulatory_features_per_chromosome": kept, "regulatory_shards": shards_written,
+            "binding_matrices": matrices_written}
 
 
 # bgzip writes blocks of at most this many uncompressed bytes.
@@ -386,9 +479,11 @@ def prune_variations(src: Path, out: Path, spans: dict[str, list[tuple[int, int]
                      columns: list[str], exclude: list[re.Pattern]) -> dict:
     """Writes `<out>/variations/<chr>/all_vars.gz` and its `.csi` for every chromosome of
     `spans` whose `<src>/<chr>/all_vars.gz` exists: the records whose start lies within `flank`
-    of a span, in file order, minus those whose name matches a pattern of `exclude`. `columns`
-    is the cache's `variation_cols`, which the caller has checked names every column of
-    `VARIATION_COLUMNS_NEEDED`."""
+    of a span, in file order, minus those whose name matches a pattern of `exclude`; a
+    chromosome with no such record gets the empty bgzf file (the end-of-file block the Ensembl
+    VEP dumper writes for a chromosome without variants) under an index naming the sequence
+    and no record. `columns` is the cache's `variation_cols`, which the caller has checked
+    names every column of `VARIATION_COLUMNS_NEEDED`."""
     chr_col = columns.index(VARIATION_CHR_COLUMN)
     name_col = columns.index(VARIATION_NAME_COLUMN)
     start_col = columns.index(VARIATION_START_COLUMN)
@@ -423,20 +518,11 @@ def prune_variations(src: Path, out: Path, spans: dict[str, list[tuple[int, int]
                 kept += 1
             writer.close()
             final_offset = writer.tell()
-        if kept == 0:
-            dst.unlink()
-            index_dst.unlink(missing_ok=True)
-            if not any(dst_dir.iterdir()):
-                dst_dir.rmdir()
-        else:
-            with index_dst.open("wb") as raw:
-                index_writer = BgzfWriter(raw)
-                index_writer.write(index.finish(final_offset))
-                index_writer.close()
+        with index_dst.open("wb") as raw:
+            index_writer = BgzfWriter(raw)
+            index_writer.write(index.finish(final_offset))
+            index_writer.close()
         summary[chrom] = {"kept": kept, "excluded": excluded, "windows": len(windows)}
-    variations_dir = out / "variations"
-    if variations_dir.is_dir() and not any(variations_dir.iterdir()):
-        variations_dir.rmdir()
     return summary
 
 
@@ -445,13 +531,18 @@ FLAG_KEYS = ("regulatory",)
 # Cell-type names contain commas, so the line cannot be split into a list; VEP stores it as
 # one string and vep-rs does not read it.
 SKIP_KEYS = ("cell_types",)
+# The runtime reads the regulatory schema as a whole number and refuses a string, where every
+# other scalar line stays the text it is.
+INT_KEYS = ("regulatory_schema",)
 
 
 def info_from_perl_info_txt(text: str, cache_version: int | None) -> dict:
     """Translate an Ensembl VEP cache `info.txt` into vep-rs's `info.json` object.
 
     Follows VEP's own reader: `source_<key>` lines are version data, `variation_cols` is a
-    comma-separated list, a value of `-` means unset, and every other line is a scalar.
+    comma-separated list, a value of `-` means unset, and every other line is a scalar;
+    `regulatory_schema`, a key of the converted layout alone, is a whole number, and a value
+    that is not one raises `ValueError`.
     """
     info: dict = {"species": None, "assembly": None, "cache_version": cache_version, "source_versions": {}}
     for line in text.splitlines():
@@ -466,6 +557,10 @@ def info_from_perl_info_txt(text: str, cache_version: int | None) -> dict:
             info[key] = [v for v in value.split(",") if v]
         elif key in FLAG_KEYS:
             info[key] = value not in ("", "0", "-")
+        elif key in INT_KEYS and value != "-":
+            if not value.isdecimal():
+                raise ValueError(f"{key} {value!r} is not a whole number")
+            info[key] = int(value)
         elif value != "-":
             info[key] = value
     if cache_version is not None:
@@ -476,13 +571,18 @@ def info_from_perl_info_txt(text: str, cache_version: int | None) -> dict:
 
 
 VARIATION_INFO_KEYS = ("variation_cols", "var_type")
+REGULATORY_INFO_KEYS = ("regulatory_schema", "cell_types")
 
 
 def cache_info(args) -> dict | int:
     """The `info.json` object for the output: from `--perl-info`, else the source cache's own,
     else the command line; an exit status when the options do not name one."""
     if args.perl_info is not None:
-        info = info_from_perl_info_txt(Path(args.perl_info).read_text(encoding="utf-8"), args.cache_version)
+        try:
+            info = info_from_perl_info_txt(Path(args.perl_info).read_text(encoding="utf-8"), args.cache_version)
+        except ValueError as error:
+            print(f"ERROR: [prune_json_cache] --perl-info {args.perl_info}: {error}", file=sys.stderr)
+            return 2
         if args.assembly is not None:
             info["assembly"] = args.assembly
         if info.get("species") is None:
@@ -504,14 +604,26 @@ def has_variation_files(out: Path) -> bool:
     return any((out / "variations").glob("*/all_vars.gz")) or any((out / "variations").glob("*/*_var.gz"))
 
 
+def has_regulatory_shards(out: Path) -> bool:
+    return any((out / "regulatory").glob("*/*.json")) or any((out / "regulatory").glob("*/*.json.gz"))
+
+
 def write_info(out: Path, info: dict) -> None:
     """Writes `info.json`, without the variation keys when the output holds no variation file,
-    and with `contig_order` naming the output's own chromosome directories (autosomes by
-    number, then X, Y and MT, then every other contig by name, the converter's order), or
-    without the key when the output holds no transcript directory."""
+    with `regulatory` true only when the output holds a regulatory shard (and the regulatory
+    schema and cell-type list only then), and with `contig_order` naming the output's own
+    chromosome directories (autosomes by number, then X, Y and MT, then every other contig by
+    name, the converter's order), or without the key when the output holds no transcript
+    directory."""
     info = dict(info)
     if not has_variation_files(out):
         for key in VARIATION_INFO_KEYS:
+            info.pop(key, None)
+    # The runtime reads this flag before it opens the regulatory tree, and the schema and
+    # cell-type list only once it has.
+    info["regulatory"] = has_regulatory_shards(out)
+    if not info["regulatory"]:
+        for key in REGULATORY_INFO_KEYS:
             info.pop(key, None)
 
     def contig_key(name: str) -> tuple[int, int, str]:
@@ -583,6 +695,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--drop-except", type=Path, default=None, metavar="FILE",
                     help="a file of transcript stable ids, one per line, that keep every --drop key")
     ap.add_argument("--perl-info", type=Path, default=None, help="Ensembl VEP cache info.txt to derive info.json from")
+    ap.add_argument("--synonyms", type=Path, default=None, metavar="FILE",
+                    help="the chromosome synonyms file the corpus runs pass as --synonyms: its lines resolve the "
+                         "records' chromosome names in place of the cache's chr_synonyms.txt, as the runs read it")
     ap.add_argument("--variations", type=Path, default=None,
                     help="a directory holding <chr>/all_vars.gz: its records within --variation-flank of a record span are "
                          "written as a bgzip and csi-indexed slice under variations/")
@@ -593,6 +708,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--variation-info", type=Path, default=None, metavar="INFO_JSON",
                     help="the info.json of the cache the --variations files belong to, whose variation_cols and "
                          "var_type replace those of the info being written")
+    ap.add_argument("--regulatory", action="store_true",
+                    help="prune the regulatory tree beside the transcripts: the features within --flank of a record span, "
+                         "written under regulatory/ in shards named as in the source")
     ap.add_argument("--info-only", action="store_true",
                     help="write info.json, refresh CHECKSUMS.sha256 and nothing else")
     ap.add_argument("--manifest-only", action="store_true",
@@ -618,18 +736,53 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: [prune_json_cache] --variation-info describes the files of --variations; pass both", file=sys.stderr)
         return 2
     if args.info_only:
-        if args.variations is not None:
-            print("ERROR: [prune_json_cache] --info-only writes info.json and refreshes CHECKSUMS.sha256, nothing else; --variations and --variation-info describe a slice this run does not cut", file=sys.stderr)
+        if args.variations is not None or args.regulatory:
+            print("ERROR: [prune_json_cache] --info-only writes info.json and refreshes CHECKSUMS.sha256, nothing else; --variations, --variation-info and --regulatory describe a slice this run does not cut", file=sys.stderr)
             return 2
+        if has_regulatory_shards(args.out) and any(key not in info for key in REGULATORY_INFO_KEYS):
+            # The tree's schema and cell-type list live in the metadata being replaced: an
+            # Ensembl VEP info.txt carries no schema and its cell_types line is dropped; a
+            # refresh keeps them.
+            existing_path = args.out / "info.json"
+            existing = json.loads(existing_path.read_text(encoding="utf-8")) if existing_path.is_file() else {}
+            missing = [key for key in REGULATORY_INFO_KEYS if key not in info and key not in existing]
+            if missing:
+                print(f"ERROR: [prune_json_cache] --info-only: {args.out} holds regulatory shards and neither the new metadata nor {existing_path} carries {', '.join(missing)}; reconvert the cache", file=sys.stderr)
+                return 2
+            for key in REGULATORY_INFO_KEYS:
+                if key not in info:
+                    info[key] = existing[key]
         write_info(args.out, info)
         write_manifest(args.out)
         return 0
     if args.cache is None or not (args.cache / "transcripts").is_dir():
         print(f"ERROR: [prune_json_cache] {args.cache} has no transcripts/ directory", file=sys.stderr)
         return 2
+    if args.regulatory and not (args.cache / "regulatory").is_dir():
+        print(f"ERROR: [prune_json_cache] --regulatory: {args.cache} has no regulatory/ directory", file=sys.stderr)
+        return 2
+    if args.regulatory and any(key not in info for key in REGULATORY_INFO_KEYS):
+        # The runtime refuses a regulatory tree whose metadata lacks the schema and cell-type
+        # list; Ensembl VEP's info.txt carries no schema and its cell_types line cannot be
+        # split into a list, so they come from the converted source's own info.json.
+        source_info = args.cache / "info.json"
+        if not source_info.is_file():
+            print(f"ERROR: [prune_json_cache] --regulatory: {source_info} is missing, and the regulatory tree's schema and cell types come from it", file=sys.stderr)
+            return 2
+        source = json.loads(source_info.read_text(encoding="utf-8"))
+        missing = [key for key in REGULATORY_INFO_KEYS if key not in source]
+        if missing:
+            print(f"ERROR: [prune_json_cache] --regulatory: {source_info} lacks {', '.join(missing)}, which the regulatory tree needs; reconvert the cache", file=sys.stderr)
+            return 2
+        for key in REGULATORY_INFO_KEYS:
+            info[key] = source[key]
     if not args.vcf:
         print("ERROR: [prune_json_cache] at least one --vcf is required", file=sys.stderr)
         return 2
+    for vcf in args.vcf:
+        if not vcf.is_file():
+            print(f"ERROR: [prune_json_cache] --vcf {vcf} is not a file", file=sys.stderr)
+            return 2
     columns: list[str] = []
     exclude: list[re.Pattern] = []
     if args.variations is not None:
@@ -667,8 +820,17 @@ def main(argv: list[str] | None = None) -> int:
     synonym_lines: list[str] = []
     if synonyms_src.is_file():
         synonym_lines = synonyms_src.read_text(encoding="utf-8").splitlines()
+    # Ensembl VEP reads a --synonyms file instead of the cache's chr_synonyms.txt
+    # (CacheDir.pm:254 at release/116.2), so the records resolve through the run's file alone.
+    resolving_lines = synonym_lines
+    if args.synonyms is not None:
+        try:
+            resolving_lines = args.synonyms.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as error:
+            print(f"ERROR: [prune_json_cache] --synonyms {args.synonyms}: {getattr(error, 'strerror', None) or error}", file=sys.stderr)
+            return 2
     linked: dict[str, list[str]] = defaultdict(list)
-    for line in synonym_lines:
+    for line in resolving_lines:
         names = line.split()
         for synonym in names[1:]:
             linked[names[0]].append(synonym)
@@ -738,6 +900,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.variations is not None:
         summary["variations_per_chromosome"] = prune_variations(
             args.variations, args.out, spans, args.variation_flank, columns, exclude)
+    if args.regulatory:
+        summary.update(prune_regulatory(args.cache, args.out, spans, args.flank, args.gzip))
     # The cache's chr_synonyms.txt, kept to the lines naming a chromosome the output holds,
     # so the slice resolves the same input names for its chromosomes as the whole cache does.
     if synonyms_src.is_file():

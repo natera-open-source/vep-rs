@@ -100,6 +100,40 @@
     "json.jsonl": "a025ecca7b668e72f0a342e05a9db86b8023610e9da412634b4df76afdb644fd"
    }
   },
+  "compress-bgzip-one-thread": {
+   "flags": [
+    "--compress_output",
+    "bgzip",
+    "--compression_threads",
+    "1"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_compress-bgzip",
+   "expected_outputs": "the compress-bgzip set's four files (expected_compress-bgzip/): the set's extra flag sets the BGZF encoder's deflate worker count to one, which changes which thread deflates each block and changes no byte of the stream, so Ensembl VEP's output for the compress-bgzip set is the output for this set",
+   "sha256": {
+    "default.txt": "574e139431b57156d55cfa352e374b0b023d24c8440c68f18b990a1a16215708",
+    "tab.txt": "2f7636e0d41935a9a8a5fdcd2e6634d08389de53b520666e1b5ea11ef04f00f4",
+    "vcf.vcf": "6b7a2be290999ce1d488f9afd7c75b884fb8a319d658e1a518d07d4bd9cdb3d0",
+    "json.jsonl": "a025ecca7b668e72f0a342e05a9db86b8023610e9da412634b4df76afdb644fd"
+   }
+  },
+  "compress-bgzip-three-threads": {
+   "flags": [
+    "--compress_output",
+    "bgzip",
+    "--compression_threads",
+    "3"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_compress-bgzip",
+   "expected_outputs": "the compress-bgzip set's four files (expected_compress-bgzip/): the set's extra flag sets the BGZF encoder's deflate worker count to three, which changes which thread deflates each block and changes no byte of the stream, so Ensembl VEP's output for the compress-bgzip set is the output for this set",
+   "sha256": {
+    "default.txt": "574e139431b57156d55cfa352e374b0b023d24c8440c68f18b990a1a16215708",
+    "tab.txt": "2f7636e0d41935a9a8a5fdcd2e6634d08389de53b520666e1b5ea11ef04f00f4",
+    "vcf.vcf": "6b7a2be290999ce1d488f9afd7c75b884fb8a319d658e1a518d07d4bd9cdb3d0",
+    "json.jsonl": "a025ecca7b668e72f0a342e05a9db86b8023610e9da412634b4df76afdb644fd"
+   }
+  },
   "no-headers": {
    "flags": [
     "--no_headers"

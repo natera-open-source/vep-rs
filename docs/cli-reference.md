@@ -1,6 +1,6 @@
 # CLI reference
 
-The `vep` binary accepts the Ensembl VEP command line. Every flag is Ensembl VEP's and does what Ensembl VEP's does, or is refused with an error naming what it would do; the few flags vep-rs adds are marked as its own. A flag the error table governs (refused, or accepted without effect) carries that table's text as its help.
+The `vep` binary accepts the Ensembl VEP command line. Every flag but the few vep-rs adds is Ensembl VEP's and does what Ensembl VEP's does, diverges from it, is accepted without effect, or is refused with an error naming what it would do. This reference and [Intended divergences](intended-divergences.md) document such divergences; the flags vep-rs adds are described beside Ensembl VEP's. A flag the error table governs (refused, or accepted without effect) carries that table's text as its help.
 
 These pages are generated from the command-line definition and the option tables by the `cli_reference` test of `crates/vep-cli`. Edit the sources, then run `VEP_UPDATE_CLI_REFERENCE=1 cargo test -p vep-cli --test cli_reference` to rewrite them.
 
@@ -72,7 +72,7 @@ Ensembl VEP's option rules are applied as data, from `Config.pm:327-645` at rele
 | `--mane` | `--mane_select`, `--mane_plus_clinical` |
 | `--use_given_ref` | `--use_transcript_ref 0` |
 
-`--everything` therefore reaches `--hgvsc` and `--hgvsp` through `--hgvs`, `--mane_select` and `--mane_plus_clinical` through `--mane`, and `--check_existing` through the frequency flags; it does not switch on `--allele_number` or `--hgvsg`. `--regulatory` is switched on and emits RegulatoryFeature and MotifFeature rows when the converted cache carries regulatory data. Motif scores, high-information positions and cell-type activity are omitted.
+`--everything` therefore reaches `--hgvsc` and `--hgvsp` through `--hgvs`, `--mane_select` and `--mane_plus_clinical` through `--mane`, and `--check_existing` through the frequency flags; it does not switch on `--allele_number` or `--hgvsg`. `--regulatory` is switched on and emits RegulatoryFeature and MotifFeature rows, with every motif field, when the converted cache carries regulatory data; `CELL_TYPE` needs `--cell_type`, which is not in Ensembl VEP's set either.
 
 ### Incompatible flags (`Config.pm:615-632`)
 
@@ -134,8 +134,8 @@ A declared flag carries its list as a value enumeration, so a value outside it i
 
 ### Lists (`Config.pm:327-346`)
 
-- Comma-separated values: `--individual`, `--individual_zyg`, `--pick_order`, `--fields`, `--chr`, `--distance`. `--cell_type`, comma-separated in Ensembl VEP, is an option this version lacks, refused on the command line and in a configuration file (exit 2). `--dont_export`, comma-separated in Ensembl VEP's list, is an option neither its `vep` script (`Config.pm:73-276`) nor this version declares: unknown on the command line (exit 2) and dropped from a configuration file, as in Ensembl VEP.
-- Repeatable, each occurrence appending: `--plugin`, `--custom`, `--transcript_filter`. `--phyloP` and `--phastCons`, repeatable in Ensembl VEP, are options this version lacks, refused on the command line and in a configuration file (exit 2).
+- Comma-separated values: `--individual`, `--individual_zyg`, `--cell_type`, `--pick_order`, `--fields`, `--chr`, `--distance`. `--cell_type` is read against the cache's epigenome names by longest match, since a name may hold a comma ([`--cell_type` names with a comma](divergences/cell-type-comma-names.md)). `--dont_export`, comma-separated in Ensembl VEP's list, is an option neither its `vep` script (`Config.pm:73-276`) nor this version declares: unknown on the command line (exit 2) and dropped from a configuration file, as in Ensembl VEP.
+- Repeatable, each occurrence appending: `--plugin`, `--custom`, `--phyloP`, `--phastCons`, `--transcript_filter`.
 - Input formats Ensembl VEP exempts from its sorted-input check (`Config.pm:640-645`): `id`, `hgvs`, `spdi`, `region`. vep-rs performs no such check in any format: every record is annotated in input order, and an input whose chromosomes interleave keeps more transcript indexes in memory.
 
 ### Rules of vep-rs's own
@@ -147,4 +147,5 @@ Checked after Ensembl VEP's rules on the same state, for behaviour Ensembl VEP h
 | `output` | `ERROR: [output] --output_format parquet needs a file path: Parquet cannot be written to STDOUT` |
 | `output` | `ERROR: [output] --fields applies to --tab and --vcf output; the Parquet column set is fixed` |
 | `output` | `ERROR: [output] --compress_output applies to the default, tab, VCF and JSON outputs; Parquet output is compressed by its own codec` |
+| `output` | `ERROR: [output] --parquet_partition applies to --output_format parquet` |
 

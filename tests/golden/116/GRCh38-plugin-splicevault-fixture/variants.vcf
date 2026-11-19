@@ -1,0 +1,17 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	13618457	donor_fwd_two_transcripts	T	C	.	.	.
+21	13628452	donor_fwd_deletion	GGC	G	.	.	.
+21	13629855	acceptor_fwd_decoy_only	G	A	.	.	.
+21	13629903	donor_region_fwd_insertion	A	AT	.	.	.
+21	13630940	acceptor_fwd_snv	G	T	.	.	.
+21	13630943	exon_fwd_snv	T	C	.	.	.
+21	13631108	donor_fwd_snv	G	A	.	.	.
+21	13639639	donor_fwd_unscored	G	C	.	.	.
+21	18294269	donor_rev_snv	C	A	.	.	.
+21	18297830	acceptor_rev_snv	C	G	.	.	.
+21	18312942	donor_rev_deletion	TAC	T	.	.	.
+21	18315257	acceptor_rev_lowercase	c	a	.	.	.
+21	18326431	donor_rev_insertion	C	CG	.	.	.
+21	19268555	intergenic_snv	C	T	.	.	.
+21	40353744	acceptor_rev_two_transcripts	C	A	.	.	.

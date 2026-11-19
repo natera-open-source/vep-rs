@@ -1,0 +1,30 @@
+entry = "splicevault_sibling_allele_rows"
+page = "docs/plugins/annotation-store-divergences.md#3-splicevault-the-table-row-of-a-sibling-allele"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 405.6 per million · 4 flag sets, 64 corpora"
+notes = "The corpus's fixture table holds a row for each allele on ENST00000299443: the `C` row's delta is 0.51, the `G` row's 0.24. The `C` allele's rows agree between the engines."
+
+[input]
+format = "vcf"
+text = """
+21	13618457	sibling	T	C,G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-splicevault-fixture/json_cache"
+
+[run]
+flags = ["--plugin", "SpliceVault,file={corpus}/data/SpliceVault_data_GRCh38_synthetic.tsv.gz"]
+
+[compare]
+kind = "field"
+field = "SpliceVault_SpliceAI_delta"
+where = { record = "sibling", allele = "G", feature = "ENST00000299443" }
+
+[expected]
+ensembl_vep = ["0.51"]
+vep_rs = ["0.24"]

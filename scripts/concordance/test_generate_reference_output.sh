@@ -2,7 +2,7 @@
 # Tests for generate_reference_output.sh: the dry-run contract and every fail-closed
 # path, plus the output-volume gate on the real-run path via a stub `docker`.
 #
-# Pure bash with a fabricated data tree. No Docker, no VEP, no cache. Every location the
+# Bash and python3 with a fabricated data tree. No Docker, no VEP, no cache. Every location the
 # script reads or writes is passed explicitly, so the tests do not depend on either
 # tree's default layout.
 #
@@ -82,8 +82,8 @@ build_tree() {
 run_gen() {
     bash "$GEN" --data-dir "$DATA" \
         --perl-cache-dir "$CACHE" \
-        --fasta-grch37 "$DATA/reference/grch37/genome.fa" \
-        --fasta-grch38 "$DATA/reference/grch38/genome.fa" \
+        --fasta-for "homo_sapiens:GRCh37=$DATA/reference/grch37/genome.fa" \
+        --fasta-for "homo_sapiens:GRCh38=$DATA/reference/grch38/genome.fa" \
         --snp-indel-gt-dir "$SNP_GT" --sv-gt-dir "$SV_GT" \
         "$@"
 }
@@ -254,11 +254,42 @@ rc=$?
 run_gen --dry-run --flags "--max_sv_size -1 --individual all" --suites s01 >"$TMP/flags_ok.out" 2>/dev/null
 rc=$?
 [[ "$rc" -eq 0 ]] && grep -qE -- '--force_overwrite --max_sv_size -1 --individual all ?$' "$TMP/flags_ok.out" && ok "words naming no owned flag pass, a negative value word included" || bad "--flags with --max_sv_size -1 --individual all exited $rc"
+# A non-VCF input (Ensembl default format, region, HGVS) is read under the flags' own
+# --format word, which stands in place of the script's --format vcf; a prefix that also
+# names --fork or --force_overwrite is ambiguous to vep and stays refused.
+run_gen --dry-run --flags "--format ensembl --regulatory" >"$TMP/flags_fmt.out" 2>"$TMP/flags_fmt.err"
+rc=$?
+n=$(grep -c -- '--format vcf' "$TMP/flags_fmt.out") || n=0
+[[ "$rc" -eq 0 && "$n" -eq 0 ]] && grep -qE -- '--assembly GRCh37 --buffer_size [0-9]+ --fork [0-9]+ .*--force_overwrite --format ensembl --regulatory ?$' "$TMP/flags_fmt.out" &&
+    ok "a --flags word naming the input format passes and replaces the script's --format vcf" || {
+    bad "--flags \"--format ensembl\": rc=$rc commands still carrying --format vcf=$n"
+    head -3 "$TMP/flags_fmt.err" | sed 's/^/         /'
+}
+out=$(run_gen --dry-run --flags "--for ensembl" 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q -- '--flags carries --for, which vep reads as --format' <<<"$out" && ok "an abbreviation naming --format and another owned flag (--for) is refused" || bad "--flags \"--for ensembl\" exited $rc"
+out=$(run_gen --dry-run --flags "--regulatory --format" 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'ends with --format and no format name' <<<"$out" && ok "a trailing --format without its format name is refused" || bad "--flags \"--regulatory --format\" exited $rc"
+run_gen --dry-run --flags "--format=ensembl --regulatory" >"$TMP/flags_fmt_eq.out" 2>/dev/null
+rc=$?
+n=$(grep -c -- '--format vcf' "$TMP/flags_fmt_eq.out") || n=0
+[[ "$rc" -eq 0 && "$n" -eq 0 ]] && grep -qE -- '--force_overwrite --format=ensembl --regulatory ?$' "$TMP/flags_fmt_eq.out" && ok "the --format=<name> spelling passes without a value word" || bad "--flags \"--format=ensembl\": rc=$rc still --format vcf=$n"
+out=$(run_gen --dry-run --flags "--format=ensembl --fork 2" 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q -- '--flags carries --fork' <<<"$out" && ok "the word after --format=<name> is still checked as an option" || bad "--flags \"--format=ensembl --fork 2\" exited $rc"
 # An exact option or alias name outranks an abbreviation in Getopt::Long: vep's `verbose|v`
 # (Config.pm:159), `terms|t` (:176) and `dir` (:241) are prefixes of owned flags and pass.
 run_gen --dry-run --flags "-v -t SO --dir /x" --suites s01 >"$TMP/flags_alias.out" 2>/dev/null
 rc=$?
 [[ "$rc" -eq 0 ]] && grep -qE -- '--force_overwrite -v -t SO --dir /x ?$' "$TMP/flags_alias.out" && ok "-v, -t and --dir, exact vep names that prefix owned flags, pass through" || bad "--flags \"-v -t SO --dir /x\" exited $rc"
+# The same spellings of a flag the script reads: -nearest, --near and --NEAREST mount the
+# cache writable as --nearest does, and reach vep as written.
+for spelling in -nearest --near --NEAREST; do
+    run_gen --dry-run --flags "$spelling symbol" --suites s01 >"$TMP/flags_near_sp.out" 2>/dev/null
+    grep -q -- "-v $CACHE:/work/cache " "$TMP/flags_near_sp.out" && ! grep -q -- "-v $CACHE:/work/cache:ro" "$TMP/flags_near_sp.out" && grep -qE -- "--force_overwrite $spelling symbol ?$" "$TMP/flags_near_sp.out" &&
+        ok "the $spelling spelling of --nearest mounts the cache writable and is passed as written" || bad "$spelling cache mount: $(grep -o -- "-v $CACHE:/work/cache[^ ]*" "$TMP/flags_near_sp.out" | head -1)"
+done
 
 echo
 echo "STATS: --stats keeps the text statistics report instead of passing --no_stats"
@@ -369,7 +400,13 @@ rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'data-dir not a directory' <<<"$out" && ok "a non-directory --data-dir is a named error" || bad "non-directory data-dir exited $rc"
 out=$(run_gen --dry-run --assembly hg19 2>&1)
 rc=$?
-[[ "$rc" -ne 0 ]] && grep -q 'invalid --assembly' <<<"$out" && ok "an unknown assembly is refused" || bad "--assembly hg19 exited $rc"
+[[ "$rc" -ne 0 ]] && grep -q 'no suite matched' <<<"$out" && ok "an assembly no suite carries is an error, not an empty success" || bad "--assembly hg19 exited $rc"
+out=$(run_gen --dry-run --assembly "GRCh38 x" 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'invalid --assembly' <<<"$out" && ok "an assembly that is not a directory name is refused" || bad "--assembly 'GRCh38 x' exited $rc"
+out=$(run_gen --dry-run --fasta-for "GRCh38=/x.fa" 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q -- '--fasta-for takes <species>:<assembly>=<path>' <<<"$out" && ok "a --fasta-for without its species is refused" || bad "--fasta-for GRCh38=/x.fa exited $rc"
 out=$(run_gen --dry-run --fork 0 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'positive integer' <<<"$out" && ok "--fork 0 is refused" || bad "--fork 0 exited $rc"
@@ -707,6 +744,11 @@ j=$(grep -c -- '-o /work/perl_out/json.jsonl ' "$TMP/cd.out") || j=0
 [[ "$d" -eq 1 && "$t" -eq 1 && "$v" -eq 1 && "$j" -eq 1 ]] && ok "the outputs are default.txt, tab.txt, vcf.vcf and json.jsonl" || bad "corpus output names: default=$d tab=$t vcf=$v json=$j"
 grep -q "\[corpus GRCh38 json\] -> $CORPUS/expected/json.jsonl.gz" "$TMP/cd.out" && ok "the dry run names the gzipped destination under expected/" || bad "the corpus destination is not expected/<name>.gz"
 [[ ! -e "$CORPUS/expected" && -z "$(find "$CORPUS" -name '.generate.*')" ]] && ok "a corpus dry run writes nothing" || bad "a corpus dry run wrote into the corpus"
+# The golden tests run vep-rs in the corpus directory, so a relative path in a flag word
+# names a corpus file there; the container reads the same file only when the corpus is
+# mounted and is its working directory, whether or not a word carries {corpus}.
+n=$(grep -c -- "-v $CORPUS:/work/corpus:ro -w /work/corpus " "$TMP/cd.out") || n=0
+[[ "$n" -eq 4 ]] && ok "corpus_is_mounted_and_is_the_working_directory_of_every_corpus_command" || bad "$n of 4 corpus commands mount the corpus at /work/corpus and run in it"
 
 build_corpus with-fasta
 run_corpus --dry-run >"$TMP/cdf.out" 2>/dev/null
@@ -718,12 +760,20 @@ rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'corpus FASTA or its index not found' "$TMP/cdf2.err" && ok "a manifest fasta without its .fai fails preflight" || bad "corpus fasta without .fai: rc=$rc"
 
 build_corpus with-fasta
-STUB_ROWS=5 PATH="$STUBDIR:$PATH" run_corpus --stats >"$TMP/cr.out" 2>"$TMP/cr.err"
+STUB_ROWS=5 STUB_LOG="$TMP/corpus-stub.log" PATH="$STUBDIR:$PATH" run_corpus >"$TMP/cr.out" 2>"$TMP/cr.err"
 rc=$?
 [[ "$rc" -eq 0 ]] && ok "a corpus run exits 0" || {
     bad "corpus run exited $rc"
     head -5 "$TMP/cr.err" | sed 's/^/         /'
 }
+# A corpus keeps the statistics report unless --no-stats: Runner.pm:146 opens the text
+# handle under --stats_text alone, so the default run passes it in --no_stats's place.
+n=$(grep -c -- ' --stats_text ' "$TMP/corpus-stub.log") || n=0
+grep -q -- ' --no_stats ' "$TMP/corpus-stub.log" && bad "a corpus run passes --no_stats without --no-stats" ||
+    { [[ "$n" -eq 4 ]] && ok "corpus run passes --stats_text by default" || bad "$n of 4 corpus commands pass --stats_text"; }
+[[ -f "$CORPUS/expected/default.summary.log" ]] && grep -q '^\[VEP run statistics\]$' "$CORPUS/expected/default.summary.log" &&
+    [[ ! -e "$CORPUS/expected/default.txt_summary.txt" ]] &&
+    ok "summary.log kept beside expected" || bad "the stubbed default.txt_summary.txt did not land as expected/default.summary.log"
 [[ -f "$CORPUS/expected/default.txt.gz" && -f "$CORPUS/expected/tab.txt.gz" && -f "$CORPUS/expected/vcf.vcf.gz" && -f "$CORPUS/expected/json.jsonl.gz" ]] &&
     ok "expected/{default.txt,tab.txt,vcf.vcf,json.jsonl}.gz are written" || bad "the four expected files are not all present"
 n=$(find "$CORPUS/expected" -name '*.txt' -o -name '*.vcf' -o -name '*.jsonl' | wc -l | tr -d ' ')
@@ -735,9 +785,12 @@ from pathlib import Path
 c = Path(sys.argv[1])
 p = json.loads((c / "provenance.json").read_text())
 names = ["default.txt", "tab.txt", "vcf.vcf", "json.jsonl"]
-assert list(p["sha256"]) == names, p["sha256"]
+reports = [f"{fmt}.summary.log" for fmt in ("default", "tab", "vcf", "json")]
+assert list(p["sha256"]) == names + reports, p["sha256"]
 for n in names:
     assert hashlib.sha256(gzip.open(c / "expected" / (n + ".gz"), "rb").read()).hexdigest() == p["sha256"][n], n
+for n in reports:
+    assert hashlib.sha256((c / "expected" / n).read_bytes()).hexdigest() == p["sha256"][n], n
 assert p["variants_vcf_sha256"] == hashlib.sha256((c / "variants.vcf").read_bytes()).hexdigest()
 assert p["vep_image"] == "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da", p["vep_image"]
 assert p["vep_image_tag"] == "ensemblorg/ensembl-vep:release_116.2"
@@ -750,7 +803,7 @@ cmd = p["vep_command"]
 assert cmd.startswith("vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --protein --max_sv_size -1 [--tab|--vcf|--json]"), cmd
 print("OK")
 EOF
-grep -q '^OK$' "$TMP/cr.check" && ok "provenance.json carries the image digest, the vep command and a matching sha256 per expected file" || {
+grep -q '^OK$' "$TMP/cr.check" && ok "provenance.json carries the image digest, the vep command and a matching sha256 per expected file and per statistics report" || {
     bad "provenance.json content is wrong"
     tail -3 "$TMP/cr.check" | sed 's/^/         /'
 }
@@ -793,6 +846,21 @@ print("OK")
 EOF
 grep -q '^OK$' "$TMP/cr3.check" && ok "a regeneration keeps a key it does not own and the input and fasta prose, and rewrites the sha256 map" || bad "regeneration lost or kept the wrong keys"
 [[ ! -e "$CORPUS/expected/default.txt" ]] && ok "--force removes a stale plain expected file, which the golden tests would read before the .gz" || bad "a stale plain expected file survived --force"
+
+# --no-stats is the corpus's opt-out: the commands pass --no_stats, no report is kept, a
+# report an earlier run left goes with its digest, and the four outputs are still pinned.
+run_corpus --dry-run --force --no-stats >"$TMP/cns.out" 2>/dev/null
+n=$(grep -c -- ' --no_stats --quiet --force_overwrite' "$TMP/cns.out") || n=0
+grep -q -- '--stats_text' "$TMP/cns.out" && bad "--no-stats still passes --stats_text" ||
+    { [[ "$n" -eq 4 ]] && ok "--no-stats passes --no_stats" || bad "$n of 4 corpus commands pass --no_stats under --no-stats"; }
+STUB_ROWS=6 PATH="$STUBDIR:$PATH" run_corpus --force --no-stats >/dev/null 2>"$TMP/cns.err"
+rc=$?
+[[ "$rc" -eq 0 && ! -e "$CORPUS/expected/default.summary.log" && ! -e "$CORPUS/expected/json.summary.log" ]] &&
+    python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); sys.exit(0 if list(p["sha256"]) == ["default.txt", "tab.txt", "vcf.vcf", "json.jsonl"] else 1)' "$CORPUS/provenance.json" &&
+    ok "a --no-stats regeneration removes the reports an earlier run kept and pins the four outputs alone" || bad "corpus --force --no-stats: rc=$rc"
+out=$(run_corpus --dry-run --force --stats --no-stats 2>&1)
+rc=$?
+[[ "$rc" -eq 0 ]] && grep -q -- ' --no_stats --quiet' <<<"$out" && ok "the last of --stats and --no-stats wins" || bad "--stats --no-stats exited $rc"
 
 # A failing format leaves the committed expected files untouched.
 before=$(sha256_file "$CORPUS/expected/json.jsonl.gz")
@@ -862,6 +930,815 @@ rm -rf "$CACHE/homo_sapiens/116_GRCh38/MT"
 out=$(run_corpus --dry-run 2>&1)
 rc=$?
 [[ "$rc" -ne 0 ]] && grep -q 'missing primary contigs: MT' <<<"$out" && ok "a corpus run checks the cache slice of the manifest's assembly" || bad "corpus against an incomplete cache exited $rc"
+
+echo
+echo "SPECIES: a corpus manifest's species and release name the slice, --species and --cache_version"
+# generate_reference_output_dry_run_reads_the_manifest_species_and_fasta: an arabidopsis
+# corpus plans under --species arabidopsis_thaliana --assembly TAIR10 --cache_version 63 with
+# its manifest FASTA; a manifest without species is homo_sapiens.
+build_tree
+build_corpus with-fasta
+python3 - "$CORPUS/manifest.json" <<'EOF'
+import json, sys
+p = sys.argv[1]
+m = json.load(open(p))
+m.update({"species": "arabidopsis_thaliana", "assembly": "TAIR10", "release": "63"})
+json.dump(m, open(p, "w"))
+EOF
+mkdir -p "$CACHE/arabidopsis_thaliana/63_TAIR10/1"
+run_corpus --dry-run >"$TMP/sp.out" 2>"$TMP/sp.err"
+rc=$?
+n=$(grep -cE -- '--cache_version 63 --species arabidopsis_thaliana --assembly TAIR10 --format vcf --buffer_size 5000 --fork 1 --fasta /work/ref\.fa ' "$TMP/sp.out") || n=0
+[[ "$rc" -eq 0 && "$n" -eq 4 ]] && ok "generate_reference_output_dry_run_reads_the_manifest_species_and_fasta: all four commands carry the manifest's species, assembly, release and FASTA" || {
+    bad "arabidopsis corpus dry run: rc=$rc commands carrying the species=$n"
+    head -3 "$TMP/sp.err" | sed 's/^/         /'
+}
+grep -q "perl cache check (arabidopsis_thaliana TAIR10): 1 chromosome directories under $CACHE/arabidopsis_thaliana/63_TAIR10" "$TMP/sp.out" && ok "the slice is checked under the species directory, by presence alone for a species whose primary set is not known" || bad "species slice check: $(grep 'perl cache check' "$TMP/sp.out")"
+rmdir "$CACHE/arabidopsis_thaliana/63_TAIR10/1"
+out=$(run_corpus --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'holds no chromosome directory' <<<"$out" && ok "an empty slice of another species fails preflight" || bad "empty arabidopsis slice exited $rc"
+rmdir "$CACHE/arabidopsis_thaliana/63_TAIR10"
+out=$(run_corpus --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q "Perl cache slice not found: $CACHE/arabidopsis_thaliana/63_TAIR10" <<<"$out" && ok "a missing slice is named under the species directory and the manifest's release" || bad "missing arabidopsis slice exited $rc"
+mkdir -p "$CACHE/arabidopsis_thaliana/63_TAIR10/1"
+out=$(run_corpus --dry-run --cache-version 116 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q -- '--cache-version 116 differs from the manifest'"'"'s release 63' <<<"$out" && ok "a --cache-version that contradicts the manifest's release is refused" || bad "--cache-version against the manifest release exited $rc"
+python3 - "$CORPUS/manifest.json" <<'EOF'
+import json, sys
+p = sys.argv[1]
+m = json.load(open(p))
+m["species"] = "Arabidopsis thaliana"
+json.dump(m, open(p, "w"))
+EOF
+out=$(run_corpus --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'manifest species must be an Ensembl species name' <<<"$out" && ok "a manifest species that is not a production name is refused" || bad "bad manifest species exited $rc"
+build_corpus
+run_corpus --dry-run >"$TMP/sp2.out" 2>/dev/null
+n=$(grep -cE -- '--cache_version 116 --species homo_sapiens --assembly GRCh38 ' "$TMP/sp2.out") || n=0
+[[ "$n" -eq 4 ]] && ok "a manifest without species plans under homo_sapiens and its release" || bad "$n of 4 commands of a species-less manifest carry homo_sapiens"
+out=$(run_gen --dry-run --suites s01 --fasta-for "homo_sapiens:GRCh37=$TMP/none.fa" 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q "FASTA for GRCh37 not found: $TMP/none.fa" <<<"$out" && ok "a later --fasta-for for a human genome replaces its default" || bad "--fasta-for override exited $rc: $(grep -m1 ERROR <<<"$out")"
+
+echo
+echo "SETS: the species directory follows --refseq and --merged, and --flag-set runs one flag_sets entry"
+# generate_reference_output_species_directory_follows_the_set_flags: Ensembl VEP appends
+# `_refseq` and `_merged` to the species directory name for the flags (CacheDir.pm:312 at
+# release/116.2), so the slice checked and recorded is that directory while --species
+# stays the species. The fabricated tree holds the three human slices of one assembly.
+build_tree
+for c in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT; do
+    mkdir -p "$CACHE/homo_sapiens_refseq/116_GRCh38/$c" "$CACHE/homo_sapiens_merged/116_GRCh38/$c"
+done
+build_corpus_with_flags() { # build_corpus_with_flags <flag>...: a corpus whose manifest flags are the arguments
+    build_corpus
+    python3 - "$CORPUS/manifest.json" "$@" <<'EOF'
+import json, sys
+p = sys.argv[1]
+m = json.load(open(p))
+m["flags"] = sys.argv[2:]
+json.dump(m, open(p, "w"))
+EOF
+}
+build_corpus_with_flags --refseq
+run_corpus --dry-run >"$TMP/set1.out" 2>"$TMP/set1.err"
+rc=$?
+n=$(grep -c -- '--species homo_sapiens --assembly GRCh38 ' "$TMP/set1.out") || n=0
+[[ "$rc" -eq 0 && "$n" -eq 4 ]] && grep -q "all 25 primary contigs present under $CACHE/homo_sapiens_refseq/116_GRCh38" "$TMP/set1.out" &&
+    ok "--refseq in the manifest flags checks the homo_sapiens_refseq slice and keeps --species homo_sapiens" || {
+    bad "--refseq corpus dry run: rc=$rc commands with the species=$n"
+    head -3 "$TMP/set1.err" | sed 's/^/         /'
+}
+build_corpus_with_flags --merged
+run_corpus --dry-run >"$TMP/set2.out" 2>/dev/null
+rc=$?
+[[ "$rc" -eq 0 ]] && grep -q "all 25 primary contigs present under $CACHE/homo_sapiens_merged/116_GRCh38" "$TMP/set2.out" &&
+    ok "--merged in the manifest flags checks the homo_sapiens_merged slice" || bad "--merged corpus dry run: rc=$rc"
+build_corpus_with_flags --protein
+run_corpus --dry-run >"$TMP/set3.out" 2>/dev/null
+rc=$?
+[[ "$rc" -eq 0 ]] && grep -q "all 25 primary contigs present under $CACHE/homo_sapiens/116_GRCh38" "$TMP/set3.out" &&
+    ok "a manifest naming neither flag checks the homo_sapiens slice" || bad "plain corpus dry run: rc=$rc"
+rm -rf "$CACHE/homo_sapiens_refseq"
+build_corpus_with_flags --refseq
+out=$(run_corpus --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q "Perl cache slice not found: $CACHE/homo_sapiens_refseq/116_GRCh38" <<<"$out" && grep -q 'Expected homo_sapiens_refseq/116_GRCh38 under' <<<"$out" &&
+    ok "a --refseq corpus without the RefSeq slice fails preflight naming homo_sapiens_refseq" || bad "missing RefSeq slice exited $rc"
+out=$(run_gen --dry-run --suites s02 --flags "--refseq" 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q "Perl cache slice not found: $CACHE/homo_sapiens_refseq/116_GRCh38" <<<"$out" &&
+    ok "a suite run under --flags --refseq checks the RefSeq slice too" || bad "suite run under --refseq exited $rc"
+for c in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y MT; do
+    mkdir -p "$CACHE/homo_sapiens_refseq/116_GRCh38/$c"
+done
+STUB_ROWS=5 PATH="$STUBDIR:$PATH" run_corpus >/dev/null 2>"$TMP/set4.err"
+rc=$?
+[[ "$rc" -eq 0 ]] && python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); sys.exit(0 if p["perl_cache"] == "homo_sapiens_refseq/116_GRCh38" and "--refseq [--tab" in p["vep_command"] else 1)' "$CORPUS/provenance.json" &&
+    ok "a --refseq corpus run records perl_cache homo_sapiens_refseq/116_GRCh38" || {
+    bad "--refseq corpus run: rc=$rc"
+    head -3 "$TMP/set4.err" | sed 's/^/         /'
+}
+
+# generate_reference_output_flag_set_runs_one_entry: the entry's flags replace the
+# manifest's, its outputs land under expected_<name>, and provenance.json gains the run's
+# record under flag_sets.<name> while the manifest's own record stands.
+add_flag_set() { # add_flag_set <json entry>
+    python3 - "$CORPUS/manifest.json" "$1" <<'EOF'
+import json, sys
+p = sys.argv[1]
+m = json.load(open(p))
+m.setdefault("flag_sets", []).append(json.loads(sys.argv[2]))
+json.dump(m, open(p, "w"))
+EOF
+}
+add_flag_set '{"name": "hgvs", "flags": ["--refseq", "--hgvs"], "covers": ["hgvs"]}'
+run_corpus --dry-run --flag-set hgvs >"$TMP/fs1.out" 2>"$TMP/fs1.err"
+rc=$?
+n=$(count_docker_cmds "$TMP/fs1.out")
+m=$(grep -cE -- '--force_overwrite --refseq --hgvs( --(tab|vcf|json))? ?$' "$TMP/fs1.out") || m=0
+[[ "$rc" -eq 0 && "$n" -eq 4 && "$m" -eq 4 ]] && grep -q "\[corpus GRCh38 json\] -> $CORPUS/expected_hgvs/json.jsonl.gz" "$TMP/fs1.out" &&
+    ok "--flag-set plans the entry's four formats under its flags into expected_<name>" || {
+    bad "--flag-set dry run: rc=$rc commands=$n with the set's flags=$m"
+    head -3 "$TMP/fs1.err" | sed 's/^/         /'
+}
+grep -q -- '--protein' "$TMP/fs1.out" && bad "a flag-set run carries the manifest's own flags" || ok "a flag-set run carries the entry's flags alone"
+before=$(python3 -c 'import json, sys; p = json.load(open(sys.argv[1])); print(json.dumps({k: v for k, v in p.items() if k != "flag_sets"}, sort_keys=True))' "$CORPUS/provenance.json")
+STUB_ROWS=5 PATH="$STUBDIR:$PATH" run_corpus --flag-set hgvs >/dev/null 2>"$TMP/fs2.err"
+rc=$?
+[[ "$rc" -eq 0 && -f "$CORPUS/expected_hgvs/default.txt.gz" && -f "$CORPUS/expected_hgvs/json.jsonl.gz" && -f "$CORPUS/expected_hgvs/vcf.summary.log" && -f "$CORPUS/expected/default.txt.gz" ]] &&
+    ok "a flag-set run writes expected_<name>/ with its reports and leaves expected/ in place" || {
+    bad "--flag-set run: rc=$rc"
+    head -3 "$TMP/fs2.err" | sed 's/^/         /'
+}
+python3 - "$CORPUS" "$before" <<'EOF' >"$TMP/fs2.check" 2>&1
+import gzip, hashlib, json, sys
+from pathlib import Path
+c = Path(sys.argv[1])
+p = json.loads((c / "provenance.json").read_text())
+assert json.dumps({k: v for k, v in p.items() if k != "flag_sets"}, sort_keys=True) == sys.argv[2], "the manifest's own record changed"
+r = p["flag_sets"]["hgvs"]
+names = ["default.txt", "tab.txt", "vcf.vcf", "json.jsonl"]
+reports = [f"{fmt}.summary.log" for fmt in ("default", "tab", "vcf", "json")]
+assert list(r["sha256"]) == names + reports, r["sha256"]
+for n in names:
+    assert hashlib.sha256(gzip.open(c / "expected_hgvs" / (n + ".gz"), "rb").read()).hexdigest() == r["sha256"][n], n
+for n in reports:
+    assert hashlib.sha256((c / "expected_hgvs" / n).read_bytes()).hexdigest() == r["sha256"][n], n
+assert r["flags"] == ["--refseq", "--hgvs"] and r["input"] == "variants.vcf" and r["expected_dir"] == "expected_hgvs", r
+assert r["perl_cache"] == "homo_sapiens_refseq/116_GRCh38" and r["cache_version"] == 116 and r["fasta"] == "none on either side", r
+assert r["vep_image"] == p["vep_image"] and r["vep_image_tag"] == p["vep_image_tag"] and r["vep_version_reported"] == "ensembl-vep          : 116.2", r
+assert r["vep_command"].endswith("--stats_text --quiet --force_overwrite --refseq --hgvs [--tab|--vcf|--json]") and r["vep_command"].startswith("vep -i variants.vcf -o <out> "), r["vep_command"]
+print("OK")
+EOF
+grep -q '^OK$' "$TMP/fs2.check" && ok "provenance.json's flag_sets.hgvs carries the set's record and the manifest's own record is unchanged" || {
+    bad "flag-set provenance record is wrong"
+    tail -3 "$TMP/fs2.check" | sed 's/^/         /'
+}
+STUB_ROWS=5 PATH="$STUBDIR:$PATH" run_corpus --flag-set hgvs >/dev/null 2>"$TMP/fs3.err"
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q "reference output already exists: $CORPUS/expected_hgvs/default.txt.gz" "$TMP/fs3.err" &&
+    ok "an existing flag-set output refuses a regeneration without --force" || bad "flag-set regeneration without --force: rc=$rc"
+write_vcf "$CORPUS/other.vcf" 2
+add_flag_set '{"name": "two", "flags": ["--refseq"], "input": "other.vcf", "formats": ["default", "tab"], "expected_dir": "expected/two"}'
+run_corpus --dry-run --flag-set two >"$TMP/fs4.out" 2>"$TMP/fs4.err"
+rc=$?
+n=$(count_docker_cmds "$TMP/fs4.out")
+m=$(grep -c -- "-v $CORPUS/other.vcf:/work/input.vcf:ro" "$TMP/fs4.out") || m=0
+[[ "$rc" -eq 0 && "$n" -eq 2 && "$m" -eq 2 ]] && grep -q "\[corpus GRCh38 tab\] -> $CORPUS/expected/two/tab.txt.gz" "$TMP/fs4.out" &&
+    ok "an entry's input, formats and expected_dir are honoured" || {
+    bad "flag set with its own input: rc=$rc commands=$n reading other.vcf=$m"
+    head -3 "$TMP/fs4.err" | sed 's/^/         /'
+}
+out=$(run_corpus --dry-run --flag-set ghost 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q "flag_sets has no entry named 'ghost'" <<<"$out" && ok "a flag set the manifest lacks is refused by name" || bad "unknown flag set exited $rc"
+# A flag set over an input in another format names it with its own --format word, the
+# shape of a corpus's Ensembl-format twin run under --regulatory.
+add_flag_set '{"name": "ensembl", "flags": ["--regulatory", "--format", "ensembl"], "input": "other.vcf", "formats": ["default", "json"]}'
+run_corpus --dry-run --flag-set ensembl >"$TMP/fs_fmt.out" 2>"$TMP/fs_fmt.err"
+rc=$?
+n=$(count_docker_cmds "$TMP/fs_fmt.out")
+m=$(grep -cE -- '--force_overwrite --regulatory --format ensembl( --json)? ?$' "$TMP/fs_fmt.out") || m=0
+v=$(grep -c -- '--format vcf' "$TMP/fs_fmt.out") || v=0
+[[ "$rc" -eq 0 && "$n" -eq 2 && "$m" -eq 2 && "$v" -eq 0 ]] &&
+    ok "a flag set naming its input format runs under that word in place of --format vcf" || {
+    bad "flag set with --format ensembl: rc=$rc commands=$n with the word=$m still --format vcf=$v"
+    head -3 "$TMP/fs_fmt.err" | sed 's/^/         /'
+}
+add_flag_set '{"name": "piped", "flags": ["--format", "vcf"], "stdin": true}'
+out=$(run_corpus --dry-run --flag-set piped 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'reads its input on standard input' <<<"$out" && ok "a flag set read on standard input is refused" || bad "stdin flag set exited $rc"
+add_flag_set '{"name": "db", "flags": ["--refseq"], "perl_mode": "database"}'
+out=$(run_corpus --dry-run --flag-set db 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q "perl_mode 'database'" <<<"$out" && ok "a flag set generated against the database is refused" || bad "database flag set exited $rc"
+add_flag_set '{"name": "gone", "flags": ["--refseq"], "input": "missing.vcf"}'
+out=$(run_corpus --dry-run --flag-set gone 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'names an input the corpus lacks: missing.vcf' <<<"$out" && ok "a flag set whose input is missing is refused" || bad "missing-input flag set exited $rc"
+out=$(run_gen --dry-run --suites s02 --flag-set hgvs 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q -- '--flag-set names a flag_sets entry of a corpus manifest; pass --corpus' <<<"$out" && ok "--flag-set without --corpus is refused" || bad "--flag-set without --corpus exited $rc"
+out=$(bash "$GEN" --corpus "$CORPUS" --tool filter_vep --flag-set hgvs --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'drop --flag-set' <<<"$out" && ok "--tool refuses --flag-set" || bad "--tool with --flag-set exited $rc"
+
+echo
+echo "PLACEHOLDER: a manifest flag word names a file inside the corpus as {corpus}/<path>"
+# corpus_flag_placeholder_is_rewritten_to_the_mount: the container mounts the corpus
+# read-only at /work/corpus and every word carrying {corpus}, keyed or positional, is
+# rewritten to the mount; the recorded command keeps the manifest's spelling.
+build_tree
+build_corpus
+python3 - "$CORPUS/manifest.json" <<'EOF'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+m = json.loads(p.read_text())
+m["flags"] = ["--custom", "file={corpus}/custom/sites.vcf.gz,short_name=CE,format=vcf,type=exact",
+              "--custom", "{corpus}/custom/regions.bed.gz,RE,bed,overlap"]
+p.write_text(json.dumps(m, indent=1) + "\n")
+EOF
+run_corpus --dry-run >"$TMP/ph.out" 2>"$TMP/ph.err"
+rc=$?
+n=$(count_docker_cmds "$TMP/ph.out")
+[[ "$rc" -eq 0 && "$n" -eq 4 ]] && ok "corpus_flag_placeholder_is_rewritten_to_the_mount: a corpus whose flags carry {corpus} plans its four commands" || {
+    bad "corpus with {corpus} flags: rc=$rc commands=$n"
+    head -5 "$TMP/ph.err" | sed 's/^/         /'
+}
+n=$(grep -c -- "-v $CORPUS:/work/corpus:ro " "$TMP/ph.out") || n=0
+[[ "$n" -eq 4 ]] && ok "every command mounts the corpus directory read-only at /work/corpus" || bad "$n of 4 commands mount the corpus at /work/corpus"
+rewritten=$(printf '%q ' --custom "file=/work/corpus/custom/sites.vcf.gz,short_name=CE,format=vcf,type=exact" --custom "/work/corpus/custom/regions.bed.gz,RE,bed,overlap")
+n=$(grep -cF -- "--force_overwrite $rewritten" "$TMP/ph.out") || n=0
+[[ "$n" -eq 4 ]] && ok "{corpus} is rewritten to /work/corpus inside every word that carries it, keyed or positional" || bad "$n of 4 commands carry the rewritten words"
+grep '^docker run ' "$TMP/ph.out" | grep -q 'corpus}' && bad "a {corpus} word reached a command unrewritten" || ok "no command carries {corpus}"
+: >"$TMP/ph.log"
+STUB_ROWS=3 STUB_LOG="$TMP/ph.log" PATH="$STUBDIR:$PATH" run_corpus >/dev/null 2>"$TMP/phr.err"
+rc=$?
+[[ "$rc" -eq 0 ]] && ok "a corpus with {corpus} flags runs" || {
+    bad "corpus with {corpus} flags exited $rc"
+    head -5 "$TMP/phr.err" | sed 's/^/         /'
+}
+n=$(grep -c -- "-v $CORPUS:/work/corpus:ro " "$TMP/ph.log") || n=0
+[[ "$n" -eq 4 ]] && ok "the corpus mount reaches every container run" || bad "$n of 4 container runs carry the corpus mount"
+python3 - "$CORPUS" <<'EOF' >"$TMP/ph.check" 2>&1
+import json, sys
+from pathlib import Path
+cmd = json.loads((Path(sys.argv[1]) / "provenance.json").read_text())["vep_command"]
+assert "--force_overwrite --custom file={corpus}/custom/sites.vcf.gz,short_name=CE,format=vcf,type=exact --custom {corpus}/custom/regions.bed.gz,RE,bed,overlap [--tab|--vcf|--json]" in cmd, cmd
+assert "/work/corpus" not in cmd, cmd
+print("OK")
+EOF
+grep -q '^OK$' "$TMP/ph.check" && ok "the recorded vep_command keeps {corpus} as the manifest spells it" || {
+    bad "the recorded vep_command does not keep {corpus}"
+    tail -2 "$TMP/ph.check" | sed 's/^/         /'
+}
+out=$(run_gen --dry-run --suites s01 --flags "--custom {corpus}/sites.vcf.gz,CE,vcf,exact" 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'a suite run has no corpus' <<<"$out" && ! grep -q '^docker run ' <<<"$out" &&
+    ok "--flags carrying {corpus} on a suite run is refused by name" || bad "--flags with {corpus} on a suite run exited $rc"
+
+# corpus_without_placeholder_is_unchanged: the committed GRCh38-synonyms corpus plans the
+# command its provenance records, byte for byte once <out> and <cache> take their mounts,
+# and mounts no corpus directory. The record carries --no_stats, so the dry run opts out
+# of the report.
+SYN=$(cd "$HERE/../../tests/golden/116/GRCh38-synonyms" && pwd)
+bash "$GEN" --corpus "$SYN" --perl-cache-dir "$CACHE" --dry-run --force --no-stats >"$TMP/syn.out" 2>"$TMP/syn.err"
+rc=$?
+committed=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["vep_command"])' "$SYN/provenance.json")
+expected="${committed% \[--tab|--vcf|--json\]}"
+expected="${expected/vep -i variants.vcf -o <out>/vep -i /work/input.vcf -o /work/perl_out/default.txt}"
+expected="${expected/--dir_cache <cache>/--dir_cache /work/cache}"
+printed=$(grep '^docker run ' "$TMP/syn.out" | head -1 | sed 's/^.* ensemblorg\/ensembl-vep:release_116\.2 //; s/ $//')
+[[ "$rc" -eq 0 && -n "$printed" && "$printed" == "$expected" ]] && ok "corpus_without_placeholder_is_unchanged: the committed GRCh38-synonyms corpus plans the vep command its provenance records" || {
+    bad "GRCh38-synonyms dry run (rc=$rc) differs from the committed command"
+    echo "         expected: $expected"
+    echo "         printed:  $printed"
+}
+grep '^docker run ' "$TMP/syn.out" | grep -q -- "-v $SYN:/work/corpus:ro -w /work/corpus " && ok "a corpus without {corpus} still runs in its mounted corpus directory" || bad "a corpus without {corpus} does not run in its mounted corpus directory"
+[[ ! -e "$SYN/.generate.dry-run" && -z "$(find "$SYN" -name '.generate.*')" ]] && ok "the committed corpus is left untouched by the dry run" || bad "the dry run wrote into the committed corpus"
+
+echo
+echo "PLUGINS: a manifest's plugin_files name the data files an Ensembl VEP plugin reads"
+# corpus_plugin_files_need_the_module_directory: a corpus naming plugin_files, or
+# {plugins} in a flag word, runs only with --dir-plugins; the directory is mounted
+# read-only at /work/plugins and every {plugins} word takes the mount; every named file
+# must exist; the recorded command keeps {plugins} and provenance.json digests the files.
+build_tree
+build_corpus
+mkdir -p "$CORPUS/plugin_data" "$TMP/plugins"
+printf 'chr\tpos\n' >"$CORPUS/plugin_data/scores.tsv"
+printf 'package Example;\n1;\n' >"$TMP/plugins/Example.pm"
+python3 - "$CORPUS/manifest.json" <<'EOF'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+m = json.loads(p.read_text())
+m["flags"] = ["--dir_plugins", "{plugins}", "--plugin", "Example,file={corpus}/plugin_data/scores.tsv,home:{plugins}"]
+m["plugin_files"] = {"Example": ["plugin_data/scores.tsv"]}
+p.write_text(json.dumps(m, indent=1) + "\n")
+EOF
+run_corpus --dry-run >/dev/null 2>"$TMP/pl0.err"
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'pass --dir-plugins <dir>' "$TMP/pl0.err" && ok "corpus_plugin_files_need_the_module_directory: plugin_files without --dir-plugins is refused by name" || bad "plugin_files without --dir-plugins: rc=$rc"
+run_corpus --dry-run --dir-plugins "$TMP/no-such-dir" >/dev/null 2>"$TMP/pl1.err"
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q -- '--dir-plugins is not a directory' "$TMP/pl1.err" && ok "a --dir-plugins that is not a directory is refused" || bad "--dir-plugins missing directory: rc=$rc"
+run_corpus --dry-run --dir-plugins "$TMP/plugins" >"$TMP/pl.out" 2>"$TMP/pl.err"
+rc=$?
+n=$(count_docker_cmds "$TMP/pl.out")
+[[ "$rc" -eq 0 && "$n" -eq 4 ]] && ok "a corpus with plugin_files and --dir-plugins plans its four commands" || {
+    bad "corpus with plugin_files: rc=$rc commands=$n"
+    head -5 "$TMP/pl.err" | sed 's/^/         /'
+}
+n=$(grep -c -- "-v $TMP/plugins:/work/plugins:ro " "$TMP/pl.out") || n=0
+[[ "$n" -eq 4 ]] && ok "every command mounts the plugin modules read-only at /work/plugins" || bad "$n of 4 commands mount the plugins directory"
+n=$(grep -c -- "-v $CORPUS:/work/corpus:ro " "$TMP/pl.out") || n=0
+[[ "$n" -eq 4 ]] && ok "every command mounts the corpus for the plugin's data files" || bad "$n of 4 commands mount the corpus"
+rewritten=$(printf '%q ' --dir_plugins /work/plugins --plugin "Example,file=/work/corpus/plugin_data/scores.tsv,home:/work/plugins")
+n=$(grep -cF -- "--force_overwrite $rewritten" "$TMP/pl.out") || n=0
+[[ "$n" -eq 4 ]] && ok "{plugins} takes the mount in every word that carries it, beside {corpus}" || bad "$n of 4 commands carry the rewritten plugin words"
+grep '^docker run ' "$TMP/pl.out" | grep -q 'plugins}' && bad "a {plugins} word reached a command unrewritten" || ok "no command carries {plugins}"
+: >"$TMP/pl.log"
+STUB_ROWS=3 STUB_LOG="$TMP/pl.log" PATH="$STUBDIR:$PATH" run_corpus --dir-plugins "$TMP/plugins" >/dev/null 2>"$TMP/plr.err"
+rc=$?
+[[ "$rc" -eq 0 ]] && ok "a corpus with plugin_files runs" || {
+    bad "corpus with plugin_files exited $rc"
+    head -5 "$TMP/plr.err" | sed 's/^/         /'
+}
+python3 - "$CORPUS" <<'EOF' >"$TMP/pl.check" 2>&1
+import hashlib, json, sys
+from pathlib import Path
+c = Path(sys.argv[1])
+p = json.loads((c / "provenance.json").read_text())
+assert "--force_overwrite --dir_plugins {plugins} --plugin Example,file={corpus}/plugin_data/scores.tsv,home:{plugins} [--tab|--vcf|--json]" in p["vep_command"], p["vep_command"]
+assert "/work/plugins" not in p["vep_command"], p["vep_command"]
+assert p["plugin_files"] == {"plugin_data/scores.tsv": hashlib.sha256((c / "plugin_data/scores.tsv").read_bytes()).hexdigest()}, p["plugin_files"]
+print("OK")
+EOF
+grep -q '^OK$' "$TMP/pl.check" && ok "provenance.json keeps {plugins} in the command and records the sha256 of every plugin file" || {
+    bad "provenance.json plugin record is wrong"
+    tail -2 "$TMP/pl.check" | sed 's/^/         /'
+}
+python3 - "$CORPUS/manifest.json" <<'EOF'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+m = json.loads(p.read_text())
+m["plugin_files"] = {"Example": ["plugin_data/scores.tsv", "plugin_data/missing.tsv"]}
+p.write_text(json.dumps(m, indent=1) + "\n")
+EOF
+run_corpus --dry-run --dir-plugins "$TMP/plugins" --force >/dev/null 2>"$TMP/pl2.err"
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'names a file the corpus lacks: plugin_data/missing.tsv' "$TMP/pl2.err" && ok "a plugin_files entry the corpus lacks fails preflight by name" || bad "missing plugin file: rc=$rc"
+python3 - "$CORPUS/manifest.json" <<'EOF'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+m = json.loads(p.read_text())
+m["plugin_files"] = {"Example": ["../other/scores.tsv"]}
+p.write_text(json.dumps(m, indent=1) + "\n")
+EOF
+run_corpus --dry-run --dir-plugins "$TMP/plugins" --force >/dev/null 2>"$TMP/pl3.err"
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'must be paths inside the corpus' "$TMP/pl3.err" && ok "a plugin_files path outside the corpus is refused" || bad "plugin file outside the corpus: rc=$rc"
+build_corpus
+python3 - "$CORPUS/manifest.json" <<'EOF'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+m = json.loads(p.read_text())
+m["flags"] = ["--dir_plugins", "{plugins}", "--plugin", "Example"]
+p.write_text(json.dumps(m, indent=1) + "\n")
+EOF
+run_corpus --dry-run >/dev/null 2>"$TMP/pl4.err"
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'pass --dir-plugins <dir>' "$TMP/pl4.err" && ok "{plugins} in a flag word without --dir-plugins is refused by name" || bad "{plugins} without --dir-plugins: rc=$rc"
+run_corpus --dry-run --dir-plugins "$TMP/plugins" >"$TMP/pl5.out" 2>/dev/null
+rc=$?
+n=$(grep -cF -- "--dir_plugins /work/plugins --plugin Example" "$TMP/pl5.out") || n=0
+[[ "$rc" -eq 0 && "$n" -eq 4 ]] && ok "{plugins} without plugin_files takes the mount as well" || bad "{plugins} without plugin_files: rc=$rc rewritten=$n"
+out=$(run_gen --dry-run --suites s01 --dir-plugins "$TMP/plugins" 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'a suite run takes none' <<<"$out" && ok "--dir-plugins on a suite run is refused" || bad "--dir-plugins on a suite run exited $rc"
+out=$(run_gen --dry-run --suites s01 --flags "--dir_plugins {plugins}" 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'a suite run has no plugin directory' <<<"$out" && ! grep -q '^docker run ' <<<"$out" &&
+    ok "--flags carrying {plugins} on a suite run is refused by name" || bad "--flags with {plugins} on a suite run exited $rc"
+
+# --perl-env NAME=VALUE sets a variable in every vep container run (-e before the image)
+# and is recorded under perl_env; a word without `=`, with an empty name or with whitespace
+# is refused, a tool run refuses the option, and a glob character in a value is not expanded.
+build_tree
+build_corpus
+run_corpus --dry-run --perl-env PERL_HASH_SEED=0 --perl-env PERL_PERTURB_KEYS=0 >"$TMP/env.out" 2>"$TMP/env.err"
+rc=$?
+n=$(grep -cF -- "-e PERL_HASH_SEED=0 -e PERL_PERTURB_KEYS=0 ensemblorg/ensembl-vep:release_116.2 vep " "$TMP/env.out") || n=0
+[[ "$rc" -eq 0 && "$n" -eq 4 ]] && ok "--perl-env words reach every container run as -e before the image" || {
+    bad "--perl-env dry run: rc=$rc commands carrying the words=$n"
+    head -3 "$TMP/env.err" | sed 's/^/         /'
+}
+run_corpus --dry-run >"$TMP/env0.out" 2>/dev/null
+grep '^docker run ' "$TMP/env0.out" | grep -q -- ' -e ' && bad "a run without --perl-env carries an -e word" || ok "a run without --perl-env sets no variable"
+for word in PERL_HASH_SEED =0 "=a=b" "FOO=a b"; do
+    out=$(run_corpus --dry-run --perl-env "$word" 2>&1)
+    rc=$?
+    [[ "$rc" -ne 0 ]] && grep -q -- "--perl-env takes NAME=VALUE without whitespace, got '$word'" <<<"$out" && ok "--perl-env '$word' is refused by name" || bad "--perl-env '$word' exited $rc"
+done
+out=$(run_gen --dry-run --suites s01 --perl-env PERL_HASH_SEED=0 2>&1)
+rc=$?
+n=$(grep -c -- "-e PERL_HASH_SEED=0 ensemblorg/ensembl-vep:release_116.2 vep " <<<"$out") || n=0
+[[ "$rc" -eq 0 && "$n" -eq 1 ]] && ok "--perl-env reaches a suite run's command" || bad "--perl-env on a suite run: rc=$rc commands=$n"
+mkdir -p "$TMP/globdir" && : >"$TMP/globdir/X=1"
+out=$(cd "$TMP/globdir" && run_corpus --dry-run --perl-env 'X=*' 2>&1)
+rc=$?
+n=$(grep -cF -- '-e X=\* ' <<<"$out") || n=0
+[[ "$rc" -eq 0 && "$n" -eq 4 ]] && ok "a glob character in a --perl-env value reaches the command unexpanded" || bad "--perl-env glob value: rc=$rc commands carrying it=$n"
+: >"$TMP/envs.log"
+STUB_ROWS=3 STUB_LOG="$TMP/envs.log" PATH="$STUBDIR:$PATH" run_gen --suites s01 --perl-env PERL_HASH_SEED=0 >/dev/null 2>"$TMP/envs.err"
+rc=$?
+python3 - "$SNP_GT/s01/output.provenance.json" <<'EOF2' >"$TMP/envs.check" 2>&1
+import json, sys
+p = json.load(open(sys.argv[1]))
+assert p["perl_env"] == ["PERL_HASH_SEED=0"], p.get("perl_env")
+print("OK")
+EOF2
+[[ "$rc" -eq 0 ]] && grep -q '^OK$' "$TMP/envs.check" && ok "a suite run's provenance records perl_env as a JSON array" || {
+    bad "suite provenance perl_env: rc=$rc"
+    tail -2 "$TMP/envs.check" | sed 's/^/         /'
+    head -3 "$TMP/envs.err" | sed 's/^/         /'
+}
+: >"$TMP/env.log"
+STUB_ROWS=3 STUB_LOG="$TMP/env.log" PATH="$STUBDIR:$PATH" run_corpus --perl-env PERL_HASH_SEED=0 --perl-env PERL_PERTURB_KEYS=0 >/dev/null 2>"$TMP/envr.err"
+rc=$?
+python3 - "$CORPUS" <<'EOF2' >"$TMP/env.check" 2>&1
+import json, sys
+from pathlib import Path
+p = json.loads((Path(sys.argv[1]) / "provenance.json").read_text())
+assert p["perl_env"] == ["PERL_HASH_SEED=0", "PERL_PERTURB_KEYS=0"], p.get("perl_env")
+print("OK")
+EOF2
+[[ "$rc" -eq 0 ]] && grep -q '^OK$' "$TMP/env.check" && ok "a corpus run records its --perl-env words under perl_env" || {
+    bad "corpus provenance perl_env: rc=$rc"
+    tail -2 "$TMP/env.check" | sed 's/^/         /'
+}
+: >"$TMP/env.log"
+STUB_ROWS=3 STUB_LOG="$TMP/env.log" PATH="$STUBDIR:$PATH" run_corpus --force >/dev/null 2>"$TMP/envr2.err"
+rc=$?
+python3 - "$CORPUS" <<'EOF2' >"$TMP/env2.check" 2>&1
+import json, sys
+from pathlib import Path
+p = json.loads((Path(sys.argv[1]) / "provenance.json").read_text())
+assert "perl_env" not in p, p.get("perl_env")
+print("OK")
+EOF2
+[[ "$rc" -eq 0 ]] && grep -q '^OK$' "$TMP/env2.check" && ok "a regeneration without --perl-env drops the earlier record's perl_env" || {
+    bad "corpus provenance perl_env not dropped: rc=$rc"
+    tail -2 "$TMP/env2.check" | sed 's/^/         /'
+}
+
+echo
+echo "TOOL: --tool filter_vep runs a corpus's tool_cases in the image and records each case"
+TCORPUS="$TMP/toolcorpus"
+build_tool_corpus() { # build_tool_corpus [manifest-json]
+    rm -rf "$TCORPUS"
+    mkdir -p "$TCORPUS"
+    printf '##fileformat=VCFv4.2\n##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence annotations from Ensembl VEP. Format: Allele|Consequence">\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t100\tr1\tA\tG\t.\t.\tCSQ=G|missense_variant\n21\t200\tr2\tA\tG\t.\t.\tCSQ=G|intron_variant\n' >"$TCORPUS/annotated.vcf"
+    printf '#Uploaded_variation\tLocation\tAllele\tConsequence\nr1\t21:100\tG\tmissense_variant\n' >"$TCORPUS/annotated.tab"
+    if [[ -n "${1:-}" ]]; then
+        printf '%s\n' "$1" >"$TCORPUS/manifest.json"
+    else
+        cat >"$TCORPUS/manifest.json" <<'EOF'
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "covers": ["filter-vep"],
+ "tool_cases": [
+  {"name": "missense", "input": "annotated.vcf", "args": ["--filter", "Consequence is missense_variant"], "expected": "expected/filter/missense.vcf"},
+  {"name": "count", "input": "annotated.vcf", "args": ["--count", "--filter", "Consequence is intron_variant"], "expected": "expected/filter/count.txt"},
+  {"name": "ontology", "input": "annotated.vcf", "args": ["--ontology", "--filter", "Consequence is coding_sequence_variant"], "perl_args": ["--version", "116"], "expected": "expected/filter/ontology.vcf"},
+  {"name": "tab", "input": "annotated.tab", "args": ["--filter", "Allele is G"], "expected": "expected/filter/tab.tab"}
+ ]
+}
+EOF
+    fi
+}
+# The stub docker's filter_vep: the input's header lines, then the data lines holding the
+# filter's last word, or their count under --count, on standard output, as filter_vep prints.
+cat >"$STUBDIR/filter_vep" <<'EOF'
+#!/usr/bin/env bash
+# filter_vep <host corpus dir> <filter_vep args...>
+corpus="$1"; shift
+input=""; count=0; word=""; rest=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    -i) input="${2#/work/corpus/}"; shift 2 ;;
+    --count) count=1; shift ;;
+    --filter) word="${2##* }"; shift 2 ;;
+    *) rest="$rest $1"; shift ;;
+    esac
+done
+[[ -n "${STUB_TOOL_LOG:-}" ]] && printf '%s|%s|%s\n' "$input" "$word" "${rest# }" >>"$STUB_TOOL_LOG"
+[[ -z "${STUB_TOOL_SILENT:-}" ]] || exit 0
+grep '^#' "$corpus/$input"
+if [[ "$count" -eq 1 ]]; then
+    n=$(grep -v '^#' "$corpus/$input" | grep -c -- "$word") || n=0
+    echo "$n"
+else
+    grep -v '^#' "$corpus/$input" | grep -- "$word" || true
+fi
+exit "${STUB_TOOL_RC:-0}"
+EOF
+chmod +x "$STUBDIR/filter_vep"
+# A docker stub that hands a filter_vep invocation to the filter_vep stub, with the host
+# directory mounted at /work/corpus, and everything else to the vep stub above.
+mv "$STUBDIR/docker" "$STUBDIR/docker-vep"
+cat >"$STUBDIR/docker" <<EOF
+#!/usr/bin/env bash
+if [[ "\$1" == "run" ]]; then
+    corpus=""
+    args=("\$@")
+    for ((i = 0; i < \${#args[@]}; i++)); do
+        if [[ "\${args[i]}" == "-v" && "\${args[i + 1]}" == *:/work/corpus:ro ]]; then corpus="\${args[i + 1]%%:*}"; fi
+        if [[ "\${args[i]}" == "filter_vep" ]]; then exec "$STUBDIR/filter_vep" "\$corpus" "\${args[@]:i+1}"; fi
+    done
+fi
+exec "$STUBDIR/docker-vep" "\$@"
+EOF
+chmod +x "$STUBDIR/docker"
+
+build_tool_corpus
+TGEN() { bash "$GEN" --corpus "$TCORPUS" --tool filter_vep "$@"; }
+TGEN --dry-run >"$TMP/td.out" 2>"$TMP/td.err"
+rc=$?
+n=$(count_docker_cmds "$TMP/td.out")
+[[ "$rc" -eq 0 && "$n" -eq 4 ]] && ok "a tool dry run plans one filter_vep command per tool case" || {
+    bad "tool dry run: rc=$rc commands=$n"
+    head -5 "$TMP/td.err" | sed 's/^/         /'
+}
+grep -q -- "filter_vep -i /work/corpus/annotated.vcf --filter 'Consequence is missense_variant'\$" "$TMP/td.out" && ok "a case's words follow -i /work/corpus/<input>, quoted" || bad "the missense case's command is not as planned"
+grep -q -- "--ontology --filter 'Consequence is coding_sequence_variant' --version 116\$" "$TMP/td.out" && ok "a case's perl_args follow its args" || bad "the ontology case lacks its perl_args"
+grep -q -- "-v $TCORPUS:/work/corpus:ro" "$TMP/td.out" && ok "the corpus is mounted read-only at /work/corpus" || bad "the corpus mount is missing"
+grep -q -- '--dir_cache\|--cache_version\|/work/perl_out' "$TMP/td.out" && bad "a tool command carries a vep cache or output flag" || ok "a tool command carries no vep cache or output flag"
+grep -q "\[filter_vep count\] -> $TCORPUS/expected/filter/count.txt" "$TMP/td.out" && ok "the dry run names each case's destination" || bad "the count case's destination is not named"
+[[ ! -e "$TCORPUS/expected" && -z "$(find "$TCORPUS" -name '.generate.*')" ]] && ok "a tool dry run writes nothing" || bad "a tool dry run wrote into the corpus"
+out=$(TGEN --dry-run --perl-env PERL_HASH_SEED=0 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'drop --perl-env' <<<"$out" && ok "--perl-env on a tool run is refused by name" || bad "--perl-env on a tool run exited $rc"
+TGEN --dry-run --tool-case count --tool-case tab >"$TMP/td2.out" 2>&1
+n=$(count_docker_cmds "$TMP/td2.out")
+[[ "$n" -eq 2 ]] && grep -q 'filter_vep count\]' "$TMP/td2.out" && grep -q 'filter_vep tab\]' "$TMP/td2.out" && ok "--tool-case selects the named cases" || bad "--tool-case: $n commands planned"
+TGEN --dry-run --tool-args "--host localhost --port 3337" >"$TMP/td3.out" 2>&1
+n=$(grep -c -- "^docker run .*--host localhost --port 3337\$" "$TMP/td3.out") || n=0
+[[ "$n" -eq 4 ]] && ok "--tool-args words end every case's command" || bad "$n of 4 commands carry the --tool-args words"
+out=$(TGEN --dry-run --tool-case nope 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q -- '--tool-case names no case of the manifest: nope' <<<"$out" && ok "a --tool-case the manifest lacks is refused by name" || bad "unknown --tool-case exited $rc"
+
+: >"$TMP/tool.log"
+STUB_TOOL_LOG="$TMP/tool.log" PATH="$STUBDIR:$PATH" TGEN >"$TMP/tr.out" 2>"$TMP/tr.err"
+rc=$?
+[[ "$rc" -eq 0 ]] && ok "a tool run exits 0" || {
+    bad "tool run exited $rc"
+    head -5 "$TMP/tr.err" | sed 's/^/         /'
+}
+[[ -f "$TCORPUS/expected/filter/missense.vcf" && -f "$TCORPUS/expected/filter/count.txt" && -f "$TCORPUS/expected/filter/ontology.vcf" && -f "$TCORPUS/expected/filter/tab.tab" ]] &&
+    ok "every case's expected file is written under the corpus" || bad "an expected file is missing"
+[[ "$(grep -vc '^#' "$TCORPUS/expected/filter/missense.vcf")" -eq 1 && "$(tail -1 "$TCORPUS/expected/filter/count.txt")" == "1" ]] &&
+    ok "an expected file is the container's standard output, a --count case included" || bad "the expected files do not carry the container's standard output: $(grep -vc '^#' "$TCORPUS/expected/filter/missense.vcf") data line(s), count $(tr '\n' ' ' <"$TCORPUS/expected/filter/count.txt")"
+grep -q '^annotated.vcf|coding_sequence_variant|--ontology --version 116$' "$TMP/tool.log" && ok "the container ran the ontology case with its perl_args" || bad "the ontology case's command was not run as planned: $(cat "$TMP/tool.log")"
+python3 - "$TCORPUS" <<'EOF' >"$TMP/tr.check" 2>&1
+import hashlib, json, sys
+from pathlib import Path
+c = Path(sys.argv[1])
+p = json.loads((c / "provenance.json").read_text())
+assert p["tool"] == "filter_vep", p["tool"]
+assert p["tool_image"] == "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da", p["tool_image"]
+assert p["tool_image_tag"] == "ensemblorg/ensembl-vep:release_116.2"
+cases = p["tool_cases"]
+assert list(cases) == ["missense", "count", "ontology", "tab"], list(cases)
+for name, case in cases.items():
+    assert case["sha256"] == hashlib.sha256((c / case["expected"]).read_bytes()).hexdigest(), name
+    assert case["expected"] == f"expected/filter/{name}." + ("txt" if name == "count" else "tab" if name == "tab" else "vcf"), case["expected"]
+    assert p["sha256"][case["expected"][len("expected/"):]] == case["sha256"], name
+assert len(p["sha256"]) == 4, p["sha256"]
+assert cases["ontology"]["command"] == "filter_vep -i annotated.vcf --ontology --filter 'Consequence is coding_sequence_variant' --version 116", cases["ontology"]["command"]
+assert cases["count"]["data_lines"] == 1, cases["count"]
+print("OK")
+EOF
+grep -q '^OK$' "$TMP/tr.check" && ok "provenance.json records the image digest and each case's command, expected file and sha256, the digests under sha256 as well" || {
+    bad "provenance.json tool record is wrong"
+    tail -3 "$TMP/tr.check" | sed 's/^/         /'
+}
+[[ -z "$(find "$TCORPUS" -name '.generate.*')" ]] && ok "the tool scratch directory is removed" || bad "a scratch directory survived the tool run"
+
+# Regeneration: refused without --force; a case that fails leaves every committed file untouched.
+PATH="$STUBDIR:$PATH" TGEN >/dev/null 2>"$TMP/tr2.err"
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q "reference output already exists: $TCORPUS/expected/filter/missense.vcf" "$TMP/tr2.err" &&
+    ok "an existing expected file refuses a tool regeneration without --force" || bad "tool regeneration without --force: rc=$rc"
+before=$(sha256_file "$TCORPUS/expected/filter/missense.vcf")
+python3 - "$TCORPUS" <<'EOF'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1]) / "provenance.json"
+d = json.loads(p.read_text())
+d["input"] = "hand-built records"
+p.write_text(json.dumps(d, indent=1) + "\n")
+EOF
+STUB_TOOL_RC=3 PATH="$STUBDIR:$PATH" TGEN --force >/dev/null 2>"$TMP/tr3.err"
+rc=$?
+[[ "$rc" -ne 0 && "$(sha256_file "$TCORPUS/expected/filter/missense.vcf")" == "$before" ]] && grep -q 'filter_vep missense exited 3' "$TMP/tr3.err" &&
+    [[ -z "$(find "$TCORPUS" -name '.generate.*')" ]] &&
+    ok "a case that exits non-zero fails the run by name and leaves the committed files and no scratch directory" || bad "failing tool case: rc=$rc"
+STUB_TOOL_SILENT=1 PATH="$STUBDIR:$PATH" TGEN --force >/dev/null 2>"$TMP/tr4.err"
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'exited 0 and wrote nothing' "$TMP/tr4.err" && ok "a case that writes nothing fails the run" || bad "silent tool case: rc=$rc"
+PATH="$STUBDIR:$PATH" TGEN --force --tool-case count >/dev/null 2>"$TMP/tr5.err"
+rc=$?
+python3 - "$TCORPUS" <<'EOF' >"$TMP/tr5.check" 2>&1
+import json, sys
+from pathlib import Path
+p = json.loads((Path(sys.argv[1]) / "provenance.json").read_text())
+assert p["input"] == "hand-built records", p.get("input")
+assert list(p["tool_cases"]) == ["missense", "count", "ontology", "tab"], list(p["tool_cases"])
+print("OK")
+EOF
+[[ "$rc" -eq 0 ]] && grep -q '^OK$' "$TMP/tr5.check" && ok "--force --tool-case rewrites one case and keeps the other cases and the keys the script does not own" || {
+    bad "tool --force --tool-case: rc=$rc"
+    tail -2 "$TMP/tr5.check" | sed 's/^/         /'
+}
+
+# Refusals around --tool.
+out=$(bash "$GEN" --corpus "$TCORPUS" --tool haplo --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'invalid --tool: haplo (filter_vep, variant_recoder)' <<<"$out" && ok "a tool other than filter_vep or variant_recoder is refused naming both" || bad "--tool haplo exited $rc"
+out=$(bash "$GEN" --data-dir "$DATA" --tool filter_vep --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q -- '--tool runs a corpus' <<<"$out" && ok "--tool without --corpus is refused" || bad "--tool without --corpus exited $rc"
+out=$(bash "$GEN" --corpus "$TCORPUS" --tool-args "--version 116" --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q -- '--tool-args and --tool-case need --tool' <<<"$out" && ok "--tool-args without --tool is refused" || bad "--tool-args without --tool exited $rc"
+out=$(TGEN --dry-run --flags "--everything" 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'drop --flags and --format' <<<"$out" && ok "--tool refuses --flags" || bad "--tool --flags exited $rc"
+out=$(TGEN --dry-run --assembly GRCh38 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'takes no suite option' <<<"$out" && ok "--tool refuses a suite option" || bad "--tool --assembly exited $rc"
+out=$(TGEN --dry-run --no-stats 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'writes no statistics; drop --stats and --no-stats' <<<"$out" && ok "--tool refuses --no-stats (filter_vep writes no report)" || bad "--tool --no-stats exited $rc"
+build_tool_corpus '{"assembly": "GRCh38", "tool_cases": []}'
+out=$(TGEN --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'tool_cases must be a non-empty list' <<<"$out" && ok "a manifest without tool cases is refused" || bad "empty tool_cases exited $rc"
+build_tool_corpus '{"assembly": "GRCh38", "tool_cases": [{"name": "x", "input": "missing.vcf", "args": ["--filter", "a"], "expected": "expected/filter/x.vcf"}]}'
+out=$(TGEN --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'input not found' <<<"$out" && ok "a case naming an input the corpus lacks is refused" || bad "missing case input exited $rc"
+build_tool_corpus '{"assembly": "GRCh38", "tool_cases": [{"name": "x", "input": "annotated.vcf", "args": ["--filter", "a"], "expected": "../x.vcf"}]}'
+out=$(TGEN --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'expected must be a file path under expected/' <<<"$out" && ok "an expected path outside expected/ is refused" || bad "expected path outside expected/ exited $rc"
+build_tool_corpus '{"assembly": "GRCh38", "tool_cases": [{"name": "x", "input": "annotated.vcf", "args": ["--filter", "a"], "expected": "expected/filter/a\tb.vcf"}]}'
+out=$(TGEN --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'tool case x: expected holds a tab or newline' <<<"$out" && ! grep -q '^docker run ' <<<"$out" &&
+    ok "an expected path holding a tab (the plan's field separator) is refused by name before any command is printed" || bad "a tab in an expected path exited $rc"
+build_tool_corpus '{"assembly": "GRCh38", "tool_cases": [{"name": "x", "input": "annotated.vcf", "args": "--filter a", "expected": "expected/filter/x.vcf"}]}'
+out=$(TGEN --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'args must be a list of non-empty strings' <<<"$out" && ok "a case whose args is one string is refused" || bad "string-valued args exited $rc"
+build_tool_corpus '{"assembly": "GRCh38", "tool_cases": [{"name": "x", "input": "annotated.vcf", "args": ["--filter", "a"], "expected": "expected/filter/x.vcf"}, {"name": "x", "input": "annotated.vcf", "args": ["--filter", "b"], "expected": "expected/filter/y.vcf"}]}'
+out=$(TGEN --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'tool case named twice: x' <<<"$out" && ok "two cases of one name are refused" || bad "duplicate case names exited $rc"
+build_tool_corpus
+echo '[1]' >"$TCORPUS/provenance.json"
+out=$(TGEN --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'not a JSON object' <<<"$out" && ok "a tool corpus whose provenance.json is not an object is refused" || bad "array provenance.json (tool) exited $rc"
+# The vep paths keep their stub: a corpus run through the two-stage docker stub still works.
+build_tree
+build_corpus
+STUB_ROWS=5 PATH="$STUBDIR:$PATH" run_corpus >/dev/null 2>"$TMP/cr7.err"
+rc=$?
+[[ "$rc" -eq 0 && -f "$CORPUS/expected/default.txt.gz" ]] && ok "the vep stub still answers a corpus run beside the filter_vep stub" || bad "corpus run through the two-stage stub: rc=$rc"
+
+echo
+echo "TOOL: --tool variant_recoder runs a recoder corpus's tool_cases the same way"
+RCORPUS="$TMP/recodercorpus"
+build_recoder_corpus() { # build_recoder_corpus [manifest-json]
+    rm -rf "$RCORPUS"
+    mkdir -p "$RCORPUS"
+    printf 'rs1\nrs2\n' >"$RCORPUS/variants.id.txt"
+    printf '21\t100\trs1\tA\tG\t.\t.\t.\n' >"$RCORPUS/variants.recode.vcf"
+    if [[ -n "${1:-}" ]]; then
+        printf '%s\n' "$1" >"$RCORPUS/manifest.json"
+    else
+        cat >"$RCORPUS/manifest.json" <<'EOF2'
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "covers": ["variant_recoder"],
+ "tool": "variant_recoder",
+ "tool_cases": [
+  {"name": "id", "input": "variants.id.txt", "args": ["--vcf_string", "--pretty"], "perl_args": ["--db_version", "116"], "perl_mode": "database", "expected": "expected/recoder/id.json"},
+  {"name": "vcf", "input": "variants.recode.vcf", "args": ["--vcf_string"], "perl_args": ["--db_version", "116"], "perl_mode": "database", "expected": "expected/recoder/vcf.json"}
+ ]
+}
+EOF2
+    fi
+}
+# The stub docker's variant_recoder: one JSON object per input line on standard output.
+cat >"$STUBDIR/variant_recoder" <<'EOF2'
+#!/usr/bin/env bash
+# variant_recoder <host corpus dir> <variant_recoder args...>
+corpus="$1"; shift
+input=""; rest=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    -i) input="${2#/work/corpus/}"; shift 2 ;;
+    *) rest="$rest $1"; shift ;;
+    esac
+done
+[[ -n "${STUB_TOOL_LOG:-}" ]] && printf '%s|%s\n' "$input" "${rest# }" >>"$STUB_TOOL_LOG"
+printf '['
+first=1
+while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    [[ "$first" -eq 1 ]] || printf ','
+    first=0
+    printf '{"A":{"input":"%s","hgvsg":["NC_000021.9:g.100A>G"]}}' "${line//	/\\t}"
+done <"$corpus/$input"
+printf ']\n'
+exit "${STUB_TOOL_RC:-0}"
+EOF2
+chmod +x "$STUBDIR/variant_recoder"
+# The docker stub hands a variant_recoder invocation to its stub as it hands filter_vep's.
+sed -i 's|if \[\[ "\${args\[i\]}" == "filter_vep" \]\]; then exec "'"$STUBDIR"'/filter_vep" "\$corpus" "\${args\[@\]:i+1}"; fi|&\n        if [[ "\${args[i]}" == "variant_recoder" ]]; then exec "'"$STUBDIR"'/variant_recoder" "\$corpus" "\${args[@]:i+1}"; fi|' "$STUBDIR/docker"
+grep -q 'variant_recoder' "$STUBDIR/docker" && ok "the docker stub routes variant_recoder to its stub" || bad "the docker stub has no variant_recoder route"
+build_recoder_corpus
+RGEN() { bash "$GEN" --corpus "$RCORPUS" --tool variant_recoder "$@"; }
+RGEN --dry-run >"$TMP/rd.out" 2>"$TMP/rd.err"
+rc=$?
+n=$(count_docker_cmds "$TMP/rd.out")
+[[ "$rc" -eq 0 && "$n" -eq 2 ]] && ok "a recoder dry run plans one variant_recoder command per tool case" || {
+    bad "recoder dry run: rc=$rc commands=$n"
+    sed 's/^/         /' "$TMP/rd.err" | head -5
+}
+grep -q -- 'variant_recoder -i /work/corpus/variants.id.txt --vcf_string --pretty --db_version 116$' "$TMP/rd.out" && ok "a recoder command carries the case's args then its perl_args" || bad "recoder command words: $(grep '^docker run' "$TMP/rd.out" | head -1)"
+grep -q -- '--dir_cache\|--fasta\|/work/perl_out' "$TMP/rd.out" && bad "a recoder command carries a vep cache, FASTA or output flag" || ok "a recoder command carries no vep cache, FASTA or output flag"
+: >"$TMP/rtool.log"
+STUB_TOOL_LOG="$TMP/rtool.log" PATH="$STUBDIR:$PATH" RGEN >"$TMP/rr.out" 2>"$TMP/rr.err"
+rc=$?
+[[ "$rc" -eq 0 ]] && ok "a recoder run exits 0" || {
+    bad "recoder run exited $rc"
+    sed 's/^/         /' "$TMP/rr.err" | head -5
+}
+[[ -f "$RCORPUS/expected/recoder/id.json" && -f "$RCORPUS/expected/recoder/vcf.json" ]] && ok "a recoder run writes each case's expected JSON" || bad "recoder expected files missing"
+python3 - "$RCORPUS" >"$TMP/rr.check" 2>&1 <<'EOF2'
+import hashlib, json, sys
+from pathlib import Path
+corpus = Path(sys.argv[1])
+p = json.loads((corpus / "provenance.json").read_text())
+assert p["tool"] == "variant_recoder", p["tool"]
+cases = p["tool_cases"]
+assert list(cases) == ["id", "vcf"], list(cases)
+assert cases["id"]["command"] == "variant_recoder -i variants.id.txt --vcf_string --pretty --db_version 116", cases["id"]["command"]
+assert cases["id"]["data_lines"] == 1, cases["id"]
+objects = json.loads((corpus / cases["id"]["expected"]).read_text())
+assert [o["A"]["input"] for o in objects] == ["rs1", "rs2"], objects
+for name, case in cases.items():
+    digest = hashlib.sha256((corpus / case["expected"]).read_bytes()).hexdigest()
+    assert digest == case["sha256"] == p["sha256"][case["expected"][len("expected/"):]], name
+print("OK")
+EOF2
+rc=$?
+[[ "$rc" -eq 0 ]] && grep -q '^OK$' "$TMP/rr.check" && ok "provenance.json records the recoder tool, each case's command and the digests" || {
+    bad "provenance.json recoder record is wrong"
+    sed 's/^/         /' "$TMP/rr.check" | head -5
+}
+out=$(bash "$GEN" --corpus "$RCORPUS" --tool filter_vep --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q "manifest tool is 'variant_recoder', not the --tool given (filter_vep)" <<<"$out" && ok "a recoder corpus run under --tool filter_vep is refused by its manifest tool" || bad "manifest tool mismatch exited $rc: $out"
+build_tool_corpus
+out=$(bash "$GEN" --corpus "$TCORPUS" --tool variant_recoder --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q "manifest tool is 'filter_vep', not the --tool given (variant_recoder)" <<<"$out" && ok "a filter corpus run under --tool variant_recoder is refused by its default tool" || bad "default tool mismatch exited $rc: $out"
+build_recoder_corpus '{"assembly": "GRCh38", "tool": "variant_recoder", "tool_cases": [{"name": "x", "tool": "filter_vep", "input": "variants.id.txt", "args": ["--vcf_string"], "expected": "expected/recoder/x.json"}]}'
+out=$(RGEN --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q "tool case x: tool must be variant_recoder, got 'filter_vep'" <<<"$out" && ok "a case naming another tool is refused by name" || bad "case tool mismatch exited $rc: $out"
+out=$(bash "$GEN" --corpus "$RCORPUS" --tool variant_recoder --stats --dry-run 2>&1)
+rc=$?
+[[ "$rc" -ne 0 ]] && grep -q 'runs variant_recoder, which writes no statistics' <<<"$out" && ok "--tool variant_recoder refuses --stats naming the tool" || bad "--tool variant_recoder --stats exited $rc"
 
 echo
 echo "FLAG: the generator itself never passes --full_cache_dir"

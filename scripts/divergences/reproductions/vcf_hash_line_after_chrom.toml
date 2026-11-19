@@ -1,0 +1,33 @@
+entry = "vcf_hash_line_after_chrom"
+page = "docs/divergences/vcf-hash-line-after-chrom.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "malformed"
+input_class_basis = "a VCF \"contains meta-information lines, a header line, and then data lines\", a data line holding 8 fixed fields (VCF 4.2 specification, section 1 and section 1.4.1 \"Fixed fields\"): after the #CHROM header line stands a line prefixed with a single \"#\" that is not a data line"
+notes = "The single-# line `#note` after the eight-sample #CHROM line: Ensembl VEP takes it as the column line, so the sample list is empty and --individual all writes no row; vep-rs reads the samples from the #CHROM line and writes the record's 28 individual rows. The first of the page's four effects (a refused list, a missing ZYG and the VCF header are the others)."
+
+[input]
+format = "vcf"
+text = """
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	S1	S2	S3	S4	S5	S6	S7	S8
+#note
+21	34716340	hb_multi	G	A,T	.	.	.	GT	0/1	1/2	0/0	2/2	0/2	1/1	./2	./.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-individual/json_cache"
+
+[run]
+flags = ["--individual", "all"]
+format = "default"
+
+[compare]
+kind = "count"
+where = { record = "hb_multi" }
+
+[expected]
+ensembl_vep = ["0"]
+vep_rs = ["28"]

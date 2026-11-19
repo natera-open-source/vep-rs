@@ -1,0 +1,37 @@
+entry = "regulatory_gff_attribute_escapes"
+page = "docs/divergences/regulatory-rows.md#2-a---regulatory_gff-attribute-value-holding-a-gff3-escape"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the GFF3 specification, \"Description of the Format\": \";\" and \",\" inside a column 9 value are written %3B and %2C; not seen in the measured datasets; classed by its most reachable shape, an identifier holding such an escape: an escaped digit in a promoter's extended bound breaks \"no other characters may be encoded\" there"
+notes = "A CTCF binding site whose ID attribute is written ESC%3BAPE%2C1, the GFF3 escapes of ; and ,; the tab format prints the Feature column as the engine names the feature."
+# A one-record regulatory file whose identifier holds two GFF3 escapes.
+prepare = [
+  "printf '##gff-version 3\\n21\\tEnsembl\\tCTCF_binding_site\\t5014322\\t5014343\\t.\\t-\\t.\\tID=ESC%%3BAPE%%2C1\\n' | bgzip -c > \"$STAGE/escaped_id.gff3.gz\"",
+  "tabix -p gff \"$STAGE/escaped_id.gff3.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+chr21	5014335	escaped_id	G	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-regulatory-gff/json_cache"
+chromosomes = ["21"]
+
+[run]
+flags = ["--regulatory_gff", "file={stage}/escaped_id.gff3.gz"]
+format = "tab"
+
+[compare]
+kind = "field"
+field = "Feature"
+where = { record = "escaped_id", feature_type = "RegulatoryFeature" }
+
+[expected]
+ensembl_vep = ["ESC%3BAPE%2C1"]
+vep_rs = ["ESC;APE,1"]

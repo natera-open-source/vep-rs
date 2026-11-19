@@ -230,7 +230,8 @@ fn vep_env_unknown_key_is_ignored() {
 
 /// A unique prefix of a long option names it, as Getopt::Long's `auto_abbrev`
 /// does (`Config.pm:62`): `--show_cache_i`, `--offl`, `--json_c` read as the
-/// full flags, and `--force` stays the alias of `--force_overwrite`.
+/// full flags, `--bio` is `--biotype` and adds the tab column, and `--force`
+/// stays the alias of `--force_overwrite`.
 #[test]
 fn unique_prefix_resolves() {
     let home = tempfile::tempdir().unwrap();
@@ -257,6 +258,7 @@ fn unique_prefix_resolves() {
             "--qui",
             "--output_fo",
             "tab",
+            "--bio",
             "-o",
             &out.display().to_string(),
         ])
@@ -264,19 +266,26 @@ fn unique_prefix_resolves() {
         .unwrap();
     assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
     assert!(tab_header(&out));
+    assert!(
+        fs::read_to_string(&out)
+            .unwrap()
+            .lines()
+            .any(|l| l.starts_with("#Uploaded_variation") && l.contains("\tBIOTYPE")),
+        "--bio is --biotype"
+    );
 }
 
 /// A prefix of several long options that Getopt::Long resolves no better is an
 /// argument syntax error, exit 2 with clap's `error:` and no `ERROR: [` line:
 /// `--fo` (fork, format, force_overwrite), `-fo` after one dash, `--hg` (the
-/// hgvs flags), `-sh` and `-ou`, which are not `-s h` and `-o u`. A prefix only
-/// vep-rs's own flags make ambiguous reads as Getopt::Long reads it over
-/// `@VEP_PARAMS`: `--js` is `--json` and writes JSON, `--pa` is `--password`
-/// and reaches its refusal.
+/// hgvs flags), `-sh` and `-ou`, which are not `-s h` and `-o u`, and `--bi`
+/// (biotype, bigwig). A prefix only vep-rs's own flags make ambiguous reads as
+/// Getopt::Long reads it over `@VEP_PARAMS`: `--js` is `--json` and writes
+/// JSON, `--pa` is `--password` and reaches its refusal.
 #[test]
 fn ambiguous_prefix_is_usage_error() {
     let home = tempfile::tempdir().unwrap();
-    for argv in [["--fo"], ["-fo"], ["--hg"], ["-sh"], ["-ou"]] {
+    for argv in [["--fo"], ["-fo"], ["--hg"], ["-sh"], ["-ou"], ["--bi"]] {
         let output = vep(home.path()).args(argv).output().unwrap();
         assert_eq!(output.status.code(), Some(2), "{argv:?}");
         let err = text(&output.stderr);
@@ -307,11 +316,11 @@ fn ambiguous_prefix_is_usage_error() {
     );
 }
 
-/// An Ensembl VEP option this version lacks is refused by its full name in any
-/// spelling (exit 2), never read as a cluster of shorts (`-stats_html` as
-/// `-s tats_html`); the option is taken from `@VEP_PARAMS` at run time, so the
-/// test holds as flags are declared. `-af_exac` reaches the error table's
-/// refusal (exit 1) as `--af_exac` does.
+/// An Ensembl VEP switch this version lacks is refused by its full name in any
+/// spelling (exit 2), never read as a cluster of shorts (`-name` as `-n ame`);
+/// the switch is taken from `@VEP_PARAMS` at run time, so the test holds as
+/// flags are declared, and runs nothing once every switch is declared.
+/// `-af_exac` reaches the error table's refusal (exit 1) as `--af_exac` does.
 #[test]
 fn single_dash_unknown_option_is_refused_by_name() {
     let home = tempfile::tempdir().unwrap();
@@ -723,6 +732,62 @@ fn a_repeatable_key_alone_on_its_config_line_is_dropped() {
          --no_stats --offline --output_file [PATH]/out.txt --protein --quiet"
     );
     assert!(annotated.contains("ENSP="), "the file's protein line acts");
+}
+
+/// A `--config` value carrying the literal text `___SPACE___` is read as
+/// written (`split_config_line` in `argv.rs` keeps a quoted blank by counting
+/// quotes and has no placeholder), so `output_file <dir>/Q___SPACE___out.txt`
+/// writes that file. Ensembl VEP 116.2's `read_config_from_file` substitutes
+/// that text for each blank inside double quotes (`Config.pm:1082`) and then
+/// restores every occurrence of it in the values (`:1089`, `s/___SPACE___/ /g
+/// for @split;`), a literal one included, so the same file writes `Q out.txt`
+/// there. A key in another case or abbreviated (`PROTEIN_VERSION 1`,
+/// `protein_v 1`) names nothing here and the line is dropped. Ensembl VEP's
+/// `is_valid_param` (`Config.pm:1035-1052`) passes it, since its `GetOptions`
+/// call reads the key under Getopt::Long's `ignore_case` and `auto_abbrev`,
+/// and `:1101` stores the value under the written key, which no module reads:
+/// the annotation is unchanged, but `full_command` (`:734-745`) echoes every
+/// stored key, so Ensembl VEP's header for this file carries
+/// `--PROTEIN_VERSION` and `--protein_v`. Here the header carries neither, nor
+/// `--protein_version`; the annotation row is identical in both engines.
+#[test]
+fn a_literal_placeholder_in_a_config_value_stays_as_written() {
+    let home = tempfile::tempdir().unwrap();
+    let file = home.path().join("flags.ini");
+    let out = home.path().join("Q___SPACE___out.txt");
+    fs::write(
+        &file,
+        format!(
+            "output_file {}\nPROTEIN_VERSION 1\nprotein_v 1\n",
+            out.display()
+        ),
+    )
+    .unwrap();
+    let mut args = corpus_args();
+    args.extend(["--config".to_string(), file.display().to_string()]);
+    let output = vep(home.path()).args(&args).output().unwrap();
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert!(out.is_file(), "the output lands at the literal path");
+    assert!(
+        !home.path().join("Q out.txt").exists(),
+        "the placeholder was read as a blank"
+    );
+    let annotated = fs::read_to_string(&out).unwrap();
+    let command_line = annotated
+        .lines()
+        .find(|l| l.starts_with("## VEP command-line:"))
+        .unwrap();
+    assert_eq!(
+        command_line,
+        "## VEP command-line: vep --assembly GRCh38 --config [PATH]/flags.ini --force_overwrite \
+         --input_file [PATH]/variants.vcf --json_cache [PATH]/json_cache --max_sv_size -1 \
+         --no_stats --offline --output_file [PATH]/Q___SPACE___out.txt --quiet"
+    );
+    assert!(annotated.contains("ENST"), "the run annotates");
+    assert!(
+        !annotated.contains("ENSP="),
+        "a case variant or prefix of protein_version set something"
+    );
 }
 
 /// `VEP_AF_EXAC=1` reaches the refusal `--af_exac` reaches typed, the identical

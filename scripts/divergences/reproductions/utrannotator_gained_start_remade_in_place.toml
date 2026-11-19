@@ -1,0 +1,31 @@
+entry = "utrannotator_gained_start_remade_in_place"
+page = "docs/divergences/utrannotator-gained-start-remade-in-place.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 63,698 per million · 4 flag sets, 93 corpora"
+notes = "The constructed record inserts one base after the second base of the start codon at cDNA 146 (5' UTR index 145) of ENST00000427445. The base repeats the codon's third, so the codon stands at index 145 with one base directly after it. Ensembl VEP names that codon as gained; vep-rs reports the frameshift of the codon's own uORF, as both engines do for the same base written directly after the codon."
+
+[input]
+format = "vcf"
+text = """
+21	10524584	utr_ins_kept_start	T	TG	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-utr-annotator/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-utr-annotator/reference.fa.gz"
+
+[run]
+flags = ["--plugin", "UTRAnnotator,file={corpus}/data/uORF_5UTR_GRCh38_PUBLIC.chr21.txt"]
+
+[compare]
+kind = "field"
+field = "5UTR_consequence"
+where = { record = "utr_ins_kept_start", feature = "ENST00000427445" }
+
+[expected]
+ensembl_vep = ["5_prime_UTR_premature_start_codon_gain_variant"]
+vep_rs = ["5_prime_UTR_uORF_frameshift_variant"]

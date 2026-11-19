@@ -1,0 +1,66 @@
+[VEP run statistics]
+VEP version (API)	 116.2 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh38
+Species	homo_sapiens
+Command line options	vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins [PATH]/plugins --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --offline --output_file [PATH]/tab.txt --plugin CADD,sv=[PATH]/1000G_phase3_SVs_synthetic.tsv.gz,snv=[PATH]/whole_genome_SNVs_synthetic.tsv.gz,force_annotate=1 --quiet --stats_text --tab
+Start time	2026-11-18 17:46:42
+End time	2026-11-18 17:46:43
+Run time	1 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/tab.txt
+
+[Data version]
+1000genomes	phase3
+COSMIC	102
+ClinVar	202509
+HGMD-PUBLIC	20204
+assembly	GRCh38.p14
+dbSNP	156
+gencode	GENCODE 50
+genebuild	GENCODE50
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.3
+regbuild	1.0
+sift	6.2.1
+
+[General statistics]
+Lines of input read	21
+Variants processed	21
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	5
+Overlapped transcripts	10
+Overlapped regulatory features	-
+
+[Variant classes]
+tandem_duplication	1
+inversion	1
+duplication	2
+indel	2
+insertion	3
+deletion	5
+SNV	7
+
+[Consequences (most severe)]
+transcript_ablation	1
+coding_sequence_variant	1
+intron_variant	3
+intergenic_variant	16
+
+[Consequences (all)]
+transcript_ablation	1
+coding_sequence_variant	1
+5_prime_UTR_variant	1
+3_prime_UTR_variant	1
+intron_variant	12
+NMD_transcript_variant	4
+upstream_gene_variant	12
+downstream_gene_variant	8
+intergenic_variant	19
+
+[Coding consequences]
+coding_sequence_variant	1
+
+[Variants by chromosome]
+21	21

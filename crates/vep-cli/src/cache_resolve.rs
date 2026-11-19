@@ -23,6 +23,14 @@
 //! The cache's checksum manifest (`CHECKSUMS.sha256`, [`CacheManifest`]) is
 //! read here, once, before `info.json`, and every cache file the run then reads
 //! whole is checked against it; a cache without one warns once and loads.
+//!
+//! Two settings of the run follow from the metadata, as `CacheDir.pm` settles
+//! them (`info`, release/116.2 lines 395-439, and `source_type`, lines 513-522):
+//! a cache whose `info.json` names the alignment file its models were edited
+//! against (`bam`) switches `--use_transcript_ref` and the `BAM_EDIT` column on
+//! unless `--use_given_ref` was given, with an `INFO:` line; and the transcript
+//! set is `--merged`, else `--refseq`, else the Ensembl set, which a converted
+//! cache's own `source_type` key, when present, must agree with.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -30,9 +38,57 @@ use std::sync::Arc;
 use tracing::warn;
 use vep_core::cache_info::CacheInfo;
 use vep_core::cache_manifest::{CacheManifest, ManifestError};
+use vep_core::sv_routing::perl_true;
 use vep_core::synonyms::ChromosomeSynonyms;
 
 use crate::config::{CliError, Config};
+
+/// The transcript set a run selects: `--merged`, else `--refseq`, else the
+/// Ensembl set (`CacheDir.pm:517`, `grep {$self->param($_)} qw(merged refseq)`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceType {
+    Ensembl,
+    RefSeq,
+    Merged,
+}
+
+impl SourceType {
+    /// The set the configuration's flags select.
+    pub fn from_flags(config: &Config) -> Self {
+        if config.merged {
+            SourceType::Merged
+        } else if config.refseq {
+            SourceType::RefSeq
+        } else {
+            SourceType::Ensembl
+        }
+    }
+
+    /// The set's name as the converter writes it under `source_type`, and as
+    /// Ensembl VEP spells `source_type`: `ensembl`, `refseq` or `merged`.
+    pub fn key(self) -> &'static str {
+        match self {
+            SourceType::Ensembl => "ensembl",
+            SourceType::RefSeq => "refseq",
+            SourceType::Merged => "merged",
+        }
+    }
+
+    /// What selected the set, for the refusal of a cache declaring another.
+    fn selection(self) -> &'static str {
+        match self {
+            SourceType::Ensembl => {
+                "neither --refseq nor --merged was given, selecting the Ensembl transcript set,"
+            }
+            SourceType::RefSeq => "--refseq names the RefSeq transcript set",
+            SourceType::Merged => "--merged names the merged transcript set",
+        }
+    }
+}
+
+/// The `INFO:` line of a BAM-edited cache (`CacheDir.pm:413`).
+pub const BAM_EDITED_NOTICE: &str =
+    "INFO: BAM-edited cache detected, enabling --use_transcript_ref; use --use_given_ref to override this";
 
 /// The cache a run reads, resolved and validated.
 #[derive(Debug, Clone)]
@@ -54,6 +110,14 @@ pub struct ResolvedCache {
     /// cache's `chr_synonyms.txt`, else an empty table. A user file replaces the
     /// cache's; the two are never merged.
     pub synonyms: Arc<ChromosomeSynonyms>,
+    /// The transcript set the flags select, which the cache's `source_type`
+    /// agrees with when it declares one.
+    pub source_type: SourceType,
+    /// The `INFO:` lines the resolution owes the run, printed after the
+    /// configuration's and before the tool check's, under `--show_cache_info`
+    /// too (`CacheDir.pm:413` prints as the annotation sources are built,
+    /// which `vep:40` reaches through the header information).
+    pub notices: Vec<&'static str>,
 }
 
 /// Perl's `species` parameter spellings that Ensembl VEP refuses as a species
@@ -74,8 +138,12 @@ pub(crate) fn canonical_assembly(value: &str) -> &str {
     }
 }
 
-/// Resolves and validates the cache the configuration names.
-pub fn resolve(config: &Config) -> Result<ResolvedCache, CliError> {
+/// Resolves and validates the cache the configuration names, and settles on
+/// the configuration what the cache's metadata decides: a BAM-edited cache
+/// switches `use_transcript_ref` and `bam_edited` on and owes the run its
+/// `INFO:` line ([`ResolvedCache::notices`]) unless `--use_given_ref` was
+/// given (`CacheDir.pm:412-416`).
+pub fn resolve(config: &mut Config) -> Result<ResolvedCache, CliError> {
     let config_assembly = config.assembly.as_deref().map(canonical_assembly);
     let (dir, dir_assembly) = match &config.json_cache {
         Some(dir) => {
@@ -109,6 +177,27 @@ pub fn resolve(config: &Config) -> Result<ResolvedCache, CliError> {
         .filter(|a| !a.is_empty())
         .or(dir_assembly)
         .or_else(|| config_assembly.map(str::to_string));
+    // Ensembl VEP reads the set from the flags alone and filters the cache's
+    // models by it (`AnnotationType/Transcript.pm:236-248`), so `--refseq`
+    // keeps of a cache of `ENST` ids those on `MT` alone; a converted cache
+    // declares its set, and a declared set the flags do not select is refused.
+    let source_type = SourceType::from_flags(config);
+    if let Some(declared) = info.source_type.as_deref() {
+        if declared != source_type.key() {
+            return Err(cache_error(format!(
+                "{} but {dir}/info.json declares source_type {declared}",
+                source_type.selection()
+            )));
+        }
+    }
+    let mut notices = Vec::new();
+    // CacheDir.pm:412 tests `$info->{bam}` for Perl truth.
+    let bam_edited = info.bam.as_deref().is_some_and(perl_true);
+    if bam_edited && !config.use_given_ref {
+        config.use_transcript_ref = true;
+        config.bam_edited = true;
+        notices.push(BAM_EDITED_NOTICE);
+    }
     let fasta = if config.fasta.is_some() || config.no_fasta {
         None
     } else {
@@ -129,6 +218,8 @@ pub fn resolve(config: &Config) -> Result<ResolvedCache, CliError> {
         assembly,
         fasta,
         synonyms: Arc::new(synonyms),
+        source_type,
+        notices,
     })
 }
 
@@ -363,7 +454,7 @@ mod tests {
     }
 
     fn resolve_flags(flags: &[&str]) -> Result<ResolvedCache, CliError> {
-        resolve(&config(flags))
+        resolve(&mut config(flags))
     }
 
     fn error(flags: &[&str]) -> String {
@@ -952,6 +1043,188 @@ mod tests {
         assert_eq!(
             error(&["--json_cache", path]),
             format!("ERROR: [cache] {path}/info.json: not a JSON object")
+        );
+    }
+
+    /// The `info.json` of a cache converted from the Ensembl VEP RefSeq test
+    /// cache, whose `info.txt` names the alignment file its models were edited
+    /// against.
+    const BAM_EDITED_INFO: &str = r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":84,
+        "bam":"interim_GRCh38.p10_knownrefseq_alignments_2017-01-13.bam","source_type":"refseq"}"#;
+
+    /// A cache whose metadata names an alignment file switches
+    /// `use_transcript_ref` and `bam_edited` on and owes the run Ensembl VEP's
+    /// `INFO:` line (`CacheDir.pm:412-416`, the text of `:413`); a cache without
+    /// the key, or with a value Perl reads as false, leaves both off and owes
+    /// nothing.
+    #[test]
+    fn bam_edited_cache_prints_the_notice_and_enables_use_transcript_ref() {
+        let dir = tempfile::tempdir().unwrap();
+        make_leaf(dir.path(), Some(BAM_EDITED_INFO));
+        let mut settled = config(&["--json_cache", dir.path().to_str().unwrap(), "--refseq"]);
+        assert!(!settled.use_transcript_ref);
+        let resolved = resolve(&mut settled).unwrap();
+        assert!(settled.use_transcript_ref);
+        assert!(settled.bam_edited);
+        assert_eq!(
+            resolved.notices,
+            ["INFO: BAM-edited cache detected, enabling --use_transcript_ref; use --use_given_ref to override this"]
+        );
+        assert!(settled.notices.is_empty());
+        assert_eq!(
+            resolved.info.bam.as_deref(),
+            Some("interim_GRCh38.p10_knownrefseq_alignments_2017-01-13.bam")
+        );
+        assert_eq!(resolved.source_type, SourceType::RefSeq);
+
+        let plain = tempfile::tempdir().unwrap();
+        make_leaf(plain.path(), Some(INFO));
+        let mut settled = config(&["--json_cache", plain.path().to_str().unwrap()]);
+        let resolved = resolve(&mut settled).unwrap();
+        assert!(!settled.use_transcript_ref);
+        assert!(!settled.bam_edited);
+        assert!(resolved.notices.is_empty());
+
+        // `$info->{bam}` is tested for Perl truth, so an empty or `0` value is no
+        // alignment file.
+        for bam in ["", "0"] {
+            let falsy = tempfile::tempdir().unwrap();
+            make_leaf(
+                falsy.path(),
+                Some(&format!(
+                    r#"{{"species":"homo_sapiens","assembly":"GRCh38","bam":"{bam}"}}"#
+                )),
+            );
+            let mut settled = config(&["--json_cache", falsy.path().to_str().unwrap()]);
+            let resolved = resolve(&mut settled).unwrap();
+            assert!(!settled.use_transcript_ref, "{bam:?}");
+            assert!(!settled.bam_edited, "{bam:?}");
+            assert!(resolved.notices.is_empty(), "{bam:?}");
+        }
+    }
+
+    /// `--use_given_ref` leaves a BAM-edited cache's switch off, with no
+    /// notice (`CacheDir.pm:412`, `!$self->param('use_given_ref')`), and an
+    /// explicit `--use_transcript_ref` beside it stays off as the option set
+    /// clears it (`Config.pm:588-590`).
+    #[test]
+    fn use_given_ref_overrides_the_bam_edited_cache() {
+        let dir = tempfile::tempdir().unwrap();
+        make_leaf(dir.path(), Some(BAM_EDITED_INFO));
+        let path = dir.path().to_str().unwrap();
+        for flags in [
+            &["--json_cache", path, "--refseq", "--use_given_ref"][..],
+            &[
+                "--json_cache",
+                path,
+                "--refseq",
+                "--use_given_ref",
+                "--use_transcript_ref",
+            ][..],
+        ] {
+            let mut settled = config(flags);
+            let resolved = resolve(&mut settled).unwrap();
+            assert!(!settled.use_transcript_ref, "{flags:?}");
+            assert!(!settled.bam_edited, "{flags:?}");
+            assert!(resolved.notices.is_empty(), "{flags:?}");
+        }
+    }
+
+    /// The transcript set comes from the flags alone, under `--json_cache` as
+    /// under the layout: `--merged` before `--refseq`, as `grep {$self->param($_)}
+    /// qw(merged refseq)` lists them (`CacheDir.pm:517`), else the Ensembl set.
+    #[test]
+    fn source_type_follows_the_flags_under_json_cache_too() {
+        let dir = tempfile::tempdir().unwrap();
+        make_leaf(dir.path(), Some(INFO));
+        let path = dir.path().to_str().unwrap();
+        assert_eq!(
+            resolve_flags(&["--json_cache", path]).unwrap().source_type,
+            SourceType::Ensembl
+        );
+        assert_eq!(
+            resolve_flags(&["--json_cache", path, "--refseq"])
+                .unwrap()
+                .source_type,
+            SourceType::RefSeq
+        );
+        assert_eq!(
+            resolve_flags(&["--json_cache", path, "--merged"])
+                .unwrap()
+                .source_type,
+            SourceType::Merged
+        );
+        // The pair is refused by the configuration; the order rule holds on the
+        // flag state itself.
+        let mut both = config(&["--json_cache", path, "--refseq"]);
+        both.merged = true;
+        assert_eq!(SourceType::from_flags(&both), SourceType::Merged);
+        assert_eq!(SourceType::Merged.key(), "merged");
+        assert_eq!(SourceType::RefSeq.key(), "refseq");
+        assert_eq!(SourceType::Ensembl.key(), "ensembl");
+    }
+
+    /// A converted cache declares its transcript set under `source_type`, a key
+    /// of this layout: the set the flags select must agree with it, or the run
+    /// is refused before any input is read, where Ensembl VEP filters the
+    /// cache's models by the flags alone; a cache without the key is unchecked.
+    #[test]
+    fn declared_source_type_mismatch_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        make_leaf(
+            dir.path(),
+            Some(r#"{"species":"homo_sapiens","assembly":"GRCh38","source_type":"ensembl"}"#),
+        );
+        let path = dir.path().to_str().unwrap();
+        assert_eq!(
+            error(&["--json_cache", path, "--refseq"]),
+            format!(
+                "ERROR: [cache] --refseq names the RefSeq transcript set but {path}/info.json declares source_type ensembl"
+            )
+        );
+        assert_eq!(
+            error(&["--json_cache", path, "--merged"]),
+            format!(
+                "ERROR: [cache] --merged names the merged transcript set but {path}/info.json declares source_type ensembl"
+            )
+        );
+        assert!(resolve_flags(&["--json_cache", path]).is_ok());
+
+        let refseq = tempfile::tempdir().unwrap();
+        make_leaf(refseq.path(), Some(BAM_EDITED_INFO));
+        let refseq_path = refseq.path().to_str().unwrap();
+        assert_eq!(
+            error(&["--json_cache", refseq_path]),
+            format!(
+                "ERROR: [cache] neither --refseq nor --merged was given, selecting the Ensembl transcript set, but {refseq_path}/info.json declares source_type refseq"
+            )
+        );
+        assert!(resolve_flags(&["--json_cache", refseq_path, "--refseq"]).is_ok());
+
+        // No key, no check: a cache without the key loads under any flag.
+        let undeclared = tempfile::tempdir().unwrap();
+        make_leaf(undeclared.path(), Some(INFO));
+        let undeclared_path = undeclared.path().to_str().unwrap();
+        for flags in [&[][..], &["--refseq"][..], &["--merged"][..]] {
+            let mut argv = vec!["--json_cache", undeclared_path];
+            argv.extend_from_slice(flags);
+            assert!(resolve_flags(&argv).is_ok(), "{flags:?}");
+        }
+
+        // The layout path checks the same key: a RefSeq species directory
+        // holding a cache that declares the Ensembl set is refused.
+        let root = tempfile::tempdir().unwrap();
+        let leaf = root.path().join("homo_sapiens_refseq").join("116_GRCh38");
+        make_leaf(
+            &leaf,
+            Some(r#"{"species":"homo_sapiens","assembly":"GRCh38","source_type":"ensembl"}"#),
+        );
+        assert_eq!(
+            error(&["--dir_cache", root.path().to_str().unwrap(), "--refseq"]),
+            format!(
+                "ERROR: [cache] --refseq names the RefSeq transcript set but {} declares source_type ensembl",
+                joined(&leaf, "info.json")
+            )
         );
     }
 

@@ -8,7 +8,10 @@ use std::sync::{Arc, OnceLock};
 
 use crate::consequence::{Consequence, ConsequenceList, TranscriptConsequence};
 use crate::coordinate::{normalize_chromosome, Strand};
-use crate::sv_routing::{perl_true, sv_so_term_and_class, sv_type_abbreviation, sv_type_string};
+use crate::custom_annotation::CustomAnnotations;
+use crate::sv_routing::{
+    perl_split, perl_true, sv_so_term_and_class, sv_type_abbreviation, sv_type_string,
+};
 
 /// Classification of variant types based on Sequence Ontology (SO) variant classes.
 ///
@@ -125,6 +128,42 @@ impl VariantClass {
     }
 }
 
+/// How a structural record writes its INFO `END`, read beside the span the
+/// record is given: Ensembl VEP ends a record that writes `SVLEN` at its
+/// position plus that length and leaves `END` unread (BaseVCF4.pm `get_end`,
+/// lines 297-317).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WrittenEnd {
+    /// The record writes no `END=`.
+    Absent,
+    /// `END` is the record's own position, `POS`.
+    Position,
+    /// `END` is the last base of the span the record is given.
+    SpanEnd,
+    /// `END` is any other value, a text that is no coordinate included.
+    Other,
+}
+
+impl WrittenEnd {
+    /// Reads `written`, the text after `END=` (`None` for a record without
+    /// one), for the record at `position` whose span ends at `span_end`.
+    pub fn of(written: Option<&str>, position: u64, span_end: u64) -> Self {
+        let Some(text) = written else {
+            return WrittenEnd::Absent;
+        };
+        match text.trim_ascii().parse::<u64>() {
+            Ok(end) if end == position => WrittenEnd::Position,
+            Ok(end) if end == span_end => WrittenEnd::SpanEnd,
+            _ => WrittenEnd::Other,
+        }
+    }
+}
+
+/// One data record a plugin groups under its name for the JSON format: the
+/// plugin's keys in its order, each value `None` where the record's line ended
+/// before the column.
+pub type PluginRecord = indexmap::IndexMap<String, Option<String>>;
+
 /// A single-allele input variant to be annotated.
 ///
 /// Represents one allele of one VCF record after multi-allelic splitting.
@@ -132,7 +171,7 @@ impl VariantClass {
 /// ref allele is `"-"` and `end < start`. Carries annotation results
 /// (transcript consequences, co-located variants, plugin data) that are
 /// populated during the pipeline.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct InputVariant {
     /// Chromosome name, normalized for cache lookup (e.g., "21", "X", "MT").
     pub chr: String,
@@ -187,6 +226,13 @@ pub struct InputVariant {
     pub intergenic_overlap: bool,
     /// Most severe consequence across all transcripts.
     pub most_severe_consequence: Option<Consequence>,
+    /// The allele's most severe consequence as annotation settled it, before
+    /// the pick family, `--coding_only`, `--no_intergenic`, `--summary` and
+    /// `--most_severe` narrow `most_severe_consequence` to the rows left:
+    /// Ensembl VEP's `display_consequence` of the whole variation feature,
+    /// which the run statistics count. Never serialized.
+    #[serde(skip)]
+    pub display_consequence: Option<Consequence>,
     /// The known variants co-located with the whole input record, in the cache's
     /// order with a name listed once: Ensembl VEP matches the record's variation
     /// feature, every allele at once, and keys the matches on it
@@ -272,11 +318,12 @@ pub struct InputVariant {
     /// Raw input line (for passthrough in some output formats), one buffer shared by
     /// every allele of the record.
     pub raw_input: Option<Arc<str>>,
-    /// The bytes of a captured VCF line that is not UTF-8, which the VCF output
-    /// writes as read, where [`Self::raw_input`] holds the line with each invalid
-    /// sequence replaced; `None` for a line that is UTF-8. One buffer shared by
-    /// every allele of the record. Not part of the variant's JSON form, which
-    /// carries the text of `raw_input`.
+    /// The stored line of a captured VCF line that is not UTF-8, as bytes, which
+    /// the VCF output writes: the fields of [`Self::raw_input`], the line with each
+    /// invalid sequence replaced, with the written bytes in place of the
+    /// replacements; `None` for a line that is UTF-8. One buffer shared by every
+    /// allele of the record. Not part of the variant's JSON form, which carries
+    /// the text of `raw_input`.
     #[serde(skip)]
     pub raw_input_bytes: Option<Arc<[u8]>>,
     /// The names of [`Self::colocated_variants`] that print on this allele's rows,
@@ -295,6 +342,29 @@ pub struct InputVariant {
     /// transcript consequence line.
     #[serde(default, skip_serializing_if = "indexmap::IndexMap::is_empty")]
     pub plugin_data: indexmap::IndexMap<String, String>,
+    /// The keys of [`Self::plugin_data`] whose empty value is Ensembl VEP's
+    /// empty string, an empty tab cell and `""` in JSON, rather than its
+    /// undefined value, `-` and no key: a record-level plugin reading a table
+    /// names the field of a cell the matched row has and leaves empty, which
+    /// a split into a fixed list of variables keeps (`BayesDel.pm:151`). The
+    /// counterpart of a row's `plugin_empty_strings` for a value that prints on
+    /// every row of the record. Empty when no key is such, and never serialized.
+    #[serde(skip)]
+    pub plugin_empty_strings: Vec<String>,
+    /// The records a plugin groups under its name in the JSON format, where
+    /// Ensembl VEP's plugins that match several data lines push one hash per
+    /// line under the plugin's name while the text formats print each column
+    /// `,`-joined across the lines ([`Self::plugin_data`] carries that join).
+    /// Group name to records in file order; read by the JSON format alone,
+    /// which writes each group as an array of objects and leaves the group's
+    /// keys out of the flat fields. Present only when non-empty.
+    #[serde(default, skip_serializing_if = "indexmap::IndexMap::is_empty")]
+    pub plugin_records: indexmap::IndexMap<String, Vec<PluginRecord>>,
+    /// The `--custom` sources' records matched to this allele's input record and
+    /// their summary statistics, one entry per source that matched or computed a
+    /// statistic, in source order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub custom_annotations: Vec<CustomAnnotations>,
 
     /// For structural variants: END position from VCF INFO field (1-based inclusive).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -312,6 +382,16 @@ pub struct InputVariant {
     /// For imprecise SVs: CIEND confidence interval (two i64 values).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ci_end: Option<(i64, i64)>,
+    /// For structural variants: whether the record's INFO carries `IMPRECISE`.
+    /// Not part of the variant's JSON form.
+    #[serde(skip)]
+    pub imprecise: bool,
+    /// For structural variants: how the record writes its INFO `END`, which
+    /// [`Self::sv_end`] and the allele's span replace by the position plus the
+    /// length when the record writes `SVLEN`. Not part of the variant's JSON
+    /// form.
+    #[serde(skip)]
+    pub written_end: WrittenEnd,
     /// Whether this is a structural variant (symbolic allele).
     #[serde(default)]
     pub is_structural: bool,
@@ -331,6 +411,16 @@ pub struct InputVariant {
     /// For BND: whether this is the single-breakend allele form (e.g., "T.").
     #[serde(default)]
     pub is_single_breakend: bool,
+    /// For the own breakend of a paired record: the chromosome as written and the
+    /// position of each mate the record names, so the own allele can be matched
+    /// against the features its mates reach (`StructuralVariationOverlap.pm:90-102`
+    /// adds the record's own allele to every feature a breakend found when the own
+    /// position lies within `MAX_DISTANCE_FROM_TRANSCRIPT` of it on the same
+    /// chromosome). Empty on every other variant, the bracket alleles included,
+    /// which carry their one mate in `mate_chr` and `mate_pos`. Not part of the
+    /// variant's JSON form.
+    #[serde(skip)]
+    pub breakend_mates: Vec<(String, u64)>,
     /// Ensembl VEP's `vep_skip` mark: a structural variant of a type its `%SO_TERMS`
     /// table lacks (`<CPX>`, `<NON_REF>`) or a deletion with neither `END` nor
     /// `SVLEN`, or whose start lies past its end (Parser/VCF.pm:477-481, 555-558).
@@ -372,6 +462,17 @@ pub struct InputVariant {
     /// one JSON object per record.
     #[serde(default)]
     pub input_record: u64,
+    /// The position column of the record's input line as written, 1-based: a
+    /// VCF record's POS, an Ensembl-format line's start. Every allele split
+    /// from one record shares it. The Parquet writer's order check compares it,
+    /// since the span a record is annotated on starts past its written position
+    /// when its anchor base or a `--minimal` prefix is trimmed, so a file
+    /// sorted by position can step back in [`Self::start`]. 0 for an
+    /// identifier, HGVS, SPDI or region input, whose order Ensembl VEP never
+    /// checks (`%UNSORTABLE`, Config.pm:640-645). Not part of the variant's
+    /// JSON form.
+    #[serde(skip)]
+    pub input_position: u64,
     /// The allele string VEP prints in `Uploaded_variation` for an ID-less record:
     /// the raw REF/ALT of a bi-allelic record whose alleles differ in length (VEP
     /// minimises those and reports the untrimmed alleles), the anchor-trimmed
@@ -452,6 +553,23 @@ pub struct InputVariant {
     /// flags a transcript allele (`OutputFactory.pm:1363` at release/116.2).
     #[serde(default)]
     pub intergenic_pick: bool,
+    /// The record's rows are the ones a removing per-gene pick (`--per_gene`,
+    /// `--pick_allele_gene`) left, so the writers list its regulatory and motif
+    /// rows ahead of its transcript rows: `pick_VariationFeatureOverlapAllele_per_gene`
+    /// returns the alleles that are not against a transcript first and one
+    /// transcript allele per gene after them (`OutputFactory.pm:838-856`), and
+    /// the output walks that list. Every allele of the record carries the mark.
+    /// Not part of the variant's JSON form.
+    #[serde(skip)]
+    pub per_gene_pick: bool,
+    /// The plugin fields a shared-library plugin wrote on the record's intergenic
+    /// row: the row's own result, held with the variant because the intergenic
+    /// row has no consequence of its own, so the writers print them on that row
+    /// alone, as Ensembl VEP keeps a plugin's result in the hash of the row it
+    /// ran on (`OutputFactory.pm:2220-2235`). Empty for every other variant. Not
+    /// part of the variant's JSON form.
+    #[serde(skip)]
+    pub intergenic_row_plugin_keys: Vec<String>,
     /// The `FREQS` entries of the record under `--check_frequency`, one
     /// `POPULATION:ALLELE:frequency` per alternate allele of the record as
     /// uploaded, the alleles the filter dropped included, `NA` for an allele
@@ -557,6 +675,7 @@ impl Default for InputVariant {
             transcript_consequences: Vec::new(),
             intergenic_overlap: false,
             most_severe_consequence: None,
+            display_consequence: None,
             colocated_variants: Vec::new(),
             hgvsg: None,
             nearest: None,
@@ -575,16 +694,22 @@ impl Default for InputVariant {
             existing_variation: Vec::new(),
             overlapping_svs: Vec::new(),
             plugin_data: indexmap::IndexMap::new(),
+            plugin_empty_strings: Vec::new(),
+            plugin_records: indexmap::IndexMap::new(),
+            custom_annotations: Vec::new(),
             sv_end: None,
             sv_type: None,
             sv_len: None,
             ci_pos: None,
             ci_end: None,
+            imprecise: false,
+            written_end: WrittenEnd::Absent,
             is_structural: false,
             mate_id: None,
             mate_chr: None,
             mate_pos: None,
             is_single_breakend: false,
+            breakend_mates: Vec::new(),
             vep_skip: false,
             oversize_sv: false,
             no_allele: false,
@@ -592,6 +717,7 @@ impl Default for InputVariant {
             annotation_start: None,
             annotation_end: None,
             input_record: 0,
+            input_position: 0,
             uploaded_allele_string: None,
             record_allele_string_multi: None,
             written_case_allele_string: None,
@@ -600,6 +726,8 @@ impl Default for InputVariant {
             intergenic_shift: None,
             summary_terms: None,
             intergenic_pick: false,
+            per_gene_pick: false,
+            intergenic_row_plugin_keys: Vec::new(),
             freqs: Vec::new(),
             filtered_allele_string: None,
             check_ref_failed: false,
@@ -629,11 +757,7 @@ impl InputVariant {
         ref_allele: Vec<u8>,
         alt_allele: Vec<u8>,
     ) -> Self {
-        let allele_string = format!(
-            "{}/{}",
-            String::from_utf8_lossy(&ref_allele),
-            String::from_utf8_lossy(&alt_allele),
-        );
+        let allele_string = allele_pair(&ref_allele, &alt_allele);
         let variant_class = classify_variant(&ref_allele, &alt_allele);
         let normalized_chr = normalize_chromosome(&chr);
         Self {
@@ -653,6 +777,7 @@ impl InputVariant {
             transcript_consequences: Vec::new(),
             intergenic_overlap: false,
             most_severe_consequence: None,
+            display_consequence: None,
             colocated_variants: Vec::new(),
             hgvsg: None,
             nearest: None,
@@ -671,16 +796,22 @@ impl InputVariant {
             existing_variation: Vec::new(),
             overlapping_svs: Vec::new(),
             plugin_data: indexmap::IndexMap::new(),
+            plugin_empty_strings: Vec::new(),
+            plugin_records: indexmap::IndexMap::new(),
+            custom_annotations: Vec::new(),
             sv_end: None,
             sv_type: None,
             sv_len: None,
             ci_pos: None,
             ci_end: None,
+            imprecise: false,
+            written_end: WrittenEnd::Absent,
             is_structural: false,
             mate_id: None,
             mate_chr: None,
             mate_pos: None,
             is_single_breakend: false,
+            breakend_mates: Vec::new(),
             vep_skip: false,
             oversize_sv: false,
             no_allele: false,
@@ -690,12 +821,15 @@ impl InputVariant {
             annotation_start: None,
             annotation_end: None,
             input_record: 0,
+            input_position: 0,
             uploaded_allele_string: None,
             input_line_name: None,
             record_so_term: None,
             intergenic_shift: None,
             summary_terms: None,
             intergenic_pick: false,
+            per_gene_pick: false,
+            intergenic_row_plugin_keys: Vec::new(),
             freqs: Vec::new(),
             filtered_allele_string: None,
             check_ref_failed: false,
@@ -724,10 +858,12 @@ impl InputVariant {
     ) -> Self {
         let end = (pos + ref_allele.len() as u64).saturating_sub(1);
         let mut variant = Self::new(chr, pos, end, ref_allele.as_bytes().to_vec(), b"*".to_vec());
-        variant.allele_string = std::iter::once(ref_allele)
-            .chain(alts)
-            .collect::<Vec<_>>()
-            .join("/");
+        variant.allele_string.clear();
+        variant.allele_string.push_str(ref_allele);
+        for alt in alts {
+            variant.allele_string.push('/');
+            variant.allele_string.push_str(alt);
+        }
         variant.no_allele = true;
         variant
     }
@@ -826,6 +962,10 @@ impl InputVariant {
         row.input_line_name.clone_from(&self.input_line_name);
         row.record_so_term.clone_from(&self.record_so_term);
         row.input_record = self.input_record;
+        // The custom sources annotate the record, so the row shares its list;
+        // its exact records name an alternate allele and print on no row of it.
+        row.custom_annotations.clone_from(&self.custom_annotations);
+        row.input_position = self.input_position;
         row.check_ref_failed = self.check_ref_failed;
         row.individual.clone_from(&self.individual);
         row.copy_ordinal = self.copy_ordinal;
@@ -952,12 +1092,17 @@ impl InputVariant {
     /// multi-allelic or breakpoint record, or the minimised `allele_string` of a
     /// bi-allelic record.
     pub fn record_allele_string(&self) -> String {
+        self.record_allele_str().to_string()
+    }
+
+    /// [`Self::record_allele_string`] borrowed from the field that holds it.
+    fn record_allele_str(&self) -> &str {
         if let Some(multi) = &self.record_allele_string_multi {
-            return multi.to_string();
+            return multi;
         }
         match self.uploaded_allele_string.as_deref() {
-            Some(s) if self.is_structural => s.to_string(),
-            _ => self.allele_string.clone(),
+            Some(s) if self.is_structural => s,
+            _ => &self.allele_string,
         }
     }
 
@@ -967,9 +1112,14 @@ impl InputVariant {
     /// feature holds this string; its `variation_name`, built before the
     /// filter runs, keeps the uploaded one.
     pub fn working_allele_string(&self) -> String {
+        self.working_allele_str().to_string()
+    }
+
+    /// [`Self::working_allele_string`] borrowed from the field that holds it.
+    pub fn working_allele_str(&self) -> &str {
         match &self.filtered_allele_string {
-            Some(filtered) => filtered.to_string(),
-            None => self.record_allele_string(),
+            Some(filtered) => filtered,
+            None => self.record_allele_str(),
         }
     }
 
@@ -1326,10 +1476,22 @@ fn written_text(bytes: Vec<u8>) -> String {
 /// lengths included, a `sequence_alteration`.
 pub fn so_variation_class(allele_string: &str) -> &'static str {
     let is_sequence = |a: &str| !a.is_empty() && a.bytes().all(|b| b.is_ascii_uppercase());
-    let parts: Vec<&str> = allele_string.split('/').collect();
-    if parts.len() > 1 && parts.iter().all(|a| a.len() == 1 && is_sequence(a)) {
+    // Two or more alleles of one upper-case letter each: a letter at every even
+    // byte and a `/` at every odd one, so the string needs no splitting.
+    let bytes = allele_string.as_bytes();
+    if bytes.len() >= 3
+        && bytes.len() % 2 == 1
+        && bytes.iter().enumerate().all(|(i, b)| {
+            if i % 2 == 1 {
+                *b == b'/'
+            } else {
+                b.is_ascii_uppercase()
+            }
+        })
+    {
         return "SNV";
     }
+    let parts: smallvec::SmallVec<[&str; 4]> = allele_string.split('/').collect();
     let tandem_repeat = allele_string
         .as_bytes()
         .windows(2)
@@ -1671,6 +1833,16 @@ mod strand_tests {
     }
 }
 
+/// `reference/alt`, each allele's bytes read with U+FFFD for an invalid sequence
+/// ([`InputVariant::allele_string`]).
+pub fn allele_pair(reference: &[u8], alt: &[u8]) -> String {
+    let mut pair = String::with_capacity(reference.len() + 1 + alt.len());
+    pair.push_str(&String::from_utf8_lossy(reference));
+    pair.push('/');
+    pair.push_str(&String::from_utf8_lossy(alt));
+    pair
+}
+
 /// The name Ensembl VEP's VCF parser gives a record from its ID field: the first of the
 /// `;`-joined IDs (ensembl-io BaseVCF4.pm:436-440 splits the field, Parser/VCF.pm:347
 /// takes `$ids->[0]`), `.` and `0` as written; `None` for an empty field or first
@@ -1724,12 +1896,16 @@ pub struct ColocatedVariant {
     pub strand: i8,
     /// Whether this is a somatic variant.
     pub somatic: bool,
-    /// Clinical significance terms.
-    pub clin_sig: Vec<String>,
+    /// The record's clinical significance terms as the cache stores them,
+    /// joined by `,`; [`clin_sig_terms`](Self::clin_sig_terms) splits them.
+    #[serde(with = "stored_list_as_array")]
+    pub clin_sig: Option<String>,
     /// Phenotype/disease association flag.
     pub phenotype: bool,
-    /// PubMed IDs.
-    pub pubmed: Vec<String>,
+    /// The record's PubMed ids as the cache stores them, joined by `,`;
+    /// [`pubmed_ids`](Self::pubmed_ids) splits them, less an id the cache cut.
+    #[serde(with = "pubmed_as_array")]
+    pub pubmed: Option<String>,
     /// The input alleles the record's alleles were matched to, as
     /// `Utils/Sequence.pm` `get_matched_variant_alleles` returns them (ensembl-variation
     /// release/116). Empty for a record matched on its span alone, a null-allele record
@@ -1744,8 +1920,13 @@ pub struct ColocatedVariant {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clinvar: Option<Box<crate::variation::ClinVarDetail>>,
     /// The record's synonyms as the cache stores them: `source::id,id` groups
-    /// joined by `--`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// joined by `--`. [`synonyms`](Self::synonyms) is the value a writer
+    /// prints, and the one a serialised variant carries.
+    #[serde(
+        default,
+        serialize_with = "serialize_synonyms",
+        skip_serializing_if = "synonyms_unwritten"
+    )]
     pub var_synonyms: Option<String>,
 }
 
@@ -1771,6 +1952,28 @@ impl ColocatedVariant {
             .map(|matched| matched.record_allele.as_str())
     }
 
+    /// The terms of [`clin_sig`](Self::clin_sig) as Ensembl VEP lists them
+    /// (`OutputFactory.pm:1125-1126` and `OutputFactory/JSON.pm:469` at
+    /// release/116.2): `None` for a value Perl reads as false, that is unset,
+    /// empty or `0`. Any other value yields its `,`-separated fields as stored,
+    /// every trailing empty one dropped and a leading or middle one kept.
+    pub fn clin_sig_terms(&self) -> Option<impl Iterator<Item = &str>> {
+        stored_list(self.clin_sig.as_deref())
+    }
+
+    /// The ids of [`pubmed`](Self::pubmed), split as
+    /// [`clin_sig_terms`](Self::clin_sig_terms) splits its terms, after
+    /// [`written_pubmed`] takes off an id the cache cut.
+    pub fn pubmed_ids(&self) -> Option<impl Iterator<Item = &str>> {
+        stored_list(written_pubmed(self.pubmed.as_deref()))
+    }
+
+    /// The record's synonyms as a writer prints them: [`written_synonyms`] of
+    /// [`var_synonyms`](Self::var_synonyms).
+    pub fn synonyms(&self) -> Option<&str> {
+        written_synonyms(self.var_synonyms.as_deref())
+    }
+
     /// Ensembl VEP's rank of the record by the first two letters of its name,
     /// case-insensitively: dbSNP `rs` 1, HGMD `cm`, `ci` and `cd` 2, COSMIC `co`
     /// 3, anything else 100 (`OutputFactory.pm:1057-1065`).
@@ -1787,6 +1990,118 @@ impl ColocatedVariant {
             "co" => 3,
             _ => 100,
         }
+    }
+}
+
+/// The elements of a `,`-joined list column of the variation cache, by the rule
+/// [`ColocatedVariant::clin_sig_terms`] states.
+fn stored_list(value: Option<&str>) -> Option<impl Iterator<Item = &str>> {
+    value
+        .filter(|value| perl_true(value))
+        .map(|value| perl_split(value, &[',']))
+}
+
+/// The length in bytes at which the Ensembl cache dump ends a stored `pubmed`
+/// or `var_synonyms` value, whatever stands there: the middle of an id as
+/// readily as a separator.
+pub const STORED_LIST_CAP: usize = 1024;
+
+/// The whole items of a stored list of a known variant. A value of exactly
+/// [`STORED_LIST_CAP`] bytes that ends in none of `separators` is cut inside
+/// its last item, which Ensembl VEP prints as an id (`OutputFactory.pm:1090`
+/// and `:1126`, `OutputFactory/JSON.pm:452-456` and `:469` at release/116.2):
+/// it reads as the text before its last separator, empty when it has none. A
+/// last item as long as a whole one cannot be told from a cut one and goes
+/// too. Every other value, one of that length ending in a separator included,
+/// reads as stored.
+pub fn whole_items<'a>(stored: &'a str, separators: &[&str]) -> &'a str {
+    if stored.len() != STORED_LIST_CAP || separators.iter().any(|sep| stored.ends_with(sep)) {
+        return stored;
+    }
+    let last_separator = separators.iter().filter_map(|sep| stored.rfind(sep)).max();
+    &stored[..last_separator.unwrap_or(0)]
+}
+
+/// A stored `pubmed` value as a writer reads it: its [`whole_items`], the ids
+/// being joined by `,`.
+pub fn written_pubmed(stored: Option<&str>) -> Option<&str> {
+    stored.map(|stored| whole_items(stored, &[","]))
+}
+
+/// A stored `var_synonyms` value as a writer prints it: its [`whole_items`],
+/// an item being one id of a `source::id,id` group and the separators `--`
+/// between groups, `::` after a source name and `,` between ids. A cut id
+/// that is the only one of its group takes the group's source name with it,
+/// and the `--` before that name: Ensembl VEP prints no source without an id
+/// from a whole list. A last group with no `::` is a source name the cut may
+/// have ended and goes with the `--` before it. `None` for an unset value
+/// and for a cut value left with no id.
+pub fn written_synonyms(stored: Option<&str>) -> Option<&str> {
+    let stored = stored?;
+    let mut whole = whole_items(stored, &["--", "::", ","]);
+    if stored[whole.len()..].starts_with("::") {
+        whole = &whole[..whole.rfind("--").unwrap_or(0)];
+    }
+    let holds_an_id = || {
+        whole.split("--").any(|group| {
+            group
+                .split_once("::")
+                .is_some_and(|(_, ids)| ids.split(',').any(|id| !id.is_empty()))
+        })
+    };
+    (whole.len() == stored.len() || holds_an_id()).then_some(whole)
+}
+
+/// Whether a serialised variant leaves `var_synonyms` out: the value is unset
+/// or [`written_synonyms`] writes none of it.
+fn synonyms_unwritten(stored: &Option<String>) -> bool {
+    written_synonyms(stored.as_deref()).is_none()
+}
+
+/// `var_synonyms` in a serialised variant: [`written_synonyms`] of the stored
+/// value.
+fn serialize_synonyms<S: serde::Serializer>(
+    stored: &Option<String>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match written_synonyms(stored.as_deref()) {
+        Some(synonyms) => serializer.serialize_some(synonyms),
+        None => serializer.serialize_none(),
+    }
+}
+
+/// [`stored_list_as_array`] for `pubmed`: the array holds the elements of
+/// [`written_pubmed`].
+mod pubmed_as_array {
+    pub use super::stored_list_as_array::deserialize;
+
+    pub fn serialize<S: serde::Serializer>(
+        value: &Option<String>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let written = super::written_pubmed(value.as_deref());
+        serializer.collect_seq(super::stored_list(written).into_iter().flatten())
+    }
+}
+
+/// A stored list in a serialised variant, the document a shared-library plugin
+/// reads: the array of its elements, empty for a value that is no list. An
+/// array is read back as its elements joined by `,`.
+mod stored_list_as_array {
+    use serde::Deserialize;
+
+    pub fn serialize<S: serde::Serializer>(
+        value: &Option<String>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.collect_seq(super::stored_list(value.as_deref()).into_iter().flatten())
+    }
+
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<String>, D::Error> {
+        let elements = Vec::<String>::deserialize(deserializer)?;
+        Ok((!elements.is_empty()).then(|| elements.join(",")))
     }
 }
 
@@ -1817,6 +2132,217 @@ pub fn colocated_in_output_order(variants: &[ColocatedVariant]) -> Vec<&Colocate
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A stored list is split as Perl's `split(',', ...)` splits it
+    /// (`OutputFactory.pm:1125-1126`, `OutputFactory/JSON.pm:469`): trailing empty
+    /// fields go, leading and middle ones stay, nothing is trimmed, and a value
+    /// Perl reads as false is no list while `,` alone is a list of none.
+    #[test]
+    fn stored_lists_split_as_perl_splits_them() {
+        let elements = |stored: Option<&str>| {
+            let cv = ColocatedVariant {
+                pubmed: stored.map(str::to_string),
+                clin_sig: stored.map(str::to_string),
+                ..Default::default()
+            };
+            let ids = cv.pubmed_ids().map(|ids| ids.collect::<Vec<_>>().join("|"));
+            let terms = cv
+                .clin_sig_terms()
+                .map(|terms| terms.collect::<Vec<_>>().join("|"));
+            assert_eq!(ids, terms, "both columns read {stored:?} alike");
+            ids
+        };
+        assert_eq!(elements(None), None);
+        assert_eq!(elements(Some("")), None);
+        assert_eq!(elements(Some("0")), None);
+        assert_eq!(
+            elements(Some("99000001,99000002,")).as_deref(),
+            Some("99000001|99000002")
+        );
+        assert_eq!(elements(Some("99000001,,,")).as_deref(), Some("99000001"));
+        assert_eq!(elements(Some(",99000001")).as_deref(), Some("|99000001"));
+        assert_eq!(
+            elements(Some("99000001,,99000002")).as_deref(),
+            Some("99000001||99000002")
+        );
+        assert_eq!(elements(Some(",")).as_deref(), Some(""));
+        assert_eq!(elements(Some(",,")).as_deref(), Some(""));
+        assert_eq!(elements(Some("0,0")).as_deref(), Some("0|0"));
+        assert_eq!(elements(Some("00")).as_deref(), Some("00"));
+        assert_eq!(
+            elements(Some("benign, pathogenic")).as_deref(),
+            Some("benign| pathogenic")
+        );
+    }
+
+    /// A serialised known variant carries `clin_sig` and `pubmed` as arrays of
+    /// their elements, the shape a shared-library plugin reads in the variant
+    /// document, and an array reads back as its elements joined by `,`.
+    #[test]
+    fn stored_lists_serialise_as_arrays() {
+        let cv = ColocatedVariant {
+            id: "rs9920000001".to_string(),
+            clin_sig: Some("benign,likely_benign,".to_string()),
+            pubmed: None,
+            ..Default::default()
+        };
+        let document = serde_json::to_value(&cv).unwrap();
+        assert_eq!(
+            document["clin_sig"],
+            serde_json::json!(["benign", "likely_benign"])
+        );
+        assert_eq!(document["pubmed"], serde_json::json!([]));
+        let read: ColocatedVariant = serde_json::from_value(document).unwrap();
+        assert_eq!(read.clin_sig.as_deref(), Some("benign,likely_benign"));
+        assert_eq!(read.pubmed, None);
+    }
+
+    /// `count` invented eight-digit PubMed ids, `99000001` onwards, joined by `,`.
+    fn invented_pubmed_ids(count: usize) -> String {
+        let ids: Vec<String> = (1..=count).map(|n| (99_000_000 + n).to_string()).collect();
+        ids.join(",")
+    }
+
+    /// A synonyms value of exactly 1,024 bytes ending in `tail`, with the text
+    /// before `tail`: a `UniProt` group whose one invented id is as long as
+    /// the length needs, then a `ClinVar` group of 70 invented ids.
+    fn synonyms_ending(tail: &str) -> (String, String) {
+        let ids: Vec<String> = (1..=70)
+            .map(|n| format!("RCV{}", 999_000_000 + n))
+            .collect();
+        let clinvar = format!("--ClinVar::{}", ids.join(","));
+        let filler = 1024 - tail.len() - "UniProt::VAR_".len() - clinvar.len();
+        let body = format!("UniProt::VAR_{}{clinvar}", "9".repeat(filler));
+        let stored = format!("{body}{tail}");
+        assert_eq!(stored.len(), 1024);
+        (stored, body)
+    }
+
+    /// The ids a known variant storing `pubmed` lists, joined by `,`.
+    fn listed_pubmed(pubmed: &str) -> Option<String> {
+        let cv = ColocatedVariant {
+            pubmed: Some(pubmed.to_string()),
+            ..Default::default()
+        };
+        cv.pubmed_ids().map(|ids| ids.collect::<Vec<_>>().join(","))
+    }
+
+    /// The `var_synonyms` of the serialised known variant storing `synonyms`.
+    fn serialised_synonyms(synonyms: &str) -> serde_json::Value {
+        let cv = ColocatedVariant {
+            var_synonyms: Some(synonyms.to_string()),
+            ..Default::default()
+        };
+        serde_json::to_value(&cv).unwrap()["var_synonyms"].clone()
+    }
+
+    /// A `pubmed` value of exactly 1,024 bytes that does not end in `,` was
+    /// cut inside its last id and lists every id before it, whether that last
+    /// item is shorter than an id or as long as one; with no `,` it lists
+    /// nothing.
+    #[test]
+    fn pubmed_at_the_cap_ends_before_its_cut_id() {
+        let whole = invented_pubmed_ids(113);
+        let cut = format!("{whole},9900011");
+        assert_eq!(cut.len(), 1024);
+        assert_eq!(listed_pubmed(&cut).as_deref(), Some(whole.as_str()));
+
+        let kept = format!("{},9900113", invented_pubmed_ids(112));
+        let whole_length = format!("{kept},99000114");
+        assert_eq!(whole_length.len(), 1024);
+        assert_eq!(listed_pubmed(&whole_length).as_deref(), Some(kept.as_str()));
+
+        assert_eq!(listed_pubmed(&"9".repeat(1024)), None);
+    }
+
+    /// Control: a `pubmed` value of 1,024 bytes ending in `,`, a value one
+    /// byte under or over that length and a short list keep every id.
+    #[test]
+    fn pubmed_beside_the_cap_or_ending_in_a_comma_keeps_every_id() {
+        let ids = format!("{},990011", invented_pubmed_ids(113));
+        let ending_in_a_comma = format!("{ids},");
+        assert_eq!(ending_in_a_comma.len(), 1024);
+        assert_eq!(
+            listed_pubmed(&ending_in_a_comma).as_deref(),
+            Some(ids.as_str())
+        );
+        assert_eq!(ids.len(), 1023);
+        assert_eq!(listed_pubmed(&ids).as_deref(), Some(ids.as_str()));
+        let over = format!("{},99000114", invented_pubmed_ids(113));
+        assert_eq!(over.len(), 1025);
+        assert_eq!(listed_pubmed(&over).as_deref(), Some(over.as_str()));
+        assert_eq!(
+            listed_pubmed("99000001,99000002").as_deref(),
+            Some("99000001,99000002")
+        );
+    }
+
+    /// A `var_synonyms` value of exactly 1,024 bytes that ends in none of
+    /// `--`, `::` and `,` ends, in the serialised known variant, before its
+    /// last separator: a cut id goes with its `,`, a group's only id with its
+    /// source name and the `--` before that, a source name with no `::`
+    /// after it with its `--`, and a value left with no id is absent.
+    #[test]
+    fn synonyms_at_the_cap_end_before_their_cut_item() {
+        for tail in [
+            ",RCV999",
+            ",RCV999000999",
+            ",RCV999000999-",
+            "--OMI",
+            "--OMIM",
+            "--OMIM:",
+        ] {
+            let (stored, body) = synonyms_ending(tail);
+            assert_eq!(serialised_synonyms(&stored), body.as_str(), "{tail}");
+        }
+        let (stored, body) = synonyms_ending("--OMIM::6059");
+        assert_eq!(serialised_synonyms(&stored), body.as_str(), "only id cut");
+
+        let no_separator = format!("ClinVar{}", "9".repeat(1024 - 7));
+        let only_id = format!("ClinVar::RCV{}", "9".repeat(1024 - 12));
+        for stored in [no_separator, only_id] {
+            assert_eq!(stored.len(), 1024);
+            assert!(serialised_synonyms(&stored).is_null(), "no synonyms");
+        }
+    }
+
+    /// Control: a `var_synonyms` value of 1,024 bytes ending in a separator,
+    /// a value one byte under or over that length and a short value are
+    /// serialised as stored.
+    #[test]
+    fn synonyms_beside_the_cap_or_ending_in_a_separator_stay_whole() {
+        for tail in [",", "--OMIM::", "--"] {
+            let (stored, _) = synonyms_ending(tail);
+            assert_eq!(serialised_synonyms(&stored), stored.as_str(), "{tail}");
+        }
+        let (at_the_cap, _) = synonyms_ending(",RCV999");
+        let under = at_the_cap.replacen('9', "", 1);
+        assert_eq!(under.len(), 1023);
+        assert_eq!(serialised_synonyms(&under), under.as_str());
+        let over = format!("{at_the_cap}0");
+        assert_eq!(serialised_synonyms(&over), over.as_str());
+        assert_eq!(
+            serialised_synonyms("ClinVar::RCV999000001"),
+            "ClinVar::RCV999000001"
+        );
+    }
+
+    /// The serialised known variant a shared-library plugin reads lists the
+    /// `pubmed` ids before the cut one, and reads back as that shorter list.
+    #[test]
+    fn a_serialised_variant_lists_no_cut_pubmed_id() {
+        let whole = invented_pubmed_ids(113);
+        let cv = ColocatedVariant {
+            pubmed: Some(format!("{whole},9900011")),
+            ..Default::default()
+        };
+        let document = serde_json::to_value(&cv).unwrap();
+        let listed = document["pubmed"].as_array().unwrap();
+        assert_eq!(listed.len(), 113, "the ids the document lists");
+        assert_eq!(listed[112], "99000113");
+        let read: ColocatedVariant = serde_json::from_value(document).unwrap();
+        assert_eq!(read.pubmed.as_deref(), Some(whole.as_str()));
+    }
 
     /// A `chr` prefix is removed for the cache lookup and kept for the output, as
     /// `_have_chr` accepts the name through its `chr` rule without rewriting it
@@ -2432,16 +2958,17 @@ mod tests {
 
     /// The reference row is the reference of the record's working string, numbered
     /// 0 over the record's span, and shares the record's `minimised` mark
-    /// (`VariationFeature_to_output_hash` sets `MINIMISED` from the feature) and
-    /// line; for an allele of a `--minimal` split it is the allele's own trimmed
-    /// reference over the trimmed span (InputBuffer.pm:674-676), with the record's
-    /// span restored for Location and the allele's rejoin key.
+    /// (`VariationFeature_to_output_hash` sets `MINIMISED` from the feature), line
+    /// and written position; for an allele of a `--minimal` split it is the
+    /// allele's own trimmed reference over the trimmed span (InputBuffer.pm:674-676),
+    /// with the record's span restored for Location and the allele's rejoin key.
     #[test]
     fn reference_row_shares_the_records_fields_and_a_split_alleles_span() {
         let mut minimised = InputVariant::new("21".into(), 101, 102, b"AA".to_vec(), b"-".to_vec());
         minimised.uploaded_allele_string = Some("AAA/A".into());
         minimised.original_allele_string = Some("AAA/A".into());
         minimised.minimised = true;
+        minimised.input_position = 100;
         minimised.raw_input = Some("21\t100\t.\tAAA\tA".into());
         minimised.raw_input_bytes = Some(Arc::from(b"21\t100\t.\tAAA\tA".as_slice()));
         let row = minimised.reference_allele_row();
@@ -2451,6 +2978,7 @@ mod tests {
             (b"AA".as_slice(), b"AA".as_slice())
         );
         assert_eq!((row.start, row.end, row.allele_num), (101, 102, Some(0)));
+        assert_eq!(row.input_position, 100);
         assert_eq!(row.original_allele_string.as_deref(), Some("AAA/A"));
         assert_eq!(row.raw_input_bytes, minimised.raw_input_bytes);
         assert_eq!(row.record_allele_string(), "AA/-");
@@ -2459,6 +2987,7 @@ mod tests {
         // at 102 and its rows sort under `A/G_`.
         let mut second = InputVariant::new("21".into(), 100, 102, b"AAA".to_vec(), b"AAG".to_vec());
         second.allele_index = 1;
+        second.input_position = 100;
         second.record_allele_string_multi = Some("AAA/AGG/AAG".into());
         assert_eq!(
             crate::minimal::apply_minimal_split(&mut second, 1),
@@ -2470,6 +2999,7 @@ mod tests {
             (b"A".as_slice(), b"A".as_slice())
         );
         assert_eq!((row.start, row.end), (102, 102));
+        assert_eq!(row.input_position, 100);
         assert_eq!(
             (row.original_start, row.original_end),
             (Some(100), Some(102))
@@ -2775,5 +3305,85 @@ mod tests {
         let mut v = make_me_variant(b"<DEL:ME:LINE>");
         v.variant_class = VariantClass::MobileElementDeletion;
         assert_eq!(v.display_allele(), "mobile_element_deletion");
+    }
+
+    /// A variant with its record-level strings and the optional fields a VCF
+    /// record fills, as a parser leaves it.
+    fn populated_input_variant() -> InputVariant {
+        let mut v = InputVariant::new(
+            "chr21".to_string(),
+            10_000,
+            9_999,
+            b"-".to_vec(),
+            b"TT".to_vec(),
+        );
+        v.input_chr = Some("chrM".into());
+        v.allele_index = 1;
+        v.allele_num = Some(2);
+        v.id = Some("rs1".to_string());
+        v.minimised = true;
+        v.original_allele_string = Some("A/ATT".to_string());
+        v.original_start = Some(9_999);
+        v.original_end = Some(10_000);
+        v.rejoin_key_prefix = Some("-/TT".into());
+        v.raw_input = Some("chr21\t9999\trs1\tA\tATT,AG".into());
+        v.existing_variation = vec!["rs1".to_string()];
+        v.overlapping_svs = vec!["esv1".to_string()];
+        // A made-up CADD_PHRED value on the constructed record.
+        v.plugin_data
+            .insert("CADD_PHRED".to_string(), "1.5".to_string());
+        v.sv_end = Some(10_000);
+        v.sv_type = Some("INS".to_string());
+        v.sv_len = Some(2);
+        v.mate_id = Some("bnd_1".to_string());
+        v.mate_chr = Some("22".to_string());
+        v.mate_pos = Some(500);
+        v.uploaded_allele_string = Some("A/ATT/AG".into());
+        v.record_allele_string_multi = Some("-/TT/G".into());
+        v.written_case_allele_string = Some("-/tt".into());
+        v.input_line_name = Some("chr21_9999_A/ATT/AG".into());
+        v.input_position = 9_999;
+        v.record_so_term = Some("insertion".to_string());
+        v.hgvsg = Some("chr21:g.9999_10000insTT".to_string());
+        v
+    }
+
+    /// The JSON document of a variant is the fixture's, key for key and value for
+    /// value: the chromosome names and the ID serialize as the strings they hold.
+    #[test]
+    fn serde_shape_of_input_variant_is_unchanged() {
+        assert_eq!(
+            serde_json::to_string_pretty(&populated_input_variant()).unwrap(),
+            include_str!("../tests/fixtures/input_variant_populated.json").trim_end()
+        );
+        let mut unnamed =
+            InputVariant::new("21".to_string(), 100, 100, b"A".to_vec(), b"G".to_vec());
+        unnamed.id = Some(".".to_string());
+        assert_eq!(
+            serde_json::to_string_pretty(&unnamed).unwrap(),
+            include_str!("../tests/fixtures/input_variant_dot_id.json").trim_end()
+        );
+    }
+
+    /// The allele string is `reference/alt` with an invalid byte read as U+FFFD.
+    #[test]
+    fn allele_pair_reads_the_bytes_lossily() {
+        assert_eq!(allele_pair(b"A", b"G"), "A/G");
+        assert_eq!(allele_pair(b"-", b"TT"), "-/TT");
+        assert_eq!(allele_pair(b"", b""), "/");
+        assert_eq!(allele_pair(b"A\xff", b"G"), "A\u{fffd}/G");
+        assert_eq!(
+            InputVariant::new("21".to_string(), 1, 1, b"AC".to_vec(), b"A".to_vec()).allele_string,
+            "AC/A"
+        );
+        assert_eq!(
+            InputVariant::without_allele("21".to_string(), 1, "A", ["*", "."]).allele_string,
+            "A/*/."
+        );
+        assert_eq!(
+            InputVariant::without_allele("21".to_string(), 1, "A", std::iter::empty())
+                .allele_string,
+            "A"
+        );
     }
 }

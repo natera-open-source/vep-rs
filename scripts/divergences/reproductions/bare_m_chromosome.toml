@@ -1,0 +1,30 @@
+entry = "bare_m_chromosome"
+page = "docs/divergences/bare-m-chromosome.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", CHROM (a String, no whitespace permitted); not seen in the measured datasets"
+notes = "Both caches' chr_synonyms.txt link chrM to MT, so Ensembl VEP admits M as chrM and never renames it to MT; the compared rows are the record's MT-ATP6 row and its intergenic row."
+
+[input]
+format = "vcf"
+text = """
+M	8993	m8993	T	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-input-hgvs/json_cache"
+chromosomes = ["MT"]
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = "m8993", feature = ["-", "ENST00000361899"] }
+
+[expected]
+ensembl_vep = ["M:8993 | G | - | intergenic_variant"]
+vep_rs = ["M:8993 | G | ENST00000361899 | missense_variant"]

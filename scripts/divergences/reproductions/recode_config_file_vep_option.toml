@@ -1,0 +1,35 @@
+entry = "recode_config_file_vep_option"
+page = "docs/divergences/recode-config-file.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the config file contract, whitespace-separated pairs of option names and settings (Ensembl VEP documentation, \"Running Ensembl VEP\", --config), which sets no rule against an Ensembl VEP option in a file variant_recoder reads; not seen in the measured datasets"
+notes = "A --config file naming symbol, a vep option the recoder's command line never declares. variant_recoder reads the file through vep's option list (Config.pm:1100; the list at Config.pm:73-276 holds symbol) and stores the value (Config.pm:1101), so the run writes gene symbols into its JSON and --fields gene_symbol prints them; vep recode drops a name its own page lacks and prints hgvsg and input alone. variant_recoder reads the Ensembl database and passes the cache and FASTA arguments through unread."
+
+prepare = ["printf 'symbol 1\\n' > \"$STAGE/recode.ini\""]
+
+[input]
+format = "id"
+text = """
+rs781261918
+"""
+
+[cache]
+corpus = "tests/golden/116/GRCh38-recoder"
+
+[run]
+tool = "recode"
+args = [
+  "-i", "{input}", "--format", "id", "--config", "{stage}/recode.ini", "--fields", "hgvsg,gene_symbol",
+  "--json_cache", "{corpus}/json_cache", "--fasta", "{corpus}/reference.fa.gz", "--synonyms", "{corpus}/chr_synonyms.txt",
+]
+
+[compare]
+kind = "stdout"
+pattern = "gene_symbol"
+
+[expected]
+ensembl_vep_exit = 0
+vep_rs_exit = 0
+ensembl_vep = ["[{\"T\":{\"input\":\"rs781261918\",\"gene_symbol\":[\"JAM2\",\"ATP5PF\",\"LOC124905002\"],\"hgvsg\":[\"NC_000021.9:g.25702257C>T\"]}}]"]
+vep_rs = []

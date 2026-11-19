@@ -138,9 +138,10 @@ pub struct CdsSpanProjection {
     pub cds_start_nf: bool,
     /// Whether the transcript has the `cds_end_NF` attribute flag.
     pub cds_end_nf: bool,
-    /// Whether the transcript's terminal codon is partial (last codon has
-    /// length `< 3 AND > 0`, matching Perl's `partial_codon` predicate at
-    /// `VariationEffect.pm::1480`).
+    /// Ensembl VEP's `partial_codon` for the span: its `translation_start`, the
+    /// peptide position of the span's first base in transcript order, lies in
+    /// a terminal codon shorter than three bases; false when that base lies
+    /// outside the coding sequence.
     pub has_partial_terminal_codon: bool,
 }
 
@@ -373,33 +374,19 @@ pub fn map_genomic_span_to_cds_projection(
     let cds_start_nf = transcript_has_flag(transcript, "cds_start_NF");
     let cds_end_nf = transcript_has_flag(transcript, "cds_end_NF");
 
-    // partial_codon (Perl VariationEffect.pm:1480) asks whether this variant's
-    // translation_start sits in the partial terminal codon, not whether the CDS
-    // length is a multiple of 3:
-    //   $last_codon_length = $cds_length - ($codon_cds_start - 1)
-    //   where $codon_cds_start = $tr_start * 3 - 2
-    //   partial = $last_codon_length < 3 AND $last_codon_length > 0
-    // The anchor is the span's first-Coordinate cds_start
-    // (BaseTranscriptVariation.pm:264); with no Coordinate segment there is no
-    // CDS anchor and partial_codon is false. cds_length comes from
-    // translateable_seq (Perl's `_translateable_seq`), else the cdna_coding window.
-    let cds_len_for_partial = vefc
-        .translateable_seq
-        .as_ref()
-        .map(|s| s.len() as u64)
-        .unwrap_or_else(|| coding_end.saturating_sub(coding_start) + 1);
-    let has_partial_terminal_codon = if let Some(MapperSegment::Coordinate { cds_start, .. }) =
-        segments
-            .iter()
-            .find(|s| matches!(s, MapperSegment::Coordinate { .. }))
-    {
-        let translation_start = (cds_start - 1) / 3 + 1;
-        let codon_cds_start = translation_start * 3 - 2;
-        let last_codon_length = cds_len_for_partial.saturating_sub(codon_cds_start - 1);
-        last_codon_length > 0 && last_codon_length < 3
-    } else {
-        false
+    // Perl's `translation_start` is the first `genomic2pep` element in transcript
+    // order (`BaseTranscriptVariation.pm:365-380`), defined only when the span's
+    // transcript-5' base, its start on the forward strand and its end on the
+    // reverse, lies in the coding sequence.
+    let five_prime_class = match strand {
+        Strand::Forward => start_class,
+        Strand::Reverse => end_class,
     };
+    let translation_start = match five_prime_class {
+        EndpointClass::InCds { cds_pos } => Some((cds_pos - 1) / 3 + 1),
+        _ => None,
+    };
+    let has_partial_terminal_codon = partial_codon(transcript, translation_start);
 
     Some(CdsSpanProjection {
         segments,
@@ -409,6 +396,33 @@ pub fn map_genomic_span_to_cds_projection(
         cds_end_nf,
         has_partial_terminal_codon,
     })
+}
+
+/// Ensembl VEP's `partial_codon` (release/116 `Utils/VariationEffect.pm:1588-1613`):
+/// the codon holding the span's `translation_start` is the coding sequence's last
+/// and is shorter than three bases,
+/// `0 < length(_translateable_seq) - (translation_start * 3 - 3) < 3`.
+///
+/// `translation_start` is the peptide position of the span's first base in
+/// transcript order, `None` where Perl's is undefined: that base lies outside the
+/// coding sequence (in a UTR, an intron or beyond the transcript), so the span's
+/// `genomic2pep` list opens with a gap and the predicate is false before any
+/// arithmetic. The coding sequence length is the transcript's `translateable_seq`;
+/// a transcript without one reads as length 0, as Perl's `length` of an undefined
+/// string does in the subtraction, so `last_codon_length` is at most zero and the
+/// predicate is false.
+pub(crate) fn partial_codon(transcript: &Transcript, translation_start: Option<u64>) -> bool {
+    let Some(translation_start) = translation_start else {
+        return false;
+    };
+    let cds_length = transcript
+        .vefc
+        .as_ref()
+        .and_then(|v| v.translateable_seq.as_deref())
+        .map_or(0, |s| s.len() as i64);
+    let codon_cds_start = translation_start as i64 * 3 - 2;
+    let last_codon_length = cds_length - (codon_cds_start - 1);
+    last_codon_length < 3 && last_codon_length > 0
 }
 
 /// Classify a single genomic endpoint for [`CdsSpanProjection`].
@@ -660,6 +674,36 @@ pub enum TranscriptPosition {
         total_exons: u32,
         cdna_pos: u64,
     },
+}
+
+impl TranscriptPosition {
+    /// The position of a base inside the transcript span that no exon pair and
+    /// no intron holds: an `Intron` whose splice distances are both `u64::MAX`,
+    /// so every splice test is false. Inside an exon's genomic span such a base
+    /// is one the model's alignment deleted, which carries no transcript
+    /// coordinate.
+    fn unmapped(total_introns: u32) -> Self {
+        TranscriptPosition::Intron {
+            intron_number: 1,
+            total_introns: total_introns.max(1),
+            dist_to_donor: u64::MAX,
+            dist_to_acceptor: u64::MAX,
+        }
+    }
+
+    /// Whether this is the position of a base no exon pair and no intron holds:
+    /// an `Intron` whose splice distances are both `u64::MAX`, the shape
+    /// `unmapped` builds.
+    pub(crate) fn is_unmapped(&self) -> bool {
+        matches!(
+            self,
+            TranscriptPosition::Intron {
+                dist_to_donor: u64::MAX,
+                dist_to_acceptor: u64::MAX,
+                ..
+            }
+        )
+    }
 }
 
 /// Map a genomic position to transcript coordinates.
@@ -942,19 +986,31 @@ fn find_intron_position(
         }
     }
 
-    // Inside the transcript span but in no known exon or intron (an incomplete
-    // model): u64::MAX splice distances keep every splice check false.
-    tracing::warn!(
-        genomic_pos,
-        transcript = %transcript.stable_id,
-        "Position within transcript span but not in any known intron; possible incomplete model"
-    );
-    TranscriptPosition::Intron {
-        intron_number: 1,
-        total_introns: total_introns.max(1),
-        dist_to_donor: u64::MAX,
-        dist_to_acceptor: u64::MAX,
+    // Inside the transcript span but in no exon pair and no intron. Inside an
+    // exon's genomic span the base is one the model's alignment deleted (a
+    // RefSeq deletion edit): the cache's mapper pairs it with no cDNA base, so
+    // it carries no transcript coordinate; its warning carries the model and no
+    // position, so the sink, which writes a text once, warns once per model.
+    // Outside every exon the model is incomplete.
+    let inside_exon_span = vefc
+        .sorted_exons
+        .iter()
+        .any(|e| genomic_pos >= e.start && genomic_pos <= e.end);
+    if inside_exon_span {
+        tracing::warn!(
+            "Bases deleted by the alignment of {} carry no transcript coordinate; \
+             a variant inside them takes the term of the transcript region whose \
+             span holds it",
+            transcript.stable_id
+        );
+    } else {
+        tracing::warn!(
+            genomic_pos,
+            transcript = %transcript.stable_id,
+            "Position within transcript span but not in any known intron; possible incomplete model"
+        );
     }
+    TranscriptPosition::unmapped(total_introns)
 }
 
 #[cfg(test)]
@@ -1596,9 +1652,9 @@ mod tests {
         let tx = make_test_transcript();
         // Start well before transcript start, end inside transcript.
         let proj = map_genomic_span_to_cds_projection(24_990_000, 25_000_200, &tx);
-        // The projection returns Some with start_endpoint_class =
-        // OutsideTranscript, or None when the boundary snap fails upstream; the
-        // class is checked when Some.
+        // `map_genomic_span_to_cds_projection` returns `None` only for a transcript
+        // without a mapper, pairs or coding model; the test transcript has all three,
+        // so the branch below runs and checks the start endpoint class.
         if let Some(p) = proj {
             assert!(matches!(
                 p.start_endpoint_class,
@@ -1850,10 +1906,8 @@ mod tests {
 
     #[test]
     fn test_projection_debug_assert_holds_reverse_strand() {
-        // The projection's cDNA-sorted precondition (debug_assert) must hold for
-        // a reverse-strand transcript. make_test_transcript is forward, so build
-        // a reverse VEFC mapper and run a projection through it; in a debug build
-        // a violated precondition would panic here.
+        // The reverse-strand pairs are checked against the projection's precondition
+        // directly; no projection runs over them.
         let pairs = build_pairs(&[(1000, 1099), (2000, 2099), (3000, 3099)], -1);
         // pairs are from_start-ascending by construction; the projection asserts this.
         assert!(pairs.windows(2).all(|w| w[0].from_start <= w[1].from_start));

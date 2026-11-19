@@ -1,10 +1,12 @@
 # Defect E: a breakend's mate-side row evaluated at the record's own coordinate
 
-**The defect in one sentence.** For a breakend, Ensembl VEP chooses which transcripts get a mate-side row by the mate's chromosome and coordinate, then evaluates almost every consequence test on that row with the record's own coordinate, which may lie on another chromosome.
+**The defect in one sentence.** For a breakend, Ensembl VEP chooses which transcripts get a mate-side row by the mate's chromosome and coordinate, then evaluates almost every consequence test on that row with the record's own coordinate, which may lie on another chromosome. The row comes out as bare `feature_truncation` or as `intergenic_variant`, where vep-rs writes `feature_truncation` plus the region the mate breakpoint lands in or, within 5,000 bases of the transcript, `upstream_gene_variant` or `downstream_gene_variant`.
 
 **Why this is a defect.** The row is written for the mate breakpoint: its transcript was chosen because the mate lands in or near it. Asking whether the record's chromosome 1 position lies inside a chromosome 21 transcript's intron answers a question about the wrong breakpoint. Only `feature_truncation` looks at the mate, so the row comes out as bare `feature_truncation` or, when even that does not fire, falls through to `intergenic_variant` on a row that names a transcript.
 
 **What vep-rs does instead.** vep-rs evaluates the mate breakpoint where it is: inside the transcript it writes `feature_truncation` plus the exon, intron, UTR or coding region the breakpoint lands in; within 5,000 bases of the transcript, `upstream_gene_variant` or `downstream_gene_variant`.
+
+A regulatory-feature or motif-feature row the mate selects goes the same way. `within_regulatory_feature` and `within_motif_feature` read the record's own coordinate through `within_feature` (`Utils/VariationEffect.pm` lines 126-142, 1653-1656 and 1684-1687), so Ensembl VEP writes the row as bare `feature_truncation`; vep-rs writes the feature's overlap term for the breakpoint the row is for.
 
 **Where it is in Ensembl VEP's source** (`ensembl-variation`):
 - `Bio/EnsEMBL/Variation/BaseVariationFeatureOverlapAllele.pm`, lines 257 and 273: the record's own feature is passed to every predicate.

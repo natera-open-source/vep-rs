@@ -10,7 +10,9 @@
 /// ABI version for plugin compatibility checking.
 ///
 /// Bumped whenever the FFI contract changes in a backwards-incompatible way.
-pub const VEP_PLUGIN_ABI_VERSION: u32 = 1;
+/// Version 2 adds the required `vep_plugin_header_info` symbol and the optional
+/// `vep_plugin_feature_types` symbol, and calls `vep_plugin_init` on every load.
+pub const VEP_PLUGIN_ABI_VERSION: u32 = 2;
 
 /// Symbol names used when looking up exported functions from a plugin dylib.
 pub mod symbol_names {
@@ -20,10 +22,10 @@ pub mod symbol_names {
     pub const NAME: &[u8] = b"vep_plugin_name\0";
     pub const VERSION: &[u8] = b"vep_plugin_version\0";
     pub const INIT: &[u8] = b"vep_plugin_init\0";
+    pub const HEADER_INFO: &[u8] = b"vep_plugin_header_info\0";
+    pub const FEATURE_TYPES: &[u8] = b"vep_plugin_feature_types\0";
     pub const RUN: &[u8] = b"vep_plugin_run\0";
     pub const FREE: &[u8] = b"vep_plugin_free\0";
-    /// Optional: a plugin without it annotates transcript rows alone.
-    pub const FEATURE_TYPES: &[u8] = b"vep_plugin_feature_types\0";
 }
 
 /// C function signatures that a plugin dylib must export.
@@ -50,29 +52,36 @@ pub mod ffi {
     pub type PluginVersionFn = unsafe extern "C" fn(*const c_void) -> *const c_char;
 
     /// Initialize the plugin with parameters. Returns 0 on success, non-zero on error.
+    /// Called exactly once per instance, with the `--plugin` parameters after the
+    /// name, zero or more, before any other instance call but `vep_plugin_name`
+    /// and `vep_plugin_version`.
     pub type PluginInitFn = unsafe extern "C" fn(*mut c_void, *const *const c_char, usize) -> i32;
+
+    /// Returns the fields the plugin writes, as a JSON array of `[key, description]`
+    /// pairs (`[]` or `null` for none), which the headers print and the column
+    /// formats take their plugin columns from. The caller frees the string via
+    /// [`PluginFreeFn`].
+    pub type PluginHeaderInfoFn = unsafe extern "C" fn(*const c_void) -> *mut c_char;
+
+    /// Returns the feature types the plugin runs on, as a JSON array of
+    /// `"Transcript"`, `"RegulatoryFeature"`, `"MotifFeature"` and `"Intergenic"`.
+    /// Optional: a library that does not export it runs on `Transcript` rows alone, Ensembl VEP's
+    /// default (`BaseVepPlugin.pm:99`). The caller frees the string via [`PluginFreeFn`].
+    pub type PluginFeatureTypesFn = unsafe extern "C" fn(*const c_void) -> *mut c_char;
 
     /// Run the plugin on a consequence.
     ///
     /// - First `*const c_void` is the plugin instance.
-    /// - Second `*const c_char` is the consequence as a JSON string.
+    /// - Second `*const c_char` is the consequence as a JSON string, the JSON text
+    ///   `null` (never a null pointer) on an intergenic row.
     /// - Third `*const c_char` is the variant as a JSON string.
     /// - Returns a JSON string that the caller must free via [`PluginFreeFn`].
     pub type PluginRunFn =
         unsafe extern "C" fn(*const c_void, *const c_char, *const c_char) -> *mut c_char;
 
-    /// Free a string returned by [`PluginRunFn`].
+    /// Free a string returned by [`PluginRunFn`], [`PluginHeaderInfoFn`] or
+    /// [`PluginFeatureTypesFn`].
     pub type PluginFreeFn = unsafe extern "C" fn(*mut c_char);
-
-    /// Optional. Returns the feature types the plugin annotates as a
-    /// null-terminated, comma-separated list of `Transcript`,
-    /// `RegulatoryFeature`, `MotifFeature`, `Feature` (the three together) and
-    /// `Intergenic`, the words Ensembl VEP's `feature_types` takes; read once
-    /// after [`PluginInitFn`], so the list may depend on the parameters. The
-    /// returned pointer must remain valid for the lifetime of the instance. A
-    /// plugin that does not export the symbol annotates `Transcript` rows
-    /// alone, Ensembl VEP's default.
-    pub type PluginFeatureTypesFn = unsafe extern "C" fn(*const c_void) -> *const c_char;
 }
 
 #[cfg(test)]
@@ -81,7 +90,7 @@ mod tests {
 
     #[test]
     fn abi_version_is_defined() {
-        assert_eq!(VEP_PLUGIN_ABI_VERSION, 1);
+        assert_eq!(VEP_PLUGIN_ABI_VERSION, 2);
     }
 
     #[test]
@@ -94,9 +103,10 @@ mod tests {
             symbol_names::NAME,
             symbol_names::VERSION,
             symbol_names::INIT,
+            symbol_names::HEADER_INFO,
+            symbol_names::FEATURE_TYPES,
             symbol_names::RUN,
             symbol_names::FREE,
-            symbol_names::FEATURE_TYPES,
         ] {
             assert_eq!(
                 name.last().copied(),

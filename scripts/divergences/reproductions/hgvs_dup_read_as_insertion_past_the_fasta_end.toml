@@ -1,0 +1,36 @@
+entry = "hgvs_dup_read_as_insertion_past_the_fasta_end"
+page = "docs/divergences/hgvs-dup-read-as-insertion-past-the-fasta-end.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the faidx format page (equal-length lines, a matching index) and the Ensembl VEP documentation, \"Annotation sources\", \"FASTA files\", and \"Running Ensembl VEP\", --fasta and --hgvs, which ask for a reference FASTA and set no rule that a sequence run its chromosome's full length; not seen in the measured datasets"
+notes = "CAG inserted after 21:46302556, inside a CAG run on the reverse-strand ENST00000291691 (46301130-46323870), against the corpus chromosome 21 cut after base 46302700: the bases the notation reads lie inside the cut, the transcript's end 21,170 bases past it. Ensembl VEP fetches the sequence past the file's end as one N, so the transcript's sequence comes up short and the duplication test reads nothing; on the complete chromosome both engines write c.743_745dup."
+# The corpus chromosome 21 cut after base 46302700 (771,711 full lines of 60 bases and 40 of the next), with an index of that length; awk reads the stream to its end, since exiting early would end gunzip on a broken pipe.
+prepare = [
+  "gunzip -c \"$CORPUS/reference.fa.gz\" | awk 'NR <= 771712 { print; next } NR == 771713 { print substr($0, 1, 40) }' > \"$STAGE/chr21_to_46302700.fa\"",
+  "printf '21\\t46302700\\t4\\t60\\t61\\n' > \"$STAGE/chr21_to_46302700.fa.fai\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	46302556	ins_cag_46302556	G	GCAG	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+fasta = "{stage}/chr21_to_46302700.fa"
+
+[run]
+flags = ["--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = "ins_cag_46302556", feature = "ENST00000291691" }
+columns = ["Consequence", "CDS_position", "HGVSc", "HGVS_OFFSET"]
+
+[expected]
+ensembl_vep = ["inframe_insertion | 741-742 | ENST00000291691.12:c.745_746insTGC | -4"]
+vep_rs = ["inframe_insertion | 741-742 | ENST00000291691.12:c.743_745dup | -4"]

@@ -12,7 +12,13 @@
 //! `STDERR` in any case for standard error) and echoed on standard error unless
 //! `--quiet`, so a standard-error target carries it twice; a text seen before, a
 //! trailing `line N` set aside, is written once. The warnings file is opened at
-//! the first warning, so a run without one leaves no file.
+//! the first warning, so a run without one leaves no file. A run that carries
+//! its warnings in its own output (`vep recode`) targets the sink's memory and
+//! reads them back when it ends. A built-in plugin's failures are held through
+//! the run and written at its end as one `Plugin '<name>' went wrong` line per
+//! plugin carrying the number of variants it failed on, as `warning_msg`'s seen
+//! set leaves one line for a plugin dying the same way on every line
+//! (BaseVEP.pm:810-813).
 //!
 //! A skipped variant is reported as `line N skipped (<line>): <description>`,
 //! the line collapsed to single spaces and cut to 50 bytes, `variant skipped`
@@ -47,6 +53,9 @@ pub enum Target {
     Stderr,
     /// A file, opened at the first warning.
     File(PathBuf),
+    /// Held in the sink for the run to read back ([`Sink::take_collected`]):
+    /// `vep recode` carries its warnings in its output.
+    Memory,
 }
 
 /// One skipped variant, as the skipped-variants file lists it.
@@ -74,6 +83,23 @@ struct State {
     /// The `--skipped_variants_file` path, checked before the run and written at
     /// its end.
     skipped_file: Option<PathBuf>,
+    /// The texts written under [`Target::Memory`], in order, each with the
+    /// input line number of the record it skipped, when it skipped one.
+    collected: Vec<(Option<u64>, String)>,
+    /// Per failed built-in plugin, in the order the failures were first
+    /// reported: the plugin's name and load-order instance, the text of its
+    /// first failure and the number of variants it failed on over the run,
+    /// written at the run's end.
+    plugin_failures: Vec<PluginFailureCount>,
+}
+
+/// One built-in plugin instance's failures over a run
+/// ([`Sink::plugin_failure`]).
+struct PluginFailureCount {
+    plugin: String,
+    instance: usize,
+    reason: String,
+    failed_variants: usize,
 }
 
 impl Default for State {
@@ -88,6 +114,8 @@ impl Default for State {
             seen: HashSet::new(),
             skipped: Vec::new(),
             skipped_file: None,
+            collected: Vec::new(),
+            plugin_failures: Vec::new(),
         }
     }
 }
@@ -134,31 +162,31 @@ impl Sink {
     /// the target and to standard error unless quiet, so a standard-error target
     /// carries it twice, as `print $fh` (:819) then `warn` (:821) write it.
     pub fn warn(&self, text: &str) {
-        let mut text = text.to_string();
-        if !text
-            .get(..4)
-            .is_some_and(|head| head.eq_ignore_ascii_case("warn"))
-        {
-            text.insert_str(0, "WARNING: ");
-        }
-        if !text.ends_with('\n') {
-            text.push('\n');
-        }
-        if !self.lock().seen.insert(dedup_key(&text)) {
-            return;
-        }
-        self.write(text);
+        self.warn_about_line(text, None);
     }
 
-    /// Writes one finished warning text to the target, then to standard error
-    /// unless quiet, a standard-error target included. A file that cannot be
-    /// created or written is kept as the run's failure ([`Sink::failure`], the
-    /// `ERROR: [output]` line the run ends with); the standard-error echo follows
-    /// `--quiet` all the same.
-    fn write(&self, text: String) {
-        let mut state = self.lock();
+    /// [`Sink::warn`] with the input line number of the record the warning is
+    /// about, kept beside the text under [`Target::Memory`].
+    fn warn_about_line(&self, text: &str, line_number: Option<u64>) {
+        Self::write_to(&mut self.lock(), text, line_number);
+    }
+
+    /// Writes one warning text, finished ([`finished_text`]) and not seen before
+    /// (BaseVEP.pm:810-813), to the target, then to standard error unless quiet,
+    /// a standard-error target included; a text seen before is dropped. A file
+    /// that cannot be created or written is kept as the run's failure
+    /// ([`Sink::failure`], the `ERROR: [output]` line the run ends with); the
+    /// standard-error echo follows `--quiet` all the same. In the `vep`
+    /// binary a text standard error refuses, as the target or as the echo,
+    /// is dropped ([`crate::stderr`]).
+    fn write_to(state: &mut State, text: &str, line_number: Option<u64>) {
+        let text = finished_text(text);
+        if !state.seen.insert(dedup_key(&text)) {
+            return;
+        }
         match state.target.clone() {
-            Target::Stderr => eprint!("{text}"),
+            Target::Stderr => crate::stderr::write(format_args!("{text}")),
+            Target::Memory => state.collected.push((line_number, text.clone())),
             Target::File(path) => {
                 let could_not_write =
                     || format!("Could not write to warnings file {}", path.display());
@@ -176,7 +204,7 @@ impl Sink {
             }
         }
         if !state.quiet {
-            eprint!("{text}");
+            crate::stderr::write(format_args!("{text}"));
         }
     }
 
@@ -198,7 +226,7 @@ impl Sink {
             Some(n) => format!("WARNING: line {n} skipped {described}\n"),
             None => format!("WARNING: variant skipped {described}\n"),
         };
-        self.warn(&text);
+        self.warn_about_line(&text, line_number);
         let mut state = self.lock();
         if state.skipped_file.is_some() {
             state.skipped.push(Skipped {
@@ -247,11 +275,82 @@ impl Sink {
         self.lock().skipped.clone()
     }
 
-    /// Ends the run: writes the skipped-variants file (BaseRunner.pm:364-380, the
-    /// header line then one row per skip, the header alone when nothing was
-    /// skipped) and closes the warnings file. The warnings-file failure, if any,
-    /// is returned after the skipped-variants file is written.
+    /// The texts written under [`Target::Memory`] since the last call, each a
+    /// finished warning line with the input line number of the record it
+    /// skipped, when it skipped one; the sink keeps none of them.
+    pub fn take_collected(&self) -> Vec<(Option<u64>, String)> {
+        std::mem::take(&mut self.lock().collected)
+    }
+
+    /// A built-in plugin's failure on a batch: `instance` its place in load
+    /// order (a built-in loaded twice is two plugins of one name, each with its
+    /// own line, as Ensembl VEP loads one instance per `--plugin` argument),
+    /// `reason` its error text and `failed_variants` the batch's variants it
+    /// annotated nothing on (OutputFactory.pm:2243-2245: `Plugin '<Class>' went
+    /// wrong: $@`, one `warning_msg` per failing line, which the seen set leaves
+    /// as one line for a plugin dying the same way on every line). The
+    /// failures of an instance are held and written at the run's end
+    /// ([`Sink::finish`]) as one line, `Plugin '<name>' went wrong: <first
+    /// reason>; <N> variants affected`, summing the batches.
+    pub fn plugin_failure(
+        &self,
+        plugin: &str,
+        instance: usize,
+        reason: &str,
+        failed_variants: usize,
+    ) {
+        let mut state = self.lock();
+        match state
+            .plugin_failures
+            .iter_mut()
+            .find(|failure| failure.plugin == plugin && failure.instance == instance)
+        {
+            Some(failure) => failure.failed_variants += failed_variants,
+            None => state.plugin_failures.push(PluginFailureCount {
+                plugin: plugin.to_string(),
+                instance,
+                reason: reason.to_string(),
+                failed_variants,
+            }),
+        }
+    }
+
+    /// Writes the plugin failures held so far ([`Sink::plugin_failure`]), one
+    /// line per plugin, through the seen set like any other warning, taking and
+    /// writing them under one lock so two callers never split a failure between
+    /// them; [`Sink::finish`] runs it, a run ending in an error runs it before it
+    /// exits so the warnings file keeps the lines, and a program's batch runs it
+    /// as the batch ends.
+    pub fn write_plugin_failures(&self) {
+        let mut state = self.lock();
+        let failures = std::mem::take(&mut state.plugin_failures);
+        for PluginFailureCount {
+            plugin,
+            reason,
+            failed_variants,
+            ..
+        } in failures
+        {
+            let variants = if failed_variants == 1 {
+                "variant"
+            } else {
+                "variants"
+            };
+            let text = format!(
+                "Plugin '{plugin}' went wrong: {reason}; {failed_variants} {variants} affected"
+            );
+            Self::write_to(&mut state, &text, None);
+        }
+    }
+
+    /// Ends the run: writes the plugin failures held through it
+    /// ([`Sink::plugin_failure`]) and the skipped-variants file
+    /// (BaseRunner.pm:364-380, the header line then one row per skip, the
+    /// header alone when nothing was skipped) and closes the warnings file. The
+    /// warnings-file failure, if any, is returned after the skipped-variants
+    /// file is written.
     pub fn finish(&self, input_file: &str) -> Result<(), CliError> {
+        self.write_plugin_failures();
         let mut state = self.lock();
         if let Some(path) = state.skipped_file.take() {
             let mut text = format!("[VEP skipped the following variants from {input_file}]\n");
@@ -280,6 +379,23 @@ fn skipped_file_unwritable(path: &Path) -> CliError {
             path.display()
         ),
     )
+}
+
+/// A warning's finished text: `WARNING: ` prefixed unless the text already
+/// opens with `warn` in any case, a newline appended unless present
+/// (BaseVEP.pm:806-807).
+fn finished_text(text: &str) -> String {
+    let mut text = text.to_string();
+    if !text
+        .get(..4)
+        .is_some_and(|head| head.eq_ignore_ascii_case("warn"))
+    {
+        text.insert_str(0, "WARNING: ");
+    }
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    text
 }
 
 /// The text a warning is deduplicated on: the text without its newline and
@@ -485,6 +601,55 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
             "WARNING: plain text\nWARNING: already prefixed\nWarned once more\n"
+        );
+    }
+
+    /// A built-in plugin's failures are held until the run ends, then written as
+    /// one line per plugin instance: the first batch's text with the variants
+    /// failed on summed over the batches, `variant` for one (`warning_msg`'s
+    /// seen set leaves one line for a plugin dying the same way on every line,
+    /// BaseVEP.pm:810-813); a second instance of the same name keeps its own
+    /// line.
+    #[test]
+    fn plugin_failures_are_one_counted_line_per_plugin_at_the_end_of_the_run() {
+        let sink = Sink::new();
+        sink.configure(Target::Memory, true, false);
+        sink.plugin_failure(
+            "CADD",
+            0,
+            "no alt cell in a row of a_synthetic.tsv.gz; the first at 21:100",
+            2,
+        );
+        sink.plugin_failure("REVEL", 1, "bad block; the first at 21:300", 1);
+        sink.plugin_failure(
+            "CADD",
+            0,
+            "no alt cell in a row of a_synthetic.tsv.gz; the first at 21:900",
+            3,
+        );
+        sink.plugin_failure(
+            "CADD",
+            2,
+            "no alt cell in a row of b_synthetic.tsv.gz; the first at 21:100",
+            1,
+        );
+        assert!(sink.take_collected().is_empty(), "held until the run ends");
+        sink.finish("in.vcf").unwrap();
+        let texts: Vec<String> = sink
+            .take_collected()
+            .into_iter()
+            .map(|(_, text)| text)
+            .collect();
+        assert_eq!(
+            texts,
+            [
+                "WARNING: Plugin 'CADD' went wrong: no alt cell in a row of a_synthetic.tsv.gz; the first at \
+                 21:100; 5 variants affected\n",
+                "WARNING: Plugin 'REVEL' went wrong: bad block; the first at 21:300; 1 variant \
+                 affected\n",
+                "WARNING: Plugin 'CADD' went wrong: no alt cell in a row of b_synthetic.tsv.gz; the first at \
+                 21:100; 1 variant affected\n",
+            ]
         );
     }
 

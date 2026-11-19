@@ -1,0 +1,33 @@
+entry = "downstream_start_past_own_codon"
+page = "docs/divergences/downstream-start-past-own-codon.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 59,397 per million · 6 flag sets, 98 corpora"
+notes = "The ClinVar record of the page's first example deletes coding base 1812 of ENST00000398960, the third base of codon 604. Ensembl VEP's plugin starts its downstream translation at offset 1812 - (1812 % 3) = 1812, the first base of codon 605 (Downstream.pm:113), and writes 50 residues; vep-rs starts at codon 604 and writes 51, the lysine of the changed codon and then the same 50. The mask stands for those 50 residues, equal on both sides. Both engines write p.Asn604LysfsTer52 and ProteinLengthChange=-109, which count the residue Ensembl VEP's DownstreamProtein leaves out."
+
+[input]
+format = "vcf"
+text = """
+21	37512050	2081367	AC	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-computed/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-computed/reference.fa.gz"
+
+[run]
+flags = ["--hgvs", "--plugin", "Downstream"]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = "2081367", feature = "ENST00000398960" }
+columns = ["Feature", "Consequence", "CDS_position", "HGVSp", "ProteinLengthChange", "DownstreamProtein"]
+mask = ["[A-Z]{50}$"]
+
+[expected]
+ensembl_vep = ["ENST00000398960 | frameshift_variant | 1812 | ENSP00000381932.2:p.Asn604LysfsTer52 | -109 | <masked>"]
+vep_rs = ["ENST00000398960 | frameshift_variant | 1812 | ENSP00000381932.2:p.Asn604LysfsTer52 | -109 | K<masked>"]

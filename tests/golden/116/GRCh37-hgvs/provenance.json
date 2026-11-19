@@ -6,7 +6,7 @@
  "divergences_classified_against": {
   "engine": "vep-rs",
   "source": "the tree this corpus is committed with",
-  "binary_md5": "b02cb551ea3aea74b725f9e57b50ba16",
+  "binary_md5": "3f8114201d1cff109e0a56c55ad0663c",
   "arch": "arm64",
   "flags_passed": [
    "--hgvs"
@@ -21,7 +21,11 @@
   "default.txt": "f582d9768b41457b858743d0b68a400f4409b010a78822f74b207ff8bf4c563e",
   "tab.txt": "104ed891705a2e2995abbb9b04cdc6d5c269d995fafb64ab36e9d86be20ed483",
   "vcf.vcf": "3ce30bc1399fb7571486c4224eba3a3611022c9496140d37a2d031ea38e5cef4",
-  "json.jsonl": "54f63fc8c69e4fe45a13adf85ec594dd1e7ecbb117f6763ad86fa76e26c098cf"
+  "json.jsonl": "54f63fc8c69e4fe45a13adf85ec594dd1e7ecbb117f6763ad86fa76e26c098cf",
+  "default.summary.log": "41fbe4cd9f610d9bc1da6da286bc4118d68c5ec16a0cce3c87bc93c4ab082a5c",
+  "tab.summary.log": "3cff7e3cc0ab5be464213978542de30507d5466d8ce85c809acfe45b0666b8f4",
+  "vcf.summary.log": "6f98598cd6b25d68884af4dd25f9646b4f29a52f18c8a7926b355a6f70d53a57",
+  "json.summary.log": "fbb159d1dc8c0c851a3f95c8490ef1674d0e2f0581b286c4b8859bfd5b256a52"
  },
  "variants_vcf_sha256": "25486466cc68e72290d84b0e26a74869a3c57e3591d380a3360672d904865cde",
  "pruned_cache": {
@@ -50,5 +54,9 @@
     "json.jsonl": "feda83240f92e687fd2c0e9d366cae39a1d123c7483879dc3e4e10d0bb1c68e8"
    }
   }
+ },
+ "summary_log": {
+  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+  "annotation_rows": "equal to the expected outputs' rows; the two runs differ only in the header lines that name a time, the cache path or the command line"
  }
 }

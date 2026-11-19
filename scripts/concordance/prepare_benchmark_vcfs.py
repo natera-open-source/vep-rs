@@ -5,9 +5,11 @@ This script:
 1) Decompresses .vcf.gz (or copies .vcf) files.
 2) Optionally normalizes chromosome naming (chr1 <-> 1).
 3) Filters to canonical contigs: one universal Ensembl-style
-   (1-22, X, Y, MT) for both GRCh37 and GRCh38. UCSC-style chr-prefix
-   inputs are auto-stripped at filter time so all engines see the same
-   Ensembl-style canonical VCF.
+   (1-22, X, Y, MT) for both GRCh37 and GRCh38, or the set
+   `--canonical-contigs <file or list>` names for another assembly (a
+   cache's info.json contig_order). UCSC-style chr-prefix inputs are
+   auto-stripped at filter time so all engines see the same Ensembl-style
+   canonical VCF.
 4) Optionally truncates to N variants for smoke tests.
 5) Writes a manifest with provenance, counts, per-file sha256, and per-file
    chr_stripped flag for audit.
@@ -19,6 +21,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import re
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,6 +39,26 @@ from typing import Optional
 # CANONICAL_CONTIGS_LIST and scripts/concordance/compare_vep_outputs.py
 # CANONICAL_CONTIGS frozenset.
 CANONICAL_CONTIGS = frozenset([str(i) for i in range(1, 23)] + ["X", "Y", "MT", "M"])
+
+
+def parse_canonical_contigs(value: str) -> frozenset[str]:
+    """The contig set a `--canonical-contigs` value names: the lines of the file
+    at `value` when one exists (comma- or whitespace-separated names, `#` lines
+    ignored), else the comma-separated names in `value` itself. An empty set is
+    a usage error: a filter that admits nothing would drop every variant."""
+    path = Path(value)
+    if path.is_file():
+        text = " ".join(
+            line
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        )
+    else:
+        text = value
+    names = frozenset(name for name in re.split(r"[,\s]+", text) if name)
+    if not names:
+        raise SystemExit(f"error: --canonical-contigs {value!r} names no contig")
+    return names
 
 
 @dataclass
@@ -85,21 +108,25 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--assembly",
-        choices=["GRCh37", "GRCh38"],
         default=None,
-        help="Reference assembly metadata (recorded in manifest). Optional under "
-        "one set, since the canonical contigs are the same for both assemblies. "
-        "Pass it for audit-trail clarity.",
+        help="Reference assembly metadata (recorded in manifest). Absent, GRCh37 or "
+        "GRCh38 selects the human canonical set for a bare --canonical-contigs; "
+        "another assembly's set is named with --canonical-contigs <file or list>, "
+        "and a bare flag under it switches the filter off with a warning.",
     )
     parser.add_argument(
         "--canonical-contigs",
-        action="store_true",
+        nargs="?",
+        const=True,
         default=True,
-        help="Filter input VCFs to canonical contigs (DEFAULT). "
-        "Universal Ensembl-style (1-22,X,Y,MT) for both assemblies. UCSC-style "
-        "chr-prefix inputs are auto-stripped at filter time. Drops variants on "
-        "alt contigs (NT_*, NW_*, decoys), so that asymmetric alt-contig handling "
-        "between engines cannot inflate F1 divergences.",
+        metavar="FILE_OR_LIST",
+        help="Filter input VCFs to canonical contigs (DEFAULT). Bare, the universal "
+        "Ensembl-style human set (1-22,X,Y,MT); with a value, the comma-separated "
+        "names given or the names in the file named, one per line or comma-separated, "
+        "`#` lines ignored (a cache's info.json contig_order). UCSC-style chr-prefix "
+        "inputs are auto-stripped at filter time. Drops variants on alt contigs "
+        "(NT_*, NW_*, decoys), so that asymmetric alt-contig handling between engines "
+        "cannot inflate F1 divergences.",
     )
     parser.add_argument(
         "--no-canonical-contigs",
@@ -244,10 +271,14 @@ def prepare_single_file(
             if fields:
                 fields[0] = normalize_chrom(fields[0], mode)
                 # Auto-strip the UCSC chr- prefix BEFORE the canonical
-                # membership check so the filter operates on Ensembl-style names.
-                # Track per-file chr_stripped flag for the manifest audit trail.
-                if canonical_contigs is not None and fields[0].lower().startswith(
-                    "chr"
+                # membership check so the filter operates on Ensembl-style names,
+                # unless the set names the prefixed spelling itself (a cache whose
+                # chromosomes carry the prefix). Track per-file chr_stripped flag
+                # for the manifest audit trail.
+                if (
+                    canonical_contigs is not None
+                    and fields[0].lower().startswith("chr")
+                    and fields[0] not in canonical_contigs
                 ):
                     fields[0] = strip_chr(fields[0])
                     chr_stripped = True
@@ -270,12 +301,29 @@ def main() -> None:
     output_dir = Path(args.output_dir).resolve()
     cache_dir = Path(args.cache_dir).resolve() if args.cache_dir else None
 
-    # One universal Ensembl-style canonical set for both assemblies. The
-    # frozenset does not depend on --assembly; --assembly is recorded in the
-    # manifest for audit only.
-    canonical_contigs: Optional[frozenset[str]] = (
-        CANONICAL_CONTIGS if args.canonical_contigs else None
-    )
+    # The bare flag is the human set under no --assembly or a human one; under
+    # another assembly no set is derivable from the name, so the filter is off
+    # with a warning, as in compare_vep_outputs.py, rather than dropping every
+    # record of a non-human VCF. A value names the set whatever the assembly.
+    canonical_contigs: Optional[frozenset[str]]
+    if args.canonical_contigs is False:
+        canonical_contigs = None
+        canonical_policy = "disabled"
+    elif args.canonical_contigs is not True:
+        canonical_contigs = parse_canonical_contigs(args.canonical_contigs)
+        canonical_policy = "named_set"
+    elif args.assembly in (None, "GRCh37", "GRCh38"):
+        canonical_contigs = CANONICAL_CONTIGS
+        canonical_policy = "universal_ensembl_style"
+    else:
+        canonical_contigs = None
+        canonical_policy = "disabled"
+        print(
+            f"WARNING: --canonical-contigs requested but --assembly is {args.assembly}, "
+            "which names no canonical set; the filter is OFF for this run. Name the "
+            "set with --canonical-contigs <file or list> (a cache's info.json "
+            "contig_order) or pass --no-canonical-contigs to silence this warning."
+        )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     vcfs = list_input_vcfs(input_dir)
@@ -322,10 +370,8 @@ def main() -> None:
         "cache_dir": str(cache_dir) if cache_dir else None,
         "max_variants": args.max_variants,
         "assembly": args.assembly,
-        "canonical_contigs_policy": "universal_ensembl_style"
-        if args.canonical_contigs
-        else "disabled",
-        "canonical_contigs_filter_active": args.canonical_contigs,
+        "canonical_contigs_policy": canonical_policy,
+        "canonical_contigs_filter_active": canonical_contigs is not None,
         "canonical_contigs_set": (
             sorted(canonical_contigs) if canonical_contigs is not None else None
         ),

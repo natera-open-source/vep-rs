@@ -1,0 +1,71 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/plugin_data --plugin REVEL,file={corpus}/plugin_data/revel.tsv.gz [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh37",
+ "fasta": "none on either side",
+ "input": "16 ClinVar records on chromosome 21 (public ClinVar identifiers; INFO dropped) chosen from a REVEL run over the whole chromosome, plus one two-allele record at 21:14982700, a position none of the 16 occupies, its two alternate alleles each carrying a REVEL row, and one substitution written with an unchanged leading base (`CC/CT` for a `C/T` row, the alleles both engines trim before the match): missense substitutions every transcript row of which REVEL scores, records whose transcripts the REVEL rows name in part (the other rows unscored unless no_match), records whose transcripts give different amino-acid changes (the aaalt test), a missense substitution REVEL has no row for, a synonymous, a stop-gained, a frameshift, an intronic and a splice-region record the plugin leaves alone, and a reverse-strand gene",
+ "sha256": {
+  "default.txt": "a7d56ba8dbc2417704a080e42897ec00fc854d7939f2be853f17dfcc57696e67",
+  "tab.txt": "b5ee43cd2fcf9599acc63f3ee2e63ec26d208e6b2e8b3f23b6f3ecdbaf35c81f",
+  "vcf.vcf": "4c6e5fcc960feb8f9b70462d478de2ae11309ca350e1141eed87e3230ec1f881",
+  "json.jsonl": "7add12c0cd7e95bfae11ba242a9e60b1dde3c0ac1a2249608e61ae8a09c5018b"
+ },
+ "variants_vcf_sha256": "78c32b93ce1d3e3d89af5d327161829b17654d4bdf8c8fc803a2303bd27f7085",
+ "plugin_files": {
+  "plugin_data/revel.tsv.gz": "3ffea9ba705cb50e3ef3f31a83f98759007709536543eeb93539472ff221544b",
+  "plugin_data/revel.tsv.gz.tbi": "0be0b7211c6ef06bb7008ebc66b0127a2f192e59d01528784dbaa3b67bce8be7"
+ },
+ "flag_sets": {
+  "revel-no-match": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/plugin_data --plugin REVEL,file={corpus}/plugin_data/revel.tsv.gz,no_match=1 [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_revel-no-match",
+   "sha256": {
+    "default.txt": "8e524fd53448195d84a79ae0c4cc4ad2f61d5c958f50cd8324f43949dd33e80d",
+    "tab.txt": "3d748f14764850901f8cf8dece03670a5e40f2823f993dcd28750653c7feaf3d",
+    "vcf.vcf": "eb2078e93df2454bd212e02c648c61f8cd97efb8884c598924ec97aca29fa9a3",
+    "json.jsonl": "00642602f15629fab353708bd409e82b380cf545c17b6d5ce74310eb01f163c6"
+   }
+  },
+  "revel-positional-no-match": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/plugin_data --plugin REVEL,{corpus}/plugin_data/revel.tsv.gz,1 [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_revel-positional-no-match",
+   "sha256": {
+    "default.txt": "3b50966d2d60f354415ddb07a81f6eace035f5e67a644974352d195a1e3dc578",
+    "tab.txt": "d1774f10aace87db92d7f64c4e6f2f452c1b1bf702c8651b12be8bae413f56da",
+    "vcf.vcf": "f48d0fb0a0dab4c2bbe6855610756b7c3d2be11a2f832d014d342a340710d7bb",
+    "json.jsonl": "55f3d48d2d515889bb7257f1cca3f60a58df2fbf59c9c97ed621bb465e796d35"
+   }
+  }
+ },
+ "plugin_fixtures": {
+  "revel.tsv.gz": {
+   "generator": "plugin_data/revel.tsv.gz: the published file cut with tabix to every record's span plus 10 bases on each side (regions merged), the header lines kept, bgzip-compressed and indexed with tabix -s 1 -b 2 -e 2, the columns the published preparation indexes; the rows carry the file's values unchanged",
+   "source": "REVEL v1.3 with transcript ids (revel-v1.3_all_chromosomes.zip), tabbed, bgzipped and indexed on hg19_pos as REVEL.pm's preparation describes; Open Database License 1.0",
+   "rows": 991,
+   "files": {
+    "plugin_data/revel.tsv.gz": "3ffea9ba705cb50e3ef3f31a83f98759007709536543eeb93539472ff221544b",
+    "plugin_data/revel.tsv.gz.tbi": "0be0b7211c6ef06bb7008ebc66b0127a2f192e59d01528784dbaa3b67bce8be7"
+   },
+   "tools": {
+    "bgzip": "bgzip (htslib) 1.22.1",
+    "tabix": "tabix (htslib) 1.22.1"
+   }
+  }
+ },
+ "generator": "plugin_data/revel.tsv.gz: a tabix cut of the published REVEL file to the records' spans (plugin_fixtures); json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh37 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <VEP_plugins checkout> for the manifest's run, and one Ensembl VEP 116.2 container run per format for each flag set from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus as the working directory and the REVEL plugin read from the container's plugin directory, whose module text equals the VEP_plugins release/116 checkout's; manifest: scripts/golden/build_golden_corpus.py select --include for every record, flag-set, then classify for the manifest's run and each flag set against the committed tree's binary"
+}

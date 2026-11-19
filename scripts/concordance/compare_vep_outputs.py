@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import gzip
 import json
@@ -14,11 +15,12 @@ import subprocess
 import sys
 import tempfile
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
-from typing import Callable, Iterable, Iterator, Sequence, TextIO
+from typing import Callable, Collection, Iterable, Iterator, Protocol, Sequence, TextIO
 
 TupleKey = tuple[str, str, str, str, str]
 ContextTermSet = frozenset[str]
@@ -209,18 +211,10 @@ def _is_start_cooccurrence_swap(perl_csq: str, rust_csq: str, allele: str) -> bo
     return pset - rset == {dropped}
 
 
-# No looser start co-emission mask exists. A predicate that admits any pair where
-# Perl carries a start term vep-rs lacks absorbs, besides the strict shape, pairs
-# where vep-rs drops the OTHER start term for its allele kind (a vep-rs defect, not
-# the co-emission), pairs where vep-rs misses start_lost outright
-# (P=5UTR,start_lost,start_retained / R=5UTR; P=frameshift,start_lost /
-# R=frameshift), unrelated protein-altering-vs-inframe shapes
-# (P=5UTR,coding_sequence_variant / R=5UTR,start_lost), and the inverted shape
-# (P=frameshift,start_retained / R=frameshift,start_lost) where Perl emits ONLY
-# start_retained, a separate predicate-overlap shape. Leaving those unmasked keeps
-# the vep-rs divergences visible and countable. The strict
-# `_is_start_cooccurrence_swap` is the only start filter, cited to
-# VariationEffect.pm:851-881, :947-963 and :1028-1075.
+# `_is_start_cooccurrence_swap` is the only start filter. A looser predicate, one
+# admitting any pair where Perl carries a start term vep-rs lacks, would also set
+# aside pairs where vep-rs misses or drops a start term, which are vep-rs
+# divergences.
 
 
 # Coding terms that must be PRESERVED on both sides for the frameshift-splice
@@ -442,6 +436,12 @@ _VEP_SKIP_UNSUPPORTED_ALLELES = frozenset({"CPX", "CTX", "<CPX>", "<CTX>"})
 SV_TRANSCRIPT_SELECTION_BUCKET = "sv_transcript_selection"
 
 
+def _ten_digits(text: str) -> bool:
+    """Whether ``text`` is written in the digits ``0`` to ``9`` alone, the digits a variant
+    file writes a coordinate in; ``str.isdigit`` takes the digits of other scripts as well."""
+    return text.isascii() and text.isdigit()
+
+
 def _location_span(loc: str) -> tuple[str, int, int] | None:
     """``chrom:start-end`` or ``chrom:pos`` as (chrom, start, end), a coordinate the reference
     numified below zero included (`21:-4-295`); None when unparseable."""
@@ -471,6 +471,10 @@ def _span_exceeds_max_sv_size(loc: str) -> bool:
     if "-" not in coords:
         return False
     start_s, _, end_s = coords.partition("-")
+    # `int` reads the digits of any script between the blanks it drops; a coordinate is
+    # written in `0` to `9`.
+    if not (start_s.strip().isascii() and end_s.strip().isascii()):
+        return False
     try:
         return abs(int(end_s) - int(start_s)) > _MAX_SV_SIZE
     except ValueError:
@@ -503,6 +507,910 @@ def _record_scope_feature(scope: ScopeFeatures, key_line: str, side: int) -> Non
         scope.setdefault((loc, allele), (set(), set()))[side].add(feature)
 
 
+class RowEntry(Protocol):
+    """One output row as a row-aware pair rule reads it: an entry of the format comparator
+    (``compare_vep_formats.py``), or the `PairRow` this comparator builds from the row's first
+    nine columns. ``key`` ends in the row's Feature_type after its last ``|``, ``fields``
+    holds the row's ``cDNA_position`` and ``CDS_position``, and ``indel`` is whether the
+    record's own alleles make the allele an insertion or a deletion, ``None`` where the
+    first column spells no alleles. ``insertion`` is whether they make every sequence allele
+    an insertion, the reference allele empty once the shared first base is dropped
+    (``reference_allele_is_empty``), ``None`` where the first column spells no alleles.
+    ``reference`` is the reference bases the allele stands in for at the entry's Location, as
+    the record's own alleles give them by position (``replaced_reference``): from the first
+    column or the format's own allele fields where they spell the alleles, else from the
+    input records where the comparison is given them; empty for a pure insertion's entry,
+    ``None`` where no record was read."""
+
+    key: str
+    location: str | None
+    allele: str
+    consequence: str
+    fields: dict[str, str]
+    indel: bool | None
+    insertion: bool | None
+    reference: str | None
+
+
+def dash(s: str) -> str:
+    """The default format's spelling of absence for an empty VCF or JSON value."""
+    return "-" if s == "" else s
+
+
+def allele_is_indel(reference: str, alternates: Collection[str], allele: str, chopped: bool = False) -> bool | None:
+    """Whether ``allele`` is an insertion or a deletion of the record whose reference allele
+    is ``reference`` and alternate alleles ``alternates``: the alternate the allele names and
+    the reference differ in length, a difference no trimming of shared bases changes. A record
+    with one alternate not spelt with a ``*`` has that alternate's shape on every row, since
+    Ensembl VEP shortens a lone allele past the shared base (``minimise_alleles``: ``TCT`` to
+    ``TCTC`` is written ``C``) and the allele then spells neither the REF nor the ALT. With
+    several, Ensembl VEP drops the record's shared leading base only when every alternate not
+    spelt with a ``*`` shares it (``Parser/VCF.pm`` lines 306-321 exempt ``<DEL:*>`` as they
+    exempt ``*``), so ``A`` to ``AT,G`` keeps ``AT`` as the insertion's allele; a VCF line's
+    REF and ALT are read the same way, and the parts of a JSON ``allele_string``, already so
+    spelt (``chopped``), as they are, since dropping a base again from ``T/TT/-`` leaves no
+    allele spelt ``TT``. ``None`` when the allele is not a sequence (a symbolic or a breakend
+    allele), when no alternate names it, or when two alternates of different shapes name it."""
+    if not re.fullmatch(r"[ACGTN-]+", allele):
+        return None
+    trimmed = [a for a in alternates if "*" not in a]
+    if len(trimmed) == 1:
+        return len(reference.strip("-")) != len(trimmed[0].strip("-"))
+    # Parser/VCF.pm:300-323 drop the shared first base only of a record that holds an ALT of
+    # another length than its REF, a ``*`` among them.
+    holds_indel = any(len(a) != len(reference) for a in alternates)
+    trim = not chopped and bool(reference) and holds_indel and all(a[:1] == reference[:1] for a in trimmed)
+    ref = reference[1:] if trim else reference
+    shapes: set[bool] = set()
+    for alternate in alternates:
+        alt = alternate[1:] if trim and "*" not in alternate else alternate
+        if dash(alt) == allele:
+            shapes.add(len(ref.strip("-")) != len(alt.strip("-")))
+    return shapes.pop() if len(shapes) == 1 else None
+
+
+def reference_allele_is_empty(reference: str, alternates: Collection[str], chopped: bool = False) -> bool:
+    """Whether the reference allele of a record is empty once the record's shared first base is
+    dropped, ``reference`` and ``alternates`` read as ``allele_is_indel`` reads them
+    (``Parser/VCF.pm`` lines 300-323 drop the base where every alternate not spelt with a ``*``
+    shares it and one ALT has another length than the REF). Every sequence allele of such a
+    record is an insertion, which Ensembl VEP stores with a start one above its end. A
+    reference allele that keeps a base past the shared first one is not empty here, a lone
+    alternate Ensembl VEP shortens further (``trim_sequences``) included."""
+    trimmed = [a for a in alternates if "*" not in a]
+    holds_indel = any(len(a) != len(reference) for a in alternates)
+    trim = not chopped and bool(reference) and holds_indel and all(a[:1] == reference[:1] for a in trimmed)
+    return not (reference[1:] if trim else reference).strip("-")
+
+
+# Ensembl VEP's Uploaded_variation for a VCF record without an ID (OutputFactory.pm:883-931):
+# the chromosome, the position and the record's own alleles joined by ``/``.
+UPLOADED_ALLELES_RE = re.compile(r"^\S+_[0-9]+_([ACGTNacgtn*-]+(?:/[^/\s]+)+)$")
+
+
+def uploaded_alleles(uploaded: str) -> tuple[str, list[str]] | None:
+    """The reference and alternate alleles an identifier-less ``Uploaded_variation`` spells
+    (``21_10542414_A/T/AG``), or ``None`` for an identifier, which names no allele."""
+    m = UPLOADED_ALLELES_RE.match(uploaded)
+    if m is None:
+        return None
+    reference, *alternates = m.group(1).split("/")
+    return reference, alternates
+
+
+UPLOADED_POSITION_RE = re.compile(r"^\S+_([0-9]+)_[ACGTNacgtn*-]+(?:/[^/\s]+)+$")
+
+
+def uploaded_position(uploaded: str) -> int | None:
+    """The POS an identifier-less ``Uploaded_variation`` spells before its alleles
+    (``21_10542414_A/T/AG``), or ``None`` for an identifier."""
+    m = UPLOADED_POSITION_RE.match(uploaded)
+    return integer_of(m.group(1), "Uploaded_variation position") if m else None
+
+
+def replaced_reference(
+    position: int, reference: str, alternates: Collection[str], location: str | None, allele: str
+) -> str | None:
+    """The reference bases an output row's allele stands in for, read by position from a
+    record's own alleles. The record whose reference allele ``reference`` starts at
+    ``position`` writes ``allele`` at ``location`` where one of its alternates is the
+    reference allele with the Location's bases replaced by the allele (``-`` replaces them by
+    nothing): those bases are returned. Where an alternate is the reference allele with the
+    allele inserted between the Location's two neighbouring positions the row is a pure
+    insertion's and the empty string is returned. ``None`` where the record writes no such
+    row, where two alternates read it differently, and for an allele or a Location that is
+    not a sequence's."""
+    if location is None or not re.fullmatch(r"[ACGTN]+|-", allele):
+        return None
+    start, _, end = location.split(":", 1)[-1].partition("-")
+    end = end or start
+    if not (re.fullmatch(r"[0-9]+", start) and re.fullmatch(r"[0-9]+", end)):
+        return None
+    first = integer_of(start, "Location position") - position
+    last = integer_of(end, "Location position") - position
+    written = "" if allele == "-" else allele
+    reference = reference.upper()
+    found: set[str] = set()
+    for alternate in alternates:
+        spelt = alternate.upper()
+        if 0 <= first <= last < len(reference) and spelt == reference[:first] + written + reference[last + 1 :]:
+            found.add(reference[first : last + 1])
+        if (
+            written
+            and last == first + 1
+            and 0 <= first < len(reference)
+            and spelt == reference[: first + 1] + written + reference[first + 1 :]
+        ):
+            found.add("")
+    return found.pop() if len(found) == 1 else None
+
+
+# The field value of an entry that lacks the field.
+ABSENT = "<absent>"
+
+
+def blank(value: str) -> bool:
+    """Whether a field value is empty in any format's spelling: ``-``, the empty string or
+    absent from the entry."""
+    return value in ("", "-", ABSENT)
+
+
+class ComparatorError(Exception):
+    """A file this comparator cannot read or an option it cannot apply."""
+
+
+def integer_of(digits: str, what: str) -> int:
+    """The integer a string of digits writes. ``str.isdigit`` takes digits ``int`` does not
+    read (a superscript) and ``int`` refuses a number longer than the interpreter converts:
+    either is a malformed input and ends the run with the comparator's error."""
+    try:
+        return int(digits)
+    except ValueError as exc:
+        shown = digits if len(digits) <= 24 else digits[:24] + "..."
+        raise ComparatorError(f"{what} {shown!r} is not an integer") from exc
+
+
+def consequence_set(s: str) -> str:
+    """Consequence terms as a sorted, de-duplicated, comma-joined set."""
+    terms = sorted({t for t in re.split(r"[&,]", s) if t})
+    return ",".join(terms)
+
+
+def feature_kind(feature_type: str) -> str:
+    """``JSON.pm:348-349``: the consequence list a feature type's entries go to
+    (``Transcript`` to ``transcript``, ``RegulatoryFeature`` to ``regulatory_feature``, an
+    undefined type to ``intergenic``); a list name is returned unchanged."""
+    kind = (feature_type if feature_type not in ("", "-") else "intergenic").lower()
+    if kind == "intergenic" or "_feature" in kind:
+        return kind
+    return kind.replace("feature", "_feature")
+
+
+def indel_row(e: RowEntry) -> bool:
+    """Whether an entry is an insertion's or a deletion's: an allele of ``-`` is one; else the
+    record's own alleles decide where the parser read them (``Entry.indel``: the VCF and JSON
+    entries, and a text row whose Uploaded_variation spells the alleles); else the Location
+    decides, an indel's spanning more bases than the allele has (an insertion's two flanking
+    bases against a one-base allele, a deletion's span against the kept bases; an insertion as
+    long as its span, or an insertion at a one-base Location, reads as a substitution here, so
+    a row under an identifier may miss the class)."""
+    if e.allele == "-":
+        return True
+    if e.indel is not None:
+        return e.indel
+    if e.location is None or not re.fullmatch(r"[ACGTN]+", e.allele):
+        return False
+    start, _, end = e.location.split(":", 1)[-1].partition("-")
+    if not (_ten_digits(start) and _ten_digits(end)):
+        return False
+    return integer_of(end, "Location position") - integer_of(start, "Location position") + 1 != len(e.allele)
+
+
+CODING_SEQUENCE_TERM = "coding_sequence_variant"
+
+
+STOP_RETAINED_TERM = "stop_retained_variant"
+
+
+SPLICE_REGION_TERM = "splice_region_variant"
+
+
+def position_bounds(e: RowEntry, column: str, start_key: str, end_key: str) -> tuple[bool, bool]:
+    """Whether the entry carries the start and the end of a transcript position: the two bounds
+    of the text formats' ``column`` (``?`` for an end that maps to no transcript base, one number
+    standing for both, ``-`` for neither, each read up to the ``/total`` suffix ``--total_length``
+    appends, OutputFactory.pm:1726-1739), or the JSON ``start_key`` and ``end_key``, which an
+    unmapped end leaves out."""
+    position = e.fields.get(column)
+    if position is None:
+        return not blank(e.fields.get(start_key, ABSENT)), not blank(e.fields.get(end_key, ABSENT))
+    position = position.partition("/")[0]
+    if blank(position):
+        return False, False
+    start, sep, end = position.partition("-")
+    return start != "?", (end if sep else start) != "?"
+
+
+def stop_codon_test_coordinates(e: RowEntry) -> bool:
+    """Whether the entry carries the coordinates the stop codon test edits at
+    (Utils/VariationEffect.pm:1507-1508, ``return 0 unless $cdna_start && $cdna_end &&
+    $cds_start``): both cDNA positions and the CDS start. A CDS end alone, the ``?-N`` of a
+    span that begins in the 5' UTR, is not one of them."""
+    return (
+        all(position_bounds(e, "cDNA_position", "cdna_start", "cdna_end"))
+        and position_bounds(e, "CDS_position", "cds_start", "cds_end")[0]
+    )
+
+
+def stop_codon_test_not_made(e: RowEntry) -> bool:
+    """Whether the entry shows that ``_ins_del_stop_altered_cil`` (Utils/VariationEffect.pm
+    :1488-1539) returns before it edits anything: the allele holds a letter other than ``A``,
+    ``C``, ``G`` and ``T`` (:1498), the span lacks a cDNA position at one end, or it has no CDS
+    start (:1508, ``stop_codon_test_coordinates``)."""
+    if e.allele != "-" and not re.fullmatch(r"[ACGT]+", e.allele):
+        return True
+    return not stop_codon_test_coordinates(e)
+
+
+# ``_overlaps_stop_codon_cil`` (Utils/VariationEffect.pm:1389-1431) takes the last three
+# genomic positions of the coding region as the stop codon (:1418-1422). On a stop codon an
+# intron splits, those positions are one or two intron bases beside the codon's last base, and
+# the stop bases that end the exon before lie outside them: a deletion of one of those bases
+# fails the overlap, ``stop_retained`` is false whatever the edited sequence holds, and
+# ``coding_unknown`` (:1616-1649) writes ``coding_sequence_variant``. The candidate reads the
+# overlap on the codon's own bases, the genomic bases of the last three coding positions, and
+# makes the stop codon test: where the edited sequence holds a stop codon at the old stop
+# position the row is ``stop_retained_variant``. The shape: a Transcript row of an insertion or
+# deletion with both cDNA positions and a CDS start whose two Consequence sets are equal
+# but for the reference's ``coding_sequence_variant`` against the candidate's
+# ``stop_retained_variant``, both holding ``splice_region_variant``, which every exon base
+# within three of an exon's end carries (``splice_region``, :616-627). A row away from an exon
+# end, a row without its positions and the two terms the other way round stay differences.
+def stop_codon_overlap_genomic_span_pair(e: RowEntry, a: RowEntry) -> bool:
+    """Whether the reference entry ``e`` and the candidate entry ``a`` of one key are a row on
+    which Ensembl VEP's genomic stop codon overlap misses a stop base that ends an exon: a
+    Transcript entry of an insertion or deletion with both cDNA positions and a CDS start
+    on both sides, ``splice_region_variant`` in both sets of terms, and the two sets equal but
+    for the reference's ``coding_sequence_variant`` against the candidate's
+    ``stop_retained_variant``."""
+    if feature_kind(e.key.rsplit("|", 1)[-1].partition("#")[0]) != "transcript" or not indel_row(e):
+        return False
+    expected_terms = set(consequence_set(e.consequence).split(","))
+    actual_terms = set(consequence_set(a.consequence).split(","))
+    if expected_terms - actual_terms != {CODING_SEQUENCE_TERM} or actual_terms - expected_terms != {STOP_RETAINED_TERM}:
+        return False
+    if SPLICE_REGION_TERM not in expected_terms:
+        return False
+    return not any(stop_codon_test_not_made(entry) for entry in (e, a))
+
+
+def length_changing_row(e: RowEntry) -> bool:
+    """Whether an entry is an insertion's or a deletion's as ``indel_row`` reads one, an allele
+    of other nucleotide letters than ``A``, ``C``, ``G``, ``T`` and ``N`` included: where the
+    record's own alleles say nothing, such an allele against a Location of another length."""
+    if indel_row(e):
+        return True
+    if e.indel is not None or e.location is None or not re.fullmatch(r"[A-Za-z]+", e.allele):
+        return False
+    start, _, end = e.location.split(":", 1)[-1].partition("-")
+    return _ten_digits(start) and _ten_digits(end) and int(end) - int(start) + 1 != len(e.allele)
+
+
+FRAMESHIFT_TERM = "frameshift_variant"
+
+
+# ``stop_retained`` (Utils/VariationEffect.pm:1290-1324) sends an insertion or deletion whose
+# alternate peptide is undefined, empty or holds an ``X`` to its second arm (:1318): the
+# genomic overlap with the stop codon (``_overlaps_stop_codon_cil``, :1389-1431) and not
+# ``_ins_del_stop_altered_cil`` (:1488-1539). That routine sets its answer to 0 (:1495) and
+# returns it before it edits anything for an allele holding a letter that names no base
+# (:1498, ``seq_is_unambiguous_dna``) and for a span without a cDNA coordinate at one end or a
+# CDS start (:1508), so :1318 reads a test the routine never makes as a stop codon kept and the
+# row carries ``stop_retained_variant``: on a deletion that removes the stop codon together
+# with a splice site or the transcript's end, among others. The cDNA twin behind ``stop_lost``
+# (:1263) reads the same 0 as a stop codon that is not lost, so neither term describes such a
+# record there. The candidate makes the test wherever the span has both cDNA coordinates and
+# a CDS start, on the three bases the edited sequence holds at the old stop position, and
+# reads a span the test cannot be made on as keeping nothing; the row then carries the terms
+# its other predicates give: ``coding_sequence_variant`` from ``coding_unknown`` (:1616-1649),
+# ``frameshift_variant`` for an inserted allele whose length is no multiple of three, or no
+# coding term beside a ``start_lost``. The shape: a Transcript row of an insertion or deletion
+# whose two Consequence sets are equal but for the reference's ``stop_retained_variant``,
+# against nothing or one of ``coding_sequence_variant`` and ``frameshift_variant`` on the
+# candidate's side, both rows showing that the test is not made (``stop_codon_test_not_made``).
+# A row with both cDNA positions, a CDS start and an allele of bases (the test is made
+# there and both engines read its answer), a candidate that keeps the term, any other term
+# beside the two and a substitution's row stay differences. The row's IMPACT follows its
+# first term, and under ``--hgvs`` or a plugin that reads ``frameshift_variant`` so do the
+# fields those read; the predicate accepts the Consequence alone.
+def stop_retained_without_stop_codon_test_pair(e: RowEntry, a: RowEntry) -> bool:
+    """Whether the reference entry ``e`` and the candidate entry ``a`` of one key are a row on
+    which Ensembl VEP writes ``stop_retained_variant`` for a stop codon test it does not make:
+    a Transcript entry of an insertion or deletion, the reference's terms holding
+    ``stop_retained_variant`` and the candidate's being the same without it, with nothing,
+    ``coding_sequence_variant`` or ``frameshift_variant`` in its place, and both entries
+    showing that the test is not made."""
+    if feature_kind(e.key.rsplit("|", 1)[-1].partition("#")[0]) != "transcript" or not length_changing_row(e):
+        return False
+    expected_terms = set(consequence_set(e.consequence).split(","))
+    actual_terms = set(consequence_set(a.consequence).split(","))
+    if expected_terms - actual_terms != {STOP_RETAINED_TERM}:
+        return False
+    if actual_terms - expected_terms not in (set(), {CODING_SEQUENCE_TERM}, {FRAMESHIFT_TERM}):
+        return False
+    return stop_codon_test_not_made(e) and stop_codon_test_not_made(a)
+
+
+STOP_GAINED_TERM = "stop_gained"
+
+
+# The terms ``frameshift`` (Utils/VariationEffect.pm:1541-1567) reads away where ``stop_retained``
+# does not hold: the in-frame pair through ``_get_codon_alleles`` (:1107, :1170) and
+# ``protein_altering_variant`` (:390).
+FRAMESHIFT_READ_TERMS = frozenset({"inframe_insertion", "inframe_deletion", "protein_altering_variant"})
+
+
+# ``_ins_del_stop_altered_cil`` (Utils/VariationEffect.pm:1488-1539), where it makes its test,
+# writes the allele into the coding sequence followed by the 3' UTR (:1521) and reads three
+# bases, the ones at the old stop position (:1528-1535); a stop codon there is its answer "not
+# altered", and :1318 writes ``stop_retained_variant``. Nothing asks whether the bases before
+# that position are the reference's. A deletion that takes coding bases, the stop codon and
+# 3' UTR bases moves later bases into the old stop position, and where those are a stop codon
+# the row reads as a stop codon kept although a residue before it changed or an earlier stop
+# codon ends the protein; so does an insertion before the stop codon on the reverse strand,
+# whose start ``_overlaps_stop_codon_cil`` moves back by the inserted length (:1413). The
+# candidate keeps the term only where every codon before the old stop position reads the
+# reference's residue as well, and the row then carries the terms its other predicates give:
+# ``coding_sequence_variant`` from ``coding_unknown`` (:1616-1649), or ``frameshift_variant``,
+# with ``stop_gained`` where the alternate peptide gains a stop, in place of the in-frame or
+# protein-altering term ``frameshift`` reads away. The shape: a Transcript row of an insertion
+# or deletion, both rows showing that the test is made (both cDNA positions, a CDS start
+# and an allele of bases), whose two Consequence sets are equal but for the reference's
+# ``stop_retained_variant``, alone against ``coding_sequence_variant``, or alone or beside one
+# of those terms against ``frameshift_variant`` with or without ``stop_gained``. A row whose
+# test is not made, a candidate that keeps the term, any other term on either side and a
+# substitution's row stay differences. The predicate accepts the Consequence alone.
+def stop_retained_three_base_stop_codon_test_pair(e: RowEntry, a: RowEntry) -> bool:
+    """Whether the reference entry ``e`` and the candidate entry ``a`` of one key are a row on
+    which Ensembl VEP writes ``stop_retained_variant`` from the three bases at the old stop
+    position alone: a Transcript entry of an insertion or deletion with both cDNA positions, a
+    CDS start and an allele of bases on both sides, the reference's terms holding
+    ``stop_retained_variant`` and the candidate's ``coding_sequence_variant`` in its place, or,
+    where the reference's hold it alone or beside one of ``inframe_insertion``,
+    ``inframe_deletion`` and ``protein_altering_variant``, ``frameshift_variant`` with or
+    without ``stop_gained`` in the place of those terms."""
+    if feature_kind(e.key.rsplit("|", 1)[-1].partition("#")[0]) != "transcript" or not length_changing_row(e):
+        return False
+    expected_terms = set(consequence_set(e.consequence).split(","))
+    actual_terms = set(consequence_set(a.consequence).split(","))
+    gone, come = expected_terms - actual_terms, actual_terms - expected_terms
+    if come == {CODING_SEQUENCE_TERM}:
+        if gone != {STOP_RETAINED_TERM}:
+            return False
+    elif come in ({FRAMESHIFT_TERM}, {STOP_GAINED_TERM, FRAMESHIFT_TERM}):
+        beside = gone - {STOP_RETAINED_TERM}
+        if STOP_RETAINED_TERM not in gone or len(beside) > 1 or not beside <= FRAMESHIFT_READ_TERMS:
+            return False
+    else:
+        return False
+    return not any(stop_codon_test_not_made(entry) for entry in (e, a))
+
+
+STOP_LOST_TERM = "stop_lost"
+
+
+# A record whose span holds all three bases of the stop codon and lacks a cDNA coordinate at
+# one end or a CDS start takes the codon out with a splice site, an exon or the transcript's
+# end. ``stop_lost`` (Utils/VariationEffect.pm:1234-1288) then asks ``_ins_del_stop_altered``,
+# which returns 0 without those coordinates (:1376, :1453), and ``stop_retained`` asks its
+# twin, which returns the same 0 (:1508) that :1318 reads as a stop codon kept: the row
+# carries ``stop_retained_variant`` and no test is made. The candidate reads the sequence the
+# record gives: the stop codon is lost unless that sequence shows it kept, so the row carries
+# ``stop_lost`` where the given sequence ends before the old stop position or holds no stop
+# codon there. The shape: a Transcript row of an insertion or deletion whose two Consequence
+# sets are equal but for the reference's ``stop_retained_variant`` against the candidate's
+# ``stop_lost``, both rows showing a span without its coordinates: a cDNA position missing
+# whole or at one end, or no CDS start. A span that begins in the 5' UTR and ends on the stop
+# codon's last base prints the CDS end alone (``?-N``), and :1508 leaves the test out for
+# want of the start. A row with those three coordinates, any other term on either side, the
+# two terms the other way round and a substitution's row stay differences. The predicate
+# accepts the Consequence alone.
+def stop_codon_removed_without_stop_codon_test_pair(e: RowEntry, a: RowEntry) -> bool:
+    """Whether the reference entry ``e`` and the candidate entry ``a`` of one key are a row on
+    which Ensembl VEP writes ``stop_retained_variant`` for a stop codon the record removes with
+    no test made: a Transcript entry of an insertion or deletion, both entries lacking a cDNA
+    position at one end or a CDS start, and the two sets of terms equal but for the
+    reference's ``stop_retained_variant`` against the candidate's ``stop_lost``."""
+    if feature_kind(e.key.rsplit("|", 1)[-1].partition("#")[0]) != "transcript" or not length_changing_row(e):
+        return False
+    expected_terms = set(consequence_set(e.consequence).split(","))
+    actual_terms = set(consequence_set(a.consequence).split(","))
+    if expected_terms - actual_terms != {STOP_RETAINED_TERM} or actual_terms - expected_terms != {STOP_LOST_TERM}:
+        return False
+    return not any(stop_codon_test_coordinates(entry) for entry in (e, a))
+
+
+def insertion_row(e: RowEntry) -> bool:
+    """Whether an entry's allele is a sequence (``-``, a symbolic or a breakend allele is
+    refused) and the record's own alleles mark it an indel where the parser read them
+    (``Entry.indel``, true of a deletion spelt as a sequence too, the ``A`` row of ``AT`` to
+    ``A,G``, whose ``del`` notation ``clamped_insertion_position`` and ``shifted_insertion_end``
+    both refuse), else the Location spans the two bases around an insertion's point."""
+    if not re.fullmatch(r"[ACGTN]+", e.allele):
+        return False
+    if e.indel is not None:
+        return e.indel
+    if e.location is None:
+        return False
+    start, _, end = e.location.split(":", 1)[-1].partition("-")
+    return _ten_digits(start) and _ten_digits(end) and int(end) == int(start) + 1
+
+
+def inserted_between_neighbours(e: RowEntry) -> bool:
+    """Whether an entry ``insertion_row`` takes is an insertion between two neighbouring
+    positions, the allele Ensembl VEP stores with a start one above its end and the only one
+    whose start ``_overlaps_stop_codon_cil`` moves (Utils/VariationEffect.pm:1408). Its
+    Location, where the format writes one, is two neighbouring positions; and, where the parser
+    read the record's own alleles, its reference allele is empty once the shared first base is
+    dropped (``RowEntry.insertion``), which refuses a deletion spelt as a sequence, a
+    replacement by a sequence of another length, an insertion kept with its shared first base
+    and an allele none of them names beside a reference allele that keeps a base. Under an
+    identifier the allele has another length than two instead, which refuses the two-base substitution of the same Location;
+    two bases replaced by a sequence of another length have an insertion's Location and
+    allele there and are taken with the insertions."""
+    if e.location is not None:
+        start, _, end = e.location.split(":", 1)[-1].partition("-")
+        if not (re.fullmatch(r"[0-9]+", start) and re.fullmatch(r"[0-9]+", end) and int(end) == int(start) + 1):
+            return False
+    if e.insertion is not None:
+        return e.insertion
+    return e.location is not None and len(e.allele) != 2
+
+
+INFRAME_INSERTION_TERM = "inframe_insertion"
+
+
+# ``_overlaps_stop_codon_cil`` (Utils/VariationEffect.pm:1389-1431) moves an insertion's start
+# by the inserted length before it reads the overlap with the stop codon, forward on the
+# forward strand and back on the reverse (:1408-1415). On the forward strand that puts the
+# start past the insertion's end, and the overlap holds only for one base inserted between the
+# codon's first and second base: an insertion before or inside the stop codon that leaves
+# every base before the codon and a stop codon at the old stop position fails it,
+# ``stop_retained`` (:1318) is false, and the row carries ``coding_sequence_variant`` from
+# ``coding_unknown`` (:1616-1649) or, for an inserted length that is no multiple of three,
+# ``frameshift_variant`` with or without ``stop_gained``. The candidate reads the insertion on
+# the coding sequence, the same on either strand: it overlaps where it lies before or inside
+# the codon and every codon before the old stop position keeps its residue. The stop
+# codon test then finds the codon kept and the row is ``stop_retained_variant``; ``frameshift``
+# returns 0 for a retained stop codon (:1549), so the ``inframe_insertion`` it reads away
+# elsewhere stands beside the term. The shape: a Transcript row of an insertion between two
+# neighbouring positions (``inserted_between_neighbours``) whose allele
+# holds ``A``, ``C``, ``G``, ``T`` and ``N`` alone, the letters :1408 moves the start for, both
+# rows carrying the coordinates the candidate's test edits at (both cDNA positions and a CDS
+# start), whose two Consequence sets are equal but for the reference's
+# ``coding_sequence_variant`` against the candidate's ``stop_retained_variant``, or the
+# reference's ``frameshift_variant`` with or without ``stop_gained`` against the candidate's
+# ``stop_retained_variant`` with or without ``inframe_insertion``. A deletion's row, a
+# replacement's row where the record's own alleles show it, a two-base allele's row under an
+# identifier, a row without those coordinates, the first pair beside ``splice_region_variant`` (the shape
+# ``stop_codon_overlap_genomic_span_pair`` reads, on an unsplit codon beside an exon end as
+# well), the terms the other way round (the reverse strand's wider range, which
+# ``stop_retained_three_base_stop_codon_test_pair`` reads) and any other term on either side
+# stay differences. The predicate accepts the Consequence alone.
+def stop_codon_overlap_insertion_range_pair(e: RowEntry, a: RowEntry) -> bool:
+    """Whether the reference entry ``e`` and the candidate entry ``a`` of one key are a row on
+    which Ensembl VEP's genomic stop codon overlap misses an insertion that keeps the stop
+    codon: a Transcript entry of an insertion between two neighbouring positions
+    (``inserted_between_neighbours``) with both cDNA positions and a CDS start on
+    both sides, the two sets of terms equal but for the reference's
+    ``coding_sequence_variant`` against the candidate's ``stop_retained_variant`` away from
+    ``splice_region_variant``, or the reference's ``frameshift_variant`` with or without
+    ``stop_gained`` against the candidate's ``stop_retained_variant`` with or without
+    ``inframe_insertion``."""
+    if feature_kind(e.key.rsplit("|", 1)[-1].partition("#")[0]) != "transcript" or not insertion_row(e):
+        return False
+    if not inserted_between_neighbours(e):
+        return False
+    expected_terms = set(consequence_set(e.consequence).split(","))
+    actual_terms = set(consequence_set(a.consequence).split(","))
+    gone, come = expected_terms - actual_terms, actual_terms - expected_terms
+    if gone == {CODING_SEQUENCE_TERM}:
+        if come != {STOP_RETAINED_TERM} or SPLICE_REGION_TERM in expected_terms:
+            return False
+    elif gone in ({FRAMESHIFT_TERM}, {STOP_GAINED_TERM, FRAMESHIFT_TERM}):
+        if come not in ({STOP_RETAINED_TERM}, {INFRAME_INSERTION_TERM, STOP_RETAINED_TERM}):
+            return False
+    else:
+        return False
+    return all(stop_codon_test_coordinates(entry) for entry in (e, a))
+
+
+# The five splice terms whose windows lie inside an intron: the two bases at its 5' end, the
+# two at its 3' end, its fifth base, its third to sixth base, and the bases 3 to 17 from its
+# 3' end (Utils/VariationEffect.pm:558-614).
+INTRON_WINDOW_SPLICE_TERMS: frozenset[str] = frozenset(
+    {
+        "splice_donor_variant",
+        "splice_acceptor_variant",
+        "splice_donor_5th_base_variant",
+        "splice_donor_region_variant",
+        "splice_polypyrimidine_tract_variant",
+    }
+)
+# The four of them beside which ``splice_region`` returns 0 (Utils/VariationEffect.pm:616-627).
+SPLICE_REGION_WITHHOLDING_TERMS: frozenset[str] = INTRON_WINDOW_SPLICE_TERMS - {"splice_polypyrimidine_tract_variant"}
+# ``within_intron`` (Utils/VariationEffect.pm:629-634) returns the flag ``intronic``; the
+# intron itself, its end bases included, is that term's window.
+INTRON_TERM = "intron_variant"
+# The six terms ``_intron_effects`` sets from the differing regions and the candidate
+# writes only where the record's span holds a base of the term's window.
+PAST_THE_SPAN_TERMS: frozenset[str] = INTRON_WINDOW_SPLICE_TERMS | {INTRON_TERM}
+SPLICE_DONOR_5TH_BASE_TERM = "splice_donor_5th_base_variant"
+SPLICE_DONOR_REGION_TERM = "splice_donor_region_variant"
+# A gap past which no window of an intron's end reaches a span or its regions.
+_FAR = 10**9
+# The row-aware rules of the stop codon classes, whose terms a row can differ by beside the
+# six: one row can carry both differences.
+STOP_CODON_ROW_PAIRS: tuple[Callable[[RowEntry, RowEntry], bool], ...] = (
+    stop_codon_overlap_genomic_span_pair,
+    stop_retained_without_stop_codon_test_pair,
+    stop_retained_three_base_stop_codon_test_pair,
+    stop_codon_removed_without_stop_codon_test_pair,
+    stop_codon_overlap_insertion_range_pair,
+)
+
+
+def transcript_positions(e: RowEntry) -> tuple[str, str, str, str] | None:
+    """The cDNA start and end and the CDS start and end an entry carries, as written (``?``
+    for an end that maps to no transcript base, ``-`` for a position the entry lacks), or
+    ``None`` where a position is not of that form. A text format's column is read up to the
+    ``/total`` suffix ``--total_length`` appends, one number standing for both ends; the JSON
+    keys are read as they are."""
+    out: list[str] = []
+    for column, start_key, end_key in (("cDNA_position", "cdna_start", "cdna_end"), ("CDS_position", "cds_start", "cds_end")):
+        position = e.fields.get(column)
+        if position is None:
+            pair = [dash(str(e.fields.get(key, "-"))) for key in (start_key, end_key)]
+        else:
+            start, sep, end = position.partition("/")[0].partition("-")
+            pair = ["-", "-"] if position in ("", "-") else [start, end if sep else start]
+        if not all(re.fullmatch(r"[0-9]+|\?|-", part) for part in pair):
+            return None
+        out.extend(pair)
+    return out[0], out[1], out[2], out[3]
+
+
+def location_span(e: RowEntry) -> int | None:
+    """The number of positions an entry's Location names, or ``None`` where it names no span
+    of whole positions."""
+    if e.location is None:
+        return None
+    start, _, end = e.location.split(":", 1)[-1].partition("-")
+    end = end or start
+    if not (re.fullmatch(r"[0-9]+", start) and re.fullmatch(r"[0-9]+", end)):
+        return None
+    span = integer_of(end, "Location position") - integer_of(start, "Location position") + 1
+    return span if span >= 1 else None
+
+
+def longer_allele_inside_one_exon(e: RowEntry) -> bool:
+    """Whether an entry shows, without its record, a span of three or more bases that lies in
+    the transcript's sequence from end to end under an allele of more nucleotide letters than
+    the span has bases: its Location names the span, and its two cDNA positions are numbers
+    as far apart as the span's two ends, which a span that holds an intron's base does not
+    have. A Location of two neighbouring positions is refused: an insertion between them is
+    written with the same Location, allele and positions as two replaced bases, and only
+    the record tells the two apart."""
+    span = location_span(e)
+    if span is None or span < 3 or not re.fullmatch(r"[ACGTN]+", e.allele) or len(e.allele) <= span:
+        return False
+    positions = transcript_positions(e)
+    if positions is None or not (_ten_digits(positions[0]) and _ten_digits(positions[1])):
+        return False
+    return integer_of(positions[1], "cDNA position") - integer_of(positions[0], "cDNA position") + 1 == span
+
+
+def differing_regions(reference: str, allele: str) -> list[tuple[int, int]]:
+    """The regions ``_get_differing_regions`` (VariationFeatureOverlapAllele.pm:405-460)
+    cuts a record into, as offsets from the span's first base: where both alleles hold more
+    than one base (:418) the runs of indices at which they differ, every index past the
+    shorter allele's end differing (:428-450); else one region, the span (:452-454)."""
+    if len(reference) <= 1 or len(allele) <= 1:
+        return [(0, len(reference) - 1)]
+    runs: list[tuple[int, int]] = []
+    for index in range(max(len(reference), len(allele))):
+        if index < len(reference) and index < len(allele) and reference[index] == allele[index]:
+            continue
+        if runs and runs[-1][1] == index - 1:
+            runs[-1] = (runs[-1][0], index)
+        else:
+            runs.append((index, index))
+    return runs or [(0, len(reference) - 1)]
+
+
+def intron_rows(
+    regions: Sequence[tuple[int, int]], span: int, start: int, end: int, forward: bool, wide_exons: bool
+) -> tuple[frozenset[str], frozenset[str]]:
+    """The splice and intron terms of the reference's row and of the candidate's for a record
+    whose span is the offsets ``0`` to ``span - 1``, on a transcript of the given strand whose
+    one intron near the span runs from offset ``start`` to offset ``end``.
+
+    The reference's row is ``_intron_effects`` (BaseTranscriptVariationAllele.pm:99-224) on
+    ``regions``, each placed with no bound at the span's end (:117-118). The intron is read
+    where the span overlaps it widened by three bases, and its two ends where the span
+    overlaps the eleven bases around each (BaseTranscriptVariation.pm:1027-1029); an intron
+    of thirteen bases or fewer is a frameshift intron (:1032-1035) and a region that
+    overlaps it sets nothing (BaseTranscriptVariationAllele.pm:138-141, :171-174). A region
+    in the intron's interior sets the intron term (:143-149) and one in a window of the six
+    below its flag (:152-159, :176-204). The flag of ``splice_region`` is assigned for each
+    region in turn, whether the region lies in one of its four windows, until a region has
+    met the intron's first two or last two bases (:209-216; Utils/VariationEffect.pm:91-94),
+    so the last region assigned decides it. The tract term is written only
+    off the exons (Constants.pm:971-983), which a transcript with a frameshift intron reads
+    twelve bases wider (BaseTranscriptVariation.pm:861; ``wide_exons`` says another intron
+    of the transcript is one). The donor region is withheld beside the fifth base and
+    ``splice_region_variant`` beside the first four terms (Utils/VariationEffect.pm:597-627).
+
+    The candidate's row keeps a term of the six only where the span itself holds a base of
+    a window of that term, the intron being the intron term's window, reads
+    ``splice_region`` from any region in one of its four windows, and withholds the donor
+    region and ``splice_region_variant`` by its own row's terms."""
+    last = span - 1
+    in_list = last >= start - 3 and end + 3 >= 0
+    at_an_end = (last >= start - 3 and start + 7 >= 0) or (last >= end - 7 and end + 3 >= 0)
+    frameshift = end - start <= 12
+    read = [r for r in regions if not (frameshift and r[1] >= start and r[0] <= end)]
+
+    def met(first: int, final: int) -> bool:
+        return any(r[1] >= first and r[0] <= final for r in read)
+
+    def held(first: int, final: int) -> bool:
+        return last >= first and final >= 0
+
+    if forward:
+        windows = {
+            "splice_donor_variant": (start, start + 1),
+            "splice_acceptor_variant": (end - 1, end),
+            SPLICE_DONOR_5TH_BASE_TERM: (start + 4, start + 4),
+            SPLICE_DONOR_REGION_TERM: (start + 2, start + 5),
+            "splice_polypyrimidine_tract_variant": (end - 16, end - 2),
+        }
+    else:
+        windows = {
+            "splice_donor_variant": (end - 1, end),
+            "splice_acceptor_variant": (start, start + 1),
+            SPLICE_DONOR_5TH_BASE_TERM: (end - 4, end - 4),
+            SPLICE_DONOR_REGION_TERM: (end - 5, end - 2),
+            "splice_polypyrimidine_tract_variant": (start + 2, start + 16),
+        }
+    off_the_exons = not (
+        start > 0 or last > end or ((frameshift or wide_exons) and (start > -12 or last + 12 > end))
+    )
+    set_by_a_region: set[str] = set()
+    held_by_the_span: set[str] = set()
+    for term, (first, final) in windows.items():
+        read_here = (in_list or at_an_end) and off_the_exons if term.startswith("splice_poly") else at_an_end
+        if read_here and met(first, final):
+            set_by_a_region.add(term)
+        if held(first, final):
+            held_by_the_span.add(term)
+    if in_list and start + 2 <= end - 2 and met(start + 2, end - 2):
+        set_by_a_region.add(INTRON_TERM)
+    if held(start, end):
+        held_by_the_span.add(INTRON_TERM)
+    beside = ((start - 3, start - 1), (start + 2, start + 7), (end - 7, end - 2), (end + 1, end + 3))
+    last_assigned = in_any = at_a_site = False
+    if at_an_end:
+        for region in read:
+            in_one = any(region[1] >= first and region[0] <= final for first, final in beside)
+            in_any = in_any or in_one
+            at_a_site = at_a_site or (region[1] >= start and region[0] <= start + 1) or (region[1] >= end - 1 and region[0] <= end)
+            if not at_a_site:
+                last_assigned = in_one
+
+    def row(terms: set[str], region: bool) -> frozenset[str]:
+        if SPLICE_DONOR_5TH_BASE_TERM in terms:
+            terms.discard(SPLICE_DONOR_REGION_TERM)
+        if region and not terms & SPLICE_REGION_WITHHOLDING_TERMS:
+            terms.add(SPLICE_REGION_TERM)
+        return frozenset(terms)
+
+    return row(set(set_by_a_region), last_assigned), row(set_by_a_region & held_by_the_span, in_any)
+
+
+def intron_placements(span: int, reach: int, positions: tuple[str, str, str, str]) -> Iterator[tuple[bool, int, int]]:
+    """The places ``(forward, start, end)`` of one intron beside a span of ``span`` bases that
+    an entry's cDNA positions allow, as offsets from the span's first base, for regions that
+    run ``reach`` bases past the span's end. A numbered cDNA position is a base of the
+    transcript's sequence and any other a base of the intron; the first position is the
+    span's first base on the forward strand and its last on the reverse. Two numbers as far
+    apart as the span put the intron after the span, one to seven bases on, as far as one of
+    its ends is still read, or before it, where an intron shorter than its windows has
+    them run on past its last base; two numbers closer than the span put it inside the
+    span. A gap wider than any window, and than the regions' reach, is placed once."""
+    last = span - 1
+    before = [-gap for gap in range(18)] + [-_FAR]
+    after = [last + gap for gap in sorted({*range(42), *range(max(42, reach - 20), reach + 19)})] + [_FAR]
+    numbered_first, numbered_last = _ten_digits(positions[0]), _ten_digits(positions[1])
+    for forward in (True, False):
+        first_in_sequence, last_in_sequence = (
+            (numbered_first, numbered_last) if forward else (numbered_last, numbered_first)
+        )
+        if first_in_sequence and last_in_sequence:
+            width = integer_of(positions[1], "cDNA position") - integer_of(positions[0], "cDNA position") + 1
+            if width == span:
+                for gap in range(1, 8):
+                    start = last + gap
+                    yield from ((forward, start, end) for end in after if end >= start)
+                    yield from ((forward, start, start + length) for length in range(42))
+                yield from ((forward, start, end) for start in range(-16, 0) for end in range(start, 0))
+            elif 0 < width < span:
+                length = span - width
+                yield from ((forward, start, start + length - 1) for start in range(1, last - length + 1))
+        elif first_in_sequence:
+            yield from ((forward, start, end) for start in range(1, span) for end in after)
+        elif last_in_sequence:
+            yield from ((forward, start, end) for end in range(last) for start in before)
+        else:
+            yield from ((forward, start, end) for start in before for end in after)
+
+
+def record_span_placement(e: RowEntry, a: RowEntry, reference: str) -> tuple[bool, int, int, bool] | None:
+    """A place of the transcript's intron, ``(forward, start, end, wide_exons)`` as
+    ``intron_rows`` reads it, at which the record's regions give the reference entry's
+    splice and intron terms and the span gives the candidate entry's, or ``None`` where
+    the entry's cDNA positions allow no such place. ``reference`` is the reference bases
+    the allele stands in for; the places are those of ``intron_placements``."""
+    positions = transcript_positions(e)
+    if positions is None:
+        return None
+    read = PAST_THE_SPAN_TERMS | {SPLICE_REGION_TERM}
+    expected = frozenset(consequence_set(e.consequence).split(",")) & read
+    actual = frozenset(consequence_set(a.consequence).split(",")) & read
+    regions = differing_regions(reference, e.allele)
+    tract = "splice_polypyrimidine_tract_variant"
+    for forward, start, end in intron_placements(len(reference), len(e.allele) - len(reference), positions):
+        rows = intron_rows(regions, len(reference), start, end, forward, False)
+        if rows == (expected, actual):
+            return forward, start, end, False
+        if (
+            tract in rows[0]
+            and tract not in expected
+            and intron_rows(regions, len(reference), start, end, forward, True) == (expected, actual)
+        ):
+            return forward, start, end, True
+    return None
+
+
+# ``_get_differing_regions`` (VariationFeatureOverlapAllele.pm:405-460) compares the two
+# alleles index by index to the longer allele's length (:428-429), so every index past the
+# reference allele's end differs, and ``_intron_effects`` places each differing region on the
+# genome from the record's start with no bound at the span's end
+# (BaseTranscriptVariationAllele.pm:117-118). On a record whose alternate allele is the longer
+# one, the flags of the five splice terms above and of the intron term (:143-204) are
+# therefore set from positions the record does not replace. The candidate writes such a term
+# only where a base of the span itself lies in a window of that term, the intron being the
+# intron term's window.
+#
+# With the record's alleles (``RowEntry.reference``: the first column or the format's own
+# allele fields, else the input records) the regions are known by position, and a pair is of
+# the class where the record is no pure insertion, both alleles hold more than one base and
+# the alternate more than the reference, and one intron stands beside the span at a place
+# the entry's cDNA positions allow (``intron_placements``) at which the regions give the
+# reference's six terms and ``splice_region_variant`` and the span gives the candidate's
+# (``intron_rows``): the terms gone are of the six, each without a base of the span in its
+# window, and the terms come are the donor region where the fifth base went and
+# ``splice_region_variant`` where the terms that withhold it went. No input names the
+# transcript's introns, so the place is read off the reference's row: where two places
+# give that row and differ in what the span holds, the pair is taken at the one that
+# gives the candidate's row.
+#
+# Without the record a row shows that no base of its span lies in any window where three
+# or more positions lie in the transcript's sequence from end to end
+# (``longer_allele_inside_one_exon``): there the candidate's set is the reference's without
+# every term of the six, with or without ``splice_region_variant`` in the place of a term
+# that withholds it. A Location of two neighbouring positions, which an insertion's row
+# shares, and a span that holds an intron's base then stay differences. With or without
+# the record, two rows whose cDNA or CDS positions differ and the terms the other way
+# round stay differences, and so does any other differing term, but for the terms of a
+# stop codon class on the same row: there that class's rule reads the rows without this
+# difference (``STOP_CODON_ROW_PAIRS``) and this one the rows without that.
+def splice_term_past_the_record_span_pair(e: RowEntry, a: RowEntry) -> bool:
+    """Whether the reference entry ``e`` and the candidate entry ``a`` of one key are a row on
+    which Ensembl VEP writes one or more of the five intron-window splice terms or the intron
+    term from positions past the end of the record's span and the candidate does not: a
+    Transcript entry with the same cDNA and CDS positions on both sides whose two sets of
+    terms differ by terms of the six the reference alone holds and, at most, the donor
+    region and ``splice_region_variant`` the candidate alone holds, beside the terms of a
+    stop codon class where its rule takes the rest of the difference. With the record's
+    alleles the two rows are those of a longer alternate allele that is no pure insertion
+    at a place of the intron the cDNA positions allow (``record_span_placement``); without
+    them the span lies in the transcript's sequence under a longer allele
+    (``longer_allele_inside_one_exon``), the candidate holds none of the six, and
+    ``splice_region_variant`` alone comes, where a term that withholds it went."""
+    if feature_kind(e.key.rsplit("|", 1)[-1].partition("#")[0]) != "transcript":
+        return False
+    positions = transcript_positions(e)
+    if positions is None or positions != transcript_positions(a):
+        return False
+    expected_terms = set(consequence_set(e.consequence).split(","))
+    actual_terms = set(consequence_set(a.consequence).split(","))
+    read = PAST_THE_SPAN_TERMS | {SPLICE_REGION_TERM}
+    if expected_terms - read != actual_terms - read:
+        # The rest of the difference is a stop codon class's: its rule reads the two rows
+        # with the candidate's splice and intron terms on both, and this one the two rows
+        # with the reference's other terms on both.
+        beside = copy.copy(e)
+        beside.consequence = ",".join(sorted((expected_terms - read) | (actual_terms & read)))
+        if not any(pair(beside, a) for pair in STOP_CODON_ROW_PAIRS):
+            return False
+        actual_terms = (actual_terms & read) | (expected_terms - read)
+        a = copy.copy(a)
+        a.consequence = ",".join(sorted(actual_terms))
+    gone, come = expected_terms - actual_terms, actual_terms - expected_terms
+    if not gone or not gone <= PAST_THE_SPAN_TERMS or not come <= {SPLICE_REGION_TERM, SPLICE_DONOR_REGION_TERM}:
+        return False
+    reference = e.reference if e.reference is not None else a.reference
+    if reference is None:
+        if not (longer_allele_inside_one_exon(e) and longer_allele_inside_one_exon(a)):
+            return False
+        if actual_terms & PAST_THE_SPAN_TERMS:
+            return False
+        return not come or (come == {SPLICE_REGION_TERM} and bool(gone & SPLICE_REGION_WITHHOLDING_TERMS))
+    if location_span(e) != len(reference) or len(reference) < 2:
+        return False
+    if not re.fullmatch(r"[ACGTN]+", e.allele) or len(e.allele) <= len(reference):
+        return False
+    return record_span_placement(e, a, reference) is not None
+
+
+@dataclass
+class PairRow:
+    """The `RowEntry` of one row of an output."""
+
+    key: str
+    location: str | None
+    allele: str
+    consequence: str
+    fields: dict[str, str]
+    indel: bool | None = None
+    insertion: bool | None = None
+    reference: str | None = None
+
+
+def pair_row(columns: Sequence[str]) -> PairRow:
+    """The first nine columns of an output row, Uploaded_variation to CDS_position, in the
+    form a row-aware pair rule reads, as the format comparator's ``parse_default`` builds a
+    default-format row: the key of Location, Allele, Feature and Feature_type, and the
+    allele's shape and the reference bases it stands in for from the record's own alleles
+    where the first column spells them."""
+    name, location, allele, _, feature, feature_type, consequence, cdna_position, cds_position = columns
+    indel = insertion = reference = None
+    record_alleles = uploaded_alleles(name)
+    if record_alleles is not None:
+        reference_allele, alternate_alleles = record_alleles
+        indel = allele_is_indel(reference_allele, alternate_alleles, allele)
+        insertion = reference_allele_is_empty(reference_allele, alternate_alleles)
+        position = uploaded_position(name)
+        if position is not None:
+            reference = replaced_reference(position, reference_allele, alternate_alleles, location, allele)
+    return PairRow(
+        key=f"{location}|{allele}|{feature}|{feature_type}",
+        location=location,
+        allele=allele,
+        consequence=consequence,
+        fields={"cDNA_position": cdna_position, "CDS_position": cds_position},
+        indel=indel,
+        insertion=insertion,
+        reference=reference,
+    )
+
+
+# The rows of the two outputs that carry the two tuples of one unmatched pair, the
+# reference's first.
+PairRows = tuple[Sequence[RowEntry], Sequence[RowEntry]]
+
+
 @dataclass(frozen=True)
 class ExclusionRule:
     """One divergence shape: its recogniser, its reporting name, whether the
@@ -510,8 +1418,8 @@ class ExclusionRule:
 
     ``classifies`` and ``excludes`` are independent because the two roles are
     independent. A rule that classifies assigns a pair to its reporting bucket;
-    a rule that excludes removes the pair from both raw denominators. Only
-    ``start_cooccurrence_swap`` does both.
+    a rule that excludes removes the pair from both raw denominators. Of the rules
+    that read the two consequence sets, only ``start_cooccurrence_swap`` does both.
     """
 
     bucket: str
@@ -522,8 +1430,17 @@ class ExclusionRule:
     # A predicate that decides on the allele kind as well as the two consequence
     # sets takes the tuple's allele as its third argument; the others take two.
     allele_aware: bool = False
+    # A row-aware predicate takes the reference's and vep-rs's row of the pair (`RowEntry`)
+    # and matches only where the caller hands the rows over: every row that carries the
+    # reference's tuple against every row that carries vep-rs's, so the rows of one key
+    # stand or fall together.
+    row_aware: bool = False
 
-    def matches(self, perl_csq: str, rust_csq: str, allele: str) -> bool:
+    def matches(self, perl_csq: str, rust_csq: str, allele: str, rows: PairRows | None = None) -> bool:
+        if self.row_aware:
+            if rows is None or not rows[0] or not rows[1]:
+                return False
+            return all(self.predicate(e, a) for e in rows[0] for a in rows[1])
         if self.allele_aware:
             return self.predicate(perl_csq, rust_csq, allele)
         return self.predicate(perl_csq, rust_csq)
@@ -600,6 +1517,63 @@ EXCLUDING_RULES: tuple[ExclusionRule, ...] = tuple(
     r for r in EXCLUSION_REGISTRY if r.excludes
 )
 
+# The pair rules of the 116.2 registry that read the two rows of an unmatched pair
+# (``row_aware``). ORDER IS THE CLASSIFICATION ORDER here too: they are asked after the
+# rules above, for a pair none of those classifies or excludes, and the first match takes it.
+# Each differs from its reference's set in a stop codon term, or in a splice term the reference
+# alone holds, which no rule above admits, and no pair satisfies two of them, so no order among
+# them moves a count. The 115.2 registry holds none, so its report keeps the published shape.
+REFERENCE_116_2_ROW_PAIR_RULES: tuple[ExclusionRule, ...] = (
+    ExclusionRule(
+        bucket="stop_codon_overlap_genomic_span",
+        predicate=stop_codon_overlap_genomic_span_pair,
+        classifies=True,
+        excludes=True,
+        taxonomy_class="stop_codon_overlap_genomic_span",
+        row_aware=True,
+    ),
+    ExclusionRule(
+        bucket="stop_retained_without_stop_codon_test",
+        predicate=stop_retained_without_stop_codon_test_pair,
+        classifies=True,
+        excludes=True,
+        taxonomy_class="stop_retained_without_stop_codon_test",
+        row_aware=True,
+    ),
+    ExclusionRule(
+        bucket="stop_retained_three_base_stop_codon_test",
+        predicate=stop_retained_three_base_stop_codon_test_pair,
+        classifies=True,
+        excludes=True,
+        taxonomy_class="stop_retained_three_base_stop_codon_test",
+        row_aware=True,
+    ),
+    ExclusionRule(
+        bucket="stop_codon_removed_without_stop_codon_test",
+        predicate=stop_codon_removed_without_stop_codon_test_pair,
+        classifies=True,
+        excludes=True,
+        taxonomy_class="stop_codon_removed_without_stop_codon_test",
+        row_aware=True,
+    ),
+    ExclusionRule(
+        bucket="stop_codon_overlap_insertion_range",
+        predicate=stop_codon_overlap_insertion_range_pair,
+        classifies=True,
+        excludes=True,
+        taxonomy_class="stop_codon_overlap_insertion_range",
+        row_aware=True,
+    ),
+    ExclusionRule(
+        bucket="splice_term_past_the_record_span",
+        predicate=splice_term_past_the_record_span_pair,
+        classifies=True,
+        excludes=True,
+        taxonomy_class="splice_term_past_the_record_span",
+        row_aware=True,
+    ),
+)
+
 
 # One sentence per pair bucket, the shape its predicate recognises, for the report.
 PAIR_RULE_DEFINITIONS: dict[str, str] = {
@@ -627,14 +1601,76 @@ PAIR_RULE_DEFINITIONS: dict[str, str] = {
         "The pairs of the splice family whose only difference is a splice_region_variant "
         "the reference's assignment order dropped; the exclusion policy of that family."
     ),
+    "stop_codon_overlap_genomic_span": (
+        "A Transcript row of an insertion or deletion with both cDNA positions and a CDS "
+        "start on which the reference writes coding_sequence_variant and vep-rs "
+        "stop_retained_variant, both beside splice_region_variant: the reference's genomic "
+        "stop codon overlap reads the last three genomic positions of the coding region and "
+        "misses a stop base that ends an exon."
+    ),
+    "stop_retained_without_stop_codon_test": (
+        "A Transcript row of an insertion or deletion whose stop codon test the reference "
+        "does not make (an allele holding a letter that names no base, or a span without a "
+        "cDNA position at one end or a CDS start) and writes stop_retained_variant for; "
+        "vep-rs writes the same set without the term, with nothing, coding_sequence_variant "
+        "or frameshift_variant in its place."
+    ),
+    "stop_retained_three_base_stop_codon_test": (
+        "A Transcript row of an insertion or deletion whose stop codon test is made, on which "
+        "the reference writes stop_retained_variant from the three bases at the old stop "
+        "position alone; vep-rs writes coding_sequence_variant in its place, or, where the "
+        "reference writes it alone or beside one of inframe_insertion, inframe_deletion and "
+        "protein_altering_variant, frameshift_variant with or without stop_gained in the place "
+        "of those terms."
+    ),
+    "stop_codon_removed_without_stop_codon_test": (
+        "A Transcript row of an insertion or deletion without a cDNA position at one end or a "
+        "CDS start, on which the reference writes stop_retained_variant with no stop codon "
+        "test made and vep-rs stop_lost for the stop codon the record removes."
+    ),
+    "stop_codon_overlap_insertion_range": (
+        "A Transcript row of an insertion with both cDNA positions and a CDS start on which "
+        "vep-rs writes stop_retained_variant, with or without inframe_insertion, for the stop "
+        "codon the insertion keeps, and the reference coding_sequence_variant, or "
+        "frameshift_variant with or without stop_gained: the reference's genomic stop codon "
+        "overlap moves an insertion's start by the inserted length. Under an identifier a row "
+        "is read as an insertion's by a Location of two neighbouring positions and an Allele "
+        "of another length than two, so two bases replaced by a sequence of another length "
+        "are set aside with the insertions."
+    ),
+    "splice_term_past_the_record_span": (
+        "On a record whose alternate allele is longer than its reference allele, Ensembl VEP "
+        "writes a splice donor, splice acceptor, donor fifth base, donor region, "
+        "polypyrimidine tract or intron term from positions past the end of the record's span; "
+        "where no base of the span lies in a window of that term, vep-rs does not write it. "
+        "For the intron term the window is the intron. With the record's alleles, from the "
+        "first column or the input records, a row is set aside where the record is no pure "
+        "insertion and one intron stands beside the span, at a place the row's cDNA positions "
+        "allow, at which the record's regions give the reference's terms and the span gives "
+        "vep-rs's, the donor region and splice_region_variant coming where the terms that "
+        "withhold them went. Without the record a row is set aside where three or more "
+        "positions lie in the transcript's sequence and vep-rs's row holds none of the six "
+        "terms; a Location of two neighbouring positions, which an insertion's row shares, "
+        "and a span that holds an intron's base then stay differences. A row that differs by "
+        "the terms of a stop codon class as well is set aside where that class's rule takes "
+        "the rest of the difference."
+    ),
 }
 PAIR_RULE_CITATIONS: dict[str, str] = {
     "splice_family_swap": "BaseTranscriptVariationAllele.pm:215; VariationEffect.pm:87-110",
     "start_cooccurrence_swap": "VariationEffect.pm:851-963, 1028-1075",
+    "stop_codon_overlap_genomic_span": "VariationEffect.pm:1389-1431, 1616-1649",
+    "stop_retained_without_stop_codon_test": "VariationEffect.pm:1290-1324, 1488-1539",
+    "stop_retained_three_base_stop_codon_test": "VariationEffect.pm:1318, 1488-1539",
+    "stop_codon_removed_without_stop_codon_test": "VariationEffect.pm:1234-1288, 1290-1324, 1508",
+    "stop_codon_overlap_insertion_range": "VariationEffect.pm:1389-1431, 1549",
+    "splice_term_past_the_record_span": (
+        "VariationFeatureOverlapAllele.pm:405-460; BaseTranscriptVariationAllele.pm:117-118, 143-204"
+    ),
 }
 
 
-_BRACKET_MATE_RE = re.compile(r"[\[\]]([^:\[\]]+):(\d+)[\[\]]")
+_BRACKET_MATE_RE = re.compile(r"[\[\]]([^:\[\]]+):(\d+)[\[\]]", re.ASCII)
 # The record's own breakend as the two engines write it: `N.` / `.N` (the reference's
 # string for the local end of a bracket breakend, and a single breakend's own VCF ALT)
 # or `chromosome_breakpoint` (the class term, written for a mateless single breakend by
@@ -673,7 +1709,7 @@ def dot_breakend_points(span: tuple[str, int, int]) -> list[str]:
     """The Locations at which vep-rs can write the point `c:(P+1)` of a dot-notation breakend
     without SVTYPE whose reference row spans ``span`` (chromosome, low, high): the span's start
     and the base after it. The reference takes the sequence rules for the coordinates
-    (BaseVCF4.pm:264-275, 297-316): the start is P + 1 when the ALT's length differs from the
+    (BaseVCF4.pm:264-275, 297-317): the start is P + 1 when the ALT's length differs from the
     REF's and P when it does not, the end P + len(REF) - 1, the two written low first. A REF of
     one base (`N N.`) gives `c:P-(P+1)` and the point is the base after the start; a REF of
     three or more bases beside an ALT of another length (`NAC .N`) gives `c:(P+1)-(P+len(REF)-1)`
@@ -860,7 +1896,7 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
         ),
         excludes=False,
         taxonomy_class="bnd_mate_32bit_buffer_intergenic",
-        perl_citation="AnnotationSource.pm:190, 251-254, 306-309; InputBuffer.pm:386-389",
+        perl_citation="AnnotationSource.pm:190, 251-254, 306-309; InputBuffer.pm:386-390",
     ),
     OneSidedRule(
         bucket=GVCF_VARIANT_SITE_DROPPED_BUCKET,
@@ -896,7 +1932,7 @@ REFERENCE_116_2_ONE_SIDED_RULES: tuple[OneSidedRule, ...] = (
         excludes=True,
         excludes_with_cache=True,
         taxonomy_class="dot_breakend_without_svtype_pair",
-        perl_citation="BaseVCF4.pm:255-275, 297-316",
+        perl_citation="BaseVCF4.pm:255-275, 297-317",
     ),
     OneSidedRule(
         bucket=MISSING_ALT_ANNOTATED_BUCKET,
@@ -1014,6 +2050,9 @@ class ReferenceRegistry:
     release: str
     pair_rules: tuple[ExclusionRule, ...]
     one_sided_rules: tuple[OneSidedRule, ...]
+    # The pair rules that read the two rows of the pair in the two outputs, asked after
+    # ``pair_rules``.
+    row_pair_rules: tuple[ExclusionRule, ...] = ()
 
 
 # Both registries share the pair rules: the splice assignment and the start co-emission
@@ -1044,6 +2083,7 @@ REFERENCE_REGISTRIES: dict[str, ReferenceRegistry] = {
         release="116.2",
         pair_rules=EXCLUSION_REGISTRY,
         one_sided_rules=REFERENCE_116_2_ONE_SIDED_RULES,
+        row_pair_rules=REFERENCE_116_2_ROW_PAIR_RULES,
     ),
 }
 REFERENCE_RELEASES: tuple[str, ...] = tuple(REFERENCE_REGISTRIES)
@@ -1073,12 +2113,36 @@ def divergence_class_definitions(reference_release: str) -> dict[str, dict[str, 
     return out
 
 
+def report_class_definitions(reference_release: str) -> dict[str, dict[str, object]]:
+    """Every class of a reference release's registry in the report's order: the pair rules
+    of `divergence_class_definitions`, the row-aware pair rules after them in
+    classification order, then the one-sided rules."""
+    registry = REFERENCE_REGISTRIES[reference_release]
+    classes = list(divergence_class_definitions(reference_release).items())
+    row_classes = [
+        (
+            rule.bucket,
+            {
+                "definition": PAIR_RULE_DEFINITIONS[rule.bucket],
+                "excludes": rule.excludes,
+                "taxonomy_class": rule.taxonomy_class,
+                "perl_citation": PAIR_RULE_CITATIONS[rule.taxonomy_class],
+            },
+        )
+        for rule in registry.row_pair_rules
+    ]
+    at = len(registry.pair_rules)
+    return dict(classes[:at] + row_classes + classes[at:])
+
+
 class ReferenceRecordScope:
     """What the 116.2 one-sided pass needs from the sorted merge, collected in the one
     read of both key streams.
 
     ``absent``: the (file, Location) pairs at which vep-rs wrote a structural row and
-    the reference wrote nothing: a record the reference dropped as `vep_skip`, since
+    the reference wrote nothing, less those `record_reference_named` takes out because a
+    row there carries the name of a record the reference wrote a row for
+    (`reference_named_locations`): a record the reference dropped as `vep_skip`, since
     116.2 writes at least one row (an intergenic one when nothing is in range) for every
     record it keeps and every route to `vep_skip` is structural; `tandem_repeat` is
     outside the test (`_TANDEM_REPEAT_ALLELE`). Every vep-rs row at an absent Location is
@@ -1192,6 +2256,194 @@ class ReferenceRecordScope:
         """Record one file's gVCF variant-site Locations, read from vep-rs's output."""
         self.gvcf_sites.update((file_name, loc) for loc in locations)
 
+    def absent_locations(self, file_name: str) -> set[str]:
+        """One file's Locations in ``absent``."""
+        return {loc for name, loc in self.absent if name == file_name}
+
+    def record_reference_named(self, file_name: str, locations: Iterable[str]) -> None:
+        """Take out of ``absent`` one file's Locations at which a vep-rs row carries the
+        name of a record the reference wrote a row for (`reference_named_locations`)."""
+        self.absent.difference_update((file_name, loc) for loc in locations)
+
+
+# A first column that names no input record.
+_NO_RECORD_NAMES = frozenset({"", ".", "-"})
+
+
+def iter_record_names(
+    path: Path,
+    canonical_contigs: frozenset[str] | None = None,
+    names: frozenset[str] | None = None,
+) -> Iterator[tuple[str, str]]:
+    """Yield (record name, Location) for every row `iter_vep_key_lines` keys, under the same
+    row filter: the name is the first column, the input record's ID or the name the engine
+    generates for a record without one, and the Location is read through
+    `canonical_location`. With ``names``, only the rows whose name is in it."""
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if not line or line.startswith("#"):
+                continue
+            fields = line.split("\t", 6)
+            if len(fields) < 7:
+                continue
+            name = fields[0].strip()
+            if names is not None and name not in names:
+                continue
+            location = canonical_location(fields[1].strip())
+            if not (location and fields[2].strip() and fields[4].strip()):
+                continue
+            if canonical_contigs is not None and location.split(":", 1)[0] not in canonical_contigs:
+                continue
+            yield name, location
+
+
+def reference_named_locations(
+    perl_path: Path,
+    rust_path: Path,
+    locations: set[str],
+    canonical_contigs: frozenset[str] | None = None,
+) -> set[str]:
+    """Of ``locations``, each a Location of one output pair at which vep-rs wrote and the
+    reference nothing, those that are not a record the reference dropped: a vep-rs row there
+    carries the name of a record the reference wrote a row for, or names no record.
+
+    Both engines print the input record's name in the first column, so the reference's
+    output tells a record it dropped, whose name is on none of its rows, from a record it
+    wrote at another Location. An engine that prints a structural record from another start
+    than the reference's (POS where the reference prints POS + 1) has no reference row at
+    its Location for a record the reference kept, and its rows stay charged. A record
+    without an ID carries a generated name, which Ensembl VEP writes from the record's own
+    line (`CHROM_POS_REF/ALT`, the POS as the input gives it), so the name tells such a
+    record apart for an engine that generates the same one. Two records at one Location
+    stand or fall together, as the Location does in ``absent``. Neither output is read
+    when ``locations`` is empty.
+    """
+    if not locations:
+        return set()
+    names_at: dict[str, set[str]] = defaultdict(set)
+    for name, location in iter_record_names(rust_path, canonical_contigs):
+        if location in locations:
+            names_at[location].add(name)
+    wanted = frozenset(set().union(*names_at.values()) - _NO_RECORD_NAMES)
+    written = (
+        {name for name, _ in iter_record_names(perl_path, canonical_contigs, wanted)}
+        if wanted
+        else set()
+    )
+    return {
+        location
+        for location, names in names_at.items()
+        if names & written or names & _NO_RECORD_NAMES
+    }
+
+
+def iter_pair_rows(path: Path, wanted: Collection[str]) -> Iterator[tuple[str, PairRow | None]]:
+    """Yield (key line, row) for every row of ``path`` whose key line, as
+    `iter_vep_key_lines` writes it under the same row filter, is in ``wanted``: the row as
+    `pair_row` reads its first nine columns, or ``None`` for a row of fewer columns, which
+    carries no position column."""
+    locations = {key_line.split("\t", 1)[0] for key_line in wanted}
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if not line or line.startswith("#"):
+                continue
+            fields = line.split("\t")
+            if len(fields) < 7:
+                continue
+            location = canonical_location(fields[1].strip())
+            if location not in locations:
+                continue
+            key_line = "\t".join(
+                (
+                    location,
+                    fields[2].strip(),
+                    fields[4].strip(),
+                    fields[5].strip(),
+                    normalize_consequence_set(fields[6].strip()),
+                )
+            )
+            if key_line in wanted:
+                yield key_line, pair_row([f.strip() for f in fields[:9]]) if len(fields) >= 9 else None
+
+
+def fetch_pair_rows(
+    discordant_rows: Sequence[dict[str, str]],
+    pairs: Iterable[tuple[int, int]],
+    perl_dir: Path,
+    rust_dir: Path,
+) -> dict[int, list[PairRow]]:
+    """The rows of the two outputs behind unmatched pairs, for the row-aware pair rules.
+
+    ``pairs`` holds, per pair, the index in ``discordant_rows`` (the rows of
+    ``discordant.tsv``) of the reference's tuple and of vep-rs's. Each output file that
+    carries one of them is read once more, as `reference_named_locations` reads it, and
+    the result maps a row's index to the distinct rows of its output that carry its tuple.
+    An index is left out when one of those rows has fewer than nine columns, so no
+    row-aware rule reads a pair with such a row. No output is read when ``pairs`` is
+    empty, and nothing but the two outputs is read."""
+    wanted: dict[Path, dict[str, int]] = defaultdict(dict)
+    for perl_index, rust_index in pairs:
+        for index, directory in ((perl_index, perl_dir), (rust_index, rust_dir)):
+            row = discordant_rows[index]
+            key_line = "\t".join(
+                (row["location"], row["allele"], row["feature"], row.get("feature_type", ""), row["consequence_set"])
+            )
+            wanted[directory / row["file_name"]][key_line] = index
+    found: dict[int, list[PairRow]] = {}
+    short: set[int] = set()
+    for path, index_of in wanted.items():
+        for key_line, row in iter_pair_rows(path, index_of):
+            index = index_of[key_line]
+            if row is None:
+                short.add(index)
+            elif row not in found.setdefault(index, []):
+                found[index].append(row)
+    return {index: rows for index, rows in found.items() if index not in short}
+
+
+def read_record_references(path: Path, rows: Iterable[PairRow]) -> None:
+    """Give each of ``rows`` that carries no reference bases (``PairRow.reference``) the
+    bases its allele stands in for, read by position from the records of the input VCF
+    ``path`` (plain or gzipped): a record is asked about a row whose Location starts on one
+    of the record's own positions on its chromosome, a ``chr`` prefix set aside
+    (`replaced_reference`). A row two records read differently keeps none, and the file is
+    not opened when no row asks."""
+    asking: dict[tuple[str, int], list[PairRow]] = defaultdict(list)
+    for row in rows:
+        if row.reference is None and row.location is not None and ":" in row.location:
+            chrom, _, coords = canonical_location(row.location).partition(":")
+            start = coords.partition("-")[0]
+            if _ten_digits(start):
+                asking[(_strip_chr(chrom), integer_of(start, "Location position"))].append(row)
+    if not asking:
+        return
+    chroms = {chrom for chrom, _ in asking}
+    read: dict[int, set[str]] = defaultdict(set)
+    opener = gzip.open if path.suffix in (".gz", ".bgz") else open
+    with opener(path, "rt", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if line.startswith("#"):
+                continue
+            fields = line.rstrip("\n").split("\t", 5)
+            chrom = _strip_chr(fields[0])
+            if len(fields) < 5 or chrom not in chroms:
+                continue
+            position = vep_rs_pos(fields[1])
+            if position is None:
+                continue
+            reference, alternates = fields[3], perl_split(fields[4], ",")
+            # An insertion's Location starts on the base before the inserted bases, the
+            # record's last where the shared bases are dropped.
+            for start in range(position, position + max(len(reference), 1)):
+                for row in asking.get((chrom, start), ()):
+                    found = replaced_reference(position, reference, alternates, row.location, row.allele)
+                    if found is not None:
+                        read[id(row)].add(found)
+    for group in asking.values():
+        for row in group:
+            if len(read[id(row)]) == 1:
+                row.reference = next(iter(read[id(row)]))
+
 
 def _strip_chr(chrom: str) -> str:
     """The reference's own normalisation of a breakend's chromosome name at the slice test
@@ -1233,7 +2485,7 @@ def count_bare_breakpoint_reference_rows(
 
 # `CHROM_POS_REF/ALT...`, the name VEP gives an ID-less record; the chromosome may carry
 # underscores, the position is the first `_digits_` group after it.
-_GENERATED_NAME_RE = re.compile(r"^.+?_\d+_(.+)$")
+_GENERATED_NAME_RE = re.compile(r"^.+?_[0-9]+_(.+)$")
 
 
 def gvcf_site_locations(path: Path, canonical_contigs: frozenset[str] | None = None) -> set[str]:
@@ -1596,8 +2848,8 @@ def apply_116_2_one_sided_rules(
         perl_alleles, _rust_alleles, _mates = breakend
         mate = reference_mate_chromosome(allele)
         # A synonym is any mate name, read as the reference reads it, that is not a name the
-        # cache files a chromosome under: the reference resolved it for the overlap and
-        # refused it at the slice test.
+        # cache files a chromosome under: a prefix the mate-allele name test does not
+        # resolve, or an accession the overlap test resolves and the slice test refuses.
         if (
             mate is not None
             and perl_alleles
@@ -1631,9 +2883,21 @@ def filter_snp_indel_intended_divergences(
     *,
     reference_release: str,
     record_scope: ReferenceRecordScope | None = None,
+    outputs: tuple[Path, Path] | None = None,
+    input_records: Callable[[str], Path | None] | None = None,
 ) -> tuple[int, int, dict[str, dict[str, int]]]:
     """Read discordant.tsv, classify intended-divergence swap pairs, and exclude
     the ones an Ensembl VEP self-contradiction accounts for.
+
+    ``outputs`` names the reference's and vep-rs's output directory. With it, a pair no
+    rule of ``EXCLUSION_REGISTRY`` classifies or excludes is put to the release's
+    row-aware rules (``row_pair_rules``) in their order, the first match taking it, on the
+    rows of the two outputs that carry its tuples (`fetch_pair_rows`); their buckets
+    follow the pair buckets. Without it, or under a release that registers no such rule,
+    no output is read. ``input_records`` names the input VCF behind an output file of that
+    name (``--input-vcf`` or ``--input-dir``), or ``None`` for a file without one: the rows of
+    such a pair whose first column spells no alleles take their record's from it
+    (`read_record_references`).
 
     ``reference_release`` selects the one-sided pass (`REFERENCE_REGISTRIES`); the pair
     rules are the same under both. Under ``"115.2"`` the pass is the scope class below
@@ -1682,30 +2946,13 @@ def filter_snp_indel_intended_divergences(
     predicate, so an excluded pair always lands in a bucket; the assertion after
     the loop is the backstop for that.
 
-    Two filters are deliberately absent from the registry.
-
-    A 3'UTR stop_lost trade-off ("vep-rs emits stop_lost where Perl emits
-    3'UTR-only") has no Perl source-line citation behind it: Perl reads the UTR
-    sequence from the cache's Bio::EnsEMBL::Slice, and vep-rs does the same
-    (``vefc.{three,five}_prime_utr`` in the JSON cache, read by
-    ``compute_{three,five}_prime_utr_sequence`` in
-    ``crates/vep-effects/src/coding.rs`` with FASTA as the fallback), so
-    cache-only mode reaches the Perl-parity verdict and the shape matches no
-    tuple.
-
-    An extended start co-emission predicate, one admitting any pair where Perl
-    carries a start term vep-rs lacks, absorbs besides the strict shape: pairs
-    where vep-rs drops the OTHER start term; pairs where vep-rs misses
-    start_lost outright (P=5UTR,start_lost,start_retained / R=5UTR;
-    P=frameshift,start_lost / R=frameshift); unrelated
-    protein-altering-vs-inframe shapes (P=5UTR,coding_sequence_variant /
-    R=5UTR,start_lost); and the inverted shape (P=frameshift,start_retained /
-    R=frameshift,start_lost) where Perl emits ONLY start_retained, a separate
-    predicate-overlap shape. Leaving those unmasked keeps the vep-rs
-    divergences visible and countable. The strict
-    ``_is_start_cooccurrence_swap`` is the only start filter, cited to
-    Utils/VariationEffect.pm:851-878, :947-963 and :1028-1075 in
-    ensembl-variation release/115 (23c76f60).
+    The registry carries no rule for a 3'UTR stop_lost trade-off (vep-rs
+    ``stop_lost`` where Perl emits a 3'UTR term alone) and no start rule looser
+    than ``_is_start_cooccurrence_swap``. The first shape matches no tuple,
+    because both engines read the UTR sequence from the cache
+    (``vefc.{three,five}_prime_utr``, with FASTA as the fallback). The second
+    would set aside pairs where vep-rs misses or drops a start term, which are
+    vep-rs divergences.
     """
     if reference_release not in REFERENCE_REGISTRIES:
         raise ValueError(
@@ -1755,6 +3002,8 @@ def filter_snp_indel_intended_divergences(
     bucket_stats: dict[str, dict[str, int]] = {
         rule.bucket: {"count": 0, "excluded": 0} for rule in CLASSIFICATION_CHAIN
     }
+    row_rules = REFERENCE_REGISTRIES[reference_release].row_pair_rules
+    untaken: list[tuple[int, int]] = []
 
     for key in matched_keys:
         # Each key has exactly 1 csq per side (unique 5-tuples from sorted-merge),
@@ -1786,10 +3035,50 @@ def filter_snp_indel_intended_divergences(
                         f"pair excluded but classified into no bucket: "
                         f"perl={pcsq!r} rust={rcsq!r}"
                     )
+                else:
+                    untaken.append((pi, ri))
                 if excluded:
                     excluded_perl += 1
                     excluded_rust += 1
                     masked_rows.update((pi, ri))
+
+    # The row-aware rules, on the pairs no rule above took, in the order of the rows in
+    # `discordant.tsv`; a row one of them set aside is not paired again.
+    row_stats: dict[str, dict[str, int]] = {
+        rule.bucket: {"count": 0, "excluded": 0} for rule in row_rules
+    }
+    if row_rules and untaken and outputs is not None:
+        untaken.sort()
+        fetched = fetch_pair_rows(rows, untaken, *outputs)
+        if input_records is not None:
+            by_file: dict[str, list[PairRow]] = defaultdict(list)
+            for index, pair_rows_of_index in fetched.items():
+                by_file[rows[index]["file_name"]].extend(pair_rows_of_index)
+            for file_name, rows_of_file in by_file.items():
+                records = input_records(file_name)
+                if records is not None:
+                    read_record_references(records, rows_of_file)
+        for pi, ri in untaken:
+            if pi in masked_rows or ri in masked_rows or pi not in fetched or ri not in fetched:
+                continue
+            pair_rows = (fetched[pi], fetched[ri])
+            rule = next(
+                (
+                    r
+                    for r in row_rules
+                    if r.matches(rows[pi]["consequence_set"], rows[ri]["consequence_set"], rows[pi]["allele"], pair_rows)
+                ),
+                None,
+            )
+            if rule is None:
+                continue
+            row_stats[rule.bucket]["count"] += 1
+            if rule.excludes:
+                row_stats[rule.bucket]["excluded"] += 1
+                excluded_perl += 1
+                excluded_rust += 1
+                masked_rows.update((pi, ri))
+    bucket_stats.update(row_stats)
 
     # Neither side's exclusion count can exceed the discordant rows available on
     # that side. Adjusted F1 subtracts these from the raw denominators, so an
@@ -2036,19 +3325,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--assembly",
-        choices=["GRCh37", "GRCh38"],
         default=None,
-        help="Reference assembly. When set with --canonical-contigs (default), tuples "
-        "with non-canonical contig in Location are dropped before F1 calc as a "
-        "defensive complement to prepare_benchmark_vcfs.py's input filter.",
+        help="Reference assembly. GRCh37 and GRCh38 select the human canonical contig "
+        "set when --canonical-contigs (default) names none; any other assembly's set "
+        "comes from the --canonical-contigs value (run_concordance.sh passes the "
+        "cache's info.json contig_order).",
     )
     parser.add_argument(
         "--canonical-contigs",
-        action="store_true",
+        nargs="?",
+        const=True,
         default=True,
+        metavar="FILE_OR_LIST",
         help="Defensive contig-allowlist filter (DEFAULT ON). Drops 5-tuples whose "
-        "Location contig is not in the canonical set for --assembly. Catches alt-contig "
-        "tuples that slip past the input filter (engine cache annotations, etc.).",
+        "Location contig is not in the canonical set. Bare, the set is the human one "
+        "for --assembly GRCh37 or GRCh38; with a value, the set is the comma-separated "
+        "names given, or the names in the file named, one per line or comma-separated, "
+        "`#` lines ignored (a non-human cache's info.json contig_order). Catches "
+        "alt-contig tuples that slip past the input filter (engine cache annotations, etc.).",
     )
     parser.add_argument(
         "--no-canonical-contigs",
@@ -2095,10 +3389,10 @@ def require_mode_args(args: argparse.Namespace) -> None:
         )
 
 
-# Canonical contig set: universal
-# Ensembl-style for both GRCh37 and GRCh38. Must match prepare_benchmark_vcfs.py
-# CANONICAL_CONTIGS frozenset and scripts/concordance/run_concordance.sh
-# CANONICAL_CONTIGS_LIST. M and MT are equivalent mitochondrial names.
+# The human canonical contig set, Ensembl-style, the same for GRCh37 and GRCh38.
+# Must match prepare_benchmark_vcfs.py CANONICAL_CONTIGS frozenset and
+# scripts/concordance/run_concordance.sh CANONICAL_CONTIGS_LIST. M and MT are
+# equivalent mitochondrial names.
 #
 # Rationale: input-prep auto-strips the UCSC chr- prefix so all engine
 # outputs emit Ensembl-style Locations. This defensive output-side filter is
@@ -2110,16 +3404,36 @@ CACHE_CONTIG_NAMES = CANONICAL_CONTIGS - {"M"}
 
 
 def canonical_set_for_assembly(assembly: str | None) -> frozenset[str] | None:
-    """Return the canonical contig set if the assembly is recognized.
+    """Return the human canonical contig set if the assembly is a human one.
 
-    The same Ensembl-style set is used for both GRCh37 and
-    GRCh38 (the assembly difference is in the genome-sequence content, not
-    contig naming). Both GRCh37 and GRCh38 return the universal set; any
-    other value, including None, returns None and disables the filter.
+    The same Ensembl-style set is used for both GRCh37 and GRCh38 (the assembly
+    difference is in the genome-sequence content, not contig naming). Any other
+    value, including None, returns None: another species' set is not derivable
+    from its assembly name and comes from `--canonical-contigs <file or list>`.
     """
     if assembly in ("GRCh37", "GRCh38"):
         return CANONICAL_CONTIGS
     return None
+
+
+def parse_canonical_contigs(value: str) -> frozenset[str]:
+    """The contig set a `--canonical-contigs` value names: the lines of the file
+    at `value` when one exists (comma- or whitespace-separated names, `#` lines
+    ignored), else the comma-separated names in `value` itself. An empty set is
+    a usage error: a filter that admits nothing would score every tuple absent."""
+    path = Path(value)
+    if path.is_file():
+        text = " ".join(
+            line
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        )
+    else:
+        text = value
+    names = frozenset(name for name in re.split(r"[,\s]+", text) if name)
+    if not names:
+        raise SystemExit(f"error: --canonical-contigs {value!r} names no contig")
+    return names
 
 
 def normalize_consequence_set(raw: str) -> str:
@@ -2148,7 +3462,7 @@ def canonical_location(location: str) -> str:
 
 def _canonical_coordinate(text: str) -> str:
     digits = text.removeprefix("+")
-    return str(int(digits)) if digits.isdigit() else text
+    return str(int(digits)) if _ten_digits(digits) else text
 
 
 def iter_vep_key_lines(
@@ -2899,6 +4213,10 @@ def _next_line(handle: TextIO) -> str | None:
     return line.rstrip("\n")
 
 
+class KeyFileOrderError(ValueError):
+    """A sorted key file holds a key that does not sort after the key before it."""
+
+
 def compare_sorted_key_files(
     perl_sorted: Path,
     rust_sorted: Path,
@@ -2920,6 +4238,11 @@ def compare_sorted_key_files(
     side or sides that wrote it, and the collector's open Location group is closed when
     both streams are exhausted.
 
+    Each file must ascend in the order the merge compares keys by, with every key once,
+    as `_sort_unique_stream_to_file` writes it. At the first key that does not sort after
+    the key before it the merge raises `KeyFileOrderError` naming the file and the line: a
+    merge that went on would count a key both files hold as missing and as extra at once.
+
     Returns:
       perl_count, rust_count, intersection, missing, extra, missing_counter, extra_counter
     """
@@ -2930,6 +4253,16 @@ def compare_sorted_key_files(
     extra = 0
     missing_counter: Counter[str] = Counter()
     extra_counter: Counter[str] = Counter()
+
+    def next_ascending(handle: TextIO, path: Path, previous: str, line: int) -> str | None:
+        """Read the key on line `line` of `path`, which must sort after `previous`."""
+        key = _next_line(handle)
+        if key is not None and key <= previous:
+            raise KeyFileOrderError(
+                f"{path}: line {line}: the key does not sort after the key before it; "
+                "the comparison needs each key file sorted with every key once"
+            )
+        return key
 
     extra_tmp: TextIO | None = None
     if discordant_out is not None:
@@ -2953,7 +4286,7 @@ def compare_sorted_key_files(
                     missing_counter[p.rsplit("\t", 1)[-1]] += 1
                 if discordant_out is not None:
                     discordant_out.write(f"{file_name}\tmissing_in_rust\t{p}\n")
-                p = _next_line(perl_h)
+                p = next_ascending(perl_h, perl_sorted, p, perl_count + 1)
                 continue
 
             if r is not None and (p is None or r < p):
@@ -2967,7 +4300,7 @@ def compare_sorted_key_files(
                     extra_counter[r.rsplit("\t", 1)[-1]] += 1
                 if extra_tmp is not None:
                     extra_tmp.write(f"{file_name}\textra_in_rust\t{r}\n")
-                r = _next_line(rust_h)
+                r = next_ascending(rust_h, rust_sorted, r, rust_count + 1)
                 continue
 
             # Equal: intersection
@@ -2980,8 +4313,8 @@ def compare_sorted_key_files(
                 _record_scope_feature(scope_features, p, 1)
             if record_scope is not None:
                 record_scope.observe(file_name, p, perl=True, rust=True)
-            p = _next_line(perl_h)
-            r = _next_line(rust_h)
+            p = next_ascending(perl_h, perl_sorted, p, perl_count + 1)
+            r = next_ascending(rust_h, rust_sorted, r, rust_count + 1)
 
     if record_scope is not None:
         record_scope.close()
@@ -3002,6 +4335,36 @@ def compare_sorted_key_files(
     )
 
 
+@contextmanager
+def _key_file_directory(
+    report_dir: Path, discordant_out: TextIO, discordant_path: Path
+) -> Iterator[str]:
+    """Yield a temporary directory under `report_dir` for one comparison's key files.
+
+    The directory is removed when the block ends, by every ending but one. Where the
+    comparison stops on a key file out of order (`KeyFileOrderError`), the directory stays
+    so the files the error names can be read, and the discordance report written so far is
+    closed and renamed with a `.partial` suffix so nothing reads it as a result. The error
+    raised in its place names both.
+    """
+    tmp = tempfile.mkdtemp(prefix="compare_vep_tmp_", dir=str(report_dir))
+    keep = False
+    try:
+        yield tmp
+    except KeyFileOrderError as error:
+        keep = True
+        discordant_out.close()
+        partial = discordant_path.with_name(f"{discordant_path.name}.partial")
+        discordant_path.replace(partial)
+        raise KeyFileOrderError(
+            f"{error}; the key files are kept in {tmp} and the rows written before the "
+            f"stop in {partial}"
+        ) from None
+    finally:
+        if not keep:
+            shutil.rmtree(tmp)
+
+
 def resolve_canonical_contigs(args: argparse.Namespace) -> frozenset[str] | None:
     """Resolve the defensive contig filter, warning when it is off by omission.
 
@@ -3009,22 +4372,30 @@ def resolve_canonical_contigs(args: argparse.Namespace) -> frozenset[str] | None
     per-class VEP totals counted WITHOUT the filter against a discordance report
     produced WITH it would inflate every term's VEP total by the dropped alt-contig
     tuples, which reads as depressed recall on every class at once.
+
+    `--canonical-contigs` is False (off), True (bare: the human set when `--assembly`
+    is GRCh37 or GRCh38) or a value naming the set (`parse_canonical_contigs`).
     """
-    canonical_contigs = (
-        canonical_set_for_assembly(args.assembly) if args.canonical_contigs else None
-    )
-    if args.canonical_contigs and canonical_contigs is None:
+    if args.canonical_contigs is False:
+        return None
+    if args.canonical_contigs is not True:
+        return parse_canonical_contigs(args.canonical_contigs)
+    canonical_contigs = canonical_set_for_assembly(args.assembly)
+    if canonical_contigs is None:
         # Soft-warn rather than hard-fail: the upstream input filter already
         # enforced the canonical-contigs constraint; this script is a defensive
         # complement, and a missing --assembly means the defensive layer is off
         # while the upstream filter applies. Print the warning so the
         # operator sees the asymmetry in the report.
         print(
-            "WARNING: --canonical-contigs (default ON) requested but --assembly was "
-            "not provided. Defensive output-side filter is OFF for this run. The "
-            "upstream input-prep canonical-contigs filter (prepare_benchmark_vcfs.py) "
-            "still applies. Pass --assembly GRCh37 or --assembly GRCh38 to enable "
-            "the defensive layer, or --no-canonical-contigs to silence this warning.",
+            "WARNING: --canonical-contigs (default ON) requested but --assembly is "
+            f"{args.assembly or 'not provided'}, which names no canonical set. "
+            "Defensive output-side filter is OFF for this run. The upstream "
+            "input-prep canonical-contigs filter (prepare_benchmark_vcfs.py) still "
+            "applies. Pass --assembly GRCh37 or --assembly GRCh38, or name the set "
+            "with --canonical-contigs <file or list> (a cache's info.json "
+            "contig_order), to enable the defensive layer, or --no-canonical-contigs "
+            "to silence this warning.",
         )
     return canonical_contigs
 
@@ -3146,6 +4517,10 @@ def run_pool_consequence_class(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    # A coordinate is read whole at any length, where CPython by default refuses to convert
+    # an integer's text of more than 4,300 digits.
+    if hasattr(sys, "set_int_max_str_digits"):
+        sys.set_int_max_str_digits(0)
     args = parse_args()
     require_mode_args(args)
     if args.mode == "by-consequence-class":
@@ -3209,9 +4584,7 @@ def main() -> int:
             missing_rust_pairs.append(perl_file.name)
             continue
 
-        with tempfile.TemporaryDirectory(
-            prefix="compare_vep_tmp_", dir=str(report_dir)
-        ) as tmp:
+        with _key_file_directory(report_dir, discordant_out, discordant_path) as tmp:
             tmp_dir = Path(tmp)
 
             # Raw comparison keys
@@ -3255,6 +4628,16 @@ def main() -> int:
                 scope_features=scope_features,
                 record_scope=record_scope,
             )
+            if record_scope is not None:
+                record_scope.record_reference_named(
+                    perl_file.name,
+                    reference_named_locations(
+                        perl_file,
+                        rust_file,
+                        record_scope.absent_locations(perl_file.name),
+                        canonical_contigs,
+                    ),
+                )
 
             # Context-collapsed comparison keys (no discordant TSV, no bucket tracking)
             perl_collapsed_sorted = (
@@ -3358,6 +4741,8 @@ def main() -> int:
         scope_features=scope_features,
         reference_release=args.reference_release,
         record_scope=record_scope,
+        outputs=(perl_dir, rust_dir),
+        input_records=lambda name: input_vcf_for(perl_dir / name, input_dir, input_vcf_path),
     )
     adj_perl = perl_total - excl_perl
     adj_rust = rust_total - excl_rust
@@ -3399,7 +4784,7 @@ def main() -> int:
     # and defines every class it applied.
     if args.reference_release != "115.2":
         aggregate["adjusted"]["reference_release"] = args.reference_release
-        aggregate["adjusted"]["divergence_classes"] = divergence_class_definitions(
+        aggregate["adjusted"]["divergence_classes"] = report_class_definitions(
             args.reference_release
         )
 
@@ -3414,8 +4799,7 @@ def main() -> int:
         "aggregate": aggregate,
         "files": per_file_results,
         "assembly": args.assembly,
-        "canonical_contigs_filter_active": args.canonical_contigs
-        and canonical_contigs is not None,
+        "canonical_contigs_filter_active": canonical_contigs is not None,
         "canonical_contigs_set": (
             sorted(canonical_contigs) if canonical_contigs is not None else None
         ),

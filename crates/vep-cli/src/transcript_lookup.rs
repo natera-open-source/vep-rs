@@ -344,7 +344,7 @@ impl TranscriptLookup {
                         && transcript.gene_stable_id == entry.gene_stable_id
                 })
             })
-            .cloned()
+            .map(|transcript| Transcript::clone(transcript))
             .ok_or_else(|| {
                 format!(
                     "transcript {} is indexed on chr{chr} but its materialized index lacks it",

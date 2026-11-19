@@ -1,0 +1,35 @@
+entry = "plugin_contig_mitochondrial_spelling"
+page = "docs/divergences/plugin-contig-mitochondrial-spelling.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 334 of 487 MT records · 80 flag sets, 10 corpora"
+notes = "ClinPred against a one-row table whose contig is named chrM; the record is spelt MT, as the cache and ClinVar spell it."
+prepare = [
+  "printf '#chr\\tStart\\tRef\\tAlt\\tClinPred_Score\\nchrM\\t3460\\tG\\tA\\t0.5\\n' | bgzip > \"$STAGE/clinpred_chrM.synthetic.tsv.gz\"",
+  "tabix -s 1 -b 2 -e 2 \"$STAGE/clinpred_chrM.synthetic.tsv.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+MT	3460	rs199476118	G	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-gnomadmt/json_cache"
+chromosomes = ["MT"]
+
+[run]
+flags = ["--plugin", "ClinPred,file={stage}/clinpred_chrM.synthetic.tsv.gz"]
+
+[compare]
+kind = "field"
+field = "ClinPred"
+where = { record = "rs199476118", feature = "ENST00000361390" }
+
+[expected]
+ensembl_vep = ["-"]
+vep_rs = ["0.5"]

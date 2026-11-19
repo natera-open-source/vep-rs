@@ -1,6 +1,6 @@
 # Defect M: `*` as the only ALT is annotated from `SVTYPE`
 
-**The defect in one sentence.** The ALT `*` names no allele of the record it stands in, yet when INFO carries a true `SVTYPE` Ensembl VEP annotates the record from INFO alone.
+**The defect in one sentence.** The ALT `*` names no allele of the record it stands in, yet when INFO carries a true `SVTYPE` Ensembl VEP annotates the record from INFO alone. vep-rs annotates nothing from INFO when the ALT column names no allele: no row in the default and tab formats.
 
 The `*` marks a base covered by an upstream deletion. Ensembl VEP routes the line to its structural path, where `*` falls outside the VCF 4.4 forms, so `SVTYPE` names the type. The record becomes a deletion over `END`, or a breakpoint at POS + 1 written under two alleles.
 

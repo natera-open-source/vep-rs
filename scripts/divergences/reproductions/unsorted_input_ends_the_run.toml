@@ -1,0 +1,32 @@
+entry = "unsorted_input_ends_the_run"
+page = "docs/divergences/unsorted-input.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under Ensembl VEP's default input format, which states no order of lines (Ensembl VEP documentation, \"Data formats\", Default Ensembl VEP input); not seen in the measured datasets; classed by its most reachable shape, a default-format file in descending order: a VCF in that order breaks \"Positions are sorted numerically, in increasing order, within each reference sequence CHROM\" (VCF 4.2 specification, section 1.4.1 \"Fixed fields\")"
+notes = "The prepare step writes the 237 single-base chromosome 21 records of the GRCh38-statistics corpus in Ensembl VEP's default format, last record first, so 108 lines lie more than 100 bases before the line above them. Ensembl VEP counts such lines within one buffer fill and ends the run past 100 of them (InputBuffer.pm:216-220, 240-250, 258-263), writing no row; vep-rs writes the 3,136 rows Ensembl VEP writes for the same file under `--no_check_variants_order` or `--buffer_size 1`."
+
+prepare = [
+  '''grep -v '^#' "$CORPUS/variants.vcf" | awk -F'\t' -v OFS='\t' '$1 == "21" && length($4) == 1 && $5 ~ /^[ACGT]$/ { print $1, $2, $2, $4 "/" $5, "+" }' | tac > "$STAGE/descending.txt"''',
+]
+
+[input]
+format = "ensembl"
+path = "{stage}/descending.txt"
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-statistics/json_cache"
+chromosomes = ["21"]
+
+[run]
+flags = []
+
+[compare]
+kind = "count"
+
+[expected]
+ensembl_vep_exit = 25
+ensembl_vep = "0"
+vep_rs = "3136"

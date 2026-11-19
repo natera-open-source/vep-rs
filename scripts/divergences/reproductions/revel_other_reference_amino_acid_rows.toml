@@ -1,0 +1,43 @@
+entry = "revel_other_reference_amino_acid_rows"
+page = "docs/divergences/revel-other-reference-amino-acid-rows.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 17.4 per million · 6 flag sets, 0 corpora"
+
+# The six rows of the published REVEL table at GRCh38 21:43059244, which the corpus's table slice does not hold:
+# the three that list ENST00000430013 name serine as their reference amino acid, the three that list the gene's
+# complete transcripts name leucine.
+prepare = [
+  '''printf '%b' '#chr\thg19_pos\tgrch38_pos\tref\talt\taaref\taaalt\tREVEL\tEnsembl_transcriptid\n21\t44479354\t43059244\tA\tC\tL\tR\t0.395\tENST00000398158;ENST00000398165;ENST00000359624;ENST00000352178;ENST00000398168;ENST00000539520;ENST00000544202\n21\t44479354\t43059244\tA\tC\tS\tA\t0.032\tENST00000430013\n21\t44479354\t43059244\tA\tG\tL\tP\t0.419\tENST00000398158;ENST00000398165;ENST00000359624;ENST00000352178;ENST00000398168;ENST00000539520;ENST00000544202\n21\t44479354\t43059244\tA\tG\tS\tP\t0.033\tENST00000430013\n21\t44479354\t43059244\tA\tT\tL\tH\t0.361\tENST00000398158;ENST00000398165;ENST00000359624;ENST00000352178;ENST00000398168;ENST00000539520;ENST00000544202\n21\t44479354\t43059244\tA\tT\tS\tT\t0.044\tENST00000430013\n' | bgzip -c > "$STAGE/revel_rows.tsv.gz" && tabix -s 1 -b 3 -e 3 "$STAGE/revel_rows.tsv.gz"''',
+]
+
+# ClinVar's record 471355, a one-base substitution that the transcript model of ENST00000430013 reads as L/P.
+[input]
+format = "vcf"
+text = """
+21	43059244	471355	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-revel/json_cache"
+
+[run]
+flags = ["--plugin", "REVEL,file={stage}/revel_rows.tsv.gz"]
+
+# The row on ENST00000430013: Ensembl VEP writes the score of the table row that lists the transcript, a row of
+# serine to proline; vep-rs writes no score, since no table row that lists the transcript scores leucine to proline.
+[compare]
+kind = "rows"
+where = { record = "471355", feature = "ENST00000430013" }
+columns = ["Location", "Allele", "Feature", "Amino_acids", "REVEL"]
+
+[expected]
+ensembl_vep = [
+  "21:43059244 | G | ENST00000430013 | L/P | 0.033",
+]
+vep_rs = [
+  "21:43059244 | G | ENST00000430013 | L/P | -",
+]

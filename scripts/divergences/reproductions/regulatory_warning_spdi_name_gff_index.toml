@@ -1,0 +1,29 @@
+entry = "regulatory_warning_spdi_name_gff_index"
+page = "docs/divergences/regulatory-rows.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 4 of 392 flag sets · 25 flag sets, 4 corpora"
+notes = "The first of the entry's three differences: a --regulatory run on a cache without regulatory data. The Drosophila melanogaster cache carries no regulatory build, so the flag switches nothing on; Ensembl VEP writes no message and vep-rs one warnings-file line."
+
+[input]
+format = "vcf"
+text = """
+4	129554	chr4_snv_4_129554_C_G	C	G	.	.	.
+"""
+
+[cache]
+species = "drosophila_melanogaster"
+assembly = "BDGP6.54"
+json_cache = "tests/golden/116/BDGP6.54-fly/json_cache"
+
+[run]
+flags = ["--regulatory"]
+
+[compare]
+kind = "warnings"
+pattern = "regulatory"
+
+[expected]
+ensembl_vep = []
+vep_rs = ["WARNING: --regulatory: this cache holds no regulatory data; no RegulatoryFeature or MotifFeature row is written"]

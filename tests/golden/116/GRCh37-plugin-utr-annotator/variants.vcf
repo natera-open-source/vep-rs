@@ -1,0 +1,27 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	10985063	ustop_lost_snv_rev_ENST00000298232_306	T	G	.	.	.
+21	10985091	ustop_gained_snv_rev_ENST00000298232_278	G	T	.	.	.
+21	10985093	uframeshift_ins_rev_ENST00000298232_276	A	AG	.	.	.
+21	10985093	uframeshift_del_rev_ENST00000298232_275	AT	A	.	.	.
+21	10985097	uaug_lost_snv_rev_ENST00000298232_272	A	G	.	.	.
+21	14982504	uaug_gained_snv_fwd_ENST00000299443_6	C	T	.	.	.
+21	14982509	uaug_gained_ins_junction_fwd_ENST00000299443_12	T	TG	.	.	.
+21	15052362	uframeshift_oorf_ins_rev_ENST00000596508_1097	C	CA	.	.	.
+21	15052365	uaug_lost_oorf_snv_rev_ENST00000596508_1094	C	T	.	.	.
+21	15053128	ustop_gained_mnv_rev_ENST00000596508_330	GC	CA	.	.	.
+21	15053450	uaug_gained_ins_junction_rev_ENST00000596508_9	A	AC	.	.	.
+21	15053450	uaug_gained_snv_rev_ENST00000596508_9	A	C	.	.	.
+21	18814016	uaug_lost_snv_fwd_ENST00000440664_129	T	C	.	.	.
+21	18814018	ustop_gained_snv_fwd_ENST00000440664_131	G	T	.	.	.
+21	18814018	uframeshift_del_fwd_ENST00000440664_132	GA	G	.	.	.
+21	18814019	uframeshift_ins_fwd_ENST00000440664_133	A	AC	.	.	.
+21	18814027	ustop_gained_mnv_fwd_ENST00000440664_140	AC	TG	.	.	.
+21	18814065	ustop_lost_snv_fwd_ENST00000440664_178	A	C	.	.	.
+21	18981462	whole_utr_exon_del_rev_ENST00000339775_146	TTTTTTTCC	T	.	.	.
+21	22582859	whole_utr_exon_del_fwd_ENST00000535285_132	GAGTTATTTGAAGAGTACCACG	G	.	.	.
+21	33651329	ustop_lost_snv_ev_rev_ENST00000290130_51	C	G	.	.	.
+21	33651348	ustop_gained_snv_ev_rev_ENST00000290130_32	C	T	.	.	.
+21	33651353	uframeshift_del_ev_rev_ENST00000290130_26	CG	C	.	.	.
+21	33651357	uaug_lost_snv_ev_rev_ENST00000290130_23	A	G	.	.	.
+21	34398438	ustop_gained_mnv_ev_fwd_ENST00000333337_195	CT	TG	.	.	.

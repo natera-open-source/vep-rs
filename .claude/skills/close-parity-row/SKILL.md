@@ -8,7 +8,12 @@ description: Close a row of tests/parity/matrix.tsv, moving it from `open` to `l
 A row lands in the pull request that brings its behaviour to its `target`, with the tests the target
 requires. [tests/parity/README.md](../../../tests/parity/README.md) defines the columns and the tests
 each target needs; read it before step 1. Branching, signing and the pull request follow
-[AGENTS.md](../../../AGENTS.md).
+[AGENTS.md](../../../AGENTS.md). The open rows (`awk -F'\t' '$4=="open"' tests/parity/matrix.tsv`)
+may be none but the `excluded` ones, which never land: rows for Ensembl VEP items come from the
+maintainers, who open one when an Ensembl VEP release adds a parameter, plugin or cache field, and a
+contributor who finds such an item without a row proposes it on an issue with the parity-row form
+rather than adding the row in the pull request that lands it; a flag vep-rs adds beyond Ensembl VEP's
+gets its row in the change that declares it.
 
 ## 1. Read the row
 

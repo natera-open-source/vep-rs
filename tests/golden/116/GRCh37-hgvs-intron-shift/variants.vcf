@@ -1,0 +1,5 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	47613087	exon_first_base_del	AC	A	.	.	.
+21	47613088	intron_del_shifted_into_cds	CC	C	.	.	.
+21	47613089	intron_ins_shifted_into_cds	C	CC	.	.	.

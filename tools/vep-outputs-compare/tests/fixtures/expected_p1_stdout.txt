@@ -1,0 +1,3 @@
+wrote pooled per-class F1: {{SCRATCH}}/pooled.csv (34 rows; adj_f1 filled for vep-rs)
+vep-rs: floor 0.000000 on 5_prime_UTR_variant; 13 of 17 terms at or above 2 pooled VEP tuples, 4 below
+fastvep: floor 0.363636 on intron_variant; 4 of 17 terms at or above 2 pooled VEP tuples, 13 below

@@ -1,6 +1,6 @@
 # Defect J: the missing ALT value is annotated as an allele
 
-**The defect in one sentence.** A record whose ALT column is the missing value `.` has no alternate allele, yet when INFO carries `SVTYPE` Ensembl VEP annotates it from INFO alone.
+**The defect in one sentence.** A record whose ALT column is the missing value `.` has no alternate allele, yet when INFO carries `SVTYPE` Ensembl VEP annotates it from INFO alone. vep-rs writes no row and no warning for the record.
 
 Ensembl VEP routes the line to its structural path, reads the `.` as a type and annotates the record: a `chromosome_breakpoint` at POS + 1 for `SVTYPE=BND`, a deletion over `END` for `SVTYPE=DEL`. A `.` listed after another ALT (`C G,.`) is read on the sequence path as an allele of its own, written as a row whose Allele is `.` with the next `ALLELE_NUM`.
 

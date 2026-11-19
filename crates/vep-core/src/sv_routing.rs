@@ -8,7 +8,7 @@
 //! when REF and the ALTs together are not a run of `ACGT` and INFO/SVTYPE is true or an
 //! ALT is written in a structural form. Lines 469-481 read the type from the ALTs joined
 //! by `/`, INFO/SVTYPE standing in for a string outside the VCF 4.4 forms, through
-//! `get_SO_term` (`Parser.pm` lines 663-727), whose abbreviation is looked up in
+//! `get_SO_term` (`Parser.pm` lines 663-728), whose abbreviation is looked up in
 //! `%SO_TERMS` (ensembl-variation `Utils/Config.pm`); a type with no entry is dropped
 //! as unsupported. [`perl_split`] reads any comma-separated value as Perl's `split`
 //! returns it, for the ALT list here and the `--plugin` argument ([`split_plugin_arg`]).
@@ -45,6 +45,15 @@ pub fn split_plugin_arg(arg: &str) -> (&str, Vec<String>) {
 
 /// The ALT column's fields with their written positions, read as Perl reads the list.
 pub fn written_alts(alt_field: &str) -> Vec<(usize, &str)> {
+    if !alt_field.contains(',') {
+        // One field, or none for an empty column: what `perl_split` reads from a
+        // column without a separator.
+        return if alt_field.is_empty() {
+            Vec::new()
+        } else {
+            vec![(0, alt_field)]
+        };
+    }
     perl_split(alt_field, &[',']).enumerate().collect()
 }
 
@@ -567,6 +576,9 @@ mod tests {
         assert_eq!(written_alts("G,,T,,"), [(0, "G"), (1, ""), (2, "T")]);
         assert_eq!(written_alts(","), []);
         assert_eq!(written_alts(""), []);
+        assert_eq!(written_alts("G"), [(0, "G")]);
+        assert_eq!(written_alts("<DEL>"), [(0, "<DEL>")]);
+        assert_eq!(written_alts("*"), [(0, "*")]);
         assert_eq!(perl_split("DEL/", &['/', ',']).collect::<Vec<_>>(), ["DEL"]);
         assert_eq!(sv_type_abbreviation("DEL/", None), "DEL");
         assert_eq!(term("<DEL>/", Some("DEL")), Some("deletion"));

@@ -1,0 +1,48 @@
+entry = "regulatory_identifier_numberified"
+page = "docs/divergences/regulatory-identifier-numberified.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the GFF3 specification, \"Description of the Format\", column 9: an \"ID\" is text unique within the scope of its file and a lowercase attribute is free to the application, with no rule against a name made of digits; not seen in the measured datasets"
+notes = "Four --regulatory_gff features over one deletion, three identified by text Perl's number test admits (12345, 007, 1e3) and the corpus's own ENSR21_536SRH as the control: Ensembl VEP's JSON writer numifies every value under a key its exempt list does not name (JSON.pm:288, :114-121), so the three identifiers are written as the numbers 12345, 7 and 1000; vep-rs writes every feature identifier as a string. The text formats agree."
+# The corpus's enhancer and CTCF binding site over the record, the enhancer re-identified with digits, plus two features
+# over the same bases identified by a leading-zero and an exponent spelling.
+prepare = [
+  "printf '##gff-version 3\\n21\\tEnsembl\\tenhancer\\t5013566\\t5014331\\t.\\t.\\t.\\tID=12345;color=#faca00\\n21\\tEnsembl\\tpromoter_flanking_region\\t5014300\\t5014400\\t.\\t.\\t.\\tID=007;color=#ff0000\\n21\\tEnsembl\\topen_chromatin_region\\t5014310\\t5014350\\t.\\t.\\t.\\tID=1e3;color=#00ff00\\n21\\tEnsembl\\tCTCF_binding_site\\t5014322\\t5014343\\t.\\t-\\t.\\tID=ENSR21_536SRH;color=#40e0d0\\n' | bgzip > \"$STAGE/numid.gff3.gz\"",
+  "tabix -p gff \"$STAGE/numid.gff3.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	5014321	del_covers_ctcf	GTGGGCCTGTGGGGGGCGCTTACC	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-regulatory-gff/json_cache"
+fasta = "tests/golden/116/GRCh38-regulatory-gff/reference.fa.gz"
+
+[run]
+flags = ["--regulatory_gff", "file={stage}/numid.gff3.gz"]
+
+# Each regulatory entry whole, its keys sorted, so the identifier's JSON type shows in the quoting.
+[compare]
+kind = "json"
+where = { record = "del_covers_ctcf" }
+path = "regulatory_feature_consequences[]"
+
+[expected]
+ensembl_vep = [
+  '{"biotype":"CTCF_binding_site","consequence_terms":["regulatory_region_ablation","regulatory_region_variant"],"impact":"MODIFIER","regulatory_feature_id":"ENSR21_536SRH","variant_allele":"-"}',
+  '{"biotype":"enhancer","consequence_terms":["regulatory_region_variant"],"impact":"MODIFIER","regulatory_feature_id":12345,"variant_allele":"-"}',
+  '{"biotype":"open_chromatin_region","consequence_terms":["regulatory_region_variant"],"impact":"MODIFIER","regulatory_feature_id":1000,"variant_allele":"-"}',
+  '{"biotype":"promoter_flanking_region","consequence_terms":["regulatory_region_variant"],"impact":"MODIFIER","regulatory_feature_id":7,"variant_allele":"-"}',
+]
+vep_rs = [
+  '{"biotype":"CTCF_binding_site","consequence_terms":["regulatory_region_ablation","regulatory_region_variant"],"impact":"MODIFIER","regulatory_feature_id":"ENSR21_536SRH","variant_allele":"-"}',
+  '{"biotype":"enhancer","consequence_terms":["regulatory_region_variant"],"impact":"MODIFIER","regulatory_feature_id":"12345","variant_allele":"-"}',
+  '{"biotype":"open_chromatin_region","consequence_terms":["regulatory_region_variant"],"impact":"MODIFIER","regulatory_feature_id":"1e3","variant_allele":"-"}',
+  '{"biotype":"promoter_flanking_region","consequence_terms":["regulatory_region_variant"],"impact":"MODIFIER","regulatory_feature_id":"007","variant_allele":"-"}',
+]

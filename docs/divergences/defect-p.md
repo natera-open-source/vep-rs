@@ -1,6 +1,6 @@
 # Defect P: the tests after the chromosome-aware overlap compare chromosome names the overlap did not resolve
 
-**The defect in one sentence.** Depending on input order or on how the mate's chromosome is spelled, Ensembl VEP drops a bracket breakend's own-end rows, when a transcript of the mate's chromosome reaches it first, or its mate rows.
+**The defect in one sentence.** Depending on input order or on how the mate's chromosome is spelled, Ensembl VEP drops a bracket breakend's own-end rows, when a transcript of the mate's chromosome reaches it first, or its mate rows. vep-rs writes both sets of rows, whatever the order of the input and the spelling of the mate's chromosome.
 
 A bracket breakend names its mate inside the brackets of its allele, and Ensembl VEP writes its rows under two alleles, the own end and the mate. After the chromosome-aware overlap has handed a record to a transcript, two further tests compare chromosome names the overlap did not resolve the same way. A record's slice is the named chromosome it is placed on, and the slice test names a record that arrives without a slice after the first transcript that reaches it. The mate-allele test, which decides whether a row carries the mate allele, compares the mate's chromosome as written, and a mate spelled `Chr21` for `21` fails it.
 

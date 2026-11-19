@@ -1,0 +1,36 @@
+entry = "custom_exact_source_allele_record_accumulation"
+page = "docs/custom-annotation.md#1-an-exact-custom-record-repeated-once-per-row-beside-a-whole-variant-record-of-the-same-name"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification, sections 1.4.1 \"Fixed fields\" and 3 \"INFO keys used for structural variants\" (a symbolic deletion record beside a substitution record in one source), and the exact type of --custom (Ensembl VEP documentation, \"Custom annotations\", Options, type); not seen in the measured datasets"
+notes = "The structural record svrec matches by span and belongs to the whole variant; the substitution record seqrec matches the allele G. The variant has nine transcript rows and every row prints the same list; the compare reads the first transcript's. mix_FILTER and mix_TAG repeat with it."
+# An exact VCF source holding a deletion record spanning the variant and a substitution record equal to it.
+prepare = [
+  "printf '##fileformat=VCFv4.2\\n##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">\\n##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the variant\">\\n##INFO=<ID=TAG,Number=1,Type=String,Description=\"Record tag\">\\n##contig=<ID=21>\\n#CHROM\\tPOS\\tID\\tREF\\tALT\\tQUAL\\tFILTER\\tINFO\\n21\\t10542414\\tsvrec\\tN\\t<DEL>\\t.\\tPASS\\tSVTYPE=DEL;END=10542415;TAG=sv\\n21\\t10542415\\tseqrec\\tA\\tG\\t.\\tPASS\\tTAG=seq\\n' | bgzip > \"$STAGE/mix.vcf.gz\"",
+  "tabix -p vcf \"$STAGE/mix.vcf.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	10542415	.	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+
+[run]
+flags = ["--custom", "file={stage}/mix.vcf.gz,short_name=mix,format=vcf,type=exact,fields=TAG"]
+format = "default"
+
+[compare]
+kind = "field"
+field = "mix"
+where = { record = "21_10542415_A/G", feature = "ENST00000427445" }
+
+[expected]
+ensembl_vep = ["svrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec,seqrec"]
+vep_rs = ["svrec,seqrec"]

@@ -1,0 +1,2 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+rs3001	1:100	A	GENE20	TRANS020	Transcript	missense_variant	-	-	-	-	-	-	IMPACT=MODIFIER

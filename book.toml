@@ -5,7 +5,7 @@
 # them with `mdbook serve`.
 [book]
 title = "vep-rs"
-description = "A fast, memory-efficient reimplementation of the Ensembl Variant Effect Predictor in Rust"
+description = "vep-rs is a fast, memory-efficient Rust reimplementation of Ensembl VEP, the Variant Effect Predictor, for VCF variant annotation."
 authors = ["Matthew Porter", "Robert Borkowski"]
 language = "en"
 src = "docs"
@@ -53,6 +53,9 @@ heading-split-level = 3
 "changelog.md" = { enable = false }
 
 [output.html.redirect]
+# Divergence index: the defects are listed by category, and the table that
+# names them by letter is the source table.
+"/intended-divergences.html#the-defects" = "intended-divergences.html#where-each-defect-is-in-ensembl-veps-source"
 # Divergence catalogue: one page per defect.
 "/intended-divergences.html#defect-a-a-later-differing-region-erases-the-splice-region-term" = "divergences/defect-a.html#defect-a-a-later-differing-region-erases-the-splice-region-term"
 "/intended-divergences.html#1-splice-region-term-lost-to-an-assignment-order" = "divergences/defect-a.html#1-splice-region-term-lost-to-an-assignment-order"
@@ -62,6 +65,7 @@ heading-split-level = 3
 "/intended-divergences.html#4-class-3-on-the-structural-variant-sets" = "divergences/defect-b.html#4-class-3-on-the-structural-variant-sets"
 "/intended-divergences.html#defect-c-restated-for-release-116-a-record-marked-skipped-is-dropped-before-annotation" = "divergences/defect-c.html#defect-c-a-record-marked-skipped-is-dropped-before-annotation"
 "/divergences/defect-c.html#defect-c-restated-for-release-116-a-record-marked-skipped-is-dropped-before-annotation" = "defect-c.html#defect-c-a-record-marked-skipped-is-dropped-before-annotation"
+"/divergences/tabix-row-with-an-end-below-its-start.html#1-six-deletion-rows-of-a---custom-vcf-source-four-with-a-malformed-end" = "tabix-row-with-an-end-below-its-start.html#1-six-deletion-rows-of-a---custom-vcf-source-four-with-an-end-that-is-no-end"
 "/intended-divergences.html#5-a-record-ensembl-vep-drops-before-annotation" = "divergences/defect-c.html#5-a-record-ensembl-vep-drops-before-annotation"
 "/intended-divergences.html#defect-p-the-tests-after-the-chromosome-aware-overlap-compare-chromosome-names-the-overlap-did-not-resolve" = "divergences/defect-p.html#defect-p-the-tests-after-the-chromosome-aware-overlap-compare-chromosome-names-the-overlap-did-not-resolve"
 "/intended-divergences.html#23-a-bracket-breakends-own-end-rows-lost-to-the-first-transcript-that-reaches-it" = "divergences/defect-p.html#23-a-bracket-breakends-own-end-rows-lost-to-the-first-transcript-that-reaches-it"
@@ -251,7 +255,7 @@ heading-split-level = 3
 "/index.html#cpu-floor" = "getting-started/installation.html#cpu-floor"
 "/index.html#container-image" = "getting-started/installation.html#container-image"
 "/index.html#quick-start" = "getting-started/quick-start.html"
-"/index.html#1-try-the-bundled-corpus" = "getting-started/quick-start.html#1-try-the-bundled-corpus"
+"/index.html#1-try-the-bundled-corpus" = "getting-started/quick-start.html#1-try-the-bundled-example"
 "/index.html#2-get-a-transcript-cache" = "getting-started/quick-start.html#2-get-a-transcript-cache"
 "/index.html#3-annotate" = "getting-started/quick-start.html#3-annotate"
 "/index.html#usage" = "getting-started/quick-start.html#usage"
@@ -259,6 +263,8 @@ heading-split-level = 3
 "/index.html#citing-vep-rs" = "project/citing.html"
 "/index.html#acknowledgments" = "project/citing.html#acknowledgments"
 "/index.html#license" = "project/citing.html#license"
+"/index.html#why-vep-rs-instead-of-ensembl-vep-or-fastvep" = "benchmarks/current-release.html#why-vep-rs-instead-of-ensembl-vep-or-fastvep"
+"/index.html#what-drop-in-means" = "benchmarks/current-release.html#what-drop-in-means"
 # CLI reference: one page per option group.
 "/cli-reference.html#input" = "cli/input-output.html#input"
 "/cli-reference.html#output" = "cli/input-output.html#output"
@@ -293,10 +299,13 @@ heading-split-level = 3
 "/output-formats.html#parquet-format" = "output/parquet.html"
 "/output-formats.html#directory-layout" = "output/parquet.html#directory-layout"
 "/output-formats.html#schema-1" = "output/parquet.html#schema"
-"/output-formats.html#row-shape---parquet_shape" = "output/parquet.html#row-shape---parquet_shape"
+"/output-formats.html#row-shape---parquet_shape" = "output/parquet.html#removed-flags-and-050-output"
 "/output-formats.html#writer-options" = "output/parquet.html#writer-options"
 "/output-formats.html#round-trip-to---tab" = "output/parquet.html#round-trip-to---tab"
-"/output-formats.html#debug-flags" = "output/parquet.html#debug-flags"
+"/output-formats.html#debug-flags" = "output/parquet.html#removed-flags-and-050-output"
+"/output/parquet.html#requirements" = "parquet.html#reading-the-output"
+"/output/parquet.html#row-shape---parquet_shape" = "parquet.html#removed-flags-and-050-output"
+"/output/parquet.html#debug-flags" = "parquet.html#removed-flags-and-050-output"
 # Plugin guide: per-plugin pages, the data-files page and the developer guide.
 "/plugins.html#annotation-store-plugins" = "plugins/annotation-store.html"
 "/plugins.html#consequence-filter-loftee" = "plugins/loftee.html"
@@ -307,13 +316,13 @@ heading-split-level = 3
 "/plugins.html#cadd" = "plugins/annotation-store.html#cadd"
 "/plugins.html#revel" = "plugins/annotation-store.html#revel"
 "/plugins.html#spliceai" = "plugins/spliceai.html#spliceai"
-"/plugins.html#dbnsfp" = "plugins.html#not-supported-dbnsfp"
 "/plugins.html#dbscsnv" = "plugins/annotation-store.html#dbscsnv"
 "/plugins.html#gnomadc" = "plugins/annotation-store.html#gnomadc"
 "/plugins.html#preparing-data-files-with-scriptsdatasetup_plugin_datash" = "plugins/data-files.html#the-setup_plugin_datash-script"
 "/plugins.html#architecture" = "developers/writing-a-plugin.html#architecture"
 "/plugins.html#built-in-vs-dynamic-plugins" = "developers/writing-a-plugin.html#built-in-vs-dynamic-plugins"
-"/plugins.html#the-c-abi-version-1" = "developers/writing-a-plugin.html#the-c-abi-version-1"
+"/plugins.html#the-c-abi-version-1" = "developers/writing-a-plugin.html#the-c-abi-version-2"
+"/developers/writing-a-plugin.html#the-c-abi-version-1" = "writing-a-plugin.html#the-c-abi-version-2"
 "/plugins.html#what-run-receives" = "developers/writing-a-plugin.html#what-run-receives"
 "/plugins.html#what-run-returns-and-where-it-lands" = "developers/writing-a-plugin.html#what-run-returns-and-where-it-lands"
 "/plugins.html#worked-example" = "developers/writing-a-plugin.html#worked-example"

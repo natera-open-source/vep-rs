@@ -8,16 +8,37 @@ homepage.workspace = true
 rust-version.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Plugin trait definition, dylib loader, and registry for VEP"
+description = "Plugin interface, dynamic-library loader and registry of vep-rs, a Rust reimplementation of Ensembl VEP"
 
 [dependencies]
 vep-core = { workspace = true }
 libloading = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
-# The example is a plugin, so it is built as the dynamic library the loader
-# opens; `tests/echo_roundtrip.rs` loads it from the profile's `examples/` dir.
+[features]
+# Makes `examples/echo_plugin.rs` report ABI version 1: the fixture the loader's
+# refusal test compiles with `rustc --cfg 'feature="abi-one"'`.
+abi-one = []
+# Drops `vep_plugin_feature_types` from `examples/echo_all_rows_plugin.rs`: the
+# fixture the loader's default-kind test compiles with
+# `rustc --cfg 'feature="no-feature-types"'`.
+no-feature-types = []
+# Drops `vep_plugin_free` from `examples/echo_plugin.rs`: the fixture the loader's
+# missing-symbol test compiles with `rustc --cfg 'feature="missing-free"'`.
+missing-free = []
+
+# The examples are plugins, so they are built as the dynamic libraries the loader
+# opens; `tests/echo_roundtrip.rs` loads them from the profile's `examples/` dir.
 [[example]]
 name = "echo_plugin"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "echo_all_rows_plugin"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "faulty_plugin"
 crate-type = ["cdylib"]

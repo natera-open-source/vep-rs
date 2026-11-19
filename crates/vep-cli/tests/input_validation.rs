@@ -235,6 +235,149 @@ fn unknown_chromosome_is_warned_and_skipped_in_every_format() {
     }
 }
 
+/// A bgzip-compressed BED of `records` (tab-separated, zero-based starts) under
+/// `dir` with its tabix index beside it, as `bgzip` and `tabix -p bed` write
+/// them.
+fn indexed_bed(dir: &Path, name: &str, records: &[&str]) -> PathBuf {
+    use noodles::csi::binning_index::index::header;
+    indexed_file(
+        dir,
+        name,
+        header::Builder::bed().build(),
+        (1, 2, 1),
+        records,
+    )
+}
+
+/// A bgzip-compressed GFF3 of `records` under `dir` with its tabix index
+/// beside it, as `bgzip` and `tabix -p gff` write them.
+fn indexed_gff(dir: &Path, name: &str, records: &[&str]) -> PathBuf {
+    use noodles::csi::binning_index::index::header;
+    indexed_file(
+        dir,
+        name,
+        header::Builder::gff().build(),
+        (3, 4, 0),
+        records,
+    )
+}
+
+/// Writes `records` bgzip-compressed with a tabix index describing `header`;
+/// `columns` names the zero-based start and end columns and the offset that
+/// makes the start one-based.
+fn indexed_file(
+    dir: &Path,
+    name: &str,
+    header: noodles::csi::binning_index::index::Header,
+    columns: (usize, usize, usize),
+    records: &[&str],
+) -> PathBuf {
+    use noodles::core::Position;
+    use noodles::csi::binning_index::index::reference_sequence::bin::Chunk;
+    use noodles::{bgzf, tabix};
+    use std::io::Write;
+
+    let (start_column, end_column, start_offset) = columns;
+    let path = dir.join(name);
+    let mut writer = bgzf::io::Writer::new(std::fs::File::create(&path).unwrap());
+    let mut indexer = tabix::index::Indexer::default();
+    indexer.set_header(header);
+    for record in records {
+        let start = writer.virtual_position();
+        writer.write_all(record.as_bytes()).unwrap();
+        writer.write_all(b"\n").unwrap();
+        let end = writer.virtual_position();
+        let fields: Vec<&str> = record.split('\t').collect();
+        let position = |column: &str, offset: usize| {
+            Position::try_from(column.parse::<usize>().unwrap() + offset).unwrap()
+        };
+        indexer
+            .add_record(
+                fields[0],
+                position(fields[start_column], start_offset),
+                position(fields[end_column], 0),
+                Chunk::new(start, end),
+            )
+            .unwrap();
+    }
+    writer.finish().unwrap();
+    tabix::fs::write(format!("{}.tbi", path.display()), &indexer.build()).unwrap();
+    path
+}
+
+/// A record on a chromosome the cache lacks is admitted when a `--custom`
+/// source's index lists it: Ensembl VEP tests the chromosome against the union
+/// over every annotation source's valid chromosomes (BaseRunner.pm:451-453), a
+/// tabix source's being its index's sequence names (File.pm:369-372), so the
+/// record passes `_have_chr` (Parser.pm:777), draws no warning and is written
+/// as `intergenic_variant` carrying the source's value; without the source it is
+/// skipped as `unknown_chromosome_is_warned_and_skipped_in_every_format` states.
+#[test]
+fn chromosome_listed_by_a_custom_source_is_annotated_intergenic_with_its_value() {
+    let dir = tempfile::tempdir().unwrap();
+    let bed = indexed_bed(dir.path(), "zregions.bed.gz", &["Z\t900\t1100\tzregion"]);
+    let custom = format!(
+        "file={},short_name=regions,format=bed,type=overlap",
+        bed.display()
+    );
+    let records = format!("{SNV_OK}\n{UNKNOWN_CHR}\n");
+    let (output, written, warnings) =
+        run_vcf(dir.path(), "listed", &records, &["--custom", &custom]);
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert_eq!(warnings, "", "nothing is skipped");
+    assert!(
+        !dir.path().join("listed.out_warnings.txt").exists(),
+        "no warnings file is created"
+    );
+    assert!(written.contains("snv_ok"), "{written}");
+    assert_eq!(
+        rows_of(&written, "unknown_chr"),
+        ["Z:1000\tG\t-\t-\t-\tintergenic_variant\t-\t-\t-\t-\t-\t-\tIMPACT=MODIFIER;regions=zregion"],
+        "{written}"
+    );
+}
+
+/// The files of `--regulatory_gff` are annotation sources too
+/// (AnnotationSourceAdaptor.pm:94-106; `File/RegFeat.pm` inherits
+/// File.pm:369-372), so a record on a chromosome the cache lacks but a
+/// regulatory file lists is admitted with no warning and gains the file's
+/// feature rows.
+#[test]
+fn chromosome_listed_by_a_regulatory_gff_file_is_annotated_with_its_features() {
+    let dir = tempfile::tempdir().unwrap();
+    let gff = indexed_gff(
+        dir.path(),
+        "z_features.gff3.gz",
+        &["Z\tEnsembl\tenhancer\t900\t1100\t.\t.\t.\tID=ENSR_Z_ENHANCER"],
+    );
+    let value = format!("file={}", gff.display());
+    let records = format!("{SNV_OK}\n{UNKNOWN_CHR}\n");
+    let (output, written, warnings) = run_vcf(
+        dir.path(),
+        "regulatory",
+        &records,
+        &["--regulatory", "--regulatory_gff", &value],
+    );
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert!(
+        !warnings.contains("skipped"),
+        "nothing is skipped:\n{warnings}"
+    );
+    assert!(written.contains("snv_ok"), "{written}");
+    let kept = rows_of(&written, "unknown_chr");
+    assert!(
+        !kept.is_empty() && kept.iter().all(|row| row.starts_with("Z:1000\t")),
+        "{written}"
+    );
+    assert!(
+        kept.iter().any(|row| {
+            row.split('\t').nth(5) == Some("regulatory_region_variant")
+                && row.ends_with("IMPACT=MODIFIER;BIOTYPE=enhancer")
+        }),
+        "{written}"
+    );
+}
+
 /// The chromosomes a cache holds are its subdirectories not starting with a dot
 /// (CacheDir.pm:431), transcripts or none: a record on a chromosome whose
 /// directory holds no transcript shard is written as `intergenic_variant`, as

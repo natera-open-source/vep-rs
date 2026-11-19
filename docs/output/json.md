@@ -1,10 +1,12 @@
 # JSON format
 
-This page describes the JSON output, one object per input record, and the keys of each object inside it. Selected with `--json` or `--output_format json`. The output is JSON Lines; a multi-allelic record is one object whose consequence arrays carry every allele. `--json` implies `--no_escape`.
+The JSON output (`--json` or `--output_format json`) is JSON Lines, one object per input record. Look up each key of an object and its type here to parse it.
+
+A multi-allelic record is one object whose consequence arrays carry every allele. `--json` implies `--no_escape`.
 
 ## Schema
 
-The two records of the [default format example](vep-and-tab.md#example) as vep-rs writes them, pretty-printed with the keys in reading order. vep-rs itself writes the keys of an object sorted; VEP's key order is Perl hash order and varies from object to object. Ensembl VEP 116.2's committed objects (`expected/json.jsonl.gz`) carry the same keys and values except `vep_rs_version`, which only vep-rs writes. The `input` value is the record's own VCF line; the first one's INFO column is abridged here.
+The two records of the [default format example](vep-and-tab.md#example) as vep-rs writes them, pretty-printed with the keys in reading order. vep-rs itself writes the keys of an object sorted; Ensembl VEP's key order is Perl hash order and varies from object to object. Ensembl VEP 116.2's committed objects (`expected/json.jsonl.gz`) carry the same keys and values except `vep_rs_version`, which only vep-rs writes. The `input` value is the record's own VCF line; the first one's INFO column is abridged here.
 
 ```json
 {
@@ -69,7 +71,7 @@ The two records of the [default format example](vep-and-tab.md#example) as vep-r
     }
   ],
   "most_severe_consequence": "missense_variant",
-  "vep_rs_version": "0.5.0"
+  "vep_rs_version": "0.6.0"
 }
 ```
 
@@ -96,11 +98,11 @@ The two records of the [default format example](vep-and-tab.md#example) as vep-r
     }
   ],
   "most_severe_consequence": "intergenic_variant",
-  "vep_rs_version": "0.5.0"
+  "vep_rs_version": "0.6.0"
 }
 ```
 
-An allele gets an `intergenic_consequences` entry only when it overlaps no transcript, so a record never carries both kinds of entry for the same allele. Under `--regulatory` ([Regulatory and motif features](../regulatory.md)), an allele inside a regulatory feature or a binding motif adds a `regulatory_feature_consequences` or `motif_feature_consequences` entry, and keeps its intergenic entry when it overlaps no transcript.
+An allele gets an `intergenic_consequences` object only when it overlaps no transcript, so a record never carries both kinds of object for the same allele. Under `--regulatory` ([Regulatory and motif features](../regulatory.md)), an allele inside a regulatory feature or a binding motif adds a `regulatory_feature_consequences` or `motif_feature_consequences` object. It keeps its intergenic object when it overlaps no transcript. Both objects carry what Ensembl VEP's carry except for the documented intended divergences. Two of them are the JSON output's own: the empty `cell_type` key Ensembl VEP writes for a `--cell_type` value naming no epigenome ([`cell_type_empty_value_key`](../divergences/cell-type-comma-names.md#an-empty---cell_type-value)) and a digit identifier it writes as a JSON number ([`regulatory_identifier_numberified`](../divergences/regulatory-identifier-numberified.md)).
 
 ### The record object
 
@@ -157,28 +159,85 @@ An allele gets an `intergenic_consequences` entry only when it overlaps no trans
 
 ## Field details
 
-`id` is VEP's `variation_name`: the first `;`-joined ID of a VCF record or the whole ID column of an Ensembl-format line. It is the literal `.` when that is `.`, and the generated `chr_start_alleles` when the ID is absent, empty or `0` (an ID Perl reads as false). An HGVS or SPDI input's `id` is its notation, and a region input's is its line as written, as in VEP. An identifier-list input's (`--format id`) is the identifier as written, whitespace removed, on every record the identifier maps to.
+### `id` and `allele_string`
+
+`id` is Ensembl VEP's `variation_name`: the first `;`-joined ID of a VCF record or the whole ID column of an Ensembl-format line. It is the literal `.` when that is `.`. It is the generated `chr_start_alleles` when the ID is absent, empty or `0` (an ID Perl reads as false). An HGVS or SPDI input's `id` is its notation, and a region input's is its line as written, as in Ensembl VEP. An identifier-list input's (`--format id`) is the identifier as written, whitespace removed, on every record the identifier maps to.
 
 `allele_string` is the record's working allele string: anchor-trimmed for a multi-allelic record, `REF/N[chr:pos[` for a paired breakend while a single breakend `N.` stays bare, and the symbolic ALT for other structural variants. A `*` keeps its written place (`N/*/G`, `A/G/*/C/GA`) and counts as an allele of one base in the trim (`G/C/*` for `AG AC,*`). A `<NON_REF>` beside a bracket ALT stays in a breakpoint's string (`N/N[21:30425700[/<NON_REF>`). A sequence record's alleles are upper case (`A/G` for `a g`), as Ensembl VEP writes them.
 
-Column renames: `Consequence` to `consequence_terms` (an array), `Gene` to `gene_id`, `Allele` to `variant_allele`, `Feature` to `transcript_id`, `SYMBOL` to `gene_symbol`, `OverlapBP` to `bp_overlap`, `OverlapPC` to `percentage_overlap`, `ENSP` to `protein_id` and `RefSeq` to `refseq_transcript_ids`. `Feature_type` is dropped. `YES` flags become `1`.
+### Renamed columns and split positions
 
-Positions split into `*_start` and `*_end`, each written only when defined: `390-?` gives `cds_start` 390 alone and `?-335` gives `cdna_end` 335 alone, as Ensembl VEP 116 writes them. A single position fills both keys. Under `--total_length` the split is Ensembl VEP's own: a single position with its total is the string `"428/1200"` at both ends. A range with its total (`428-430/1200`) prints its start, `428`, at both ends, because the `/1200` tail of the end is not a plain number. SIFT and PolyPhen split into `*_prediction` and `*_score`.
+Column renames:
 
-Numeric-looking values are numbers, except under the identifier keys; a zero fraction prints as an integer (`100`, not `100.0`). `gene_symbol`, `gene_symbol_source`, `biotype`, `variant_class` and the other flag-gated keys appear only under their flags. Absent or `-` values are omitted, except a `-` under `variant_allele`, `given_ref` and `used_ref`, where it is an empty allele. `--fields` does not apply: every key the flags produce is written, as in Ensembl VEP.
+| Column        | Key                             |
+| ------------- | ------------------------------- |
+| `Consequence` | `consequence_terms` (an array)  |
+| `Gene`        | `gene_id`                       |
+| `Allele`      | `variant_allele`                |
+| `Feature`     | `transcript_id`                 |
+| `SYMBOL`      | `gene_symbol`                   |
+| `OverlapBP`   | `bp_overlap`                    |
+| `OverlapPC`   | `percentage_overlap`            |
+| `ENSP`        | `protein_id`                    |
+| `RefSeq`      | `refseq_transcript_ids`         |
 
-`--shift_genomic 1` adds a `location` to every transcript entry (the `Location` column, moved under `--shift_3prime 1`) and to the intergenic entry of an insertion or deletion `--shift_3prime 1` analysed. Plugin fields, built-in or dylib, sit inside each consequence object; none is written at the record level.
+A plugin's `chr` key, the chromosome column of the committed synthetic dbNSFP fixture, becomes `seq_region_name` too. `Feature_type` is dropped.
 
-The keys VEP derives from the variant alone sit on the record object, lower-cased, and on no consequence entry: `variant_class` (`--variant_class`), `ambiguity` (`--ambiguity`), `minimised` (`--minimal`) and `check_ref` (`--dont_skip`). `uploaded_allele`, `allele_num` and `ref_allele` sit on every consequence entry of a sequence variant; a structural variant's entries carry `allele_num` alone, as Ensembl VEP writes them.
+Positions split into `*_start` and `*_end`, each written only when defined: `390-?` gives `cds_start` 390 alone and `?-335` gives `cdna_end` 335 alone, as Ensembl VEP 116 writes them. A single position fills both keys. Under `--total_length` the split is Ensembl VEP's own: a single position with its total is the string `"428/1200"` at both ends. A range with its total (`428-430/1200`) prints its start, `428`, at both ends, because the `/1200` tail of the end is not a plain number.
 
-`assembly_name` is the `--assembly` value, else the assembly the cache's `info.json` names, under `--json_cache` and `--full_cache_dir` alike. Ensembl VEP reads the assembly from the cache directory's name, which `--full_cache_dir` bypasses, and its fallback to a `cache_assembly` parameter is declared and never set (`OutputFactory/JSON.pm` lines 168 and 242), so under `--full_cache_dir` with neither `--assembly` nor `--grch37` it prints `"assembly_name":null`. The same unset parameter leaves its pseudoautosomal redirect of `Y` reads unarmed and its `--fasta_dir` filter passing every file naming the species ([Reference FASTA](../cache-setup.md#reference-fasta)).
+### Numbers and strings
 
-`--terms display` or `--terms NCBI` renders `consequence_terms` and `most_severe_consequence` in that vocabulary. Ensembl VEP exits on a record with two or more distinct terms there, so this JSON is one it does not produce.
+Numeric-looking values are numbers, except under the identifier keys, with blanks at either end of the value dropped. A zero fraction prints as an integer (`100`, not `100.0`), and the ten bytes `0 but true`, Perl's idiom for a true zero, are `0`.
+
+A value that reads as infinity or not-a-number stays a string, since JSON has no such number. Ensembl VEP writes a bare `inf` or `nan` token there, the documented class [`json_non_finite_number_token`](../divergences/json-non-finite-number-token.md).
+
+A feature identifier (`transcript_id`, `regulatory_feature_id`, `motif_feature_id`) and a transcription factor name stay strings whatever their text. Ensembl VEP exempts no regulatory or motif key and writes an all-digit one as a number, the documented class [`regulatory_identifier_numberified`](../divergences/regulatory-identifier-numberified.md).
+
+### Flag-gated, plugin and record-level keys
+
+`gene_symbol`, `gene_symbol_source`, `biotype`, `variant_class` and the other flag-gated keys appear only under their flags. A flag-gated key a loaded plugin declares, `tsl` or `appris` for a dbNSFP column of that name, carries the plugin's value on the rows the plugin wrote whatever the flag ([dbNSFP](../plugins.md)). Absent or `-` values are omitted, except a `-` under `variant_allele`, `given_ref` and `used_ref`, where it is an empty allele. `--fields` does not apply: every key the flags produce is written, as in Ensembl VEP.
+
+`--shift_genomic 1` adds a `location` to every transcript object of a sequence variant: the `Location` column, moved under `--shift_3prime 1`. The intergenic object of an insertion or deletion `--shift_3prime 1` analysed gets one too. A structural variant's objects get none, as Ensembl VEP writes none.
+
+A plugin key named as a column the object leaves out (`Uploaded_variation`, `Existing_variation`, or `Location` without `--shift_genomic 1`) joins the object under its lowercased name on the rows the plugin wrote it, as Ensembl VEP keeps every key of a consequence hash. The record object's `id` stays the record's name, and a key of those names the plugin declared but left unwritten on a row adds nothing.
+
+The keys Ensembl VEP derives from the variant alone sit on the record object, lower-cased, and on no consequence object:
+
+- `variant_class` (`--variant_class`);
+- `ambiguity` (`--ambiguity`);
+- `minimised` (`--minimal`);
+- `check_ref` (`--dont_skip`).
+
+`uploaded_allele`, `allele_num` and `ref_allele` sit on every consequence object of a sequence variant; a structural variant's objects carry `allele_num` alone, as Ensembl VEP writes them.
+
+### `assembly_name`
+
+`assembly_name` is the `--assembly` value, else the assembly the cache's `info.json` names, under `--json_cache` and `--full_cache_dir` alike. Ensembl VEP reads the assembly from the cache directory's name, which `--full_cache_dir` bypasses. Its fallback to a `cache_assembly` parameter is declared and never set (`OutputFactory/JSON.pm` lines 168 and 242). So under `--full_cache_dir` with neither `--assembly` nor `--grch37` it prints `"assembly_name":null`. The same unset parameter leaves its pseudoautosomal redirect of `Y` reads unarmed and its `--fasta_dir` filter passing every file naming the species ([Reference FASTA](../cache-setup.md#reference-fasta)).
+
+### `--terms` and `vep_rs_version`
+
+`--terms display` or `--terms NCBI` renders `consequence_terms` and `most_severe_consequence` in that vocabulary. Ensembl VEP exits on a record with two or more terms there, one of them a label of the vocabulary. So this JSON is one it does not produce ([A JSON output under `--terms display` or `--terms NCBI`](../divergences/json-terms-vocabulary.md)).
 
 `vep_rs_version` names the vep-rs release that wrote the object, on every object; Ensembl VEP writes no such key ([Engine identity](../output-formats.md#engine-identity)).
 
 ## Key set
 
-The object's keys are Ensembl VEP's plus `vep_rs_version`, with one exception: `custom_annotations`, the record-level object Ensembl VEP writes for `--custom` sources, is never written, since custom annotation sources are not supported.
+The object's keys are Ensembl VEP's plus `vep_rs_version`, except for the documented intended divergences. `custom_annotations`, the record-level object of a `--custom` run, lists each source's statistics and records as Ensembl VEP's JSON factory does ([Custom annotation](../custom-annotation.md#output)).
 
-A `colocated_variants` entry is written as Ensembl VEP's JSON factory writes it, whatever the flags: every set cache column of the known variant, and `frequencies`. The columns are `seq_region_name`, `id`, `start`, `end`, `strand`, `allele_string`, `clin_sig` and `pubmed` as lists, `somatic` and `phenotype_or_disease` when `1`, `clin_sig_allele`, `clin_sig_ref_allele`, `clinvar_somatic_classification` and `var_synonyms` as `{source: [ids]}`. `frequencies` nests the matched allele's values under each alternate allele with lower-cased population keys. The consequence objects carry none of the co-located variant or frequency keys of the text formats.
+A `colocated_variants` object is written as Ensembl VEP's JSON factory writes it, whatever the flags: every set cache column of the known variant, and `frequencies`. The columns are:
+
+- `seq_region_name`, `id`, `start`, `end`, `strand` and `allele_string`;
+- `clin_sig` and `pubmed` as lists;
+- `somatic` and `phenotype_or_disease` when `1`;
+- `clin_sig_allele`, `clin_sig_ref_allele` and `clinvar_somatic_classification`;
+- `var_synonyms` as `{source: [ids]}`.
+
+`frequencies` nests the matched allele's values under each alternate allele with lower-cased population keys. The consequence objects carry none of the co-located variant or frequency keys of the text formats.
+
+## Where next
+
+- [VEP default and tab formats](vep-and-tab.md#example): the same two records in the default format.
+- [How structural variants are written](structural-variants.md): how a structural record is recognised, spanned and typed.
+- [Regulatory and motif features](../regulatory.md): the features and motifs `--regulatory` annotates against.
+- [Custom annotation](../custom-annotation.md#output): the keys a `--custom` source adds.
+- [Engine identity](../output-formats.md#engine-identity): where each format names the vep-rs release.

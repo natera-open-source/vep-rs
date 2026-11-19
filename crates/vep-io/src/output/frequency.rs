@@ -221,6 +221,11 @@ pub fn reported_frequency<'a>(
 /// row allele's own entry when that is the remainder of a biallelic record's
 /// `AF` (:1226-1243).
 ///
+/// The column is split on `,` with its trailing empty pairs dropped, and each
+/// pair into two scalars, `my ($a, $f) = split(':', $pair)` (:1217-1218): the
+/// allele is the text before the first `:` and the value the text between the
+/// first and the second, so `G:0.25:` and `G:0.25:9` both read `0.25`.
+///
 /// Every output field of every row reads its column through here, so the pairs
 /// are scanned in place: no map of the record's alleles is built.
 fn column_frequency<'a>(
@@ -232,8 +237,12 @@ fn column_frequency<'a>(
     let text = cv.frequency_strings.get(column).filter(|t| perl_true(t))?;
     let is_af = column == "AF";
     let pairs = || {
-        text.split(',')
-            .map(|pair| pair.split_once(':').unwrap_or((pair, "")))
+        perl_split(text, &[',']).map(|pair| {
+            let mut fields = pair.split(':');
+            let pair_allele = fields.next().unwrap_or("");
+            let value = fields.next().unwrap_or("");
+            (pair_allele, value)
+        })
     };
     let mut total = 0.0;
     let mut matched_value: Option<Cow<'a, str>> = None;
@@ -784,6 +793,42 @@ mod tests {
             )],
         );
         assert_eq!(max_af(&combined_only, &groups), None);
+    }
+
+    /// A pair's value is the text between its first and second `:`, as the
+    /// two-scalar `split(':', $pair)` reads it (OutputFactory.pm:1218), and a
+    /// column ending in `,` holds no empty pair (:1217). Ensembl VEP 116.2
+    /// writes `AFR_AF=0.25` with `MAX_AF=0.25` for the stored `G:0.25:` and
+    /// `G:0.25:9`, and `AF=0.3000` for a known variant `/G` storing `G:0.3,`
+    /// that is matched on its span: its empty first allele is the one no pair
+    /// names, so the row of `G` prints its own value.
+    #[test]
+    fn pairs_split_as_perl_splits_them() {
+        let groups = reporting(|g| g.af_1kg = true);
+        for stored in [
+            "G:0.25",
+            "G:0.25:",
+            "G:0.25:9",
+            "G:0.25:9:8",
+            "G:0.25,",
+            "G:0.25:,",
+        ] {
+            let variant = row(
+                "A",
+                "G",
+                vec![known("A/G", &[("G", "G")], &[("AFR", stored)])],
+            );
+            assert_eq!(field("AFR", &variant, &groups), "0.25", "{stored}");
+            assert_eq!(
+                max_af(&variant, &reporting(|g| g.max_af = true)),
+                Some(("0.25".to_string(), vec!["AFR"])),
+                "{stored}"
+            );
+        }
+        let af = reporting(|g| g.af = true);
+        let span_matched = |stored: &str| row("A", "G", vec![known("/G", &[], &[("AF", stored)])]);
+        assert_eq!(field("AF", &span_matched("G:0.3"), &af), "0.3000");
+        assert_eq!(field("AF", &span_matched("G:0.3,"), &af), "0.3000");
     }
 
     /// Under `--old_maf` the reader rewrites `AFR`, `AMR` and `EUR` to a bare

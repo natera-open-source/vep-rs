@@ -1,12 +1,12 @@
 name: Parity row
-description: Close one open row of tests/parity/matrix.tsv (maintainers and agents)
+description: Close one open row of tests/parity/matrix.tsv, or propose an item it lacks (maintainers and agents)
 title: "Close the `<item>` parity row"
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        One issue per row of `tests/parity/matrix.tsv`. The columns are defined in `tests/parity/README.md`, and the recipe is `.claude/skills/close-parity-row/SKILL.md`.
+        One issue per row of `tests/parity/matrix.tsv`. The columns are defined in `tests/parity/README.md`, and the recipe is `.claude/skills/close-parity-row/SKILL.md`. The rows a pull request can close are the matrix's `open` rows whose target is not `excluded`, and there may be none: the maintainers open a row when an Ensembl VEP release adds a parameter, plugin or cache field, and an item without a row is proposed here, with the fields below, for them to open.
   - type: dropdown
     id: carried
     attributes:
@@ -21,7 +21,7 @@ body:
     id: item
     attributes:
       label: Row
-      description: The row's `item`, exactly as it appears in the matrix.
+      description: The row's `item`, exactly as it appears in the matrix, or the name proposed for an item the matrix lacks.
       placeholder: AlphaMissense
     validations:
       required: true
@@ -29,7 +29,7 @@ body:
     id: target
     attributes:
       label: Target
-      description: The row's `target` column. To change it, open a target decision first.
+      description: The row's `target` column, or the target proposed for an item without a row. To change a row's target, open a target decision first.
       options:
         - implemented
         - documented_subset
@@ -42,7 +42,7 @@ body:
     id: perl_reference
     attributes:
       label: Ensembl VEP reference
-      description: The `perl_reference` column, narrowed to the sub and line range where you know it.
+      description: The `perl_reference` column, or the module that implements an item without a row, narrowed to the sub and line range where you know it.
       placeholder: Config.pm::read_config_from_file, lines 960-975
     validations:
       required: true

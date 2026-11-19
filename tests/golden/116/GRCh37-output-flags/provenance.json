@@ -6,7 +6,7 @@
  "divergences_classified_against": {
   "engine": "vep-rs",
   "source": "the tree this corpus is committed with",
-  "binary_md5": "de0467a31ea5e1b7214192547df7124c",
+  "binary_md5": "3f8114201d1cff109e0a56c55ad0663c",
   "arch": "arm64",
   "flags_passed": []
  },

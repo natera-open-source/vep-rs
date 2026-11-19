@@ -1,0 +1,51 @@
+entry = "refseq_edited_model_intron_span_coding_reference"
+page = "docs/divergences/refseq-edited-model-intron-span-coding-reference.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "seen in the genome-wide ClinVar GRCh38 and GRCh37 files annotated on the RefSeq caches: 15 rows of the shape, 3 on GRCh38 and 12 on GRCh37, 5 of them differing in a term or a protein notation"
+notes = "ClinVar record 2530348 on GRCh38, the deletion of the 693 bases X:111410073-111410765, written as a region line so that the file holds none of its bases; both engines read the reference bases from the FASTA file. On the reverse-strand NM_000555.3, whose one edit appends 27 bases after the last exon base, the span is the last 12 bases of exon 1 (CDS 210-221), the 333 bases of intron 1 and the first 348 bases of exon 2 (CDS 222-569): 360 coding bases, the deletion of residues 72 to 191 in frame. Both engines write the same three positions. Ensembl VEP reads its reference codons from the genome's allele written over the coding span, intron bases included, finds stops in their translation and writes stop_lost and protein_altering_variant with a stop-lost extension on the HGVSp; vep-rs reads the model's own codons and writes inframe_deletion and the deletion alone. The model's stop codon is codon 442 and the deletion ends at cDNA 741. The prepare steps cut the one region file of a RefSeq GRCh38 cache that holds the model and convert it in the Ensembl VEP image."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the cut of the RefSeq cache is converted in the Ensembl VEP image: pass --image" >&2; exit 1; }
+[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens_refseq/116_GRCh38 with chromosome X under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens_refseq/116_GRCh38"
+mkdir -p "$cut/X"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
+cp "$PERL_CACHE/X/111000001-112000000.gz" "$cut/X/"''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens_refseq/116_GRCh38 /stage/json-cache X > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "region"
+text = """
+X:111410073-111410765:1/-
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "refseq"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+chromosomes = ["X"]
+
+[run]
+flags = [
+  "--refseq",
+  "--hgvs",
+  "--fasta", "{grch38_fasta}/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
+]
+
+[compare]
+kind = "rows"
+where = { feature = "NM_000555.3" }
+columns = ["Feature", "Consequence", "cDNA_position", "CDS_position", "Protein_position", "HGVSp"]
+
+[expected]
+ensembl_vep = [
+  "NM_000555.3 | splice_acceptor_variant,splice_donor_variant,stop_lost,protein_altering_variant,splice_donor_5th_base_variant,intron_variant | 382-741 | 210-569 | 70-190 | NP_000546.2:p.His72_Ser191delextTer?",
+]
+vep_rs = [
+  "NM_000555.3 | splice_acceptor_variant,splice_donor_variant,inframe_deletion,splice_donor_5th_base_variant,intron_variant | 382-741 | 210-569 | 70-190 | NP_000546.2:p.His72_Ser191del",
+]

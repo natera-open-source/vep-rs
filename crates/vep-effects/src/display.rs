@@ -775,6 +775,9 @@ pub struct DisplayFields {
     /// orders them: an insertion's start is one past its end. `None` when
     /// either end is unmapped.
     pub translation_span: Option<(i64, i64)>,
+    /// `translation_start` alone, set whenever the start residue is mapped,
+    /// the end mapped or not: [`TranscriptConsequence::protein_start`].
+    pub protein_start: Option<i64>,
     /// The span's own positions once [`Self::record_span_positions`] has put
     /// another span's in the three position columns; `None` while the columns
     /// are the span's own.
@@ -806,6 +809,10 @@ impl DisplayFields {
         tc.cdna_total = self.cdna_total;
         tc.cds_total = self.cds_total;
         tc.protein_total = self.protein_total;
+        tc.protein_start = self
+            .protein_start
+            .and_then(|start| u32::try_from(start).ok())
+            .filter(|start| *start > 0);
         tc.amino_acids = self.amino_acids;
         tc.codons = self.codons;
         tc.own_span_positions = self.own_span_positions;
@@ -846,6 +853,7 @@ impl DisplayFields {
         if self.coding {
             self.cds_position = record.cds_position;
             self.protein_position = record.protein_position;
+            self.protein_start = record.protein_start;
         }
         self.own_span_positions = Some(Box::new(own));
     }
@@ -859,6 +867,32 @@ struct CodingSpan {
     cds_end: Option<i64>,
     pep_start: Option<i64>,
     pep_end: Option<i64>,
+}
+
+/// The length of the transcript's cDNA: its exons and its `_rna_edit`
+/// attributes together, each edit replacing cDNA `start..=end` by its bases
+/// (`Transcript::length` with the edits applied, Transcript.pm:1670-1678;
+/// `SeqEdit::length_diff`, SeqEdit.pm:297 after :144). Ensembl VEP prints the
+/// exons' length alone on an edited transcript: the transcript its cache
+/// stores carries no `edits_enabled`, the test of Transcript.pm:1675.
+fn cdna_length(transcript: &Transcript) -> u32 {
+    let exons = transcript.spliced_length();
+    if transcript.refseq_alignment().is_none() {
+        return exons;
+    }
+    let edits: i128 = transcript
+        .attributes
+        .iter()
+        .filter(|attribute| &*attribute.code == "_rna_edit")
+        .filter_map(|attribute| {
+            let mut fields = attribute.value.split_whitespace();
+            let start: i64 = fields.next()?.parse().ok()?;
+            let end: i64 = fields.next()?.parse().ok()?;
+            let bases = fields.next().map_or(0, str::len) as i128;
+            Some(bases - (i128::from(end) - i128::from(start) + 1))
+        })
+        .sum();
+    u32::try_from(i128::from(exons) + edits).unwrap_or(exons)
 }
 
 /// The position columns and totals of the span `vf_start..=vf_end` against
@@ -895,10 +929,21 @@ fn span_positions(
         return (out, None);
     };
     let strand = transcript.strand.as_i8();
-    let cdna = genomic2cdna(mapper, vf_start, vf_end, strand);
+    let mut cdna = genomic2cdna(mapper, vf_start, vf_end, strand);
+    // An insertion on bases the model holds and the genome lacks stands at
+    // the point after the base 5' of it where the genome is the model's
+    // reference, the span `coding::perl_span` gives the row's terms.
+    let spans_model_bases = matches!(
+        cdna.as_slice(),
+        [Segment::Coord { start, .. }, Segment::Coord { end, .. }] if start <= end
+    );
+    if vf_start == vf_end + 1 && spans_model_bases && crate::coding::genome_is_reference(transcript)
+    {
+        cdna.truncate(1);
+    }
     out.exon = true;
     out.cdna_position = coords_column(first_start(&cdna), last_end(&cdna));
-    out.cdna_total = Some(transcript.spliced_length());
+    out.cdna_total = Some(cdna_length(transcript));
 
     // coding
     let (Some(coding_start), Some(coding_end)) =
@@ -935,6 +980,7 @@ fn span_positions(
     out.protein_position = coords_column(pep_start, pep_end);
     out.protein_total = cached_length(vefc.and_then(|v| v.peptide.as_deref()));
     out.translation_span = pep_start.zip(pep_end);
+    out.protein_start = pep_start;
     (
         out,
         Some(CodingSpan {
@@ -1083,7 +1129,6 @@ mod tests {
             .iter()
             .enumerate()
             .map(|(i, (s, e))| Exon {
-                stable_id: None,
                 start: *s,
                 end: *e,
                 rank: i as u32 + 1,
@@ -1110,6 +1155,7 @@ mod tests {
         let cds: String = "ATG".to_string() + &"GCT".repeat(98) + "TAA";
         assert_eq!(cds.len(), 300);
         let vefc = TranscriptVEFC {
+            spliced_seq: None,
             translateable_seq: Some(cds),
             three_prime_utr: Some("GGGCCC".repeat(20)),
             mapper: Some(mapper_for(&exons, 1, (51, 350), -1)),
@@ -1306,8 +1352,8 @@ mod tests {
 
     /// The totals `--total_length` appends (`OutputFactory.pm`
     /// `TranscriptVariationAllele_to_output_hash`): the transcript's length (the
-    /// exon sum, `Transcript::length`) beside the cDNA position of a variant
-    /// overlapping an exon, the length of the cached `translateable_seq` beside
+    /// exon sum of a transcript without an edit, `Transcript::length`) beside
+    /// the cDNA position of a variant overlapping an exon, the length of the cached `translateable_seq` beside
     /// the CDS position and the length of the cached `peptide` beside the protein
     /// position of a coding variant, the sequence totals only when the cache
     /// carries the sequence; the positions themselves stay numeric. On the
@@ -1346,6 +1392,64 @@ mod tests {
         // Without a cached peptide the protein position gets no total.
         let d = display_fields(&snv(1052, "G", "A"), &forward_transcript());
         assert_eq!((d.cds_total, d.protein_total), (Some(300), None));
+    }
+
+    /// The cDNA total counts the transcript's `_rna_edit` attributes with its
+    /// exons: an insertion adds its bases, a deletion removes its span, a
+    /// replacement adds its bases less the span it replaces, and a replacement
+    /// of equal length changes nothing. On the fixture, whose exons sum to 500,
+    /// three bases inserted, three deleted and one base replaced by three
+    /// leave a cDNA of 502; an attribute of another code is not an edit, one
+    /// whose code `_rna_edit` only begins included. An edit whose span ends at
+    /// the largest integer, alone or beside a second one, is read without a
+    /// failure: a total below zero is no length, and the exons' length stands.
+    #[test]
+    fn the_cdna_total_counts_the_rna_edits() {
+        let attribute = |code: &str, value: &str| vep_core::transcript::Attribute {
+            code: code.into(),
+            value: value.to_string(),
+        };
+        let total = |attributes: Vec<vep_core::transcript::Attribute>| {
+            let mut tx = forward_transcript();
+            tx.attributes = attributes;
+            tx.derived = Default::default();
+            display_fields(&snv(1010, "A", "G"), &tx).cdna_total
+        };
+        assert_eq!(total(vec![]), Some(500));
+        assert_eq!(total(vec![attribute("_rna_edit", "10 9 AAA")]), Some(503));
+        assert_eq!(total(vec![attribute("_rna_edit", "50 52 ")]), Some(497));
+        assert_eq!(total(vec![attribute("_rna_edit", "50 52")]), Some(497));
+        assert_eq!(
+            total(vec![attribute("_rna_edit", "500 500 TAA")]),
+            Some(502)
+        );
+        assert_eq!(total(vec![attribute("_rna_edit", "70 70 T")]), Some(500));
+        assert_eq!(
+            total(vec![
+                attribute("_rna_edit", "10 9 AAA"),
+                attribute("rseq_mrna_match", "1"),
+                attribute("_rna_edit", "50 52 "),
+                attribute("_rna_edit", "500 500 TAA"),
+            ]),
+            Some(502)
+        );
+        assert_eq!(
+            total(vec![attribute("rseq_mrna_match", "10 9 AAA")]),
+            Some(500)
+        );
+        assert_eq!(
+            total(vec![attribute("_rna_edit_note", "10 9 AAA")]),
+            Some(500)
+        );
+        let range_end = format!("0 {}", i64::MAX);
+        assert_eq!(total(vec![attribute("_rna_edit", &range_end)]), Some(500));
+        assert_eq!(
+            total(vec![
+                attribute("_rna_edit", &format!("1 {}", i64::MAX)),
+                attribute("_rna_edit", &format!("1 {}", i64::MAX)),
+            ]),
+            Some(500)
+        );
     }
 
     /// An insertion between the 5' UTR and the first coding base maps to one

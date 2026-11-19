@@ -76,7 +76,7 @@ Usage:
       --fasta <path> [options]
 
 Required:
-  --perl-cache-dir <path>   Perl VEP cache root, the directory above homo_sapiens/ (passed to VEP as --dir_cache)
+  --perl-cache-dir <path>   Ensembl VEP cache root, the directory above <species>/ (passed to VEP as --dir_cache)
   --json-cache-dir <path>   Converted JSON cache for vep-rs (must contain info.json)
   --fasta <path>            Reference FASTA, or --no-fasta to run every engine without one
 
@@ -91,7 +91,7 @@ Optional:
                                    --perl-vep-mode docker first)
   --rust-release            Run vep-rs using a release build (cargo --release)
   --reference-release <115.2|116.2>  The Ensembl VEP release the comparator's adjusted F1
-                            is scored against (compare_vep_outputs.py --reference-release).
+                            is scored against (the tuple comparator's --reference-release).
                             Default: derived from the Docker image tag, the fixtures
                             directory's provenance.json, or the local checkout's
                             Constants.pm; the run fails before comparing when none
@@ -120,23 +120,41 @@ Optional:
                             --fasta is a hard-fail.
   --no-canonical-contigs    Opt out of the canonical-contigs input filter and annotate every
                             contig the input carries. DEFAULT: input VCFs are filtered to the
-                            canonical contigs 1-22,X,Y,MT (Ensembl style, for both assemblies;
-                            a UCSC chr prefix is stripped first) before being fed to the
-                            engines, so that asymmetric alt-contig handling between engines
-                            cannot inflate F1 divergences.
+                            canonical contigs before being fed to the engines, so that
+                            asymmetric alt-contig handling between engines cannot inflate F1
+                            divergences: 1-22,X,Y,MT (Ensembl style; a UCSC chr prefix is
+                            stripped first) under --assembly GRCh37 or GRCh38, and the
+                            contig_order of the JSON cache's info.json under any other
+                            assembly.
   --mode <smoke|full>       Run mode (default: smoke)
   --smoke-variants <int>    Variants per file in smoke mode (default: 5000)
-  --plugins <list>          Comma-separated plugins to test (e.g. CADD,REVEL,gnomADc)
+  --plugins <list>          Comma-separated plugins to test (e.g. REVEL,gnomADc,LoFtool)
   --plugin-data-dir <path>  Plugin data file directory (default: ~/.vep/plugin_data/<assembly>/<tier>)
   --plugin-tier <quick|full>  Plugin data tier (default: quick)
   --run-id <id>             Identifier for this measurement campaign; recorded
-                            into provenance.json and every wall-time CSV row's
-                            notes column. Optional; useful for grouping runs.
+                            into provenance.json. Optional; useful for grouping
+                            runs.
   --host-id <id>            Identifier for the machine running this invocation;
-                            recorded into provenance.json and every wall-time CSV
-                            row. Optional (e.g. a hostname, when aggregating runs
-                            from more than one machine).
+                            recorded into provenance.json. Optional (e.g. a
+                            hostname, when aggregating runs from more than one
+                            machine).
   --help                    Print this help
+
+Environment:
+  VEP_OUTPUTS_COMPARATOR    The SNP/indel tuple comparator. Unset: the Rust tool of this
+                            tree, tools/vep-outputs-compare, built through cargo before
+                            any engine runs. `python`: compare_vep_outputs.py, the
+                            reference implementation, which writes the same reports.
+                            Any other value: a comparator binary, as a path or a
+                            command on PATH; one that is not an executable stops the run
+                            before any engine runs.
+  CADD_SNV_FILE, CADD_INDEL_FILE, SPLICEAI_SNV_FILE, SPLICEAI_INDEL_FILE, AVI_FILE,
+  DBNSFP_FILE, DBSCSNV_FILE
+                            Your own data file for CADD, SpliceAI, AVI, dbNSFP or dbscSNV,
+                            with its tabix index beside it. These plugins read no file of
+                            the plugin data directory: one named in --plugins runs when
+                            its variables are set (SPLICEAI_INDEL_FILE is optional) and is
+                            left out of the run otherwise.
 
 Outputs:
   <work-dir>/inputs     prepared VCFs
@@ -325,25 +343,18 @@ fi
 # asymmetry, NOT from real consequence-logic differences.
 #
 # Default: filter input VCFs to canonical contigs before feeding to engines. The filtered
-# VCF SHAs are captured in provenance.json under canonical_contigs_filter_active +
-# filtered_vcf_sha256s. --no-canonical-contigs is the explicit opt-out for comparison
-# against a "with alt contigs" baseline.
-if [[ "${CANONICAL_CONTIGS}" -eq 1 ]]; then
-    for cmd in bcftools tabix bgzip; do
-        if ! command -v "${cmd}" >/dev/null 2>&1; then
-            echo "ERROR: canonical-contigs filter requires ${cmd} (install htslib + bcftools)" >&2
-            echo "  Or pass --no-canonical-contigs to opt out and annotate every contig" >&2
-            exit 1
-        fi
-    done
-fi
+# VCF SHAs are captured in provenance.json under input_vcf_sha256s and
+# input_prep_manifest.files[].output_sha256, beside canonical_contigs_filter_active.
+# --no-canonical-contigs is the explicit opt-out for comparison against a "with alt
+# contigs" baseline.
 
-# Canonical contig set: universal
-# Ensembl-style for both GRCh37 and GRCh38. The assembly difference is in the
-# genome-sequence content, NOT contig naming. UCSC-style chr-prefix inputs are
-# auto-stripped at filter time so the output is always Ensembl-style. Must match
-# scripts/concordance/prepare_benchmark_vcfs.py CANONICAL_CONTIGS frozenset and
-# scripts/concordance/compare_vep_outputs.py CANONICAL_CONTIGS frozenset.
+# The human canonical contig set, Ensembl-style for both GRCh37 and GRCh38. The
+# assembly difference is in the genome-sequence content, NOT contig naming.
+# UCSC-style chr-prefix inputs are auto-stripped at filter time so the output is
+# always Ensembl-style. Must match scripts/concordance/prepare_benchmark_vcfs.py
+# CANONICAL_CONTIGS frozenset and scripts/concordance/compare_vep_outputs.py
+# CANONICAL_CONTIGS frozenset. Under any other assembly the set is the JSON
+# cache's contig_order, read once the cache directory is resolved below.
 #
 # The variable is CANONICAL_CONTIGS_LIST, not CANONICAL_CONTIGS: the latter is the
 # 0|1 flag among the defaults above that tracks whether the filter is active.
@@ -370,6 +381,31 @@ for cmd in cargo python3; do
         exit 1
     fi
 done
+
+# The SNP/indel tuple comparator. Unset, VEP_OUTPUTS_COMPARATOR selects the Rust tool of this
+# tree, tools/vep-outputs-compare, built here through cargo as the engine is, so that a build
+# that fails stops the run before any engine runs; `python` selects compare_vep_outputs.py,
+# the reference implementation, which writes the same reports; any other value names a
+# comparator binary, a path or a command on PATH (`type -P` resolves it as the exec does).
+OUTPUTS_COMPARE_MANIFEST="${VEP_RS_DIR}/tools/vep-outputs-compare/Cargo.toml"
+case "${VEP_OUTPUTS_COMPARATOR:-}" in
+"")
+    if ! cargo build -q --release --locked --manifest-path "${OUTPUTS_COMPARE_MANIFEST}"; then
+        echo "ERROR: [run_concordance] the tuple comparator tools/vep-outputs-compare did not build: repair 'cargo build --release --locked --manifest-path ${OUTPUTS_COMPARE_MANIFEST}' or name a built one in VEP_OUTPUTS_COMPARATOR, or set VEP_OUTPUTS_COMPARATOR=python to score with the Python reference implementation" >&2
+        exit 1
+    fi
+    OUTPUTS_COMPARE=(cargo run -q --release --locked --manifest-path "${OUTPUTS_COMPARE_MANIFEST}" --)
+    ;;
+python) OUTPUTS_COMPARE=(python3 "${VEP_RS_DIR}/scripts/concordance/compare_vep_outputs.py") ;;
+*)
+    if outputs_bin=$(type -P -- "${VEP_OUTPUTS_COMPARATOR}") && [[ -f "${outputs_bin}" && -x "${outputs_bin}" ]]; then
+        OUTPUTS_COMPARE=("${outputs_bin}")
+    else
+        echo "ERROR: [run_concordance] the tuple comparator ${VEP_OUTPUTS_COMPARATOR} is not an executable: name a built one in VEP_OUTPUTS_COMPARATOR or unset it to build tools/vep-outputs-compare, or set VEP_OUTPUTS_COMPARATOR=python to score with the Python reference implementation" >&2
+        exit 1
+    fi
+    ;;
+esac
 
 if [[ "${PERL_VEP_MODE}" == "local" ]]; then
     if ! command -v perl >/dev/null 2>&1; then
@@ -758,10 +794,10 @@ PY
 PERL_CACHE_VERSION="$(
     python3 - <<PY
 from pathlib import Path
-# The cache root holds homo_sapiens/<version>_<assembly>/info.txt; VEP resolves
+# The cache root holds <species>/<version>_<assembly>/info.txt; VEP resolves
 # --dir_cache the same way, so the version is read from that leaf.
 root = Path("${PERL_CACHE_DIR}")
-leaves = sorted(root.glob("homo_sapiens/*_${ASSEMBLY}/info.txt"))
+leaves = sorted(root.glob("${SPECIES}/*_${ASSEMBLY}/info.txt"))
 info = leaves[-1] if leaves else root / "info.txt"
 version = "unknown"
 if info.exists():
@@ -869,7 +905,17 @@ plugin_docker_mounts() {
         return 0
     fi
 
-    vols+=(-v "${PLUGIN_DATA_DIR}:/work/plugin_data:ro")
+    if [[ -d "${PLUGIN_DATA_DIR}" ]]; then
+        vols+=(-v "${PLUGIN_DATA_DIR}:/work/plugin_data:ro")
+    fi
+    # A user's own file is read through its directory, mounted under the variable's name,
+    # the path build_plugin_args gives the Perl engine.
+    local var
+    for var in "${USER_PLUGIN_FILE_VARS[@]}"; do
+        if [[ -n "${!var:-}" ]]; then
+            vols+=(-v "$(cd "$(dirname "${!var}")" && pwd):/work/user_plugin_data/${var}:ro")
+        fi
+    done
     # Only mount VEP_plugins when it exists: the ensembl-vep image already installs
     # every .pm into /plugins (ENV VEP_DIR_PLUGINS=/plugins), so the mount is a
     # version pin, not a requirement. Mounting a nonexistent host path makes Docker
@@ -903,12 +949,26 @@ plugin_docker_mounts() {
     printf '%s\n' "${vols[@]}"
 }
 
+# The variables that name a user's own data file, and the ones a plugin cannot run without.
+USER_PLUGIN_FILE_VARS=(CADD_SNV_FILE CADD_INDEL_FILE SPLICEAI_SNV_FILE SPLICEAI_INDEL_FILE AVI_FILE DBNSFP_FILE DBSCSNV_FILE)
+user_plugin_file_vars() {
+    case "$1" in
+    CADD) echo "CADD_SNV_FILE CADD_INDEL_FILE" ;;
+    SpliceAI) echo "SPLICEAI_SNV_FILE" ;;
+    AVI) echo "AVI_FILE" ;;
+    dbNSFP) echo "DBNSFP_FILE" ;;
+    dbscSNV) echo "DBSCSNV_FILE" ;;
+    esac
+}
+
 build_plugin_args() {
     # Map plugin name to --plugin argument for a given data directory.
     # $1 = plugin name, $2 = data directory (host path), $3 = "perl" or "rust"
     # For Docker Perl VEP, paths are remapped to /work/plugin_data/
     # File names come from scripts/data/plugin_data_layout.sh, the table
     # setup_plugin_data.sh stages from, so the harness reads what staging wrote.
+    # CADD, SpliceAI, AVI, dbNSFP and dbscSNV are not in that table: each reads the
+    # user's own file, named by a variable.
     local plugin="$1"
     local data_dir="$2"
     local target="$3"
@@ -920,20 +980,30 @@ build_plugin_args() {
     fi
     local f
 
+    # The path an engine reads a user's file at: the host path, or the mount of its
+    # directory in the Perl container (plugin_docker_mounts).
+    user_file() {
+        if [[ "${target}" == "perl" && "${PERL_VEP_MODE}" == "docker" ]]; then
+            echo "/work/user_plugin_data/$1/$(basename "${!1}")"
+        else
+            echo "${!1}"
+        fi
+    }
+
     case "${plugin}" in
     CADD)
-        echo "CADD,snv=${d}/$(plugin_data_file CADD snv "${ASSEMBLY_LC}"),indels=${d}/$(plugin_data_file CADD indel "${ASSEMBLY_LC}")"
+        echo "CADD,snv=$(user_file CADD_SNV_FILE),indels=$(user_file CADD_INDEL_FILE)"
         ;;
     REVEL)
         echo "REVEL,file=${d}/$(plugin_data_file REVEL file "${ASSEMBLY_LC}")"
         ;;
     SpliceAI)
-        # The indel file is passed only when staged (it is not freely distributed);
+        # The indel file is passed only when SPLICEAI_INDEL_FILE names one;
         # Perl's SpliceAI.pm adds both files and fails on an absent one, vep-rs accepts
         # either alone, so a run without it is a vep-rs-only run of this plugin.
-        f="SpliceAI,snv=${d}/$(plugin_data_file SpliceAI snv "${ASSEMBLY_LC}")"
-        if [[ -e "${data_dir}/$(plugin_data_file SpliceAI indel "${ASSEMBLY_LC}")" ]]; then
-            f="${f},indel=${d}/$(plugin_data_file SpliceAI indel "${ASSEMBLY_LC}")"
+        f="SpliceAI,snv=$(user_file SPLICEAI_SNV_FILE)"
+        if [[ -n "${SPLICEAI_INDEL_FILE:-}" ]]; then
+            f="${f},indel=$(user_file SPLICEAI_INDEL_FILE)"
         fi
         echo "${f}"
         ;;
@@ -943,17 +1013,46 @@ build_plugin_args() {
     AlphaMissense)
         echo "AlphaMissense,${d}/$(plugin_data_file AlphaMissense file "${ASSEMBLY_LC}")"
         ;;
+    AVI)
+        # The harness runs AVI on GRCh38 alone. Both engines take the same string;
+        # raw=1 and links=1 exercise every output field.
+        if [[ "${ASSEMBLY_LC}" != "grch38" ]]; then
+            echo "ERROR: the harness runs AVI on GRCh38 alone; got ${ASSEMBLY}" >&2
+            return 1
+        fi
+        echo "AVI,file=$(user_file AVI_FILE),raw=1,links=1"
+        ;;
     dbNSFP)
-        echo "dbNSFP,${d}/$(plugin_data_file dbNSFP file "${ASSEMBLY_LC}"),SIFT_pred,Polyphen2_HDIV_pred,MutationTaster_pred"
+        echo "dbNSFP,$(user_file DBNSFP_FILE),SIFT_pred,Polyphen2_HDIV_pred,MutationTaster_pred"
         ;;
     dbscSNV)
-        echo "dbscSNV,${d}/$(plugin_data_file dbscSNV file "${ASSEMBLY_LC}")"
+        echo "dbscSNV,$(user_file DBSCSNV_FILE)"
         ;;
     LoFtool)
         echo "LoFtool,${d}/$(plugin_data_file LoFtool file "${ASSEMBLY_LC}")"
         ;;
     pLI)
         echo "pLI,${d}/$(plugin_data_file pLI file "${ASSEMBLY_LC}")"
+        ;;
+    LOEUF)
+        # LOEUF.pm:146-153 dies without match_by; gene is the mode the runs of
+        # plugin_gate_runs.toml pass.
+        echo "LOEUF,file=${d}/$(plugin_data_file LOEUF file "${ASSEMBLY_LC}"),match_by=gene"
+        ;;
+    DosageSensitivity)
+        echo "DosageSensitivity,file=${d}/$(plugin_data_file DosageSensitivity file "${ASSEMBLY_LC}")"
+        ;;
+    AncestralAllele)
+        # Both engines take the bgzipped FASTA as the one positional parameter.
+        echo "AncestralAllele,${d}/$(plugin_data_file AncestralAllele file "${ASSEMBLY_LC}")"
+        ;;
+    Conservation)
+        # Both engines take the bigWig as the one positional parameter (the average score).
+        if [[ "${ASSEMBLY_LC}" != "grch38" ]]; then
+            echo "ERROR: Conservation is GRCh38-only (Ensembl Compara publishes the GERP bigWig for GRCh38 alone); got ${ASSEMBLY}" >&2
+            return 1
+        fi
+        echo "Conservation,${d}/$(plugin_data_file Conservation file "${ASSEMBLY_LC}")"
         ;;
     GWAS)
         # NHGRI-EBI GWAS Catalog. GRCh38 ONLY: the catalog publishes CHR_POS in
@@ -970,6 +1069,17 @@ build_plugin_args() {
             echo "GWAS,file=${d}/$(plugin_data_file GWAS file "${ASSEMBLY_LC}")"
         fi
         ;;
+    OpenTargets)
+        # Open Targets Platform VEP export. GRCh38 ONLY: the Platform publishes GRCh38
+        # coordinates. Both engines take the same file= argument; the staged copy has its
+        # header line commented (the preparation setup_plugin_data.sh prints), which
+        # Perl's OpenTargets.pm needs and vep-rs accepts.
+        if [[ "${ASSEMBLY_LC}" != "grch38" ]]; then
+            echo "ERROR: OpenTargets is GRCh38-only (the Platform publishes GRCh38 coordinates); got ${ASSEMBLY}" >&2
+            return 1
+        fi
+        echo "OpenTargets,file=${d}/$(plugin_data_file OpenTargets file "${ASSEMBLY_LC}")"
+        ;;
     LoFTEE)
         # LoFTEE data lives under a dedicated dir (LOFTEE_DATA_DIR, default
         # ${d}/loftee/<assembly>), not the tabix tier layout. Perl plugin is
@@ -977,10 +1087,10 @@ build_plugin_args() {
         # Both are fed the SAME data so HC/LC uses identical inputs.
         #
         # The two upstream bundles differ STRUCTURALLY: GRCh38 ships GERP as a
-        # bigWig, GRCh37 as a tabix per-base TSV. Hardcoding the bigWig made a
-        # GRCh37 invocation impossible to build.
+        # bigWig, GRCh37 as a tabix per-base TSV. A hardcoded bigWig key cannot
+        # build a GRCh37 invocation.
         local ld="${LOFTEE_DATA_DIR:-${d}/loftee/${ASSEMBLY_LC}}"
-        local gerp_file gerp_key ancestor_plain ancestor_bgzf
+        local gerp_file gerp_key ancestor_plain ancestor_bgzf splice_off=""
         gerp_file="$(basename "$(plugin_data_file LoFTEE gerp "${ASSEMBLY_LC}")")"
         # The Perl plugin reads the bgzipped ancestral FASTA (with .fai and .gzi); vep-rs
         # reads the plain one. Both are staged, so both names come from the layout table.
@@ -988,6 +1098,8 @@ build_plugin_args() {
         ancestor_bgzf="$(basename "$(plugin_data_file LoFTEE ancestor_bgzf "${ASSEMBLY_LC}")")"
         if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
             gerp_key="gerp_tabix"
+            # vep-rs refuses a GRCh37 run that leaves master's splice layer on.
+            splice_off=",run_splice_predictions=0"
         else
             gerp_key="gerp_bigwig"
         fi
@@ -1007,7 +1119,7 @@ build_plugin_args() {
                 echo "LoF,loftee_path:${lp},human_ancestor_fa:${pld}/${ancestor_bgzf},gerp_bigwig:${pld}/${gerp_file},run_splice_predictions:0"
             fi
         else
-            echo "LoFTEE,human_ancestor_fa=${ld}/${ancestor_plain},${gerp_key}=${ld}/${gerp_file}"
+            echo "LoFTEE,human_ancestor_fa=${ld}/${ancestor_plain},${gerp_key}=${ld}/${gerp_file}${splice_off}"
         fi
         ;;
     *)
@@ -1018,14 +1130,38 @@ build_plugin_args() {
 }
 
 if [[ -n "${PLUGINS}" ]]; then
-    IFS=',' read -ra PLUGIN_NAMES <<<"${PLUGINS}"
+    IFS=',' read -ra REQUESTED_PLUGINS <<<"${PLUGINS}"
 
-    if [[ ! -d "${PLUGIN_DATA_DIR}" ]]; then
-        echo "ERROR: plugin data directory not found: ${PLUGIN_DATA_DIR}" >&2
-        echo "  Run: scripts/data/setup_plugin_data.sh --assembly ${ASSEMBLY} --tier ${PLUGIN_TIER} --data-dir ${PLUGIN_DATA_DIR}" >&2
-        exit 1
-    fi
+    # A plugin that reads the user's own file runs when its variables name one, and is
+    # left out of the run otherwise.
+    for plugin in "${REQUESTED_PLUGINS[@]}"; do
+        unset_var=""
+        for var in $(user_plugin_file_vars "${plugin}"); do
+            if [[ -z "${!var:-}" ]]; then
+                unset_var="${var}"
+            elif [[ ! -f "${!var}" ]]; then
+                echo "ERROR: ${var} names no file: ${!var}" >&2
+                exit 1
+            fi
+        done
+        if [[ -n "${unset_var}" ]]; then
+            echo "plugins: ${plugin} is left out of the run: set ${unset_var} to your own file" >&2
+            continue
+        fi
+        PLUGIN_NAMES+=("${plugin}")
+        if [[ -z "$(user_plugin_file_vars "${plugin}")" && ! -d "${PLUGIN_DATA_DIR}" ]]; then
+            echo "ERROR: plugin data directory not found: ${PLUGIN_DATA_DIR}" >&2
+            echo "  Run: scripts/data/setup_plugin_data.sh --assembly ${ASSEMBLY} --tier ${PLUGIN_TIER} --data-dir ${PLUGIN_DATA_DIR}" >&2
+            exit 1
+        fi
+    done
+    PLUGINS="$(
+        IFS=','
+        echo "${PLUGIN_NAMES[*]+${PLUGIN_NAMES[*]}}"
+    )"
+fi
 
+if [[ ${#PLUGIN_NAMES[@]} -gt 0 ]]; then
     echo "plugins:"
     echo "  plugins:   ${PLUGIN_NAMES[*]}"
     echo "  data dir:  ${PLUGIN_DATA_DIR}"
@@ -1044,9 +1180,13 @@ if [[ -z "${JSON_CACHE_DIR}" ]]; then
     JSON_CACHE_DIR="${WORK_DIR}/cache_json"
     echo "ERROR: --json-cache-dir is required; no JSON cache was given (for example ${JSON_CACHE_DIR})." >&2
     echo "  Build one with vep-cache-builder (no Perl required):" >&2
-    echo "    vep-cache-builder --release 116 --assembly GRCh38 \\" >&2
-    echo "      --genome-fasta Homo_sapiens.GRCh38.dna.primary_assembly.fa \\" >&2
+    echo "    vep-cache-builder --release 116 --assembly ${ASSEMBLY} \\" >&2
+    echo "      --genome-fasta Homo_sapiens.${ASSEMBLY}.dna.primary_assembly.fa \\" >&2
+    echo "      --core-dumps core_dumps_${ASSEMBLY_LC} \\" >&2
     echo "      --include-predictions --output-dir ${JSON_CACHE_DIR}" >&2
+    echo "  --core-dumps names a directory of the release's table dumps (a missing table is" >&2
+    echo "  downloaded into it): they supply what the GFF3 lacks and each region's codon table." >&2
+    echo "  A build without them needs --codon-table MT=2 where the annotation holds MT." >&2
     echo "  Or provide an existing cache with --json-cache-dir." >&2
     exit 1
 else
@@ -1057,20 +1197,43 @@ else
     fi
 fi
 
+# The canonical-contigs flag both filters take: bare under a human assembly (the
+# scripts' own human set), the cache's contig_order under any other, so a fly or
+# mouse run keeps the chromosomes its cache holds and drops the rest.
+CANONICAL_CONTIGS_FLAG=(--no-canonical-contigs)
+if [[ "${CANONICAL_CONTIGS}" -eq 1 ]]; then
+    case "${ASSEMBLY}" in
+    GRCh37 | GRCh38)
+        CANONICAL_CONTIGS_FLAG=(--canonical-contigs)
+        ;;
+    *)
+        CACHE_CONTIG_ORDER="$(
+            python3 - "${JSON_CACHE_DIR}/info.json" <<'PY'
+import json, sys
+from pathlib import Path
+order = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")).get("contig_order") or []
+print(",".join(order))
+PY
+        )"
+        if [[ -z "${CACHE_CONTIG_ORDER}" ]]; then
+            echo "ERROR: [run_concordance] ${JSON_CACHE_DIR}/info.json lists no contig_order, so the canonical contigs of assembly ${ASSEMBLY} are unknown; pass --no-canonical-contigs to annotate every contig" >&2
+            exit 1
+        fi
+        CANONICAL_CONTIGS_FLAG=(--canonical-contigs "${CACHE_CONTIG_ORDER}")
+        ;;
+    esac
+fi
+
 PREP_ARGS=(
     --input-dir "${BENCHMARK_DIR}"
     --output-dir "${WORK_DIR}/inputs"
     --chrom-mode auto
     --cache-dir "${JSON_CACHE_DIR}"
     --assembly "${ASSEMBLY}"
+    "${CANONICAL_CONTIGS_FLAG[@]}"
 )
 if [[ "${MODE}" == "smoke" ]]; then
     PREP_ARGS+=(--max-variants "${SMOKE_VARIANTS}")
-fi
-if [[ "${CANONICAL_CONTIGS}" -eq 1 ]]; then
-    PREP_ARGS+=(--canonical-contigs)
-else
-    PREP_ARGS+=(--no-canonical-contigs)
 fi
 
 echo "preparing benchmark vcfs (${MODE})"
@@ -1123,14 +1286,14 @@ export PERL_DOCKER_DIGEST PERL_CACHE_SHA JSON_CACHE_SHA FASTA_SHA
 #
 # `plugins=` alone is not enough: it records WHICH plugins ran, not which DATA
 # they read. Two runs naming the same plugins but pointing at different files
-# (GRCh37 vs GRCh38 CADD, or a re-prepared REVEL index) collided, and the second
-# silently reused the first's output.
+# (GRCh37 vs GRCh38 CADD, or a re-prepared REVEL index) would share one key, and
+# the second would reuse the first's output.
 PLUGIN_DATA_FINGERPRINT=""
-if [[ -n "${PLUGINS}" && -d "${PLUGIN_DATA_DIR}" ]]; then
-    # Size+mtime per file, not a content hash: these are multi-GB tabix files and
-    # hashing them would dominate the run. `stat` is not portable (BSD -f vs
+if [[ -n "${PLUGINS}" ]]; then
+    # Size+mtime per file, not a content hash: hashing every plugin data file
+    # would dominate the run. `stat` is not portable (BSD -f vs
     # GNU -c), so probe once and use whichever the host accepts.
-    if stat -f '%z' "${PLUGIN_DATA_DIR}" >/dev/null 2>&1; then
+    if stat -f '%z' "${VEP_RS_DIR}" >/dev/null 2>&1; then
         _stat_fmt=(-f '%N:%z:%m')
     else
         _stat_fmt=(-c '%n:%s:%Y')
@@ -1141,9 +1304,18 @@ if [[ -n "${PLUGINS}" && -d "${PLUGIN_DATA_DIR}" ]]; then
         _sha_cmd=(shasum -a 256)
     fi
     PLUGIN_DATA_FINGERPRINT="$(
-        find "${PLUGIN_DATA_DIR}" -type f \
-            \( -name '*.gz' -o -name '*.bgz' -o -name '*.txt' -o -name '*.tsv' -o -name '*.bw' \) \
-            -exec stat "${_stat_fmt[@]}" {} \; 2>/dev/null | sort | "${_sha_cmd[@]}" | cut -d' ' -f1
+        {
+            if [[ -d "${PLUGIN_DATA_DIR}" ]]; then
+                find "${PLUGIN_DATA_DIR}" -type f \
+                    \( -name '*.gz' -o -name '*.bgz' -o -name '*.txt' -o -name '*.tsv' -o -name '*.bw' \) \
+                    -exec stat "${_stat_fmt[@]}" {} \; 2>/dev/null
+            fi
+            for var in "${USER_PLUGIN_FILE_VARS[@]}"; do
+                if [[ -n "${!var:-}" ]]; then
+                    stat "${_stat_fmt[@]}" "${!var}" 2>/dev/null || true
+                fi
+            done
+        } | sort | "${_sha_cmd[@]}" | cut -d' ' -f1
     )"
 fi
 # The plugin argument strings are in the key as well: the same plugin names over the same
@@ -1475,6 +1647,7 @@ provenance = {
     "plugins": "${PLUGINS}" if "${PLUGINS}" else None,
     "plugin_data_dir": "${PLUGIN_DATA_DIR}" if "${PLUGIN_DATA_DIR}" else None,
     "plugin_tier": "${PLUGIN_TIER}" if "${PLUGINS}" else None,
+    "perl_plugin_args": "${PERL_PLUGIN_ARGS[*]+${PERL_PLUGIN_ARGS[*]}}" if "${PLUGINS}" else None,
     "perl_docker_digest": os.environ.get("PERL_DOCKER_DIGEST") or None,
     "perl_cache_sha256": os.environ.get("PERL_CACHE_SHA") or None,
     "json_cache_sha256": os.environ.get("JSON_CACHE_SHA") or None,
@@ -1527,13 +1700,9 @@ COMPARE_ARGS=(
     --input-dir "${WORK_DIR}/inputs"
     --assembly "${ASSEMBLY}"
     --reference-release "${REFERENCE_RELEASE}"
+    "${CANONICAL_CONTIGS_FLAG[@]}"
 )
-if [[ "${CANONICAL_CONTIGS}" -eq 1 ]]; then
-    COMPARE_ARGS+=(--canonical-contigs)
-else
-    COMPARE_ARGS+=(--no-canonical-contigs)
-fi
-run_timed "compare_outputs" python3 "${VEP_RS_DIR}/scripts/concordance/compare_vep_outputs.py" "${COMPARE_ARGS[@]}"
+run_timed "compare_outputs" "${OUTPUTS_COMPARE[@]}" "${COMPARE_ARGS[@]}"
 
 # Plugin concordance comparison
 if [[ ${#PLUGIN_NAMES[@]} -gt 0 ]]; then
@@ -1542,9 +1711,9 @@ if [[ ${#PLUGIN_NAMES[@]} -gt 0 ]]; then
         IFS=','
         echo "${PLUGIN_NAMES[*]}"
     )"
-    # No `|| true`: the comparator's exit status IS the plugin verdict. Swallowing
-    # it meant a plugin FAIL -- including one that annotated nothing at all --
-    # could never fail the run.
+    # No `|| true`: the comparator's exit status IS the plugin verdict. With it
+    # swallowed, a plugin FAIL, including one that annotated nothing at all,
+    # cannot fail the run.
     PLUGIN_COMPARE_STATUS=0
     run_timed "compare_plugin_outputs" python3 "${VEP_RS_DIR}/scripts/concordance/compare_plugin_outputs.py" \
         --perl-dir "${WORK_DIR}/perl" \
@@ -1555,10 +1724,9 @@ if [[ ${#PLUGIN_NAMES[@]} -gt 0 ]]; then
 
     if [[ "${PLUGIN_COMPARE_STATUS}" -ne 0 ]]; then
         echo "ERROR: [plugin_concordance] comparison FAILED (exit ${PLUGIN_COMPARE_STATUS}); see ${WORK_DIR}/reports/plugin_concordance.json" >&2
-        # Carry it to the process exit. Printing the ERROR is not enough: this
-        # script's last statement is an `echo`, so a status that stops here leaves
-        # the run reporting success and a plugin that annotated nothing reading
-        # as a pass -- the same false green the `|| true` produced, one layer up.
+        # Carry it to the process exit: the script ends on `exit "${RUN_STATUS}"`, so a
+        # status that stops here leaves the run reporting success and a plugin that
+        # annotated nothing reading as a pass.
         RUN_STATUS="${PLUGIN_COMPARE_STATUS}"
     fi
 

@@ -1,0 +1,35 @@
+entry = "minimal_lookup_ref_repeated_allele"
+page = "docs/divergences/minimal-lookup-ref-repeated-allele.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\" (REF and ALT, which carry no rule against a repeated ALT allele) and the Ensembl VEP documentation, \"Running Ensembl VEP\", --lookup_ref (which overwrites the supplied reference allele); not seen in the measured datasets"
+notes = "The FASTA reads A at 21:10542415, so the looked-up record is A/A/A: Ensembl VEP splits it after the lookup into one -/- feature per repeat, each writing its reference row under --process_ref_homs, two per transcript; vep-rs reads the repeat as one allele before the lookup and writes one."
+
+[input]
+format = "vcf"
+text = """
+21	10542415	rep	T	A,A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+fasta = "tests/golden/116/GRCh38-custom/reference.fa.gz"
+
+[run]
+flags = ["--lookup_ref", "--minimal", "--process_ref_homs", "--allele_number"]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = "rep", feature = "ENST00000427445" }
+columns = ["Location", "Allele", "Feature", "Consequence", "ALLELE_NUM"]
+
+[expected]
+ensembl_vep = [
+  "21:10542415 | - | ENST00000427445 | synonymous_variant | 0",
+  "21:10542415 | - | ENST00000427445 | synonymous_variant | 0",
+]
+vep_rs = ["21:10542415 | - | ENST00000427445 | synonymous_variant | 0"]

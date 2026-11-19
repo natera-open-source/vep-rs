@@ -8,6 +8,8 @@ tests of the page by area write their own notes file over the same scratch repos
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 import re
 import shutil
@@ -208,7 +210,7 @@ def expected_page(repo: Path) -> str:
         f"(Rust {msrv} or later), which compiles for the machine it runs on: "
         '`RUSTFLAGS="-C target-cpu=native" cargo build --release --locked`',
         f"- Container image: `docker pull ghcr.io/natera-open-source/vep-rs:{VERSION}` (linux/amd64: the x86_64 binaries "
-        "with the `duckdb` CLI that Parquet output needs)",
+        "with `bgzip`, `tabix` and `ps`)",
         f"- Built by the [release workflow]({REPO_URL}/actions/workflows/release.yml) from tag `{TAG}` (commit `{COMMIT}`) "
         f"with Rust {TOOLCHAIN}; every file in [`SHA256SUMS`]({DOWNLOAD}/SHA256SUMS) carries a GitHub build-provenance "
         "attestation: `gh attestation verify <file> --repo natera-open-source/vep-rs`",
@@ -245,7 +247,7 @@ def test_the_0_3_2_page_renders_from_the_repository_files(tmp_path: Path) -> Non
     assert page(repo) == expected_page(repo)
 
 
-def test_the_page_runs_about_sixty_lines_and_is_refused_over_four_hundred(tmp_path: Path) -> None:
+def test_the_page_runs_about_sixty_lines_and_is_refused_over_eight_hundred(tmp_path: Path) -> None:
     repo = fixture_repo(tmp_path)
     lines = page(repo).splitlines()
     assert len(lines) <= 60
@@ -260,10 +262,30 @@ def test_the_page_runs_about_sixty_lines_and_is_refused_over_four_hundred(tmp_pa
         write_changelog(repo, "### Changed\n\n" + "".join(f"- Change number {i}.\n" for i in range(n)))
 
     lines_outside_changed = len(lines) - len(changelog_bullets(repo, VERSION))
-    changed_bullets(400 - lines_outside_changed)
-    assert page(repo).count("\n") == 400
-    changed_bullets(401 - lines_outside_changed)
-    assert error(repo) == f"{ERR}the page is 401 lines; the cap is 400\n"
+    changed_bullets(800 - lines_outside_changed)
+    assert page(repo).count("\n") == 800
+    changed_bullets(801 - lines_outside_changed)
+    assert error(repo) == f"{ERR}the page is 801 lines; the cap is 800\n"
+
+
+def test_the_page_renders_at_120_000_characters_and_is_refused_one_character_over(tmp_path: Path) -> None:
+    repo = fixture_repo(tmp_path)
+
+    def one_change_of(digits: int) -> None:
+        write_changelog(repo, f"### Changed\n\n- Change {'0' * digits}.\n")
+
+    one_change_of(1)
+    characters_outside_the_digits = len(page(repo)) - 1
+    one_change_of(120_000 - characters_outside_the_digits)
+    at_the_cap = page(repo)
+    assert len(at_the_cap) == 120_000
+    # The footer's middle dot is two bytes of UTF-8, so a count of bytes would refuse this page.
+    assert len(at_the_cap.encode()) > 120_000
+    one_change_of(120_001 - characters_outside_the_digits)
+    assert error(repo) == (
+        f"{ERR}the page is 120,001 characters; the cap is 120,000, "
+        "and GitHub refuses a release body over 125,000 characters\n"
+    )
 
 
 def test_whole_genome_table_derives_every_cell_from_the_records(tmp_path: Path) -> None:
@@ -468,7 +490,7 @@ SECURITY = """\
   - A FASTA index whose line length is zero is refused with `ERROR: [fasta]`.
   - A structural-variant allele of an unknown type is skipped with a warning.
 - Every input line is bounded in length."""
-DEPENDENCIES = "- `rustls` 0.23.46 clears four advisories, none reachable from `vep`.\n- The container image carries the `duckdb` CLI 2.0.0."
+DEPENDENCIES = "- `rustls` 0.23.46 clears four advisories, none reachable from `vep`.\n- The container image carries `bgzip` and `tabix` from the base distribution."
 REMOVED = "- `--transcript_index_impl` and the index implementations it selected.\n- The unused second VCF parser."
 ONE_AREA = "What changed, by area\n\n- Output\n  - A change."
 
@@ -614,7 +636,7 @@ def test_install_lists_every_archive_in_target_order_with_its_digest(tmp_path: P
     assert [l.split(": ", 1)[1].rsplit("; sha256", 1)[0] for l in install[:3]] == [PLATFORMS[n] for n in PLATFORMS]
     assert install[4] == (
         "- Container image: `docker pull ghcr.io/natera-open-source/vep-rs:0.3.2` (linux/amd64: the x86_64 binaries "
-        "with the `duckdb` CLI that Parquet output needs)"
+        "with `bgzip`, `tabix` and `ps`)"
     )
     assert f"from tag `{TAG}` (commit `{COMMIT}`) with Rust {TOOLCHAIN}; every file in [`SHA256SUMS`]({DOWNLOAD}/SHA256SUMS)" in install[5]
     assert install[6].endswith(f"sha256 `{DIGESTS['vep-rs-0.3.2.tar.gz']}`") and "DOI" not in install[6]
@@ -723,10 +745,38 @@ def test_generic_archives_follow_their_measured_archive_with_their_own_cpu_floor
     assert install[6] == (
         "- Container image: `docker pull ghcr.io/natera-open-source/vep-rs:0.3.2` (linux/amd64 and linux/arm64: the "
         "`x86-64-v2` and the generic aarch64 binaries, which run on almost every 64-bit host; the single-platform tags "
-        "`0.3.2-x86-64-v3` and `0.3.2-neoverse-v1` carry the measured binaries; every image adds the `duckdb` CLI that "
-        "Parquet output needs)"
+        "`0.3.2-x86-64-v3` and `0.3.2-neoverse-v1` carry the measured binaries; every image adds `bgzip`, `tabix` and `ps`)"
     )
     assert all(l.startswith("- ") for l in install)
+
+
+INTEL_MAC = "vep-0.3.2-x86_64-apple-darwin.tar.gz"
+INTEL_MAC_PLATFORM = "macOS on Intel, x86-64-v3 (AVX2, BMI2, FMA: every Intel Mac macOS 26 supports)"
+
+
+def test_x86_64_apple_darwin_archive_renders_its_bullet(tmp_path: Path) -> None:
+    """A SHA256SUMS carrying the Intel Mac archive renders its bullet last among the archives, after the Apple
+    silicon one, with its platform and CPU floor and no glibc clause, and the page changes by that line alone;
+    a release without the archive renders without it, and the measured archives stay required."""
+    repo = fixture_repo(tmp_path)
+    without = page(repo)
+    (repo / "SHA256SUMS").write_text("".join(f"{d}  {n}\n" for n, d in {**DIGESTS, INTEL_MAC: "3" * 64}.items()))
+    body = page(repo)
+    install = install_lines(body)
+    assert len(install) == 8 and [l.split("`")[1] for l in install[:4]] == [*PLATFORMS, INTEL_MAC]
+    assert install[3] == f"- [`{INTEL_MAC}`]({DOWNLOAD}/{INTEL_MAC}): {INTEL_MAC_PLATFORM}; sha256 `{'3' * 64}`"
+    assert body.replace(f"{install[3]}\n", "") == without
+    with_generic_archives(repo, {n: "2.17" for n in {**DIGESTS, **GENERIC_DIGESTS} if "linux-gnu" in n})
+    (repo / "SHA256SUMS").write_text(f"{'3' * 64}  {INTEL_MAC}\n" + (repo / "SHA256SUMS").read_text())
+    install = install_lines(page(repo))
+    assert len(install) == 10 and [l.split("`")[1] for l in install[:6]] == [
+        "vep-0.3.2-x86_64-unknown-linux-gnu.tar.gz", "vep-0.3.2-x86_64-unknown-linux-gnu-v2.tar.gz",
+        "vep-0.3.2-aarch64-unknown-linux-gnu.tar.gz", "vep-0.3.2-aarch64-unknown-linux-gnu-generic.tar.gz",
+        "vep-0.3.2-aarch64-apple-darwin.tar.gz", INTEL_MAC,
+    ]
+    assert install[5].split(": ", 1)[1].rsplit("; sha256", 1)[0] == INTEL_MAC_PLATFORM
+    (repo / "SHA256SUMS").write_text("".join(f"{d}  {n}\n" for n, d in {**DIGESTS, INTEL_MAC: "3" * 64}.items() if "aarch64-apple" not in n))
+    assert "SHA256SUMS lacks the archive for ['aarch64-apple-darwin']" in error(repo)
 
 
 def generic_cells(record: dict) -> None:
@@ -986,34 +1036,48 @@ def pooled(cells: list[tuple[int, int, int]]) -> str:
     return f1(sum(c[0] for c in cells), sum(c[1] for c in cells), sum(c[2] for c in cells))
 
 
-def expected_caption(clones: int, population_classes: str, clinvar_classes: str) -> str:
+def expected_caption(clones: int, population_classes: str, clinvar_classes: str, single_file: str = "") -> str:
     """The six-dataset caption over the fixture records: `population_classes` is the pair the whole genome was
     timed on, `clinvar_classes` the pair the ClinVar files were timed on with what differs from the whole-genome
-    measurement."""
+    measurement, `single_file` the clause a `single_file_whole_genome` block adds."""
     return (
         "Whole genome against Ensembl VEP 116.2: the population datasets one run per chromosome, each ClinVar release one "
         f"genome-wide file; wall time is the sum of the per-chromosome medians of {clones} machines at 16 threads on "
         f"{population_classes} for the population datasets, and the whole-file median of {clones} machines on "
-        f"{clinvar_classes}, so the `All six` row carries no wall time; peak memory at most 2.6 GB on any chromosome; tuple "
-        f"counts, per-chromosome rows and per-file counts are in the [provenance records]({REPO_URL}/tree/{TAG}/docs/concordance-provenance)."
+        f"{clinvar_classes}, so the `All six` row carries no wall time; peak memory is each dataset's largest per-chromosome "
+        "median, at most 2.6 GB on any chromosome, and a whole-file cell's own median where its campaign recorded one"
+        f"{single_file}; tuple counts, per-chromosome rows and per-file counts are in the "
+        f"[provenance records]({REPO_URL}/tree/{TAG}/docs/concordance-provenance)."
     )
 
 
-def expected_six_dataset_section(caption: str | None = None) -> list[str]:
+def expected_six_dataset_section(caption: str | None = None, clinvar_peaks: dict[tuple[str, str], str] | None = None) -> list[str]:
+    """The six-dataset section over the fixture records; `clinvar_peaks` is the peak RSS cell per (ClinVar cell,
+    arch) of the ClinVar rows, empty where the fixture aggregate carries none."""
+    clinvar_peaks = clinvar_peaks or {}
     raw: list[tuple[int, int, int]] = []
     adjusted: list[tuple[int, int, int]] = []
-    rows = ["| Dataset | Raw F1 | Adjusted F1 | ARM (s) | x86 (s) |", "| --- | --- | --- | --- | --- |"]
+    rows = [
+        "| Dataset | Raw F1 | Adjusted F1 | ARM (s) | x86 (s) | ARM peak (GB) | x86 peak (GB) |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
     for ds, label, _, p, r, i, xp, xr in POPULATION:
         raw.append((i, p, r))
         adjusted.append((i, p - xp, r - xr))
         arm, x86 = (sum(Fraction(str(m)) for m in medians) for medians in WALL[ds])
-        rows.append(f"| {label.replace(', whole genome', '')} | {f1(i, p, r)} | {f1(i, p - xp, r - xr)} | {half_up(arm, 0)} | {half_up(x86, 0)} |")
+        # Every fixture cell peaks at 1,900 MB but gnomAD v4.1 chromosome 2 on x86, at 2,501 MB: 2.6 GB rounded up.
+        x86_peak = "2.6" if ds == "gnomad_v4.1_genomes" else "1.9"
+        rows.append(
+            f"| {label.replace(', whole genome', '')} | {f1(i, p, r)} | {f1(i, p - xp, r - xr)} | {half_up(arm, 0)} | "
+            f"{half_up(x86, 0)} | 1.9 | {x86_peak} |"
+        )
     for s, (label, p, r, i, ap, ar, ai) in CLINVAR.items():
         raw.append((i, p, r))
         adjusted.append((ai, ap, ar))
         arm, x86 = (half_up(Fraction(str(CLINVAR_WALL[(s, arch)])), 0) for arch in ("arm64", "x86_64"))
-        rows.append(f"| {label} | {f1(i, p, r)} | {f1(ai, ap, ar)} | {arm} | {x86} |")
-    rows.append(f"| All six | {pooled(raw)} | {pooled(adjusted)} | | |")
+        peaks = "".join(f" {clinvar_peaks[(s, a)]} |" if (s, a) in clinvar_peaks else " |" for a in ("arm64", "x86_64"))
+        rows.append(f"| {label} | {f1(i, p, r)} | {f1(ai, ap, ar)} | {arm} | {x86} |{peaks}")
+    rows.append(f"| All six | {pooled(raw)} | {pooled(adjusted)} | | | | |")
     sv = ["| File set | Assembly | Raw F1 | Adjusted F1 |", "| --- | --- | --- | --- |"]
     for s, (assembly, gnomad, _) in SV_CELLS.items():
         files = sv_files(s)
@@ -1047,9 +1111,9 @@ def test_six_dataset_records_render_six_rows_all_six_and_the_eight_structural_va
         "gnomAD v4.1", "gnomAD v2.1.1", "1000 Genomes Phase 3", "1000 Genomes high-coverage", "ClinVar GRCh37", "ClinVar GRCh38", "All six",
     ]
     assert rows[0].startswith("| gnomAD v4.1 | 0.999999522 | 1.000000000 | 724 | 1,169 |")
-    assert rows[4] == "| ClinVar GRCh37 | 0.999979065 | 1.000000000 | 4 | 7 |"
-    assert rows[5] == "| ClinVar GRCh38 | 0.999972446 | 1.000000000 | 13 | 21 |", "12.5 s rounds half up, never to even"
-    assert rows[6] == "| All six | 0.999998462 | 1.000000000 | | |"
+    assert rows[4] == "| ClinVar GRCh37 | 0.999979065 | 1.000000000 | 4 | 7 | | |"
+    assert rows[5] == "| ClinVar GRCh38 | 0.999972446 | 1.000000000 | 13 | 21 | | |", "12.5 s rounds half up, never to even"
+    assert rows[6] == "| All six | 0.999998462 | 1.000000000 | | | | |"
     sv_rows = sv_table.splitlines()[2:]
     assert [r.split(" | ")[0][2:] for r in sv_rows] == ["ClinVar SV", "gnomAD SV", "1000 Genomes SV", "Synthetic (13 files)"] * 2
     assert [r.split(" | ")[1] for r in sv_rows] == ["GRCh37"] * 4 + ["GRCh38"] * 4
@@ -1124,7 +1188,7 @@ def test_six_dataset_adjusted_f1_is_computed_from_the_adjusted_counts(tmp_path: 
     assert "| ClinVar GRCh38 | 0.999972446 | 0.999999204 | 13 | 21 |" in moved
     assert f1(125_569_059, 125_569_159, 125_569_159) == "0.999999204" and "0.999999000" not in moved
     all_six = next(l for l in moved.splitlines() if l.startswith("| All six |"))
-    assert all_six != next(l for l in body.splitlines() if l.startswith("| All six |")) and all_six.endswith("| | |")
+    assert all_six != next(l for l in body.splitlines() if l.startswith("| All six |")) and all_six.endswith("| | | | |")
 
     def drop_adjusted_counts(record: dict) -> None:
         del record["concordance"]["s01"]["adj_rust"]
@@ -1629,6 +1693,327 @@ def test_each_six_dataset_fault_is_refused_by_its_line_or_rendered_with_its_figu
         assert expected in page(repo)
 
 
+def whole_genome_rows(body: str) -> dict[str, str]:
+    """The six-dataset whole-genome table's rows by dataset label."""
+    table = concordance_section(body).split("\n\n")[1]
+    return {r.split(" | ")[0][2:]: r for r in table.splitlines()[2:]}
+
+
+def test_peak_memory_renders_per_dataset_beside_wall_time(tmp_path: Path) -> None:
+    """Each population row carries the dataset's largest per-chromosome median peak RSS per architecture, in GB
+    rounded up: the fixture's gnomAD v4.1 chromosome 2 on x86 peaks at 2,501 MB and every other cell at 1,900 MB,
+    so that row alone reads 2.6 on x86. A ClinVar row's cells are empty until its aggregate carries a peak, and
+    the caption's bound is the largest cell of all."""
+    repo = six_dataset_repo(tmp_path)
+    body = page(repo)
+    rows = whole_genome_rows(body)
+    assert rows["gnomAD v4.1"].endswith("| 724 | 1,169 | 1.9 | 2.6 |")
+    for label in ("gnomAD v2.1.1", "1000 Genomes Phase 3", "1000 Genomes high-coverage"):
+        assert rows[label].endswith("| 1.9 | 1.9 |"), label
+    assert rows["ClinVar GRCh37"].endswith("| 4 | 7 | | |") and rows["ClinVar GRCh38"].endswith("| 13 | 21 | | |")
+    assert rows["All six"].endswith("| 1.000000000 | | | | |")
+    assert "peak memory is each dataset's largest per-chromosome median, at most 2.6 GB on any chromosome" in body
+
+    # A higher peak on one chromosome moves its dataset's cell and the caption's bound alone.
+    def raise_a_phase3_cell(record: dict) -> None:
+        cell = next(c for c in released(record)["per_cell"] if (c["dataset"], c["arch"]) == ("1000g_phase3", "arm64"))
+        cell["peak_rss_mb_median"] = 3_000.1
+
+    edit_record(repo, "population", raise_a_phase3_cell)
+    body = page(repo)
+    rows = whole_genome_rows(body)
+    assert rows["1000 Genomes Phase 3"].endswith("| 3.1 | 1.9 |") and rows["gnomAD v4.1"].endswith("| 1.9 | 2.6 |")
+    assert "at most 3.1 GB on any chromosome" in body
+
+    # A ClinVar aggregate that records its peak renders it; 3,100.0 MB is exactly 3.1 GB and 3,100.1 rounds up.
+    def record_clinvar_peaks(record: dict) -> None:
+        aggregate(record, "s01", "arm64")["peak_rss_mb_median"] = 3_100.0
+        aggregate(record, "s01", "x86_64")["peak_rss_mb_median"] = 3_100.1
+
+    edit_record(repo, "release", record_clinvar_peaks)
+    rows = whole_genome_rows(page(repo))
+    assert rows["ClinVar GRCh37"].endswith("| 4 | 7 | 3.1 | 3.2 |") and rows["ClinVar GRCh38"].endswith("| 13 | 21 | | |")
+    table = concordance_section(page(repo)).split("\n\n")[1]
+    expected = expected_six_dataset_section(clinvar_peaks={("s01", "arm64"): "3.1", ("s01", "x86_64"): "3.2"})[1]
+    expected = "\n".join(
+        r[: -len("| 1.9 | 1.9 |")] + "| 3.1 | 1.9 |" if r.startswith("| 1000 Genomes Phase 3 |") else r
+        for r in expected.splitlines()
+    )
+    assert table == expected
+
+    edit_record(repo, "release", lambda r: aggregate(r, "s01", "arm64").update(peak_rss_mb_median="n/a"))
+    assert error(repo) == (
+        f"{ERR}the per_cell_aggregates entry for s01 on arm64 carries a peak_rss_mb_median that is not a number: 'n/a'\n"
+    )
+
+
+SINGLE_FILE = {
+    "label": "gnomAD v4.1, whole genome",
+    "assembly": "GRCh38",
+    "fork": 16,
+    "per_arch": [
+        {"arch": "arm64", "instance_type": "c9gd.8xlarge", "n_clones": 5, "median_sec": 640.4, "peak_rss_mb_median": 15_321.0},
+        {"arch": "x86_64", "instance_type": "c8id.8xlarge", "n_clones": 5, "median_sec": 1_049.6, "peak_rss_mb_median": 16_040.2},
+    ],
+}
+SINGLE_FILE_CLAUSE = (
+    "; the whole of gnomAD v4.1 GRCh38 as one input file ran in 640 s at a peak of 15.4 GB on ARM and 1,050 s at a "
+    "peak of 16.1 GB on x86, the median of 5 machines at 16 threads"
+)
+
+
+def test_the_single_file_whole_genome_bound_renders_from_the_record_when_present(tmp_path: Path) -> None:
+    """A release record without a `single_file_whole_genome` block renders no such clause; one with the block
+    states the dataset as one input file with its wall time and peak RSS per architecture and the clone count,
+    and a malformed block is refused by name."""
+    repo = six_dataset_repo(tmp_path)
+    assert "as one input file" not in page(repo)
+    edit_record(repo, "release", lambda r: r.update(single_file_whole_genome=copy.deepcopy(SINGLE_FILE)))
+    body = page(repo)
+    caption = concordance_section(body).split("\n\n")[0]
+    assert caption == expected_caption(
+        20, pair(COMPUTE), f"{pair(MEMORY)} for the ClinVar files, another instance class and protocol", SINGLE_FILE_CLAUSE
+    )
+    assert len(body.splitlines()) <= 60
+
+    def with_block(edit) -> None:
+        block = copy.deepcopy(SINGLE_FILE)
+        edit(block)
+        edit_record(repo, "release", lambda r: r.update(single_file_whole_genome=block))
+
+    with_block(lambda b: b["per_arch"][1].update(n_clones=3))
+    assert "the median of 5 and 3 machines at 16 threads" in page(repo)
+    where = f"{ERR}the release record's single_file_whole_genome"
+    for edit, expected in (
+        (lambda b: drop_keys(b, "assembly"), f"{where} carries no assembly"),
+        (lambda b: b.update(fork="16"), f"{where} carries fork that is not an integer: '16'"),
+        (lambda b: b.update(per_arch={}), f"{where}.per_arch is not a list"),
+        (lambda b: drop_keys(b["per_arch"][0], "peak_rss_mb_median"), f"{where}.per_arch[0] carries no peak_rss_mb_median"),
+        (lambda b: b["per_arch"][1].update(median_sec="slow"), f"{where}.per_arch[1] carries a median_sec that is not a number: 'slow'"),
+        (lambda b: b["per_arch"][1].update(arch="riscv64"), f"{where}.per_arch[1] names the architecture 'riscv64'; one of arm64, x86_64 is read"),
+        (lambda b: b["per_arch"][1].update(arch="arm64"), f"{where}.per_arch carries arm64 twice"),
+        (lambda b: b["per_arch"].pop(), f"{where}.per_arch carries no x86_64"),
+    ):
+        with_block(edit)
+        assert error(repo) == f"{expected}\n"
+
+
+SAME_DAY_RATIOS = {  # dataset: the stored ratio on arm64, then on x86_64, at the record's three decimals
+    "gnomad_v4.1_genomes": (0.926, 0.934),
+    "gnomad_v2.1.1_genomes": (0.945, 1.004),
+    "1000g_phase3": (0.871, 1.207),
+    "1000g_highcov": (0.9, 0.995),
+}
+# Each stored ratio at two decimals, rounded by hand: 0.926 rounds up to 0.93 and 0.934 down to 0.93; 0.945 and 0.995
+# are halves and round up to 0.95 and 1.00; 1.004 rounds down to 1.00, 0.871 down to 0.87 and 1.207 up to 1.21; 0.9
+# gains its second decimal.
+SAME_DAY_FIGURES = (
+    "0.93 (ARM) and 0.93 (x86) for gnomAD v4.1, 0.95 (ARM) and 1.00 (x86) for gnomAD v2.1.1, 0.87 (ARM) and 1.21 (x86) "
+    "for 1000 Genomes Phase 3, 0.90 (ARM) and 1.00 (x86) for 1000 Genomes high-coverage"
+)
+SAME_DAY = "the population record's previous_release_wall_time"
+
+
+def same_day_sentence(figures: str, compared: str = PREVIOUS[1:]) -> str:
+    return (
+        f"The summed wall time of vep-rs {VERSION} over that of vep-rs {compared}, whose archived binaries were timed on "
+        f"the same day, instance classes and clone count, is {figures}."
+    )
+
+
+def same_day_block(datasets: list[tuple[str, str, str, float, float]]) -> dict:
+    """A `previous_release_wall_time` block over `datasets` (id, label, assembly, then the stored ratio on arm64
+    and on x86_64), its entries in that order with arm64 before x86_64. Every entry's two sums divide to 0.5,
+    which no stored ratio rounds to."""
+    return {
+        "release": PREVIOUS, "campaign_id": "fixture-retiming", "release_campaign_id": "fixture-campaign", "n_clones_per_cell": 20,
+        "instance_types": dict(COMPUTE), "binary_sha256": {"arm64": "a" * 64, "x86_64": "b" * 64},
+        "warmup_run_discarded_per_clone": True, "note": "A fixture.",
+        "per_dataset": [
+            {"dataset": ds, "label": label, "assembly": asm, "arch": arch, "n_cells": 2, "release_sum_of_cell_medians_sec": 100.0,
+             "previous_release_sum_of_cell_medians_sec": 200.0, "ratio_release_over_previous": ratio}
+            for ds, label, asm, *ratios in datasets
+            for arch, ratio in zip(("arm64", "x86_64"), ratios)
+        ],
+    }
+
+
+def six_dataset_same_day_block() -> dict:
+    return same_day_block([(ds, label, asm, *SAME_DAY_RATIOS[ds]) for ds, label, asm, *_ in POPULATION])
+
+
+def same_day(record: dict) -> dict:
+    return record["previous_release_wall_time"]
+
+
+def test_the_same_day_comparison_renders_as_one_caption_sentence_from_the_stored_ratios(tmp_path: Path) -> None:
+    """A population record without a `previous_release_wall_time` block renders the caption as it stands; one with
+    the block gains one sentence between the peak-memory clause and the records clause, which becomes a sentence
+    of its own: the summed wall time of the version rendered over that of the release the block names, each
+    dataset of the table under its label with the stored ratio per architecture at two decimals. Nothing else on
+    the page moves, the tables included."""
+    repo = six_dataset_repo(tmp_path)
+    without = page(repo)
+    assert without.count("; tuple counts") == 1 and "over that of" not in without
+    edit_record(repo, "population", lambda r: r.update(previous_release_wall_time=six_dataset_same_day_block()))
+    body = page(repo)
+    sentence = same_day_sentence(SAME_DAY_FIGURES)
+    assert body == without.replace("; tuple counts", f". {sentence} Tuple counts")
+    caption = concordance_section(body).split("\n\n")[0]
+    assert caption.endswith(
+        "and a whole-file cell's own median where its campaign recorded one. "
+        f"{sentence} Tuple counts, per-chromosome rows and per-file counts are in the "
+        f"[provenance records]({REPO_URL}/tree/{TAG}/docs/concordance-provenance)."
+    )
+    assert "\n" not in caption and len(body.splitlines()) == len(without.splitlines())
+    # The halves pin the rounding to half up on the stored decimal, where binary float formatting prints 0.94 and
+    # 0.99; the two sums beside each ratio divide to 0.5 and are not read.
+    assert (f"{0.945:.2f}", f"{0.995:.2f}") == ("0.94", "0.99") and "0.50" not in caption
+
+    # The compared version is the block's own `release`: the footer's compare link still starts at v0.3.1.
+    edit_record(repo, "population", lambda r: same_day(r).update(release="v0.5.0"))
+    moved = page(repo)
+    assert same_day_sentence(SAME_DAY_FIGURES, "0.5.0") in moved and f"compare/{PREVIOUS}...{TAG}" in moved
+    edit_record(repo, "population", lambda r: same_day(r).update(release=PREVIOUS))
+
+    # The sentence follows the table's dataset order and names ARM before x86, whatever the block's order.
+    edit_record(repo, "population", lambda r: same_day(r)["per_dataset"].reverse())
+    assert page(repo) == body
+
+    # It stands after the single-file clause when the release record carries one.
+    edit_record(repo, "release", lambda r: r.update(single_file_whole_genome=copy.deepcopy(SINGLE_FILE)))
+    assert f"recorded one{SINGLE_FILE_CLAUSE}. {sentence} Tuple counts, per-chromosome rows" in page(repo)
+
+    # A null block is an absent one.
+    repo = six_dataset_repo(tmp_path / "null")
+    edit_record(repo, "population", lambda r: r.update(previous_release_wall_time=None))
+    assert page(repo) == without
+
+
+def test_the_fixture_repo_page_carries_the_same_day_sentence_in_its_own_caption(tmp_path: Path) -> None:
+    """The whole-genome caption of the page rendered from the `fixture_repo` repository takes the sentence at the same
+    place, over its own table's datasets: 0.744 rounds down to 0.74 and the half 1.005 up to 1.01."""
+    repo = fixture_repo(tmp_path)
+    datasets = release_record(repo)["population_concordance"]["per_dataset"]
+    block = same_day_block([(r["dataset"], r["label"], r["assembly"], 0.744, 1.005) for r in datasets])
+    edit_record(repo, "population", lambda r: r.update(previous_release_wall_time=block))
+    labels = ("gnomAD v4.1", "gnomAD v2.1.1", "1000 Genomes Phase 3", "1000 Genomes high-coverage")
+    sentence = same_day_sentence(", ".join(f"0.74 (ARM) and 1.01 (x86) for {label}" for label in labels))
+    expected = expected_page(repo)
+    assert expected.count("; tuple counts and per-chromosome rows") == 1
+    assert page(repo) == expected.replace("; tuple counts", f". {sentence} Tuple counts")
+
+
+SAME_DAY_PROBES = [  # the population record's edit over the fixture block, then the exact ERROR line
+    pytest.param(lambda r: drop_keys(same_day(r), "release"), f"{SAME_DAY} carries no release", id="no-release"),
+    pytest.param(
+        lambda r: drop_keys(same_day(r), "note", "binary_sha256"),
+        f"{SAME_DAY} carries no binary_sha256, note", id="no-key-the-caption-does-not-read",
+    ),
+    pytest.param(
+        lambda r: r.update(previous_release_wall_time=[1]),
+        f"{SAME_DAY} carries no release, per_dataset, campaign_id, release_campaign_id, n_clones_per_cell, instance_types, "
+        "binary_sha256, warmup_run_discarded_per_clone, note",
+        id="a-block-that-is-not-an-object",
+    ),
+    pytest.param(
+        lambda r: same_day(r).update(release="0.3.1"),
+        f"{SAME_DAY} names the release '0.3.1'; a tag of the form vX.Y.Z is read", id="a-release-that-is-not-a-tag",
+    ),
+    pytest.param(
+        lambda r: same_day(r).update(release="v0.3.1-rc1"),
+        f"{SAME_DAY} names the release 'v0.3.1-rc1'; a tag of the form vX.Y.Z is read", id="a-release-tag-with-a-suffix",
+    ),
+    pytest.param(
+        lambda r: same_day(r).update(release=31),
+        f"{SAME_DAY} names the release 31; a tag of the form vX.Y.Z is read", id="a-release-that-is-not-a-string",
+    ),
+    pytest.param(
+        lambda r: same_day(r).update(release=TAG),
+        f"{SAME_DAY} names v0.3.2, the version rendered, as the release it is compared with",
+        id="a-release-that-is-the-version-rendered",
+    ),
+    pytest.param(
+        lambda r: same_day(r).update(per_dataset={}),
+        f"{SAME_DAY}.per_dataset is not a list", id="a-per-dataset-that-is-not-a-list",
+    ),
+    pytest.param(
+        lambda r: drop_keys(same_day(r)["per_dataset"][2], "ratio_release_over_previous"),
+        f"{SAME_DAY}.per_dataset[2] carries no ratio_release_over_previous", id="an-entry-without-its-ratio",
+    ),
+    pytest.param(
+        lambda r: drop_keys(same_day(r)["per_dataset"][4], "n_cells", "label"),
+        f"{SAME_DAY}.per_dataset[4] carries no label, n_cells", id="an-entry-without-a-key-the-caption-does-not-read",
+    ),
+    pytest.param(
+        lambda r: same_day(r)["per_dataset"][3].update(dataset="clinvar_grch38"),
+        f"{SAME_DAY}.per_dataset[3] names the dataset 'clinvar_grch38', no population dataset of the whole-genome table",
+        id="a-dataset-the-table-does-not-carry",
+    ),
+    pytest.param(
+        lambda r: same_day(r)["per_dataset"][3].update(dataset=["1000g_phase3"]),
+        f"{SAME_DAY}.per_dataset[3] names the dataset ['1000g_phase3'], no population dataset of the whole-genome table",
+        id="a-dataset-that-is-not-a-string",
+    ),
+    pytest.param(
+        lambda r: same_day(r)["per_dataset"][1].update(arch="riscv64"),
+        f"{SAME_DAY}.per_dataset[1] names the architecture 'riscv64'; one of arm64, x86_64 is read",
+        id="an-architecture-other-than-the-two",
+    ),
+    pytest.param(
+        lambda r: same_day(r)["per_dataset"][1].update(arch={"name": "x86_64"}),
+        f"{SAME_DAY}.per_dataset[1] names the architecture {{'name': 'x86_64'}}; one of arm64, x86_64 is read",
+        id="an-architecture-that-is-not-a-string",
+    ),
+    pytest.param(
+        lambda r: same_day(r)["per_dataset"][1].update(arch="arm64"),
+        f"{SAME_DAY}.per_dataset carries gnomad_v4.1_genomes on arm64 twice", id="an-entry-given-twice",
+    ),
+    pytest.param(
+        lambda r: same_day(r)["per_dataset"][0].update(ratio_release_over_previous=0),
+        f"{SAME_DAY}.per_dataset[0] carries a ratio_release_over_previous that is not a positive number: 0",
+        id="a-ratio-of-zero",
+    ),
+    pytest.param(
+        lambda r: same_day(r)["per_dataset"][7].update(ratio_release_over_previous=-0.926),
+        f"{SAME_DAY}.per_dataset[7] carries a ratio_release_over_previous that is not a positive number: -0.926",
+        id="a-ratio-below-zero",
+    ),
+    pytest.param(
+        lambda r: same_day(r)["per_dataset"][0].update(ratio_release_over_previous="n/a"),
+        f"{SAME_DAY}.per_dataset[0] carries a ratio_release_over_previous that is not a positive number: 'n/a'",
+        id="a-ratio-that-is-not-a-number",
+    ),
+    pytest.param(
+        lambda r: same_day(r)["per_dataset"][0].update(ratio_release_over_previous=float("nan")),
+        f"{SAME_DAY}.per_dataset[0] carries a ratio_release_over_previous that is not a positive number: nan",
+        id="a-ratio-that-is-not-finite",
+    ),
+    pytest.param(
+        lambda r: same_day(r)["per_dataset"][0].update(ratio_release_over_previous=1e30),
+        f"{SAME_DAY}.per_dataset[0] carries a ratio_release_over_previous too large to state at two decimals: 1e+30",
+        id="a-ratio-too-large-to-round",
+    ),
+    pytest.param(
+        lambda r: same_day(r).update(per_dataset=same_day(r)["per_dataset"][:6]),
+        f"{SAME_DAY}.per_dataset carries no entry for 1000g_highcov on arm64, x86_64", id="a-table-dataset-with-no-entry",
+    ),
+    pytest.param(
+        lambda r: same_day(r)["per_dataset"].pop(5),
+        f"{SAME_DAY}.per_dataset carries no entry for 1000g_phase3 on x86_64", id="a-table-dataset-on-one-architecture-only",
+    ),
+]
+
+
+@pytest.mark.parametrize("edit, expected", SAME_DAY_PROBES)
+def test_a_malformed_same_day_block_is_refused_by_name_before_anything_is_printed(tmp_path: Path, edit, expected: str) -> None:
+    repo = six_dataset_repo(tmp_path)
+    edit_record(repo, "population", lambda r: r.update(previous_release_wall_time=six_dataset_same_day_block()))
+    edit_record(repo, "population", edit)
+    out = render(repo)
+    assert (out.returncode, out.stdout, out.stderr) == (1, "", f"{ERR}{expected}\n")
+
+
 def test_a_chromosome_peak_rss_that_is_absent_or_not_a_finite_number_is_refused_by_name(tmp_path: Path) -> None:
     repo = six_dataset_repo(tmp_path)
     where = f"{ERR}the population record's wall_time.vep_rs.per_cell[0] carries"
@@ -1648,8 +2033,8 @@ def test_a_chromosome_peak_rss_that_is_absent_or_not_a_finite_number_is_refused_
     assert error(repo) == f"{ERR}the population record's wall_time.vep_rs.per_cell is empty\n"
 
 
-# The published 0.4.0 release: the tag's commit, the SHA256SUMS digests of its assets, and the concordance section
-# of its page, which this script rendered at that tag from the records the repository carries.
+# The published 0.4.0 release: the tag's commit, the SHA256SUMS digests of its assets, and the concordance figures
+# of its page as the renderer states them from the records the repository carries.
 COMMIT_040 = "f64272326dee8f813a57f9fa832539ccd8067dab"
 DIGESTS_040 = {
     "vep-0.4.0-aarch64-apple-darwin.tar.gz": "b22283552d1e4c995090025c04dedbc884f1b1afc477ee9f88334f9bb4674fc2",
@@ -1662,19 +2047,22 @@ PUBLISHED_040_CAPTION = (
     "genome-wide file; wall time is the sum of the per-chromosome medians of 20 machines at 16 threads on `c8gd.8xlarge` "
     "(ARM) and `c8id.8xlarge` (x86) for the population datasets, and the whole-file median of 20 machines on "
     "`r8gd.8xlarge` (ARM) and `r8id.8xlarge` (x86) for the ClinVar files, another instance class and protocol, so the "
-    "`All six` row carries no wall time; peak memory at most 2.6 GB on any chromosome; tuple counts, per-chromosome rows "
+    "`All six` row carries no wall time; peak memory is each dataset's largest per-chromosome median, at most 2.6 GB on "
+    "any chromosome, and a whole-file cell's own median where its campaign recorded one; tuple counts, per-chromosome rows "
     f"and per-file counts are in the [provenance records]({REPO_URL}/tree/v0.4.0/docs/concordance-provenance)."
 )
+# The peak columns are the per-dataset maxima of the 0.4.0 population record's cells (gnomAD v4.1 2,502.7 and
+# 2,316.9 MB; the ClinVar aggregates of that campaign carry no peak), rounded up to one decimal.
 PUBLISHED_040_TABLES = """\
-| Dataset | Raw F1 | Adjusted F1 | ARM (s) | x86 (s) |
-| --- | --- | --- | --- | --- |
-| gnomAD v4.1 | 0.999999353 | 1.000000000 | 881 | 1,365 |
-| gnomAD v2.1.1 | 0.999999521 | 1.000000000 | 282 | 472 |
-| 1000 Genomes Phase 3 | 0.999999714 | 1.000000000 | 49 | 76 |
-| 1000 Genomes high-coverage | 0.999991204 | 1.000000000 | 85 | 116 |
-| ClinVar GRCh37 | 0.999979065 | 1.000000000 | 5 | 6 |
-| ClinVar GRCh38 | 0.999972446 | 1.000000000 | 14 | 14 |
-| All six | 0.999998408 | 1.000000000 | | |
+| Dataset | Raw F1 | Adjusted F1 | ARM (s) | x86 (s) | ARM peak (GB) | x86 peak (GB) |
+| --- | --- | --- | --- | --- | --- | --- |
+| gnomAD v4.1 | 0.999999353 | 1.000000000 | 881 | 1,365 | 2.6 | 2.4 |
+| gnomAD v2.1.1 | 0.999999521 | 1.000000000 | 282 | 472 | 1.0 | 1.0 |
+| 1000 Genomes Phase 3 | 0.999999714 | 1.000000000 | 49 | 76 | 1.0 | 1.0 |
+| 1000 Genomes high-coverage | 0.999991204 | 1.000000000 | 85 | 116 | 1.8 | 1.8 |
+| ClinVar GRCh37 | 0.999979065 | 1.000000000 | 5 | 6 | | |
+| ClinVar GRCh38 | 0.999972446 | 1.000000000 | 14 | 14 | | |
+| All six | 0.999998408 | 1.000000000 | | | | |
 
 Structural-variant file sets measured on the released binary against the same reference, each set's files pooled by \
 summed counts; the paper's own figures stay as published in \
@@ -1709,8 +2097,8 @@ def release_040_repo(tmp_path: Path) -> Path:
 
 def test_the_0_4_0_records_render_the_published_concordance_section(tmp_path: Path) -> None:
     """The repository's 0.4.0 records, timed on one generation per pair with the ClinVar files on another class
-    than the whole genome, render the published page's concordance section word for word: the caption without a
-    label, then the two tables."""
+    than the whole genome, render the published page's concordance figures in the six-dataset page's shape: the
+    caption without a label, then the two tables."""
     repo = release_040_repo(tmp_path)
     out = subprocess.run(
         [sys.executable, str(SCRIPT), "--repo", str(repo), "--version", "0.4.0", "--previous", "v0.3.2", "--commit", COMMIT_040,
@@ -1724,3 +2112,344 @@ def test_the_0_4_0_records_render_the_published_concordance_section(tmp_path: Pa
     assert [l for l in out.stdout.splitlines() if l.startswith("#")] == [
         "## Highlights", "## Upgrade notes", "## Added", "## Changed", "## Fixed", "## Concordance and wall time", "## Install", "## Cite",
     ]
+
+
+PLUGIN_RECORD = ROOT / "scripts" / "docs" / "testdata" / "plugin_record_fixture.json"
+PLUGINS = "the release record's plugin_concordance"
+PLUGIN_COUNTS = ("perl", "rust", "intersection", "adj_perl", "adj_rust", "adj_intersection")
+PLUGIN_DATA = {"clinvar": "ClinVar", "synthetic_fixture": "synthetic fixture", "committed_table": "committed table"}
+PLUGIN_CAPTION = (
+    "Each supported plugin is measured on the released binary against the same Ensembl VEP reference, as raw and "
+    "adjusted F1 over the plugin's populated fields. A plugin verified on real data is measured on the genome-wide "
+    "ClinVar dataset of each assembly; a plugin whose data cannot be redistributed, on synthetic fixtures; a plugin "
+    "that reads the user's own table, on a committed table. An empty cell is an assembly the plugin is not supported on."
+)
+NOT_PORTED = 56
+PLUGIN_HEADER = "| Plugin | Data | GRCh37 raw F1 | GRCh37 adjusted F1 | GRCh38 raw F1 | GRCh38 adjusted F1 |"
+
+
+def plugin_record() -> dict:
+    return json.loads(PLUGIN_RECORD.read_text())
+
+
+def plugin_block() -> dict:
+    """The `plugin_concordance` block of a release record, built from the fixture plugin record: per gate row
+    vep-rs's per-feature counts summed over the row's expected sets, vep-rs's support, and the labels and
+    counts of the groups of plugins not ported."""
+    record = plugin_record()
+    entries = [
+        e for name in ("real_data", "synthetic_fixtures", "committed_table") for e in record[name]
+        if e["engine"] == "vep-rs" and e["projection"] == "feature"
+    ]
+    rows = []
+    for row in record["rows"]:
+        key = (row["plugin"], row["assembly"], row["dataset_or_corpus"])
+        sets = [e for e in entries if (e["plugin"], e["assembly"], e.get("dataset", e.get("corpus"))) == key]
+        assert sets, key
+        masked: dict[str, int] = {}
+        for e in sets:
+            for name, n in e["masked"].items():
+                masked[name] = masked.get(name, 0) + n
+        rows.append({
+            **row, "expected_sets": len(sets), **{k: sum(e[k] for e in sets) for k in PLUGIN_COUNTS},
+            "masked": masked, "residual_rows": sum(e["residual_rows"] for e in sets),
+        })
+    support = next(s for s in record["support"] if s["engine"] == "vep-rs")
+    groups = [{"label": g["label"], "count": g["count"]} for g in record["not_ported"]["groups"]]
+    return {
+        "plugins_record": {"file": PLUGIN_RECORD.name, "sha256": hashlib.sha256(PLUGIN_RECORD.read_bytes()).hexdigest()},
+        "ensembl_vep": "116.2",
+        "rows": rows,
+        "support": {k: v for k, v in support.items() if k != "engine"},
+        "not_ported": {"of": record["not_ported"]["of"], "groups": groups},
+    }
+
+
+def plugin_repo(tmp_path: Path, edit=None) -> Path:
+    """The six-dataset scratch repository whose release record carries the fixture block, after `edit`."""
+    repo = six_dataset_repo(tmp_path)
+    block = plugin_block()
+    if edit is not None:
+        edit(block)
+    edit_record(repo, "release", lambda r: r.update(plugin_concordance=block))
+    return repo
+
+
+def expected_plugin_table(block: dict) -> list[str]:
+    """The plugin table over a block: one row per label and kind of data in the block's order, each figure from
+    the row's integer counts with the fractions module."""
+    cells: dict[tuple[str, str], dict[str, str]] = {}
+    for row in block["rows"]:
+        raw = f1(row["intersection"], row["perl"], row["rust"])
+        adjusted = f1(row["adj_intersection"], row["adj_perl"], row["adj_rust"])
+        cells.setdefault((row["plugin"], row["scored_on"]), {})[row["assembly"]] = f" {raw} | {adjusted} |"
+    table = [PLUGIN_HEADER, "| --- | --- | --- | --- | --- | --- |"]
+    for (label, scored_on), pairs in cells.items():
+        table.append(f"| {label} | {PLUGIN_DATA[scored_on]} |" + pairs.get("GRCh37", " | |") + pairs.get("GRCh38", " | |"))
+    return table
+
+
+def test_a_plugin_block_renders_the_plugin_table_and_the_plugins_not_ported_after_the_structural_variant_table(tmp_path: Path) -> None:
+    block = plugin_block()
+    assert len(block["rows"]) == 57
+    repo = plugin_repo(tmp_path)
+    body = page(repo)
+    section = concordance_section(body)
+    six_dataset = "\n\n".join(expected_six_dataset_section())
+    table = expected_plugin_table(block)
+    labels = [g["label"] for g in block["not_ported"]["groups"]]
+    reasons = [
+        "| Reason | Count |", "| --- | --- |",
+        *(f"| {label} | {n} |" for label, n in zip(labels, (16, 13, 7, 7, 5, 4, 4))),
+        "| Total | 56 |",
+    ]
+    sentence = (
+        "vep-rs supports 31 of the 87 Ensembl VEP plugins in its support table. The 56 it does not port are counted "
+        "by reason below; the README names each one."
+    )
+    assert sum(g["count"] for g in block["not_ported"]["groups"]) == NOT_PORTED and "count" not in block["not_ported"]
+    assert section == "\n\n".join([six_dataset, PLUGIN_CAPTION, "\n".join(table), sentence, "\n".join(reasons)])
+
+    rows = table[2:]
+    assert len(rows) == 32
+    names = [r.split(" | ")[0][2:] for r in rows]
+    assert len(set(names)) == 32 and len({n.partition(" (")[0] for n in names}) == 31
+    assert [n for n in names if " (" in n] == ["CADD (structural variants)"]
+    data = [r.split(" | ")[1] for r in rows]
+    assert (data.count("ClinVar"), data.count("synthetic fixture"), data.count("committed table")) == (20, 11, 1)
+    by_name = dict(zip(names, rows))
+    assert by_name["AlphaMissense"] == "| AlphaMissense | ClinVar | 0.999888723 | 1.000000000 | 0.999997449 | 1.000000000 |"
+    assert by_name["Conservation"].startswith("| Conservation | ClinVar | | | ")
+    assert by_name["CADD (structural variants)"].startswith("| CADD (structural variants) | synthetic fixture | | | ")
+    assert by_name["TranscriptAnnotator"].startswith("| TranscriptAnnotator | committed table | ")
+    figures = [cell for r in rows for cell in r.strip("| ").split(" | ")[2:] if cell.strip("| ")]
+    adjusted = [r.split("|")[i].strip() for r in rows for i in (4, 6) if r.split("|")[i].strip()]
+    assert len(adjusted) == 57 and set(adjusted) == {"1.000000000"}
+    assert all(re.fullmatch(r"[01]\.\d{9}", cell) for cell in figures)
+    assert len({r.split("|")[i].strip() for r in rows for i in (3, 5)} - {"", "1.000000000"}) > 5, "raw F1 comes from the counts"
+
+    assert [l for l in body.splitlines() if l.startswith("#")] == [
+        "## Upgrade notes", "## Changed", "## Concordance and wall time", "## Install", "## Cite",
+    ]
+
+    # A block that carries more of the plugin record than the page reads renders the same page: a row's rounded
+    # figures, sets and classes, the record's file, a stated total, each group's plugins and the other engines.
+    record = plugin_record()
+    unread_names = [p for g in record["not_ported"]["groups"] for p in g["plugins"]]
+    unread_names += [text for e in record["engines"] if e["id"] != "vep-rs" for text in (e["id"], e["name"])]
+
+    def carry_unread_fields(release: dict) -> None:
+        carried = release["plugin_concordance"]
+        for row in carried["rows"]:
+            row.update(raw_f1=0.1, adjusted_f1=0.2, expected_sets=99, masked={"a_class": 3})
+        carried["plugins_record"] = {"file": "another.json", "sha256": "0" * 64}
+        carried["not_ported"]["count"] = 999
+        for group, source in zip(carried["not_ported"]["groups"], record["not_ported"]["groups"]):
+            group["plugins"] = source["plugins"]
+        carried.update(engines=record["engines"], absent=record["absent"])
+
+    edit_record(repo, "release", carry_unread_fields)
+    carried = json.dumps(release_record(repo)["plugin_concordance"])
+    assert len(unread_names) == NOT_PORTED + 2 and all(name in carried for name in unread_names)
+    assert page(repo) == body
+    assert not [name for name in unread_names if name in body]
+    edit_record(repo, "release", lambda r: r.pop("plugin_concordance"))
+    assert concordance_section(page(repo)) == six_dataset
+
+
+def test_the_plugin_tables_add_fifty_lines_to_the_fixed_lines_of_the_page(tmp_path: Path) -> None:
+    """The page's fixed lines run from the Concordance header through the footer: neither the notes file nor the
+    CHANGELOG writes one. On the fixture repository, which lists three binary archives, they are 42 without the
+    block and 92 with the 57 gate rows: the caption, the 34 lines of the plugin table, the sentence, the 10
+    lines of the table of plugins not ported, and the blank line before each of the four."""
+
+    def fixed_lines(repo: Path) -> list[str]:
+        lines = page(repo).splitlines()
+        return lines[lines.index("## Concordance and wall time") :]
+
+    repo = plugin_repo(tmp_path)
+    with_tables = fixed_lines(repo)
+    edit_record(repo, "release", lambda r: r.pop("plugin_concordance"))
+    without = fixed_lines(repo)
+    assert (len(without), len(with_tables)) == (42, 92)
+    install = with_tables.index("## Install")
+    added = with_tables[install - 50 : install - 1]
+    assert with_tables[install - 51] == ""
+    assert [len(block.splitlines()) for block in "\n".join(added).split("\n\n")] == [1, 34, 1, 10]
+    assert with_tables[: len(without) - 15] + with_tables[-15:] == without[:-15] + without[-15:]
+
+
+def test_a_block_of_fewer_kinds_of_data_renders_its_own_rows_and_numbers_under_the_same_caption(tmp_path: Path) -> None:
+    def keep(*kinds: str):
+        def edit(block: dict) -> None:
+            block["rows"] = [row for row in block["rows"] if row["scored_on"] in kinds]
+            scored = len({row["plugin"].partition(" (")[0] for row in block["rows"]})
+            block["support"]["read"] = scored
+            block["not_ported"]["of"] = scored + NOT_PORTED
+        return edit
+
+    def plugin_part(repo: Path) -> list[str]:
+        """The four blocks after the structural-variant table: the caption, the plugin table, the sentence and the reasons."""
+        return concordance_section(page(repo)).split("\n\n")[4:]
+
+    caption, table, sentence, _ = plugin_part(plugin_repo(tmp_path / "one", keep("clinvar")))
+    assert caption == PLUGIN_CAPTION
+    assert len(table.splitlines()) == 2 + 20 and {r.split(" | ")[1] for r in table.splitlines()[2:]} == {"ClinVar"}
+    assert sentence.startswith("vep-rs supports 20 of the 76 Ensembl VEP plugins in its support table. The 56 it does not port ")
+    caption, table, sentence, _ = plugin_part(plugin_repo(tmp_path / "two", keep("committed_table", "synthetic_fixture")))
+    assert caption == PLUGIN_CAPTION
+    assert len(table.splitlines()) == 2 + 12
+    assert {r.split(" | ")[1] for r in table.splitlines()[2:]} == {"synthetic fixture", "committed table"}
+    assert sentence.startswith("vep-rs supports 11 of the 67 Ensembl VEP plugins in its support table. The 56 it does not port ")
+
+
+def test_an_earlier_shape_record_carrying_a_plugin_block_is_refused(tmp_path: Path) -> None:
+    repo = fixture_repo(tmp_path)
+    edit_record(repo, "release", lambda r: r.update(plugin_concordance=plugin_block()))
+    assert error(repo) == (
+        f"{ERR}{PLUGINS} is rendered after the structural-variant table, which a record of the earlier shape lacks\n"
+    )
+
+
+def plugin_row(block: dict, plugin: str, assembly: str) -> dict:
+    return next(row for row in block["rows"] if (row["plugin"], row["assembly"]) == (plugin, assembly))
+
+
+SV_ROW = "rows[11] (CADD (structural variants) on GRCh38)"
+PLUGIN_PROBES = [  # the block's edit, then the exact ERROR line
+    pytest.param(
+        lambda b: b["not_ported"]["groups"][0].update(count=15),
+        f"{ERR}{PLUGINS} counts 31 plugins supported and 55 not ported, which are not the 87 it lists",
+        id="groups-whose-sum-and-the-supported-count-do-not-give-the-plugins-listed",
+    ),
+    pytest.param(
+        lambda b: b["not_ported"].update(of=88),
+        f"{ERR}{PLUGINS} counts 31 plugins supported and 56 not ported, which are not the 88 it lists",
+        id="supported-and-not-ported-that-do-not-sum-to-the-plugins-listed",
+    ),
+    pytest.param(
+        lambda b: b["support"].update(read=32),
+        f"{ERR}{PLUGINS} counts 32 plugins supported and 56 not ported, which are not the 87 it lists",
+        id="a-supported-count-that-does-not-sum",
+    ),
+    pytest.param(
+        lambda b: (b["support"].update(read=30), b["not_ported"].update(of=86)),
+        f"{ERR}{PLUGINS}.support reads 30 plugins and the rows score 31",
+        id="a-supported-count-that-is-not-the-plugins-the-rows-score",
+    ),
+    pytest.param(
+        lambda b: plugin_row(b, "AlphaMissense", "GRCh37").update(adj_rust=269569),
+        f"{ERR}{PLUGINS}.rows[0] (AlphaMissense on GRCh37) is not a perfect adjusted match: adj_perl 269568, adj_rust 269569, "
+        "adj_intersection 269568",
+        id="adjusted-counts-that-differ-on-one-side",
+    ),
+    pytest.param(
+        lambda b: plugin_row(b, "CADD (structural variants)", "GRCh38").update(adj_intersection=0),
+        f"{ERR}{PLUGINS}.{SV_ROW} is not a perfect adjusted match: adj_perl 157, adj_rust 157, adj_intersection 0",
+        id="an-adjusted-intersection-below-both-sides",
+    ),
+    pytest.param(
+        lambda b: plugin_row(b, "CADD (structural variants)", "GRCh38").update(residual_rows=2),
+        f"{ERR}{PLUGINS}.{SV_ROW} carries 2 residual rows; the page states a plugin with none",
+        id="a-row-with-residual-rows",
+    ),
+    pytest.param(
+        lambda b: plugin_row(b, "AlphaMissense", "GRCh37").pop("residual_rows"),
+        f"{ERR}{PLUGINS}.rows[0] carries no residual_rows",
+        id="a-row-without-its-residual-count",
+    ),
+    pytest.param(
+        lambda b: plugin_row(b, "AlphaMissense", "GRCh37").update(perl=269598.0),
+        f"{ERR}{PLUGINS}.rows[0] (AlphaMissense on GRCh37) carries perl that is not an integer: 269598.0",
+        id="a-count-that-is-not-an-integer",
+    ),
+    pytest.param(
+        lambda b: plugin_row(b, "AlphaMissense", "GRCh37").pop("adj_perl"),
+        f"{ERR}{PLUGINS}.rows[0] (AlphaMissense on GRCh37) carries no adj_perl",
+        id="a-row-without-an-adjusted-count",
+    ),
+    pytest.param(
+        lambda b: plugin_row(b, "AlphaMissense", "GRCh37").update(scored_on="real_data"),
+        f"{ERR}{PLUGINS}.rows[0] (AlphaMissense on GRCh37) is scored on 'real_data'; one of clinvar, synthetic_fixture, "
+        "committed_table is read",
+        id="a-kind-of-data-the-table-has-no-cell-for",
+    ),
+    pytest.param(
+        lambda b: plugin_row(b, "AlphaMissense", "GRCh37").update(scored_on=["clinvar"]),
+        f"{ERR}{PLUGINS}.rows[0] (AlphaMissense on GRCh37) is scored on ['clinvar']; one of clinvar, synthetic_fixture, "
+        "committed_table is read",
+        id="a-kind-of-data-that-is-not-text",
+    ),
+    pytest.param(
+        lambda b: plugin_row(b, "AlphaMissense", "GRCh37").update(assembly="GRCm39"),
+        f"{ERR}{PLUGINS}.rows[0] (AlphaMissense on GRCm39) names an assembly the table has no columns for; one of GRCh37, "
+        "GRCh38 is read",
+        id="an-assembly-the-table-has-no-columns-for",
+    ),
+    pytest.param(
+        lambda b: plugin_row(b, "AlphaMissense", "GRCh37").update(assembly="GRCh38"),
+        f"{ERR}{PLUGINS}.rows carries AlphaMissense on GRCh38 twice",
+        id="a-plugin-on-one-assembly-twice",
+    ),
+    pytest.param(
+        lambda b: plugin_row(b, "AlphaMissense", "GRCh37").update(plugin="Alpha | Missense"),
+        f"{ERR}{PLUGINS}.rows[0] carries plugin that is not the text of one table cell: 'Alpha | Missense'",
+        id="a-label-that-would-break-its-row",
+    ),
+    pytest.param(
+        lambda b: b["not_ported"]["groups"][2].update(label=" "),
+        f"{ERR}{PLUGINS}.not_ported.groups[2] carries label that is not the text of one table cell: ' '",
+        id="a-group-with-a-blank-label",
+    ),
+    pytest.param(
+        lambda b: b["not_ported"]["groups"][2].update(count=-7),
+        f"{ERR}{PLUGINS}.not_ported.groups[2] carries count that is below zero: -7",
+        id="a-group-count-below-zero",
+    ),
+    pytest.param(
+        lambda b: b["not_ported"]["groups"][2].pop("count"),
+        f"{ERR}{PLUGINS}.not_ported.groups[2] carries no count",
+        id="a-group-without-its-count",
+    ),
+    pytest.param(
+        lambda b: b["not_ported"].update(groups={"label": "one", "count": 56}),
+        f"{ERR}{PLUGINS}.not_ported.groups is not a list",
+        id="groups-that-are-not-a-list",
+    ),
+    pytest.param(
+        lambda b: b["not_ported"].pop("of"),
+        f"{ERR}{PLUGINS}.not_ported carries no of",
+        id="a-block-without-the-plugins-listed",
+    ),
+    pytest.param(
+        lambda b: b["not_ported"].update(of=True),
+        f"{ERR}{PLUGINS}.not_ported carries of that is not an integer: True",
+        id="a-listed-count-that-is-not-an-integer",
+    ),
+    pytest.param(
+        lambda b: b["support"].pop("read"),
+        f"{ERR}{PLUGINS}.support carries no read",
+        id="a-support-block-without-the-plugins-read",
+    ),
+    pytest.param(lambda b: b.pop("not_ported"), f"{ERR}{PLUGINS} carries no not_ported", id="a-block-without-not-ported"),
+    pytest.param(lambda b: b.pop("rows"), f"{ERR}{PLUGINS} carries no rows", id="a-block-without-rows"),
+    pytest.param(lambda b: b.update(rows=[]), f"{ERR}{PLUGINS}.rows is not a list of rows", id="a-block-with-no-rows"),
+    pytest.param(
+        lambda b: b.update(ensembl_vep="115.2"),
+        f"{ERR}{PLUGINS} names Ensembl VEP '115.2'; the records' perl_reference blocks name 116.2",
+        id="a-block-naming-another-reference-release",
+    ),
+    pytest.param(lambda b: b.pop("ensembl_vep"), f"{ERR}{PLUGINS} carries no ensembl_vep", id="a-block-without-its-reference-release"),
+]
+
+
+@pytest.mark.parametrize("edit, expected", PLUGIN_PROBES)
+def test_a_malformed_plugin_block_is_refused_by_name_before_anything_is_printed(tmp_path: Path, edit, expected: str) -> None:
+    out = render(plugin_repo(tmp_path, edit))
+    assert (out.returncode, out.stdout, out.stderr) == (1, "", f"{expected}\n")
+
+
+def test_a_plugin_block_that_is_not_an_object_is_refused(tmp_path: Path) -> None:
+    repo = six_dataset_repo(tmp_path)
+    edit_record(repo, "release", lambda r: r.update(plugin_concordance=[plugin_block()]))
+    assert error(repo) == f"{ERR}{PLUGINS} is not an object\n"

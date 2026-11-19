@@ -8,7 +8,7 @@ homepage.workspace = true
 rust-version.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Built-in VEP plugins: tabix annotation engine, allele matching, and clinical plugins"
+description = "Built-in plugins and custom annotation sources of vep-rs, a Rust reimplementation of Ensembl VEP"
 
 [dependencies]
 vep-core = { workspace = true }
@@ -21,7 +21,6 @@ indexmap = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-parking_lot = { workspace = true }
 rayon = { workspace = true }
 memmap2 = { workspace = true }
 

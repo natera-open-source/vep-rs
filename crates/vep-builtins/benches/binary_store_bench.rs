@@ -14,8 +14,8 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::hint::black_box;
 
 use vep_builtins::annotation_store::AnnotationStore;
-use vep_builtins::binary_store::{BinaryAnnotator, BinaryStoreWriter};
-use vep_builtins::tabix::TabixRecord;
+use vep_builtins::binary_store::{BinaryAnnotator, BinaryStoreWriter, ContentIdentity};
+use vep_builtins::tabix::{TabixConfig, TabixRecord};
 
 /// Generate synthetic records: `record_count` records across `chr_count` chromosomes,
 /// evenly spaced starting at position 1000.
@@ -60,9 +60,19 @@ fn bench_binary_store_queries(c: &mut Criterion) {
         let dir = tempfile::tempdir().unwrap();
         let vpd_path = dir.path().join("bench.vpd");
         let writer = BinaryStoreWriter::new(vpd_path.clone());
-        writer.write(&column_names, &grouped).unwrap();
+        // A store is bound to its table's bytes; the bench's table is a stand-in.
+        let table = dir.path().join("bench.tsv.gz");
+        std::fs::write(&table, b"bench").unwrap();
+        let source = ContentIdentity::of_file(&table).unwrap();
+        let config = TabixConfig {
+            file_path: table,
+            ..TabixConfig::default()
+        };
+        writer
+            .write(&column_names, &grouped, &config, &source)
+            .unwrap();
 
-        let store = BinaryAnnotator::open(&vpd_path).unwrap();
+        let store = BinaryAnnotator::open(&vpd_path, &config).unwrap();
 
         group.bench_with_input(
             BenchmarkId::new("single_query", records_per_chr),

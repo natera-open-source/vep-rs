@@ -1,0 +1,119 @@
+[VEP run statistics]
+VEP version (API)	 116.2 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh37
+Species	homo_sapiens
+Command line options	vep --assembly GRCh37 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --fasta [PATH]/ref.fa --force_overwrite --fork --format vcf --hgvs --input_file [PATH]/input.vcf --offline --output_file [PATH]/tab.txt --quiet --stats_text --tab
+Start time	2026-11-13 13:46:28
+End time	2026-11-13 13:46:28
+Run time	0 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/tab.txt
+
+[Data version]
+1000genomes	phase3
+COSMIC	98
+ClinVar	202306
+HGMD-PUBLIC	20204
+assembly	GRCh37.p13
+dbSNP	156
+gencode	GENCODE 19
+genebuild	2011-04
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.2
+regbuild	1.0
+sift	sift5.2.2
+
+[General statistics]
+Lines of input read	3
+Variants processed	3
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	3
+Overlapped transcripts	10
+Overlapped regulatory features	-
+
+[Variant classes]
+insertion	1
+deletion	2
+
+[Consequences (most severe)]
+splice_acceptor_variant	2
+frameshift_variant	1
+
+[Consequences (all)]
+splice_acceptor_variant	2
+frameshift_variant	1
+splice_region_variant	1
+non_coding_transcript_exon_variant	6
+intron_variant	15
+downstream_gene_variant	6
+
+[Coding consequences]
+frameshift_variant	1
+
+[Variants by chromosome]
+21	3
+
+[Distribution of variants on chromosome 21]
+0	0
+1	0
+2	0
+3	0
+4	0
+5	0
+6	0
+7	0
+8	0
+9	0
+10	0
+11	0
+12	0
+13	0
+14	0
+15	0
+16	0
+17	0
+18	0
+19	0
+20	0
+21	0
+22	0
+23	0
+24	0
+25	0
+26	0
+27	0
+28	0
+29	0
+30	0
+31	0
+32	0
+33	0
+34	0
+35	0
+36	0
+37	0
+38	0
+39	0
+40	0
+41	0
+42	0
+43	0
+44	0
+45	0
+46	0
+47	3
+48	0
+
+[Position in protein]
+00-10%	0
+10-20%	3
+20-30%	0
+30-40%	0
+40-50%	0
+50-60%	0
+60-70%	0
+70-80%	0
+80-90%	0
+90-100%	0

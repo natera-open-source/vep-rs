@@ -1,0 +1,16 @@
+## ENSEMBL VARIANT EFFECT PREDICTOR v116.2
+## Output produced by the reference annotator
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+rs1001	21:10000	A	GENE1	TRANS001	Transcript	missense_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+rs1001	21:10000	A	GENE1	TRANS002	Transcript	intron_variant,non_coding_transcript_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+rs1002	21:20000	C	GENE1	TRANS001	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+rs1003	21:30000	T	GENE1	TRANS001	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+rs1004	21:40000	G	GENE2	TRANS003	Transcript	5_prime_UTR_variant,start_lost,start_retained_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+sv1005	21:030425651-+30425949	deletion	GENE2	TRANS003	Transcript	transcript_ablation	-	-	-	-	-	-	IMPACT=MODIFIER
+rs1006	21:50000	A	GENE3	TRANS004	Transcript	synonymous_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+rs1007	KI270728.1:100	A	GENE9	TRANS009	Transcript	intron_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+bnd1008	21:60000	chromosome_breakpoint	GENE4	TRANS005	Transcript	transcript_ablation	-	-	-	-	-	-	IMPACT=MODIFIER
+bnd1008	21:60000	chromosome_breakpoint	GENE4	TRANS005	Transcript	transcript_ablation	-	-	-	-	-	-	IMPACT=MODIFIER
+rs1009	21:70000	A	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+rs1010	21:110000	G	GENE1	TRANS001	Transcript	 intron_variant, intron_variant ,splice_region_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+short	line

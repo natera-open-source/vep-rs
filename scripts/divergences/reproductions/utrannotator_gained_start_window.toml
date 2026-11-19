@@ -1,0 +1,31 @@
+entry = "utrannotator_gained_start_window"
+page = "docs/plugins/transcript-model.md#1-utrannotator-the-window-of-the-gained-start-test"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 137,713 per million · 4 flag sets, 104 corpora"
+notes = "The constructed record inserts the three bases of a start codon after the first base of the uORF's start codon at cDNA 64 (5' UTR index 63) of this reverse-strand transcript, giving `CCCATAAATGTGCATTGC`: the codon at index 63 is parted and lost, and the inserted bases stand as a start codon at index 64. Ensembl VEP's four-base window ends one base short of the gained codon's third base. The FASTA named covers the transcript's whole 5' UTR."
+
+[input]
+format = "vcf"
+text = """
+21	25734954	utr_ins	A	ACAT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-release116/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-loftee/reference.fa.gz"
+
+[run]
+flags = ["--plugin", "UTRAnnotator,file={repo}/tests/golden/116/GRCh38-plugin-utr-annotator/data/uORF_5UTR_GRCh38_PUBLIC.chr21.txt"]
+
+[compare]
+kind = "field"
+field = "5UTR_consequence"
+where = { record = "utr_ins", feature = "ENST00000924761" }
+
+[expected]
+ensembl_vep = ["5_prime_UTR_premature_start_codon_loss_variant"]
+vep_rs = ["5_prime_UTR_premature_start_codon_gain_variant"]

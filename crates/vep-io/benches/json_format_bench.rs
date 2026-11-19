@@ -25,7 +25,9 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use smallvec::smallvec;
 use std::hint::black_box;
+use std::sync::Arc;
 use vep_core::consequence::{Consequence, FeatureType, Impact, TranscriptConsequence};
+use vep_core::transcript::Transcript;
 use vep_core::variant::{ColocatedVariant, InputVariant};
 use vep_io::output::fields::FieldOptions;
 use vep_io::output::json::JsonOutputFormatter;
@@ -33,15 +35,18 @@ use vep_io::output::json::JsonOutputFormatter;
 /// One annotated transcript consequence resembling a typical missense hit.
 fn make_transcript_consequence(transcript_id: &str, gene_id: &str) -> TranscriptConsequence {
     TranscriptConsequence {
-        transcript_id: transcript_id.into(),
-        gene_id: gene_id.into(),
-        gene_symbol: Some("MRPL39".into()),
-        gene_symbol_source: Some("HGNC".into()),
-        hgnc_id: Some("HGNC:16650".into()),
+        transcript: Some(Arc::new(Transcript {
+            stable_id: transcript_id.into(),
+            gene_stable_id: gene_id.into(),
+            gene_symbol: Some("MRPL39".into()),
+            gene_symbol_source: Some("HGNC".into()),
+            hgnc_id: Some("HGNC:16650".into()),
+            biotype: "protein_coding".into(),
+            ..Transcript::default()
+        })),
         consequences: smallvec![Consequence::MissenseVariant],
         impact: Impact::MODERATE,
         feature_type: FeatureType::Transcript,
-        biotype: Some("protein_coding".into()),
         canonical: true,
         cdna_position: Some("1033".into()),
         cds_position: Some("991".into()),

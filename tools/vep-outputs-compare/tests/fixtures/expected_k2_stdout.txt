@@ -1,0 +1,4 @@
+VEP per-term totals: cache miss, wrote {{SCRATCH}}/totals_cache.csv
+wrote per-class counts: {{SCRATCH}}/per_class.csv (17 rows fastvep/ds_b)
+terms: 17  VEP tuples: 22  VEP-only: 11  engine-only: 20
+this dataset's floor: 0.363636 on intron_variant (3 terms at or above 3 tuples, 14 below). NOT the reported floor, which is pooled across datasets -- see --pool-consequence-class.

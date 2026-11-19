@@ -1,0 +1,30 @@
+entry = "reverse_strand_record_as_written_allele"
+page = "docs/plugins.md#1-clinpred-a-record-given-on-the-reverse-strand"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the Ensembl VEP documentation, \"Data formats\", Default Ensembl VEP input, whose strand column is + (forward) or - (reverse); not seen in the measured datasets"
+notes = "The reverse-strand spelling of T>C at 21:30282172; the corpus table scores T C 0.163359 and T G 0.375971, and the written G is matched against the table's forward-strand Alt."
+
+[input]
+format = "ensembl"
+text = """
+21	30282172	30282172	A/G	-	rev_missense
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-clinpred-fixture/json_cache"
+
+[run]
+flags = ["--plugin", "ClinPred,file={corpus}/data/ClinPred_hg38_sorted_tabbed_synthetic.tsv.gz"]
+
+[compare]
+kind = "field"
+field = "ClinPred"
+where = { record = "rev_missense", feature = "ENST00000340345" }
+
+[expected]
+ensembl_vep = ["0.375971"]
+vep_rs = ["0.163359"]

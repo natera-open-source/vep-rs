@@ -11,7 +11,11 @@
   "default.txt": "790915b3ba91782b7317eb678dab6f3d98b061bccba383a8a1f486c70de34495",
   "tab.txt": "8c597bc69a56b70b7d1e9dff8a2c32953da87dbc0530a7d59caf2a32908ba058",
   "vcf.vcf": "21faa0ad4a005caeffba86ca6fcacc672c5712462decf32bf19853d2c6deec63",
-  "json.jsonl": "6e11b97071c96edc2a70f0bd92d9c28c614decea4635172ab5073e9a07376274"
+  "json.jsonl": "6e11b97071c96edc2a70f0bd92d9c28c614decea4635172ab5073e9a07376274",
+  "default.summary.log": "835f31b826d3b6e5f4796db2b0d11b3b584dff93dcd6a425d467d502545ac8f3",
+  "tab.summary.log": "eb9727be3af5f5e52637134dc7560243bdfaa2dcfb148dd2058326d722ccc537",
+  "vcf.summary.log": "f0444dbd5fe45c0d22ea7347f8a7ac0ab3a18f10d7dcd6653bbbac2ea58a5e5b",
+  "json.summary.log": "047e8e2fc71b536fe7687677e01d3054f0ed2d11754ef679132fd362ef4a5225"
  },
  "variants_vcf_sha256": "d095a93e3a66d71cad3afdd57463ca67009a743cff6ff3a6b95f17571702c6f0",
  "flag_sets": {
@@ -108,5 +112,9 @@
   "variants.ensembl.txt": "4eb8fd0c6b1b2871a218d6ade3fb168f9177c3426370656d3fa8e1f746d31333",
   "variants.ensembl.space.txt": "636aa274f9eb7addaecff676ecf71ea53302f0bba0f0784d683fc5d155c58221",
   "variants.space.vcf": "4b0bdb5c14a6e1e58a179329899b06d06bf716d72570803f0ccfa1210fadc0d8"
+ },
+ "summary_log": {
+  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --uploaded_allele --variant_class --mask_header_cache_path [--tab|--vcf|--json]",
+  "annotation_rows": "equal to the expected outputs' rows; the two runs differ only in the header lines that name a time, the cache path or the command line"
  }
 }

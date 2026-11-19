@@ -1,0 +1,44 @@
+entry = "alphamissense_sibling_allele_rows"
+page = "docs/divergences/alphamissense-sibling-allele-rows.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 405.6 per million · 6 flag sets, 64 corpora"
+
+# The corpus table with the `A T` row at 13610388 given its own prediction, 0.9000 likely_pathogenic, where the
+# `A C` row before it keeps 0.1079 likely_benign; both rows predict M54L on ENST00000299443.5.
+prepare = [
+  'zcat "$CORPUS/plugin_data/alphamissense.tsv.gz" | awk -F"\t" -v OFS="\t" "\$1 == \"chr21\" && \$2 == \"13610388\" && \$4 == \"T\" { \$9 = \"0.9000\"; \$10 = \"likely_pathogenic\" } { print }" | bgzip -c > "$STAGE/am_edited.tsv.gz" && tabix -s 1 -b 2 -e 2 "$STAGE/am_edited.tsv.gz"',
+]
+
+# Two alleles of one codon that both give leucine, in the ALT order C,T.
+[input]
+format = "vcf"
+text = """
+21	13610388	sibling_ct	A	C,T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-alphamissense/json_cache"
+
+[run]
+flags = ["--plugin", "AlphaMissense,file={stage}/am_edited.tsv.gz"]
+
+# The T row: Ensembl VEP writes the A C row's prediction, the first table row in file order whose letters match
+# and whose alternate is one of the record's alleles; vep-rs writes the table's row for A T.
+[compare]
+kind = "rows"
+where = { record = "sibling_ct", feature = "ENST00000299443" }
+columns = ["Location", "Allele", "Feature", "Amino_acids", "am_class", "am_pathogenicity"]
+
+[expected]
+ensembl_vep = [
+  "21:13610388 | C | ENST00000299443 | M/L | likely_benign | 0.1079",
+  "21:13610388 | T | ENST00000299443 | M/L | likely_benign | 0.1079",
+]
+vep_rs = [
+  "21:13610388 | C | ENST00000299443 | M/L | likely_benign | 0.1079",
+  "21:13610388 | T | ENST00000299443 | M/L | likely_pathogenic | 0.9000",
+]

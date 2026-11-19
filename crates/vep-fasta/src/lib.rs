@@ -32,7 +32,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
     fs::File,
-    io::{BufRead, BufReader, Cursor, Read},
+    io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -316,21 +316,33 @@ fn bgzf_header_len(header: &[u8]) -> Option<usize> {
     bgzf.then(|| usize::from(u16::from_le_bytes([header[16], header[17]])) + 1)
 }
 
-/// The length of the BGZF block starting at `at`, read from its header, or
-/// `None` when the bytes there are not a BGZF header.
-fn bgzf_block_len(data: &[u8], at: usize) -> Option<usize> {
-    bgzf_header_len(data.get(at..)?)
+/// Fills `buf` with the bytes of `file`, whose length is `file_len`, from
+/// `at`; `None` when they lie past the end or the read fails.
+fn read_file_at(mut file: &File, file_len: u64, at: u64, buf: &mut [u8]) -> Option<()> {
+    if at.checked_add(buf.len() as u64)? > file_len {
+        return None;
+    }
+    file.seek(SeekFrom::Start(at)).ok()?;
+    file.read_exact(buf).ok()
+}
+
+/// The length of the BGZF block starting at `at` in `file`, read from its
+/// header, or `None` when the bytes there are not a BGZF header.
+fn bgzf_block_len(file: &File, file_len: u64, at: u64) -> Option<usize> {
+    let mut header = [0u8; BGZF_HEADER_LEN];
+    read_file_at(file, file_len, at, &mut header)?;
+    bgzf_header_len(&header)
 }
 
 /// The ISIZE field of the block at `at` of length `len`: its uncompressed size,
 /// or `None` when `len` is under the field's four bytes or the block's last four
-/// bytes lie outside `data`.
-fn bgzf_block_isize(data: &[u8], at: usize, len: usize) -> Option<u64> {
+/// bytes lie outside the file.
+fn bgzf_block_isize(file: &File, file_len: u64, at: u64, len: usize) -> Option<u64> {
     if len < 4 {
         return None;
     }
-    let end = at.checked_add(len)?;
-    let tail: [u8; 4] = data.get(end - 4..end)?.try_into().ok()?;
+    let mut tail = [0u8; 4];
+    read_file_at(file, file_len, at.checked_add(len as u64)? - 4, &mut tail)?;
     Some(u64::from(u32::from_le_bytes(tail)))
 }
 
@@ -342,16 +354,19 @@ enum BgzfRefusal {
     OversizedBlock(u64),
 }
 
-/// The uncompressed length of `data` when `index` describes it, else why it does
-/// not: the file must start with a whole BGZF block, and every entry must start
-/// where the block before it ends, at the uncompressed offset that block's ISIZE
-/// brings the sequence to; the last block must end at the file's end or at its
-/// EOF block. Every block's header and ISIZE are read, one pass over the whole
-/// compressed file, so the index is the one `bgzip -r` would write for these
-/// bytes or it is refused, and a block whose ISIZE is over the format's limit is
-/// refused as its own fault, wherever it sits.
-fn check_gzi(data: &[u8], index: &[(u64, u64)]) -> Result<u64, BgzfRefusal> {
-    let len = data.len() as u64;
+/// The uncompressed length of the BGZF `file`, of `len` bytes, when `index`
+/// describes it, else why it does not: the file must start with a whole BGZF
+/// block, and every entry must start where the block before it ends, at the
+/// uncompressed offset that block's ISIZE brings the sequence to; the last block
+/// must end at the file's end or at its EOF block. Every block's header and
+/// ISIZE are read, one pass over the whole compressed file, so the index is the
+/// one `bgzip -r` would write for these bytes or it is refused, and a block
+/// whose ISIZE is over the format's limit is refused as its own fault, wherever
+/// it sits. The pass reads the file in place rather than through its mapping:
+/// a header and a trailer out of every block, faulted through the mapping,
+/// would bring the whole file into the process under the kernel's readahead,
+/// and a handle's resident size is meant to be what its reads touch.
+fn check_gzi(file: &File, len: u64, index: &[(u64, u64)]) -> Result<u64, BgzfRefusal> {
     let not_a_block = |at: u64| {
         BgzfRefusal::IndexMismatch(if at == 0 {
             "the file does not start with a BGZF block".to_string()
@@ -363,10 +378,9 @@ fn check_gzi(data: &[u8], index: &[(u64, u64)]) -> Result<u64, BgzfRefusal> {
     // `start`, refused when the bytes there are not one or its ISIZE is over the
     // limit.
     let block_end = |start: (u64, u64)| -> Result<(u64, u64), BgzfRefusal> {
-        let at = start.0 as usize;
-        let block_len = bgzf_block_len(data, at).ok_or_else(|| not_a_block(start.0))?;
+        let block_len = bgzf_block_len(file, len, start.0).ok_or_else(|| not_a_block(start.0))?;
         let block_isize =
-            bgzf_block_isize(data, at, block_len).ok_or_else(|| not_a_block(start.0))?;
+            bgzf_block_isize(file, len, start.0, block_len).ok_or_else(|| not_a_block(start.0))?;
         if block_isize > BGZF_MAX_ISIZE {
             return Err(BgzfRefusal::OversizedBlock(start.0));
         }
@@ -388,8 +402,8 @@ fn check_gzi(data: &[u8], index: &[(u64, u64)]) -> Result<u64, BgzfRefusal> {
     if end.0 == len {
         Ok(end.1)
     } else if end.0 + BGZF_EOF_LEN as u64 == len {
-        let eof_block = bgzf_block_len(data, end.0 as usize) == Some(BGZF_EOF_LEN)
-            && bgzf_block_isize(data, end.0 as usize, BGZF_EOF_LEN) == Some(0);
+        let eof_block = bgzf_block_len(file, len, end.0) == Some(BGZF_EOF_LEN)
+            && bgzf_block_isize(file, len, end.0, BGZF_EOF_LEN) == Some(0);
         if eof_block {
             Ok(end.1)
         } else {
@@ -456,10 +470,14 @@ fn checked_gzi(fasta_path: &Path, gzi_path: &Path) -> Result<IndexedBgzf, FastaE
         .map_err(io_error("failed to read BGZF index", gzi_path))?
         .as_ref()
         .to_vec();
-    let data = map_file(fasta_path)?;
-    match check_gzi(&data, &index) {
+    let file = File::open(fasta_path).map_err(io_error("failed to open FASTA", fasta_path))?;
+    let len = file
+        .metadata()
+        .map_err(io_error("failed to read FASTA", fasta_path))?
+        .len();
+    match check_gzi(&file, len, &index) {
         Ok(uncompressed_len) => Ok(IndexedBgzf {
-            data,
+            data: map_file(fasta_path)?,
             index,
             uncompressed_len,
         }),
@@ -685,6 +703,14 @@ struct FastaSource {
     storage: FastaStorage,
 }
 
+/// How a read spells its bases: upper-cased, as every consequence computation
+/// reads the reference, or as the file has them.
+#[derive(Debug, Clone, Copy)]
+enum Case {
+    Upper,
+    AsWritten,
+}
+
 /// Thread-safe indexed reference FASTA.
 ///
 /// Uses `.fai` entries to compute byte offsets for random access.
@@ -693,6 +719,9 @@ pub struct IndexedFasta {
     fasta_path: PathBuf,
     sources: Vec<FastaSource>,
     records: HashMap<String, FaiRecord>,
+    /// The record names in `.fai` order, the files in the order they were
+    /// opened.
+    names: Vec<String>,
     // Lowercased alias -> canonical contig name in `records`.
     aliases: HashMap<String, String>,
     /// The pseudoautosomal regions a read on the record `Y` is redirected
@@ -739,6 +768,7 @@ impl IndexedFasta {
 
         let mut sources: Vec<FastaSource> = Vec::with_capacity(files.len());
         let mut records: HashMap<String, FaiRecord> = HashMap::new();
+        let mut names: Vec<String> = Vec::new();
         let mut aliases: HashMap<String, String> = HashMap::new();
         for fasta_path in files {
             let encoding = encoding_of(&fasta_path)?;
@@ -787,12 +817,14 @@ impl IndexedFasta {
                     aliases.insert(alias.to_ascii_lowercase(), name.clone());
                 }
                 aliases.insert(name.to_ascii_lowercase(), name.clone());
+                names.push(name);
             }
         }
         Ok(Self {
             fasta_path: given.to_path_buf(),
             sources,
             records,
+            names,
             aliases,
             pars: &[],
         })
@@ -853,38 +885,55 @@ impl IndexedFasta {
     /// (`FastaSequence.pm:548-594`): the bases before the region from `Y`, the
     /// region's from `X` at the region's offset, the bases after it from `Y`.
     pub fn sequence(&self, chr: &str, start: u64, end: u64) -> Option<Vec<u8>> {
+        self.sequence_in_case(chr, start, end, Case::Upper)
+    }
+
+    /// [`Self::sequence`] with every base in the case the file spells it: a file
+    /// whose case carries meaning (an ancestral-allele FASTA marks a
+    /// low-confidence call in lower case) is read as written.
+    pub fn sequence_as_written(&self, chr: &str, start: u64, end: u64) -> Option<Vec<u8>> {
+        self.sequence_in_case(chr, start, end, Case::AsWritten)
+    }
+
+    fn sequence_in_case(&self, chr: &str, start: u64, end: u64, case: Case) -> Option<Vec<u8>> {
         if start == 0 || end < start {
             return None;
         }
         let (name, rec) = self.record(chr)?;
         let Some(par) = self.par_of(name, start, end) else {
-            return self.record_sequence(rec, start, end);
+            return self.record_sequence(rec, start, end, case);
         };
         // Not `with_capacity(end - start + 1)`: `end` is checked against the
         // record only when the piece after the region is read, so here the span
         // is whatever the caller asked for, up to `vep_core::coordinate::MAX_COORD`.
         let mut seq = Vec::new();
         if start < par.start {
-            seq.extend(self.record_sequence(rec, start, par.start - 1)?);
+            seq.extend(self.record_sequence(rec, start, par.start - 1, case)?);
         }
         let x_start = start.max(par.start) + par.adj;
         let x_end = end.min(par.end) + par.adj;
         match self.records.get("X") {
-            Some(x) => seq.extend(self.record_sequence(x, x_start, x_end)?),
+            Some(x) => seq.extend(self.record_sequence(x, x_start, x_end, case)?),
             None => {
                 let region_len = usize::try_from(x_end - x_start + 1).ok()?;
                 seq.extend(std::iter::repeat_n(b'N', region_len));
             }
         }
         if end > par.end {
-            seq.extend(self.record_sequence(rec, par.end + 1, end)?);
+            seq.extend(self.record_sequence(rec, par.end + 1, end, case)?);
         }
         Some(seq)
     }
 
-    /// The upper-cased bases `start..=end` (1-based) of `rec`, `None` when the
-    /// span leaves the record or its base count disagrees with the index.
-    fn record_sequence(&self, rec: &FaiRecord, start: u64, end: u64) -> Option<Vec<u8>> {
+    /// The bases `start..=end` (1-based) of `rec` in the given case, `None` when
+    /// the span leaves the record or its base count disagrees with the index.
+    fn record_sequence(
+        &self,
+        rec: &FaiRecord,
+        start: u64,
+        end: u64,
+        case: Case,
+    ) -> Option<Vec<u8>> {
         if end > rec.len {
             return None;
         }
@@ -894,11 +943,11 @@ impl IndexedFasta {
         let raw = self.bytes(rec, first, raw_len)?;
         let len = usize::try_from(end - start + 1).ok()?;
         let mut seq = Vec::with_capacity(len);
-        seq.extend(
-            raw.iter()
-                .filter(|b| **b != b'\n' && **b != b'\r')
-                .map(u8::to_ascii_uppercase),
-        );
+        let bases = raw.iter().filter(|b| **b != b'\n' && **b != b'\r');
+        match case {
+            Case::Upper => seq.extend(bases.map(u8::to_ascii_uppercase)),
+            Case::AsWritten => seq.extend(bases),
+        }
         (seq.len() == len).then_some(seq)
     }
 
@@ -925,6 +974,34 @@ impl IndexedFasta {
     /// as its `.fai` line states it; `None` when no record is reached.
     pub fn sequence_length(&self, chr: &str) -> Option<u64> {
         self.record(chr).map(|(_, record)| record.len)
+    }
+
+    /// The records' names in `.fai` order, the order the reference lists its
+    /// sequences in; a directory's files contribute theirs in the order they
+    /// were opened ([`Self::files`]).
+    pub fn record_names(&self) -> impl Iterator<Item = &str> {
+        self.names.iter().map(String::as_str)
+    }
+
+    /// The names of every record the FASTA (or the directory's FASTAs) carries,
+    /// as their `.fai` lines spell them, sorted by byte.
+    pub fn sequence_names(&self) -> Vec<&str> {
+        let mut names: Vec<&str> = self.records.keys().map(String::as_str).collect();
+        names.sort_unstable();
+        names
+    }
+
+    /// Every record with the number of bases its `.fai` line states, in the
+    /// order of [`Self::sequence_names`]: the chromosome lengths Ensembl VEP
+    /// reads from a FASTA for its run statistics (`BaseVEP.pm` `chr_lengths`).
+    pub fn records(&self) -> Vec<(&str, u64)> {
+        let mut records: Vec<(&str, u64)> = self
+            .records
+            .iter()
+            .map(|(name, record)| (name.as_str(), record.len))
+            .collect();
+        records.sort_unstable();
+        records
     }
 
     /// The record `chr` reaches ([`Self::record_name`]) with the name the FASTA
@@ -1245,6 +1322,33 @@ mod tests {
             assert_eq!(in_memory.base("1", pos), mmap.base("1", pos));
         }
         assert_eq!(in_memory.sequence("chr1", 2, 5), Some(b"CACA".to_vec()));
+    }
+
+    /// `sequence` upper-cases; `sequence_as_written` keeps the file's case and
+    /// its non-base characters, across a line end, and `record_names` lists
+    /// the records in index order.
+    #[test]
+    fn sequence_as_written_keeps_the_case_and_the_gap_characters() {
+        let dir = tempdir().unwrap();
+        let fa = dir.path().join("anc.fa");
+        let fai = dir.path().join("anc.fa.fai");
+        // Two records of two four-base lines each; the second is listed first
+        // in the index so the index order, not the file's order, is what
+        // `record_names` reports.
+        std::fs::write(&fa, b">b:2\nAcg-\n.Nnt\n>a:1\nGGcc\nTTaa\n").unwrap();
+        std::fs::write(&fai, b"a:1\t8\t20\t4\t5\nb:2\t8\t5\t4\t5\n").unwrap();
+
+        let idx = IndexedFasta::from_path(&fa).unwrap();
+        assert_eq!(idx.sequence("b:2", 1, 8), Some(b"ACG-.NNT".to_vec()));
+        assert_eq!(
+            idx.sequence_as_written("b:2", 1, 8),
+            Some(b"Acg-.Nnt".to_vec())
+        );
+        assert_eq!(idx.sequence_as_written("b:2", 3, 6), Some(b"g-.N".to_vec()));
+        assert_eq!(idx.sequence_as_written("a:1", 4, 5), Some(b"cT".to_vec()));
+        assert_eq!(idx.sequence_as_written("a:1", 8, 9), None);
+        assert_eq!(idx.sequence_as_written("c:3", 1, 1), None);
+        assert_eq!(idx.record_names().collect::<Vec<_>>(), ["a:1", "b:2"]);
     }
 
     /// A deterministic sequence of `len` bases over the four letters and N, in
@@ -1687,6 +1791,19 @@ mod tests {
         IndexedFasta::from_path_mmap(&gz).unwrap();
     }
 
+    /// The record names come in `.fai` order, the reference's own listing, not
+    /// by name: a file listing `2` before `10` before `1` reports them so.
+    #[test]
+    fn record_names_follow_the_fai_order() {
+        let dir = tempdir().unwrap();
+        let (fasta, fai) = fasta_and_fai(&[("2", b"ACGTAC"), ("10", b"GGGGGG"), ("1", b"TTTTTT")]);
+        std::fs::write(dir.path().join("ref.fa"), &fasta).unwrap();
+        std::fs::write(dir.path().join("ref.fa.fai"), &fai).unwrap();
+        let fasta = IndexedFasta::from_path(dir.path().join("ref.fa")).unwrap();
+        assert_eq!(fasta.record_names().collect::<Vec<_>>(), ["2", "10", "1"]);
+        assert_eq!(fasta.record_name("chr10"), Some("10"));
+    }
+
     /// A directory given as the FASTA opens every indexed `.fa` and `.fa.gz` in
     /// it and serves their sequences together: an unindexed file and a `.fasta`
     /// are passed over, the indexes a file needs follow its bytes rather than its
@@ -1738,6 +1855,7 @@ mod tests {
         assert_eq!(fasta.sequence("2", 1, 6), Some(b"GGGGGG".to_vec()));
         assert_eq!(fasta.base("chrX", 6), Some(b'T'));
         assert_eq!(fasta.base("3", 1), None);
+        assert_eq!(fasta.record_names().collect::<Vec<_>>(), ["1", "2", "X"]);
         let plain_bytes = IndexedFasta::from_path(dir.path().join("x.fa.gz")).unwrap();
         assert_eq!(plain_bytes.sequence("X", 1, 6), Some(b"TTTTTT".to_vec()));
         let error = IndexedFasta::from_path(dir.path().join("y.fa")).unwrap_err();
@@ -2272,6 +2390,41 @@ mod tests {
         }
         for other in ["grch38", "hg38", "GRCh38.p14", "GRCm39", ""] {
             assert!(pars_for_assembly(other).is_empty(), "{other}");
+        }
+    }
+
+    /// The record names are every `.fai` name of every file opened, as spelled
+    /// there, in byte order: `10` before `2`, `chrM` after both.
+    #[test]
+    fn sequence_names_are_every_record_in_byte_order() {
+        let dir = tempdir().unwrap();
+        let (fasta, fai) = fasta_and_fai(&[("2", &bases(1, 70)), ("10", &bases(2, 61))]);
+        std::fs::write(dir.path().join("a.fa"), &fasta).unwrap();
+        std::fs::write(dir.path().join("a.fa.fai"), &fai).unwrap();
+        let (fasta, fai) = fasta_and_fai(&[("chrM", &bases(3, 5))]);
+        std::fs::write(dir.path().join("b.fa"), &fasta).unwrap();
+        std::fs::write(dir.path().join("b.fa.fai"), &fai).unwrap();
+        let one = IndexedFasta::from_path_mmap(dir.path().join("a.fa")).unwrap();
+        assert_eq!(one.sequence_names(), ["10", "2"]);
+        let both = IndexedFasta::from_path_mmap(dir.path()).unwrap();
+        assert_eq!(both.sequence_names(), ["10", "2", "chrM"]);
+    }
+
+    /// Every `.fai` record is listed with the base count its line states, in
+    /// the order of `sequence_names`.
+    #[test]
+    fn records_lists_every_fai_record_with_its_length() {
+        let dir = tempdir().unwrap();
+        let (fasta, fai) = fasta_and_fai(&[("2", &bases(1, 70)), ("10", &bases(2, 61))]);
+        std::fs::write(dir.path().join("a.fa"), &fasta).unwrap();
+        std::fs::write(dir.path().join("a.fa.fai"), &fai).unwrap();
+        let (fasta, fai) = fasta_and_fai(&[("chrM", &bases(3, 5))]);
+        std::fs::write(dir.path().join("b.fa"), &fasta).unwrap();
+        std::fs::write(dir.path().join("b.fa.fai"), &fai).unwrap();
+        let both = IndexedFasta::from_path_mmap(dir.path()).unwrap();
+        assert_eq!(both.records(), [("10", 61), ("2", 70), ("chrM", 5)]);
+        for (name, len) in both.records() {
+            assert_eq!(both.sequence_length(name), Some(len));
         }
     }
 

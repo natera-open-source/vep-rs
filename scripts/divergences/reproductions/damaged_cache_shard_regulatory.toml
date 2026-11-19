@@ -1,0 +1,38 @@
+entry = "damaged_cache_shard_regulatory"
+page = "docs/divergences/damaged-cache-shard.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "malformed"
+input_class_basis = "each member of a gzip file has a header, its compressed blocks, then CRC32 and ISIZE (RFC 1952, section 2.3 \"Member format\"): the regulatory region file of the cache is cut short inside its compressed blocks and carries neither CRC32 nor ISIZE"
+notes = "The regulatory file of region 46000001-47000000 of chromosome 21 is cut to half its bytes in both caches; the record's regulatory feature and four motif features lie 300,745 bases inside that region, so that file alone held them. The transcript files stay whole, and the vep-rs copy drops CHECKSUMS.sha256 so the inflater, not the checksum, refuses the shard."
+# Hard-link copies of both caches; the region file is unlinked before the cut copy is written so the source stays whole.
+prepare = [
+  'mkdir -p "$STAGE/perl-cache/homo_sapiens" && cp -al "$PERL_CACHE" "$STAGE/perl-cache/homo_sapiens/116_GRCh38"',
+  'src="$PERL_CACHE/21/46000001-47000000_reg.gz"; dst="$STAGE/perl-cache/homo_sapiens/116_GRCh38/21/46000001-47000000_reg.gz"; rm "$dst"; head -c "$(( $(wc -c < "$src") / 2 ))" "$src" > "$dst"',
+  'cp -al "$CORPUS/json_cache" "$STAGE/json-cache" && rm "$STAGE/json-cache/CHECKSUMS.sha256"',
+  'src="$CORPUS/json_cache/regulatory/21/46000001-47000000.json.gz"; dst="$STAGE/json-cache/regulatory/21/46000001-47000000.json.gz"; rm "$dst"; head -c "$(( $(wc -c < "$src") / 2 ))" "$src" > "$dst"',
+]
+
+[input]
+format = "vcf"
+text = """
+21	46699255	rs868224642	G	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+corpus = "tests/golden/116/GRCh38-regulatory"
+
+[run]
+flags = ["--regulatory"]
+
+[compare]
+kind = "stderr"
+pattern = "Failed to inflate"
+
+[expected]
+ensembl_vep = []
+vep_rs = ["ERROR: [cache] Failed to inflate <path> incomplete deflate stream"]

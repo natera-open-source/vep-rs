@@ -1,6 +1,6 @@
 # A BGZF block whose trailer overstates its size
 
-A difference in which records are written, on an input shape no measured dataset has; nothing is set aside.
+A difference in which records of a malformed BGZF input are written, on an input shape no measured dataset has; nothing is set aside. Ensembl VEP annotates the records of a malformed block, where vep-rs ends the run before any record of the block is written.
 
 A BGZF file is a sequence of gzip members of at most 64 KiB of inflated data each, and every member's trailer declares its inflated size (`ISIZE`). Ensembl VEP reads a compressed input file through `gzip -dc`, or through `IO::Uncompress::Gunzip` where no `gzip` is on the path (`Utils.pm` lines 440-446, the multi-member branch the parser asks for), decompressors that inflate a member's data before they read its trailer. A block whose `ISIZE` declares more than the data inflates to is read through: `gzip -dc` writes the inflated records, reports `invalid compressed data--length error` and ends the stream there; `IO::Uncompress::Gunzip` writes them and reports nothing. Either way the records reach the parser and are annotated.
 

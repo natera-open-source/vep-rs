@@ -8,8 +8,8 @@
 //!
 //! - **transcript_amplification**: DUP fully contains the transcript (OverlapPC == 100%).
 //! - **feature_elongation**: DUP lies entirely within the transcript and overlaps
-//!   exonic (cDNA) sequence; a DUP that extends beyond either transcript boundary
-//!   does not get it.
+//!   exonic (cDNA) sequence or lies wholly inside a frameshift intron; a DUP that
+//!   extends beyond either transcript boundary does not get it.
 //! - Regional sub-consequences are added when the DUP overlaps specific transcript
 //!   regions (CDS, UTRs, introns, non-coding exons).
 //! - **start_lost**: the DUP span covers a start-codon base with both ends in exons
@@ -22,10 +22,12 @@
 
 use super::insertion::structural_start_lost;
 use super::{
-    is_mature_mirna_sv, overlaps_any_exon, overlaps_any_intron_trimmed, overlaps_cds_exon,
-    overlaps_five_prime_utr, overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
+    frameshift_intron_span, is_mature_mirna_sv, overlaps_any_exon, overlaps_any_intron_trimmed,
+    overlaps_cds_exon, overlaps_five_prime_utr, overlaps_polypyrimidine_tract,
+    overlaps_three_prime_utr, FrameshiftIntronSpan,
 };
 use smallvec::SmallVec;
+use std::sync::Arc;
 use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
@@ -34,7 +36,7 @@ use vep_core::variant::InputVariant;
 /// Calculate consequences for a structural duplication against a transcript.
 pub fn calculate(
     variant: &InputVariant,
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
@@ -105,14 +107,31 @@ pub fn calculate(
             // Ensembl VEP `feature_elongation` predicate:
             //   within_cdna(@_) AND complete_within_feature(@_) AND copy_number_gain(@_)
             // so it fires when the DUP lies entirely inside the transcript and
-            // overlaps exonic sequence, not when it extends beyond.
+            // overlaps exonic sequence, not when it extends beyond. `within_cdna`
+            // also holds for a DUP wholly inside a frameshift intron, which takes
+            // the terms of `frameshift_intron_span`.
             let complete_within = sv_lo >= tx_start && sv_hi <= tx_end;
-            let overlaps_cdna = overlaps_any_exon(transcript, sv_lo, sv_hi);
+            let frameshift_intron = frameshift_intron_span(transcript, sv_lo, sv_hi);
+            let overlaps_cdna =
+                overlaps_any_exon(transcript, sv_lo, sv_hi) || frameshift_intron.is_some();
             if complete_within && overlaps_cdna {
                 consequences.push(Consequence::FeatureElongation);
             }
 
-            add_regional_consequences(transcript, sv_lo, sv_hi, &mut consequences);
+            add_regional_consequences(
+                transcript,
+                sv_lo,
+                sv_hi,
+                frameshift_intron,
+                &mut consequences,
+            );
+        }
+
+        // A row no predicate claims carries Ensembl VEP's default term:
+        // `$cons = [$DEFAULT_OVERLAP_CONSEQUENCE] unless @$cons`
+        // (`BaseVariationFeatureOverlapAllele.pm:285`), `intergenic_variant`.
+        if consequences.is_empty() {
+            consequences.push(Consequence::IntergenicVariant);
         }
 
         let impact = determine_impact(&consequences);
@@ -144,11 +163,13 @@ pub fn calculate(
     }
 }
 
-/// Add regional sub-consequences based on which transcript regions the DUP overlaps.
+/// Add regional sub-consequences based on which transcript regions the DUP overlaps;
+/// `frameshift_intron` is the reading of a DUP wholly inside a frameshift intron.
 fn add_regional_consequences(
     transcript: &Transcript,
     sv_lo: u64,
     sv_hi: u64,
+    frameshift_intron: Option<FrameshiftIntronSpan>,
     consequences: &mut ConsequenceList,
 ) {
     let is_protein_coding = transcript.has_cds();
@@ -157,13 +178,19 @@ fn add_regional_consequences(
         if structural_start_lost(transcript, sv_lo, sv_hi) {
             push_unique(consequences, Consequence::StartLost);
         }
-        if overlaps_cds_exon(transcript, sv_lo, sv_hi) {
+        if overlaps_cds_exon(transcript, sv_lo, sv_hi)
+            || frameshift_intron.is_some_and(|span| span.coding)
+        {
             push_unique(consequences, Consequence::CodingSequenceVariant);
         }
-        if overlaps_five_prime_utr(transcript, sv_lo, sv_hi) {
+        if overlaps_five_prime_utr(transcript, sv_lo, sv_hi)
+            || frameshift_intron.is_some_and(|span| span.five_prime_utr)
+        {
             push_unique(consequences, Consequence::FivePrimeUtrVariant);
         }
-        if overlaps_three_prime_utr(transcript, sv_lo, sv_hi) {
+        if overlaps_three_prime_utr(transcript, sv_lo, sv_hi)
+            || frameshift_intron.is_some_and(|span| span.three_prime_utr)
+        {
             push_unique(consequences, Consequence::ThreePrimeUtrVariant);
         }
     } else {
@@ -248,7 +275,7 @@ fn compute_distance_downstream(transcript: &Transcript, sv_lo: u64, sv_hi: u64) 
 
 /// Build a base `TranscriptConsequence` with transcript metadata populated.
 fn build_base_consequence(
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     consequences: &[Consequence],
     impact: Impact,
 ) -> TranscriptConsequence {
@@ -275,6 +302,22 @@ mod tests {
     use crate::test_helpers::{make_test_transcript, make_test_transcript_with_flags};
     use vep_core::consequence::FeatureType;
     use vep_core::variant::VariantClass;
+
+    /// [`super::calculate`] on a transcript the test owns: the row shares a copy of
+    /// it, as the index shares its handle.
+    fn calculate(
+        variant: &InputVariant,
+        transcript: &Transcript,
+        upstream_distance: u64,
+        downstream_distance: u64,
+    ) -> Option<TranscriptConsequence> {
+        super::calculate(
+            variant,
+            &Arc::new(transcript.clone()),
+            upstream_distance,
+            downstream_distance,
+        )
+    }
 
     /// Helper: build a structural duplication variant.
     fn make_dup(start: u64, sv_end: u64, class: VariantClass) -> InputVariant {
@@ -514,7 +557,7 @@ mod tests {
     #[test]
     fn test_dup_overlap_bp_and_pct_values() {
         let tx = make_test_transcript();
-        // DUP overlapping exactly half the transcript.
+        // DUP over the first 3001 bases of the transcript's 6001-base span.
         let v = make_dup(25_000_000, 25_003_000, VariantClass::Duplication);
         let result = calculate(&v, &tx, 5000, 5000);
         assert!(result.is_some());
@@ -591,13 +634,13 @@ mod tests {
         let result = calculate(&v, &tx, 5000, 5000);
         assert!(result.is_some());
         let tc = result.unwrap();
-        assert_eq!(&*tc.transcript_id, "ENST00000000001");
-        assert_eq!(&*tc.gene_id, "ENSG00000000001");
-        assert_eq!(tc.gene_symbol.as_deref(), Some("TEST1"));
+        assert_eq!(tc.transcript_id(), "ENST00000000001");
+        assert_eq!(tc.gene_id(), "ENSG00000000001");
+        assert_eq!(tc.gene_symbol(), Some("TEST1"));
         assert!(tc.canonical);
         assert_eq!(tc.strand, 1);
         assert_eq!(tc.feature_type, FeatureType::Transcript);
-        assert_eq!(tc.biotype.as_deref(), Some("protein_coding"));
+        assert_eq!(tc.biotype(), Some("protein_coding"));
     }
 
     #[test]
@@ -635,6 +678,93 @@ mod tests {
                 window[1],
                 window[1].rank()
             );
+        }
+    }
+
+    /// A duplication wholly inside a frameshift intron. Ensembl VEP 116.2 writes
+    /// `feature_elongation,coding_sequence_variant` for `<DUP>` and `<DUP:TANDEM>`
+    /// over GRCh37 `21:38600094-38600097` on ENST00000288304 (a 4-base intron inside
+    /// its coding region), `feature_elongation,non_coding_transcript_variant` for
+    /// GRCh38 `21:6358575-6358576` on the lncRNA ENST00000624847, and
+    /// `intron_variant` in an ordinary intron.
+    #[test]
+    fn a_duplication_inside_a_frameshift_intron_is_an_elongation() {
+        let mut tx = crate::sv::deletion::frameshift_intron_test_transcript();
+        let terms = |tx: &Transcript, class: VariantClass, start: u64, end: u64| {
+            let tc = calculate(&make_dup(start, end, class), tx, 5000, 5000).unwrap();
+            let mut terms: Vec<String> = tc.consequences.iter().map(|c| c.to_string()).collect();
+            terms.sort();
+            terms
+        };
+        for class in [VariantClass::Duplication, VariantClass::TandemDuplication] {
+            // The 9-base intron of the coding region, whole and in part.
+            for (start, end) in [(25_002_101, 25_002_109), (25_002_103, 25_002_107)] {
+                assert_eq!(
+                    terms(&tx, class, start, end),
+                    ["coding_sequence_variant", "feature_elongation"],
+                    "{class:?} {start}-{end}"
+                );
+            }
+            // The introns of the two UTRs.
+            assert_eq!(
+                terms(&tx, class, 25_000_021, 25_000_025),
+                ["5_prime_UTR_variant", "feature_elongation"]
+            );
+            assert_eq!(
+                terms(&tx, class, 25_005_001, 25_005_013),
+                ["3_prime_UTR_variant", "feature_elongation"]
+            );
+            // Nine bases inside an ordinary intron keep the intronic reading.
+            assert_eq!(
+                terms(&tx, class, 25_001_000, 25_001_008),
+                ["intron_variant"]
+            );
+        }
+        // Without a translation the context term stands beside the elongation.
+        tx.biotype = "lncRNA".into();
+        tx.coding_region_start = None;
+        tx.coding_region_end = None;
+        tx.translation = None;
+        if let Some(mapper) = tx.vefc.as_mut().and_then(|v| v.mapper.as_mut()) {
+            mapper.cdna_coding_start = 0;
+            mapper.cdna_coding_end = 0;
+        }
+        assert_eq!(
+            terms(&tx, VariantClass::Duplication, 25_002_101, 25_002_109),
+            ["feature_elongation", "non_coding_transcript_variant"]
+        );
+    }
+
+    /// A duplication on only the first or last two bases of an intron, which no
+    /// predicate claims: Ensembl VEP 116.2 writes `intergenic_variant` for `<DUP>`,
+    /// `<DUP:TANDEM>` and `<CN2>` over GRCh37 `21:38600108-38600109` and
+    /// `21:38600522-38600523` on ENST00000288304 (the ends of its 416-base intron),
+    /// and `intron_variant` once the span reaches the intron's third base.
+    #[test]
+    fn a_duplication_on_the_splice_bases_of_an_intron_takes_the_default_term() {
+        let tx = make_test_transcript();
+        let terms = |class: VariantClass, start: u64, end: u64| {
+            let tc = calculate(&make_dup(start, end, class), &tx, 5000, 5000).unwrap();
+            tc.consequences
+                .iter()
+                .map(|c| c.to_string())
+                .collect::<Vec<_>>()
+        };
+        for class in [VariantClass::Duplication, VariantClass::TandemDuplication] {
+            // Intron 1 is 25_000_300-25_001_999.
+            for (start, end) in [
+                (25_000_300, 25_000_301),
+                (25_000_300, 25_000_300),
+                (25_000_301, 25_000_301),
+                (25_001_998, 25_001_999),
+            ] {
+                assert_eq!(
+                    terms(class, start, end),
+                    ["intergenic_variant"],
+                    "{class:?} {start}-{end}"
+                );
+            }
+            assert_eq!(terms(class, 25_000_301, 25_000_302), ["intron_variant"]);
         }
     }
 }

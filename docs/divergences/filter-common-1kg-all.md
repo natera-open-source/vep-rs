@@ -1,6 +1,6 @@
 # `--filter_common` and `--freq_pop 1KG_ALL` read the 1000 Genomes `AF` column
 
-A difference in which records and alleles are written, under flags no measured dataset is run with; nothing is set aside, and a run under them is charged to vep-rs in both figures.
+A difference in which records and alleles are written, under flags no measured dataset is run with; nothing is set aside, and a run under them is charged to vep-rs in both figures. On a release-116 cache Ensembl VEP finds no frequency data under `1KG_ALL`, so `--filter_common` keeps every record. vep-rs reads the cache's `AF` column and drops the alleles whose 1000 Genomes frequency is 0.01 or more.
 
 Ensembl VEP's frequency filter reads the population `--freq_pop` names from each co-located variant's cache record (`AnnotationSource/Cache/BaseCacheVariation.pm`, `get_frequency_data`, lines 179-256). `1KG_ALL` is the default population and the one `--filter_common` sets (`Config.pm` lines 319-322 and 442-446). For it the filter reads the record's `minor_allele` and `minor_allele_freq` (lines 215-230) and, without them, the record's `1KG_ALL` or `ALL` keys (line 232). A release-116 cache carries none of these: its 1000 Genomes frequencies are the `AF`, `AFR`, `AMR`, `EAS`, `EUR` and `SAS` columns of its `variation_cols` line.
 

@@ -3,7 +3,7 @@
 
 //! Plugin overhead benchmark binary.
 //!
-//! Runs the VEP annotation pipeline on real data and emits structured
+//! Runs the VEP annotation pipeline on its caller's input and plugin files and emits structured
 //! JSON timing reports decomposed by pipeline phase. Designed to measure
 //! plugin overhead across multiple dimensions:
 //!
@@ -15,7 +15,7 @@
 //! # Usage
 //!
 //! ```bash
-//! cargo build --release --bin bench_plugins
+//! cargo build --release -p vep-cli --features bench --bin bench_plugins
 //!
 //! target/release/bench_plugins \
 //!   --input <input.vcf.gz> \
@@ -39,11 +39,13 @@ use serde::Serialize;
 use vep_builtins::{BuiltinRegistry, PluginTimings};
 use vep_cli::config::CliError;
 use vep_cli::json_cache;
-use vep_cli::transcript_index::TranscriptBinIndex;
+use vep_cli::transcript_index::{TranscriptBinIndex, TranscriptIndex};
 use vep_cli::variation_matcher::{self, ColocationRules};
 use vep_cli::variation_source::{ReadFailure, VariationSource};
+use vep_cli::{LazyTranscriptIndexes, TranscriptSet};
 use vep_core::allele::trim_alleles;
 use vep_core::consequence::Consequence;
+use vep_core::transcript::Transcript;
 use vep_core::variant::InputVariant;
 
 #[derive(Parser, Debug)]
@@ -59,6 +61,12 @@ struct Args {
     /// Path to converted JSON cache directory.
     #[arg(long = "json-cache")]
     json_cache: String,
+
+    /// Reference FASTA, read as `vep --fasta` reads it for the transcripts: a
+    /// stop codon an `_rna_edit` completes is paired with the bases the
+    /// genome holds of it.
+    #[arg(long)]
+    fasta: Option<String>,
 
     /// Plugin specifications (repeatable). Same format as vep --plugin.
     #[arg(long = "plugin", action = clap::ArgAction::Append)]
@@ -100,6 +108,10 @@ struct BenchReport {
     plugin_detail: HashMap<String, PluginDetail>,
     runs: Vec<RunTimings>,
     derived: DerivedMetrics,
+    /// Every plugin failure over the runs, `<plugin>: <error>`, in run order; a
+    /// plugin that failed timed its failure, so its timings are not its work.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    plugin_failures: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -163,7 +175,7 @@ struct DerivedMetrics {
     variants_per_second: f64,
     plugin_overhead_pct: f64,
     plugin_overhead_ms: f64,
-    /// Only present if baseline (no-plugin) run data is embedded.
+    /// Variants per second over the mean consequence-phase time; `None` when that mean is zero.
     #[serde(skip_serializing_if = "Option::is_none")]
     consequence_only_variants_per_second: Option<f64>,
 }
@@ -198,36 +210,7 @@ fn main() -> Result<()> {
     );
 
     let cache_start = Instant::now();
-    let effects_config = Arc::new(vep_effects::EffectsConfig {
-        upstream_distance: 5000,
-        downstream_distance: 5000,
-        reference_fasta: None,
-        enable_indel_3prime_shift: false,
-        hgvs: vep_effects::hgvs::HgvsOptions::default(),
-        populate_loftee_context: false,
-        compute_hgvs: false,
-        compute_exon_intron_numbers: true,
-        protein_version: false,
-        hgvsg: None,
-        spdi: None,
-        domains: false,
-        use_transcript_ref: false,
-        process_ref_homs: false,
-    });
-
-    let raw_transcripts = json_cache::load_all_transcripts(&args.json_cache)?;
-    let mut indexed: HashMap<String, TranscriptBinIndex> = HashMap::new();
-    for (chr, txs) in raw_transcripts {
-        indexed.insert(
-            chr,
-            TranscriptBinIndex::new(
-                txs,
-                effects_config.upstream_distance,
-                effects_config.downstream_distance,
-            ),
-        );
-    }
-    let transcripts = Arc::new(indexed);
+    let (effects_config, transcripts) = load_transcripts(&args)?;
 
     let variation_source: Option<Arc<VariationSource>> =
         VariationSource::open_json_cache(&args.json_cache, false)?.map(Arc::new);
@@ -265,6 +248,7 @@ fn main() -> Result<()> {
 
     let use_parallel = num_threads > 1;
     let mut run_results: Vec<RunTimings> = Vec::with_capacity(args.runs);
+    let mut plugin_failures: Vec<String> = Vec::new();
 
     for run_idx in 0..args.runs {
         eprintln!("--- Run {}/{} ---", run_idx + 1, args.runs);
@@ -286,11 +270,16 @@ fn main() -> Result<()> {
         let csq_ms = csq_start.elapsed().as_millis() as u64;
 
         let plugin_timings = if registry.plugin_count() > 0 {
-            if args.sequential {
-                Some(pool.install(|| registry.run_batch_sequential(&mut batch))?)
+            let (timings, outcome) = if args.sequential {
+                pool.install(|| registry.run_batch_sequential(&mut batch))
             } else {
-                Some(pool.install(|| registry.run_batch_timed(&mut batch))?)
+                pool.install(|| registry.run_batch_timed(&mut batch))
+            };
+            for failure in &outcome.failures {
+                eprintln!("  plugin {} failed: {}", failure.plugin, failure.error);
+                plugin_failures.push(format!("{}: {}", failure.plugin, failure.error));
             }
+            Some(timings)
         } else {
             None
         };
@@ -329,6 +318,7 @@ fn main() -> Result<()> {
         parse_ms,
         &plugin_names,
         &run_results,
+        plugin_failures,
     );
 
     let json = serde_json::to_string_pretty(&report)?;
@@ -346,6 +336,96 @@ fn main() -> Result<()> {
     );
 
     Ok(())
+}
+
+/// The transcripts a run annotates against, every chromosome indexed.
+enum Transcripts {
+    /// Every record of the cache in the bench's own overlap index, the load of
+    /// a run without a reference sequence.
+    Own(HashMap<String, TranscriptBinIndex>),
+    /// The library's index, whose loader pairs a completed stop codon from the
+    /// reference sequence `--fasta` names
+    /// ([`vep_cli::annotator::load_transcript_indexes`]).
+    Paired(Arc<LazyTranscriptIndexes>),
+}
+
+impl Transcripts {
+    /// The index of `chr`, `None` for a chromosome the cache does not hold.
+    fn get(&self, chr: &str) -> Option<ChromosomeTranscripts<'_>> {
+        match self {
+            Self::Own(indexes) => indexes.get(chr).map(ChromosomeTranscripts::Own),
+            Self::Paired(indexes) => indexes.get(chr).map(ChromosomeTranscripts::Paired),
+        }
+    }
+}
+
+/// One chromosome's index of a [`Transcripts`].
+enum ChromosomeTranscripts<'a> {
+    Own(&'a TranscriptBinIndex),
+    Paired(&'a TranscriptIndex),
+}
+
+impl ChromosomeTranscripts<'_> {
+    /// Calls `f` for every transcript whose extended region overlaps
+    /// `start..=end`.
+    fn for_each_overlapping(&self, start: u64, end: u64, f: impl FnMut(&Arc<Transcript>)) {
+        match self {
+            Self::Own(index) => index.for_each_overlapping(start, end, f),
+            Self::Paired(index) => index.for_each_overlapping(start, end, f),
+        }
+    }
+}
+
+/// The effects configuration of a run and the cache's transcripts. Without
+/// `--fasta` the bench loads and indexes every record itself. With it the
+/// configuration carries the reference sequence and the transcripts come from
+/// the library's loader.
+fn load_transcripts(args: &Args) -> Result<(Arc<vep_effects::EffectsConfig>, Transcripts)> {
+    let reference_fasta = match &args.fasta {
+        Some(path) => Some(Arc::new(
+            vep_fasta::IndexedFasta::from_path(path)
+                .with_context(|| format!("failed to open the reference FASTA {path}"))?,
+        )),
+        None => None,
+    };
+    let effects_config = Arc::new(vep_effects::EffectsConfig {
+        upstream_distance: 5000,
+        downstream_distance: 5000,
+        reference_fasta,
+        enable_indel_3prime_shift: false,
+        hgvs: vep_effects::hgvs::HgvsOptions::default(),
+        loftee_context: vep_effects::LofteeContextRows::None,
+        context_sequences: vep_effects::LofteeContextRows::None,
+        compute_hgvs: false,
+        compute_exon_intron_numbers: true,
+        protein_version: false,
+        hgvsg: None,
+        spdi: None,
+        domains: false,
+        use_transcript_ref: false,
+        process_ref_homs: false,
+    });
+    let transcripts = if effects_config.reference_fasta.is_some() {
+        Transcripts::Paired(vep_cli::annotator::load_transcript_indexes(
+            &args.json_cache,
+            &effects_config,
+            TranscriptSet::default(),
+        )?)
+    } else {
+        let mut indexed: HashMap<String, TranscriptBinIndex> = HashMap::new();
+        for (chr, txs) in json_cache::load_all_transcripts(&args.json_cache)? {
+            indexed.insert(
+                chr,
+                TranscriptBinIndex::new(
+                    txs,
+                    effects_config.upstream_distance,
+                    effects_config.downstream_distance,
+                ),
+            );
+        }
+        Transcripts::Own(indexed)
+    };
+    Ok((effects_config, transcripts))
 }
 
 /// Parse VCF variants from an input file.
@@ -448,7 +528,7 @@ fn parse_vcf_line(line: &str) -> Result<Vec<InputVariant>> {
 /// as the runner's batch driver does.
 fn annotate_consequences(
     variants: &mut [InputVariant],
-    transcripts: &Arc<HashMap<String, TranscriptBinIndex>>,
+    transcripts: &Transcripts,
     variation_source: &Option<Arc<VariationSource>>,
     effects_config: &Arc<vep_effects::EffectsConfig>,
     use_parallel: bool,
@@ -501,6 +581,7 @@ fn build_report(
     parse_ms: u64,
     plugin_names: &[String],
     runs: &[RunTimings],
+    plugin_failures: Vec<String>,
 ) -> BenchReport {
     let csq_times: Vec<u64> = runs.iter().map(|r| r.consequence_ms).collect();
     let prefetch_times: Vec<u64> = runs.iter().map(|r| r.plugin_prefetch_ms).collect();
@@ -598,6 +679,7 @@ fn build_report(
                 None
             },
         },
+        plugin_failures,
     }
 }
 
@@ -622,5 +704,106 @@ fn aggregate_f64(values: &[f64]) -> AggregatedTimingF64 {
         mean: sum / values.len() as f64,
         min: values.iter().cloned().fold(f64::INFINITY, f64::min),
         max: values.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A cache and a reference under `dir` with one coding transcript at
+    /// MT:101-110 whose exon ends one base into its stop codon: three sense
+    /// codons, an `_rna_edit` replacing the exon's last base by the codon, and
+    /// the two pairs Ensembl's mapper builds for the edit, the second placing
+    /// the held stop base on the codon's last base; and over the same span a
+    /// transcript whose stable id is `0`, which the library's transcript set
+    /// leaves out and a load of every record keeps. Returns the cache and the
+    /// FASTA.
+    fn completed_stop_fixture(dir: &std::path::Path) -> (String, String) {
+        let cache = dir.join("cache");
+        let shard = cache.join("transcripts").join("MT");
+        std::fs::create_dir_all(&shard).unwrap();
+        let unnamed = serde_json::json!({
+            "stable_id": "0", "gene_stable_id": "G0", "chr": "MT",
+            "start": 101, "end": 110, "strand": 1, "biotype": "lncRNA", "source": "ensembl",
+            "exons": [{"start": 101, "end": 110, "rank": 1, "phase": -1, "end_phase": -1}],
+        });
+        let record = serde_json::json!([unnamed, {
+            "stable_id": "NM_1", "gene_stable_id": "G1", "chr": "MT",
+            "start": 101, "end": 110, "strand": 1, "biotype": "protein_coding",
+            "source": "ensembl", "is_canonical": 1,
+            "exons": [{"start": 101, "end": 110, "rank": 1, "phase": 0, "end_phase": -1}],
+            "cdna_coding_start": 1, "cdna_coding_end": 12,
+            "attributes": [{"code": "_rna_edit", "value": "10 10 TAA"}],
+            "translation": {"stable_id": "NP_1", "start": 1, "end": 10},
+            "variation_effect_feature_cache": {
+                "codon_table": 2, "translateable_seq": "ATGGCTGAGTAA", "peptide": "MAE",
+                "mapper": {"start_phase": 0, "cdna_coding_start": 1, "cdna_coding_end": 12,
+                    "pairs": [
+                        {"from_start": 1, "from_end": 9, "to_start": 101, "to_end": 109, "ori": 1},
+                        {"from_start": 12, "from_end": 12, "to_start": 110, "to_end": 110, "ori": 1},
+                    ]},
+            },
+        }]);
+        std::fs::write(shard.join("1-1000000.json"), record.to_string()).unwrap();
+        std::fs::write(cache.join("info.json"), r#"{"assembly":"GRCh38"}"#).unwrap();
+
+        let mut bases = vec![b'C'; 300];
+        bases[100..110].copy_from_slice(b"ATGGCTGAGT");
+        let fasta = dir.join("reference.fa");
+        let mut text = b">MT\n".to_vec();
+        text.extend_from_slice(&bases);
+        text.push(b'\n');
+        std::fs::write(&fasta, text).unwrap();
+        std::fs::write(dir.join("reference.fa.fai"), "MT\t300\t4\t300\t301\n").unwrap();
+        (
+            cache.to_str().unwrap().to_string(),
+            fasta.to_str().unwrap().to_string(),
+        )
+    }
+
+    /// What a run with `arguments` loads and reads: the number of transcripts
+    /// in its index and the `CDS_position` of a substitution of the stop base
+    /// the genome holds.
+    fn held_stop_base(arguments: &[&str]) -> (usize, Option<String>) {
+        let args = Args::parse_from(
+            ["bench_plugins", "-i", "unused.vcf"]
+                .iter()
+                .chain(arguments),
+        );
+        let (effects_config, transcripts) = load_transcripts(&args).unwrap();
+        let loaded = match &transcripts {
+            Transcripts::Own(indexes) => indexes.values().map(TranscriptBinIndex::len).sum(),
+            Transcripts::Paired(indexes) => indexes
+                .chromosomes()
+                .filter_map(|chr| indexes.get(chr))
+                .map(TranscriptIndex::len)
+                .sum(),
+        };
+        let mut variants = parse_vcf_line("MT\t110\t.\tT\tG\t.\t.\t.").unwrap();
+        annotate_consequences(&mut variants, &transcripts, &None, &effects_config, false).unwrap();
+        let rows = &variants[0].transcript_consequences;
+        let coding = rows.iter().find(|row| row.transcript_id() == "NM_1");
+        (loaded, coding.unwrap().cds_position.clone())
+    }
+
+    /// With `--fasta` the transcripts come from the library's loader, paired
+    /// as `vep --fasta` pairs them: its set leaves the transcript without a
+    /// stable id out, and a substitution of the stop base the genome holds
+    /// reads at that base's own coding position, 10. Without it the bench
+    /// loads every record itself: both transcripts are indexed, the cache's
+    /// pairs stand and the base reads at the codon's last position, 12.
+    #[test]
+    fn a_reference_sequence_pairs_a_completed_stop_codon() {
+        let dir = tempfile::tempdir().unwrap();
+        let (cache, fasta) = completed_stop_fixture(dir.path());
+        assert_eq!(
+            held_stop_base(&["--json-cache", &cache, "--fasta", &fasta]),
+            (1, Some("10".to_string()))
+        );
+        assert_eq!(
+            held_stop_base(&["--json-cache", &cache]),
+            (2, Some("12".to_string()))
+        );
     }
 }

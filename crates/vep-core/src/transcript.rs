@@ -7,9 +7,11 @@
 //! coordinate mapper, VEFC cache) as loaded from the VEP JSON or binary cache.
 //! These types are the primary input to the consequence calculator in `vep-effects`.
 
+use std::borrow::Cow;
 use std::sync::{Arc, OnceLock};
 
 use crate::coordinate::Strand;
+use crate::sv_routing::perl_split;
 
 /// An Ensembl transcript loaded from the VEP cache.
 ///
@@ -46,6 +48,13 @@ pub struct Transcript {
     pub gene_symbol: Option<Arc<str>>,
     /// Gene symbol source (e.g., "HGNC").
     pub gene_symbol_source: Option<Arc<str>>,
+    /// The primary identifier of the EntrezGene entry a RefSeq gene's symbol is
+    /// taken from, Ensembl VEP's `_gene_symbol_id` key
+    /// (`AnnotationSource/Database/Transcript.pm:563` at release/116.2); `None`
+    /// on an Ensembl cache's transcripts and on a RefSeq gene without exactly
+    /// one EntrezGene entry. Read by `--transcript_filter` alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gene_symbol_id: Option<Arc<str>>,
     /// HGNC ID.
     pub hgnc_id: Option<Arc<str>>,
     /// Gene phenotype association count (number of phenotypes associated with
@@ -59,9 +68,12 @@ pub struct Transcript {
     pub mane_select: Option<String>,
     /// The `MANE_Plus_Clinical` attribute's value, `Some` on presence as above.
     pub mane_plus_clinical: Option<String>,
-    /// Transcript Support Level: the digits of a `TSL` attribute's `tsl<N>`
-    /// value when they are not zero; `tslNA` carries none.
-    pub tsl: Option<u8>,
+    /// Transcript Support Level: the digit run after `tsl` in a `TSL`
+    /// attribute's value, kept as the text it was matched as ([`tsl_level`]), since
+    /// Ensembl VEP prints that text (`1`; `007` from a GFF3 that wrote it) and
+    /// reads it as a number only in the JSON format and the pick orders. `None`
+    /// for `tslNA`, for the one digit `0`, and without the attribute.
+    pub tsl: Option<String>,
     /// APPRIS annotation as the cache spells it (`principal1`, `alternativeM`).
     pub appris: Option<String>,
     /// CCDS ID.
@@ -80,6 +92,11 @@ pub struct Transcript {
     pub uniprot_isoform: Option<String>,
     /// Exons.
     pub exons: Vec<Exon>,
+    /// The exons' stable ids in rank order, loaded only for a run whose plugins
+    /// print them: no output or consequence reads an exon's id, and parsing
+    /// them is a cost of every load.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exon_ids: Option<Arc<[Arc<str>]>>,
     /// Introns from the cache's intron list, else the gaps between exons, filled at load time.
     pub introns: Vec<Intron>,
     /// cDNA coding start position (1-based offset within cDNA).
@@ -108,6 +125,16 @@ pub struct Transcript {
     pub gencode_primary: bool,
     /// Transcript attributes (code/value pairs from the Perl cache).
     pub attributes: Vec<Attribute>,
+    /// The cache the transcript came from in a merged cache: the `_source_cache`
+    /// key stamped on the transcripts of a region file both caches hold
+    /// (`Pipeline/DumpVEP/MergeVEP.pm:103, 110` at release/116.2); `None` on a
+    /// single-source cache and on a region file one cache alone held.
+    pub source_cache: Option<SourceCache>,
+    /// Whether the model was corrected against the cache's alignment file: the
+    /// `_bam_edit_status` key `apply_edits` sets
+    /// (`AnnotationType/Transcript.pm:601, 621` at release/116.2); `None` on a
+    /// transcript the alignment never touched and on every cache without one.
+    pub bam_edit_status: Option<BamEditStatus>,
     /// Cached data for variant effect calculation (_variation_effect_feature_cache).
     pub vefc: Option<TranscriptVEFC>,
     /// Facts derived from the fields above, filled on first use and read by
@@ -115,23 +142,216 @@ pub struct Transcript {
     /// [`Transcript::feature_ordinals`], [`Transcript::spliced_seq`]).
     #[serde(skip)]
     pub derived: TranscriptDerived,
-    /// Position of `stable_id` in the byte order of the chromosome's transcript
-    /// ids, counted from 1 and assigned by the loader once the chromosome is
-    /// complete: two transcripts of one chromosome compare by rank as their ids
-    /// compare, and equal ids share a rank. Never serialized; 0 until assigned.
+    /// Position of the transcript's Ensembl VEP sort key, the stable id followed
+    /// by `_` and the dbID when the record carries one
+    /// (`BaseVariationFeature.pm:310-321`), in the byte order of the
+    /// chromosome's keys, counted from 1 and assigned by the loader once the
+    /// chromosome is complete: two transcripts of one chromosome compare by rank
+    /// as their keys compare, and equal keys share a rank. Never serialized; 0
+    /// until assigned.
     #[serde(skip)]
     pub id_rank: u32,
 }
 
+/// The cache a transcript of a merged cache came from: Ensembl VEP's
+/// `_source_cache` key, `Ensembl` or `RefSeq` (`Pipeline/DumpVEP/MergeVEP.pm`
+/// at release/116.2), spelled as the cache spells it; or the short name of the
+/// custom annotation source a transcript was read from, which the `SOURCE`
+/// column prints alike (OutputFactory.pm:1583, Constants.pm:98 and :101).
+/// Serialized as that text: `"Ensembl"`, `"RefSeq"`, or the custom name.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SourceCache {
+    Ensembl,
+    RefSeq,
+    Custom(Arc<str>),
+}
+
+impl SourceCache {
+    /// The `SOURCE` column's text.
+    pub fn column_text(&self) -> &str {
+        match self {
+            SourceCache::Ensembl => "Ensembl",
+            SourceCache::RefSeq => "RefSeq",
+            SourceCache::Custom(name) => name,
+        }
+    }
+}
+
+impl serde::Serialize for SourceCache {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.column_text())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for SourceCache {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let text: String = serde::Deserialize::deserialize(deserializer)?;
+        Ok(match text.as_str() {
+            "Ensembl" => SourceCache::Ensembl,
+            "RefSeq" => SourceCache::RefSeq,
+            name => SourceCache::Custom(Arc::from(name)),
+        })
+    }
+}
+
+/// The outcome of editing a transcript model against the cache's alignment
+/// file: Ensembl VEP's `_bam_edit_status`, `ok` when the edited sequence equals
+/// the aligned one and the model carries the edits, `failed` when it did not and
+/// the model was dumped unedited (`AnnotationType/Transcript.pm:599-627` at
+/// release/116.2), spelled as the cache spells it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BamEditStatus {
+    Ok,
+    Failed,
+}
+
+impl BamEditStatus {
+    /// The `BAM_EDIT` column's text, the status upper-cased
+    /// (`uc($tr->{_bam_edit_status})`, OutputFactory.pm:1551-1553 at release/116.2).
+    pub fn column_text(self) -> &'static str {
+        match self {
+            BamEditStatus::Ok => "OK",
+            BamEditStatus::Failed => "FAILED",
+        }
+    }
+}
+
 /// The lazily filled cells behind [`Transcript::facts`],
-/// [`Transcript::feature_ordinals`] and [`Transcript::spliced_seq`]. A fresh or
-/// cloned transcript starts empty, so a transcript edited after construction is
-/// read as edited.
+/// [`Transcript::feature_ordinals`], [`Transcript::spliced_seq`] and
+/// [`Transcript::refseq_alignment`]. A fresh or cloned transcript starts empty,
+/// so a transcript edited after construction is read as edited.
 #[derive(Debug, Default)]
 pub struct TranscriptDerived {
     facts: OnceLock<TranscriptFacts>,
     ordinals: OnceLock<Box<FeatureOrdinals>>,
     spliced_seq: OnceLock<Option<Box<str>>>,
+    refseq_alignment: OnceLock<Option<Arc<RefSeqAlignment>>>,
+}
+
+/// What a RefSeq model's attributes record of its alignment to the genome,
+/// read once per transcript: the match codes the `REFSEQ_MATCH` column lists
+/// and the `_rna_edit` entries, which Ensembl VEP reads per allele from the
+/// attribute list (`TranscriptVariationAllele::hgvs_transcript` and
+/// `::codon`, ensembl-variation release/116). A transcript carrying neither
+/// kind of attribute has none ([`Transcript::refseq_alignment`] is `None`).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RefSeqAlignment {
+    /// The codes of the attributes matching `^rseq`, in attribute order
+    /// (`grep {$_->code =~ /^rseq/}` over the attribute list, OutputFactory.pm:1547 at
+    /// release/116.2); `enst_refseq_compare` and `_rna_edit` are not among them.
+    pub match_codes: Arc<[Box<str>]>,
+    /// The `_rna_edit` attributes that change the cDNA's length, in order of
+    /// their start, as [`get_misalignment_offset`](Self::misalignment_offset)
+    /// reads them.
+    pub indel_edits: Box<[IndelEdit]>,
+    /// The bases of the first `_rna_edit` attribute in attribute order, its
+    /// `<start> <end> ` prefix removed (`s/\d+\s\d+\s//`,
+    /// TranscriptVariationAllele.pm:832-833): empty for a deletion; `None` on a
+    /// transcript without an edit.
+    pub first_edit_bases: Option<Box<str>>,
+}
+
+/// One `_rna_edit` attribute that inserts or deletes bases against the genome,
+/// read as `get_misalignment_offset` reads the attribute's `<start> <end>
+/// <bases>` value (TranscriptVariationAllele.pm:1605-1618): split on single
+/// spaces with trailing empty fields dropped ([`perl_split`]), so a deletion's
+/// value `50 52 ` has two fields and an insertion's `10 9 AAA` three.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct IndelEdit {
+    /// The edit's start in the unedited cDNA, the first field.
+    pub start: i64,
+    /// The bases the edit adds to the cDNA numbering downstream of it: the
+    /// length of the third field for an edit with three fields
+    /// (`length($split_val[2])`, :1617), `-1 - (end - start)` for one with two
+    /// (:1614).
+    pub length_change: i64,
+}
+
+impl RefSeqAlignment {
+    /// The transcript's alignment facts, or `None` when its attributes carry
+    /// no `rseq` code and no `_rna_edit`.
+    fn read(attributes: &[Attribute]) -> Option<Self> {
+        let match_codes: Arc<[Box<str>]> = attributes
+            .iter()
+            .filter(|a| a.code.starts_with("rseq"))
+            .map(|a| Box::from(&*a.code))
+            .collect();
+        let edits: Vec<&Attribute> = attributes
+            .iter()
+            .filter(|a| a.code.starts_with("_rna_edit"))
+            .collect();
+        if match_codes.is_empty() && edits.is_empty() {
+            return None;
+        }
+        let first_edit_bases = edits
+            .first()
+            .map(|edit| Box::from(strip_edit_span(&edit.value)));
+        let mut indel_edits: Vec<IndelEdit> = edits.into_iter().filter_map(indel_edit).collect();
+        indel_edits.sort_by_key(|edit| edit.start);
+        Some(RefSeqAlignment {
+            match_codes,
+            indel_edits: indel_edits.into_boxed_slice(),
+            first_edit_bases,
+        })
+    }
+
+    /// `get_misalignment_offset` (TranscriptVariationAllele.pm:1594-1624): the
+    /// sum of the length changes of the indel edits whose start is at or before
+    /// `variant_cdna_start`, the allele's cDNA start, 0 standing for an
+    /// undefined one (:1608-1610) so that an allele outside the exons counts no
+    /// edit.
+    pub fn misalignment_offset(&self, variant_cdna_start: Option<i64>) -> i64 {
+        let location = variant_cdna_start.unwrap_or(0);
+        self.indel_edits
+            .iter()
+            .filter(|edit| location >= edit.start)
+            .map(|edit| edit.length_change)
+            .sum()
+    }
+}
+
+/// The attribute value past its `<digits><space><digits><space>` prefix, the
+/// bases of the edit, which `s/\d+\s\d+\s//` leaves (TranscriptVariationAllele.pm:833);
+/// a value not of that shape is kept whole, as the substitution then matches
+/// nothing.
+fn strip_edit_span(value: &str) -> &str {
+    let is_digits = |field: &str| !field.is_empty() && field.bytes().all(|b| b.is_ascii_digit());
+    let Some((start, rest)) = value.split_once(|c: char| c.is_ascii_whitespace()) else {
+        return value;
+    };
+    let Some((end, bases)) = rest.split_once(|c: char| c.is_ascii_whitespace()) else {
+        return value;
+    };
+    if is_digits(start) && is_digits(end) {
+        bases
+    } else {
+        value
+    }
+}
+
+/// The indel an `_rna_edit` attribute describes, or `None` for a substitution,
+/// whose three fields replace as many bases as they span (`:1606`). A value
+/// without two leading integers, which no cache writes, is skipped here;
+/// Ensembl VEP reads a missing or non-numeric field as 0 and applies the same
+/// arithmetic, counting an empty value as a deletion of one (`:1614`).
+fn indel_edit(attribute: &Attribute) -> Option<IndelEdit> {
+    let fields: Vec<&str> = perl_split(&attribute.value, &[' ']).collect();
+    let start: i64 = fields.first()?.parse().ok()?;
+    let end: i64 = fields.get(1)?.parse().ok()?;
+    let length_change = if fields.len() == 3 {
+        let bases = fields[2].len() as i64;
+        if end - start + 1 == bases {
+            return None;
+        }
+        bases
+    } else {
+        -1 - (end - start)
+    };
+    Some(IndelEdit {
+        start,
+        length_change,
+    })
 }
 
 impl Clone for TranscriptDerived {
@@ -289,11 +509,12 @@ impl FeatureOrdinals {
     }
 }
 
-/// An exon within a transcript.
+/// An exon within a transcript: its span, rank and phases. The cache's exon
+/// stable id is not loaded onto the exon, since no output column or
+/// consequence reads it; a run whose plugins print the ids loads them onto
+/// [`Transcript::exon_ids`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Exon {
-    /// Exon stable ID (e.g., "ENSE00001472862").
-    pub stable_id: Option<String>,
     /// 1-based start position.
     pub start: u64,
     /// 1-based end position (inclusive).
@@ -327,10 +548,33 @@ pub struct Translation {
     pub seq: Option<String>,
 }
 
+/// The support level a `TSL` attribute's value carries, as Ensembl VEP reads
+/// it for the `TSL` field (`OutputFactory.pm:1610-1611` at release/116.2) and
+/// for the pick orders (`:752-753`; `VariationFeatureAdaptor.pm:2182-2183` at
+/// ensembl-variation release/116): `m/tsl(\d+)/` then `$1 if $1`. The match is
+/// the first `tsl` a digit follows and the run of digits after it, kept as
+/// text, so `tsl1 (assigned to previous version 8)` is `1`, `tslNA then tsl4`
+/// is `4` and `tsl007` is `007`; `None` when no `tsl` is followed by a digit
+/// (`tslNA`) and when the run is the one digit `0`, the only digit run Perl's
+/// truth test drops (`00` is true).
+pub fn tsl_level(value: &str) -> Option<&str> {
+    let digits = value.match_indices("tsl").find_map(|(at, tsl)| {
+        let rest = &value[at + tsl.len()..];
+        let digit_run_len = rest
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len());
+        (digit_run_len > 0).then_some(&rest[..digit_run_len])
+    })?;
+    (digits != "0").then_some(digits)
+}
+
 /// A code/value attribute pair from the Perl cache.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Attribute {
-    pub code: String,
+    /// The attribute code (`TSL`, `gencode_basic`, `_rna_edit`): one of a few
+    /// dozen strings a cache repeats on most of its transcripts, so the loader
+    /// shares one allocation per distinct code.
+    pub code: Arc<str>,
     pub value: String,
 }
 
@@ -351,6 +595,12 @@ pub struct TranscriptVEFC {
     pub translateable_seq: Option<String>,
     /// Protein (peptide) sequence.
     pub peptide: Option<String>,
+    /// The spliced cDNA with the model's edits applied, which `apply_edits`
+    /// stores on an `ok` BAM-edited transcript alone
+    /// (`AnnotationType/Transcript.pm:617` at release/116.2); every other
+    /// transcript's cDNA is assembled from the pieces above or read from the
+    /// FASTA.
+    pub spliced_seq: Option<String>,
     /// Introns from the VEFC (may duplicate transcript-level introns).
     pub introns: Vec<Intron>,
     /// Exons sorted by rank for the VEFC.
@@ -604,7 +854,7 @@ pub struct ProteinFunctionPredictions {
 /// substitution at every protein position. The format is defined by
 /// `ProteinFunctionPredictionMatrix.pm` in ensembl-variation release/115:
 ///
-/// - Gzip-compressed blob (decompressed at load time or lazily on first lookup)
+/// - Gzip-compressed blob, held compressed and inflated on the first lookup
 /// - Header: 3 bytes `"VEP"`
 /// - Per position: 20 amino acids × 2 bytes = 40 bytes
 /// - Each cell: `u16` little-endian; top 2 bits (15-14) = category index, bits 13-10
@@ -612,8 +862,15 @@ pub struct ProteinFunctionPredictions {
 /// - `0xFFFF` = no prediction
 /// - Amino acid order: A C D E F G H I K L M N P Q R S T V W Y
 ///
+/// A run without `--sift` or `--polyphen` never looks a matrix up, so every
+/// stream stays as the cache stores it; a run that does pays the inflate once
+/// per matrix it looks up, on the thread of the first lookup.
+///
+/// Serialized as `analysis`, `sub_analysis`, `peptide_length` and the inflated
+/// bytes under `predictions_data`, whichever way the matrix was built.
+///
 /// See [`crate::prediction`] for the decoder implementation and format documentation.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct PredictionMatrix {
     /// Analysis name: "sift", "polyphen_humdiv", or "polyphen_humvar".
     pub analysis: String,
@@ -621,12 +878,101 @@ pub struct PredictionMatrix {
     pub sub_analysis: Option<String>,
     /// Length of the protein (number of residues).
     pub peptide_length: usize,
-    /// Decompressed prediction matrix bytes (header + position data).
-    /// Use [`crate::prediction::decode_prediction`] to look up values.
-    pub predictions_data: Vec<u8>,
+    /// The gzip stream of the matrix as the cache stores it; empty for a matrix
+    /// built from inflated bytes.
+    compressed: Box<[u8]>,
+    /// The inflated matrix (header + position data), filled on the first
+    /// lookup; `None` inside when the stream did not inflate.
+    inflated: OnceLock<Option<Box<[u8]>>>,
+}
+
+/// The serialized shape of a [`PredictionMatrix`].
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PredictionMatrixRepr<'a> {
+    analysis: Cow<'a, str>,
+    sub_analysis: Option<Cow<'a, str>>,
+    peptide_length: usize,
+    predictions_data: Cow<'a, [u8]>,
+}
+
+impl serde::Serialize for PredictionMatrix {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        PredictionMatrixRepr {
+            analysis: Cow::Borrowed(self.analysis.as_str()),
+            sub_analysis: self.sub_analysis.as_deref().map(Cow::Borrowed),
+            peptide_length: self.peptide_length,
+            predictions_data: Cow::Borrowed(self.predictions_data().unwrap_or_default()),
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PredictionMatrix {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let repr = PredictionMatrixRepr::deserialize(deserializer)?;
+        Ok(Self::from_inflated(
+            repr.analysis.into_owned(),
+            repr.sub_analysis.map(Cow::into_owned),
+            repr.peptide_length,
+            repr.predictions_data.into_owned(),
+        ))
+    }
 }
 
 impl PredictionMatrix {
+    /// A matrix from the gzip stream the cache stores, inflated on the first
+    /// lookup.
+    pub fn from_compressed(
+        analysis: String,
+        sub_analysis: Option<String>,
+        peptide_length: usize,
+        compressed: Vec<u8>,
+    ) -> Self {
+        Self {
+            analysis,
+            sub_analysis,
+            peptide_length,
+            compressed: compressed.into_boxed_slice(),
+            inflated: OnceLock::new(),
+        }
+    }
+
+    /// A matrix from its inflated bytes (header + position data).
+    pub fn from_inflated(
+        analysis: String,
+        sub_analysis: Option<String>,
+        peptide_length: usize,
+        inflated: Vec<u8>,
+    ) -> Self {
+        Self {
+            analysis,
+            sub_analysis,
+            peptide_length,
+            compressed: Box::default(),
+            inflated: OnceLock::from(Some(inflated.into_boxed_slice())),
+        }
+    }
+
+    /// The inflated matrix bytes (header + position data), inflating the
+    /// stored stream on the first call; `None` when the stream does not
+    /// inflate, which [`Self::lookup`] reads as no prediction anywhere. Use
+    /// [`crate::prediction::decode_prediction`] to look up values.
+    pub fn predictions_data(&self) -> Option<&[u8]> {
+        self.inflated
+            .get_or_init(|| {
+                crate::prediction::gunzip_matrix(&self.compressed)
+                    .ok()
+                    .map(Vec::into_boxed_slice)
+            })
+            .as_deref()
+    }
+
+    /// Whether the inflate has run, on a lookup or at construction from inflated
+    /// bytes; a stream that failed to inflate counts as run.
+    pub fn is_inflated(&self) -> bool {
+        self.inflated.get().is_some()
+    }
+
     /// Look up the prediction for a given protein position and amino acid.
     ///
     /// Returns `None` if the position/AA is out of range or no prediction exists.
@@ -636,7 +982,12 @@ impl PredictionMatrix {
         amino_acid: u8,
         analysis: crate::prediction::AnalysisType,
     ) -> Option<crate::prediction::Prediction> {
-        crate::prediction::decode_prediction(&self.predictions_data, position, amino_acid, analysis)
+        crate::prediction::decode_prediction(
+            self.predictions_data()?,
+            position,
+            amino_acid,
+            analysis,
+        )
     }
 }
 
@@ -662,6 +1013,65 @@ pub struct Intron {
     pub rank: u32,
 }
 
+/// The empty transcript: empty identifiers, chromosome, biotype and source,
+/// every optional value absent, the forward strand, a span of 0 to 0, no
+/// exons, introns, flags or attributes, and rank 0.
+impl Default for Transcript {
+    fn default() -> Self {
+        Self {
+            stable_id: Arc::from(""),
+            version: None,
+            db_id: None,
+            gene_stable_id: Arc::from(""),
+            gene_version: None,
+            chr: String::new(),
+            start: 0,
+            end: 0,
+            strand: Strand::Forward,
+            biotype: Arc::from(""),
+            source: String::new(),
+            gene_symbol: None,
+            gene_symbol_source: None,
+            gene_symbol_id: None,
+            hgnc_id: None,
+            gene_phenotype: None,
+            canonical: false,
+            mane_select: None,
+            mane_plus_clinical: None,
+            tsl: None,
+            appris: None,
+            ccds: None,
+            protein_id: None,
+            refseq: None,
+            swissprot: None,
+            trembl: None,
+            uniparc: None,
+            uniprot_isoform: None,
+            exons: Vec::new(),
+            exon_ids: None,
+            introns: Vec::new(),
+            cdna_coding_start: None,
+            cdna_coding_end: None,
+            coding_region_start: None,
+            coding_region_end: None,
+            translation_start: None,
+            translation_end: None,
+            translation: None,
+            cdna_sequence: None,
+            protein_sequence: None,
+            flags: Arc::from([]),
+            gencode_basic: false,
+            gencode_primary: false,
+            attributes: Vec::new(),
+            source_cache: None,
+            bam_edit_status: None,
+            vefc: None,
+            derived: TranscriptDerived::default(),
+            id_rank: 0,
+        }
+    }
+}
+
 impl Transcript {
     /// The per-transcript facts, computed on the first call and shared by every
     /// later one.
@@ -679,10 +1089,14 @@ impl Transcript {
             .get_or_init(|| Box::new(FeatureOrdinals::compute(self)))
     }
 
-    /// The spliced cDNA of a coding transcript, assembled on the first call
-    /// from the cached 5' UTR, translateable sequence and 3' UTR and shared by
-    /// every later one; `None` for a transcript without a coding model or
-    /// whose cached pieces do not fit together.
+    /// The spliced cDNA the cache holds for the transcript: the edited cDNA a
+    /// BAM-edited `ok` model stores whole ([`TranscriptVEFC::spliced_seq`], read
+    /// before any assembly as `TranscriptVariation::_get_ref_allele` reads it,
+    /// TranscriptVariation.pm:462 at release/116), else a coding transcript's
+    /// cDNA assembled on the first call from the cached 5' UTR, translateable
+    /// sequence and 3' UTR and shared by every later one; `None` for any other
+    /// transcript without a coding model or whose cached pieces do not fit
+    /// together.
     ///
     /// The cache holds the three pieces Ensembl's `Transcript::translateable_seq`
     /// and the two UTR accessors cut from one spliced sequence, so their
@@ -691,13 +1105,40 @@ impl Transcript {
     /// removed. The padding's length is the excess of the cached sequence over
     /// the coding span, so no exon rule is needed to find it; a cache whose 5'
     /// UTR does not end at the coding start, or whose padding is not 0 to 2
-    /// bases, yields `None`. A non-coding transcript's cDNA is not in the
-    /// cache.
+    /// bases, yields `None`. An unedited non-coding transcript's cDNA is not in
+    /// the cache.
     pub fn spliced_seq(&self) -> Option<&str> {
+        if let Some(edited) = self.vefc.as_ref().and_then(|v| v.spliced_seq.as_deref()) {
+            return Some(edited);
+        }
         self.derived
             .spliced_seq
             .get_or_init(|| self.assemble_spliced_seq().map(String::into_boxed_str))
             .as_deref()
+    }
+
+    /// What the transcript's attributes record of a RefSeq model's alignment to
+    /// the genome ([`RefSeqAlignment`]), read on the first call and shared by
+    /// every later one; `None` for a transcript whose attributes carry no
+    /// `rseq` code and no `_rna_edit`, every unedited Ensembl model included.
+    pub fn refseq_alignment(&self) -> Option<&Arc<RefSeqAlignment>> {
+        self.derived
+            .refseq_alignment
+            .get_or_init(|| RefSeqAlignment::read(&self.attributes).map(Arc::new))
+            .as_ref()
+    }
+
+    /// The `rseq` match codes of [`Transcript::refseq_alignment`], empty without
+    /// one.
+    pub fn rseq_codes(&self) -> &[Box<str>] {
+        self.refseq_alignment()
+            .map_or(&[], |alignment| &alignment.match_codes)
+    }
+
+    /// The indel edits of [`Transcript::refseq_alignment`], empty without one.
+    pub fn indel_edits(&self) -> &[IndelEdit] {
+        self.refseq_alignment()
+            .map_or(&[], |alignment| &alignment.indel_edits)
     }
 
     fn assemble_spliced_seq(&self) -> Option<String> {
@@ -886,22 +1327,60 @@ mod tests {
         assert_eq!(t.end_exon_index, 4);
     }
 
+    /// A SIFT matrix built from its gzip stream inflates on the first lookup
+    /// and once only; a stream that is not gzip reads as no prediction
+    /// anywhere; a matrix built from inflated bytes answers without a stream;
+    /// both constructions serialize to the inflated bytes and read back whole.
     #[test]
-    fn test_exon_stable_id() {
-        let exon = Exon {
-            stable_id: Some("ENSE00001472862".to_string()),
-            start: 25000001,
-            end: 25000200,
-            rank: 1,
-            phase: 0,
-            end_phase: 2,
-        };
-        assert_eq!(exon.stable_id.as_deref(), Some("ENSE00001472862"));
+    fn prediction_matrix_inflates_on_first_lookup() {
+        use crate::prediction::AnalysisType;
+        use std::io::Write as _;
+
+        let mut raw = b"VEP".to_vec();
+        raw.extend(std::iter::repeat_n(0xFFu8, 2 * 20 * 2));
+        // Residue 2, amino acid C (column 1): category 1 (deleterious), score 0.01.
+        let offset = 3 + (20 + 1) * 2;
+        raw[offset..offset + 2].copy_from_slice(&((1u16 << 14) | 10).to_le_bytes());
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(&raw).unwrap();
+        let compressed = gz.finish().unwrap();
+
+        let lazy = PredictionMatrix::from_compressed("sift".to_string(), None, 2, compressed);
+        assert!(!lazy.is_inflated());
+        let hit = lazy.lookup(2, b'C', AnalysisType::Sift).unwrap();
+        assert_eq!((hit.label(), hit.score), ("deleterious", 0.01));
+        assert!(lazy.is_inflated());
+        let first = lazy.predictions_data().unwrap().as_ptr();
+        assert!(lazy.lookup(1, b'A', AnalysisType::Sift).is_none());
+        assert_eq!(lazy.predictions_data().unwrap().as_ptr(), first);
+        assert_eq!(lazy.predictions_data(), Some(raw.as_slice()));
+
+        let broken =
+            PredictionMatrix::from_compressed("sift".to_string(), None, 2, b"VEP".to_vec());
+        assert!(broken.lookup(2, b'C', AnalysisType::Sift).is_none());
+        assert!(broken.is_inflated() && broken.predictions_data().is_none());
+
+        let eager = PredictionMatrix::from_inflated("sift".to_string(), None, 2, raw.clone());
+        assert!(eager.is_inflated());
+        assert_eq!(eager.predictions_data(), Some(raw.as_slice()));
+        assert!(eager.lookup(2, b'C', AnalysisType::Sift).is_some());
+
+        let lazy_json = serde_json::to_value(&lazy).unwrap();
+        assert_eq!(lazy_json, serde_json::to_value(&eager).unwrap());
+        assert_eq!(
+            lazy_json["predictions_data"].as_array().unwrap().len(),
+            raw.len()
+        );
+        let read_back: PredictionMatrix = serde_json::from_value(lazy_json).unwrap();
+        assert_eq!(read_back.predictions_data(), Some(raw.as_slice()));
+        assert_eq!(
+            (read_back.analysis.as_str(), read_back.peptide_length),
+            ("sift", 2)
+        );
     }
 
     fn exon(start: u64, end: u64, phase: i8) -> Exon {
         Exon {
-            stable_id: None,
             start,
             end,
             rank: 0,
@@ -935,6 +1414,7 @@ mod tests {
             source: "Ensembl".into(),
             gene_symbol: None,
             gene_symbol_source: None,
+            gene_symbol_id: None,
             hgnc_id: None,
             gene_phenotype: None,
             canonical: false,
@@ -950,6 +1430,7 @@ mod tests {
             uniparc: None,
             uniprot_isoform: None,
             exons,
+            exon_ids: None,
             introns,
             cdna_coding_start: None,
             cdna_coding_end: None,
@@ -965,6 +1446,8 @@ mod tests {
             gencode_primary: false,
             attributes: vec![],
             vefc: None,
+            source_cache: None,
+            bam_edit_status: None,
             derived: Default::default(),
             id_rank: 0,
         }
@@ -1087,10 +1570,19 @@ mod tests {
         assert_eq!(&*derived.feature_ordinals().introns, &[(201, 299)]);
     }
 
-    /// The empty cells every loaded transcript carries, touched or not.
+    /// The empty cells every loaded transcript carries, touched or not. Each
+    /// `OnceLock` holds a `Once` beside its value: where `Once` is a 4-byte
+    /// futex word (Linux) the four cells take 16 + 16 + 24 + 16 = 72 bytes, and
+    /// where it is an 8-byte queue pointer (macOS) the 10-byte facts cell pads
+    /// to 24, for 80.
     #[test]
-    fn derived_cells_cost_at_most_56_bytes_per_transcript() {
-        assert!(std::mem::size_of::<TranscriptDerived>() <= 56);
+    fn derived_cells_cost_at_most_72_bytes_per_transcript() {
+        let bound = if std::mem::size_of::<std::sync::Once>() == 4 {
+            72
+        } else {
+            80
+        };
+        assert!(std::mem::size_of::<TranscriptDerived>() <= bound);
     }
 
     /// A coding transcript with a translation and a mapper over `cds`, the
@@ -1182,6 +1674,145 @@ mod tests {
         let mut over_padded = coding_transcript("", "ATGCCCTAA", "TTT", 0);
         over_padded.vefc.as_mut().unwrap().translateable_seq = Some("NNNATGCCCTAA".into());
         assert_eq!(over_padded.spliced_seq(), None);
+    }
+
+    /// The edited cDNA a BAM-edited `ok` model stores whole is the spliced
+    /// sequence, read before any assembly: on a non-coding transcript, whose
+    /// pieces assemble nothing, and over the pieces of a coding one, leaving the
+    /// assembly cell empty. A transcript without it assembles its cDNA from the
+    /// pieces into the cell.
+    #[test]
+    fn spliced_seq_reads_the_cached_edited_cdna_before_assembling_one() {
+        let mut non_coding = transcript(Strand::Forward, vec![exon(100, 111, -1)], vec![]);
+        non_coding.vefc = Some(TranscriptVEFC {
+            spliced_seq: Some("ACGTACGTAAAC".into()),
+            ..Default::default()
+        });
+        assert_eq!(non_coding.spliced_seq(), Some("ACGTACGTAAAC"));
+        assert!(non_coding.derived.spliced_seq.get().is_none());
+
+        let mut coding = coding_transcript("GGAAC", "ATGCCCTAA", "TTTAAACC", 0);
+        coding.vefc.as_mut().unwrap().spliced_seq = Some("GGAACATGCCCTAATTTAAACG".into());
+        assert_eq!(coding.spliced_seq(), Some("GGAACATGCCCTAATTTAAACG"));
+        assert!(coding.derived.spliced_seq.get().is_none());
+
+        let assembled = coding_transcript("GGAAC", "ATGCCCTAA", "TTTAAACC", 0);
+        assert_eq!(assembled.spliced_seq(), Some("GGAACATGCCCTAATTTAAACC"));
+        assert_eq!(
+            assembled
+                .derived
+                .spliced_seq
+                .get()
+                .and_then(|s| s.as_deref()),
+            Some("GGAACATGCCCTAATTTAAACC")
+        );
+    }
+
+    /// The two transcript keys serialize as the cache spells them, `Ensembl` or
+    /// `RefSeq` for `_source_cache` and `ok` or `failed` for `_bam_edit_status`,
+    /// and the `BAM_EDIT` column prints the status upper-cased.
+    #[test]
+    fn source_cache_and_bam_edit_status_spell_as_the_cache_does() {
+        assert_eq!(
+            serde_json::to_string(&SourceCache::Ensembl).unwrap(),
+            r#""Ensembl""#
+        );
+        assert_eq!(
+            serde_json::to_string(&SourceCache::RefSeq).unwrap(),
+            r#""RefSeq""#
+        );
+        assert_eq!(
+            serde_json::to_string(&BamEditStatus::Ok).unwrap(),
+            r#""ok""#
+        );
+        assert_eq!(
+            serde_json::to_string(&BamEditStatus::Failed).unwrap(),
+            r#""failed""#
+        );
+        assert_eq!(
+            serde_json::from_str::<SourceCache>(r#""RefSeq""#).unwrap(),
+            SourceCache::RefSeq
+        );
+        assert_eq!(
+            serde_json::from_str::<BamEditStatus>(r#""failed""#).unwrap(),
+            BamEditStatus::Failed
+        );
+        assert!(serde_json::from_str::<BamEditStatus>(r#""OK""#).is_err());
+        assert_eq!(BamEditStatus::Ok.column_text(), "OK");
+        assert_eq!(BamEditStatus::Failed.column_text(), "FAILED");
+    }
+
+    /// The alignment cell reads the `rseq` codes in attribute order, leaving
+    /// `enst_refseq_compare` and `_rna_edit` out (OutputFactory.pm:1547), and
+    /// the `_rna_edit` values as `get_misalignment_offset` splits them
+    /// (TranscriptVariationAllele.pm:1605-1618): `10 9 AAA` inserts three bases,
+    /// `50 52 ` deletes three, `70 70 T` replaces one base with one and counts
+    /// for nothing. The offset sums the edits starting at or before the allele's
+    /// cDNA start, none for an undefined start (:1608-1610); the first edit's
+    /// bases are kept for the mismatch rule (:832-833); a transcript with
+    /// neither kind of attribute has no alignment and empty lists.
+    #[test]
+    fn refseq_alignment_reads_the_match_codes_and_the_indel_edits() {
+        let mut tx = transcript(Strand::Forward, vec![exon(100, 200, -1)], vec![]);
+        assert!(tx.refseq_alignment().is_none());
+        assert!(tx.rseq_codes().is_empty() && tx.indel_edits().is_empty());
+
+        let attribute = |code: &str, value: &str| Attribute {
+            code: code.into(),
+            value: value.to_string(),
+        };
+        tx.attributes = vec![
+            attribute("_rna_edit", "50 52 "),
+            attribute("rseq_5p_mismatch", ""),
+            attribute("enst_refseq_compare", "1"),
+            attribute("_rna_edit", "10 9 AAA"),
+            attribute("rseq_cds_mismatch", ""),
+            attribute("_rna_edit", "70 70 T"),
+        ];
+        tx.derived = Default::default();
+        let alignment = tx.refseq_alignment().unwrap();
+        assert_eq!(
+            alignment
+                .match_codes
+                .iter()
+                .map(|c| &**c)
+                .collect::<Vec<_>>(),
+            ["rseq_5p_mismatch", "rseq_cds_mismatch"]
+        );
+        assert_eq!(
+            &*alignment.indel_edits,
+            &[
+                IndelEdit {
+                    start: 10,
+                    length_change: 3
+                },
+                IndelEdit {
+                    start: 50,
+                    length_change: -3
+                },
+            ]
+        );
+        assert_eq!(alignment.first_edit_bases.as_deref(), Some(""));
+        assert_eq!(alignment.misalignment_offset(Some(30)), 3);
+        assert_eq!(alignment.misalignment_offset(Some(60)), 0);
+        assert_eq!(alignment.misalignment_offset(Some(5)), 0);
+        assert_eq!(alignment.misalignment_offset(Some(10)), 3);
+        assert_eq!(alignment.misalignment_offset(None), 0);
+        assert_eq!(tx.rseq_codes().len(), 2);
+        assert_eq!(tx.indel_edits().len(), 2);
+
+        let mut insertion_first = transcript(Strand::Forward, vec![exon(100, 200, -1)], vec![]);
+        insertion_first.attributes = vec![attribute("_rna_edit", "10 9 AAA")];
+        let alignment = insertion_first.refseq_alignment().unwrap();
+        assert!(alignment.match_codes.is_empty());
+        assert_eq!(alignment.first_edit_bases.as_deref(), Some("AAA"));
+
+        let mut codes_only = transcript(Strand::Forward, vec![exon(100, 200, -1)], vec![]);
+        codes_only.attributes = vec![attribute("rseq_mrna_match", "")];
+        let alignment = codes_only.refseq_alignment().unwrap();
+        assert_eq!(alignment.first_edit_bases, None);
+        assert!(alignment.indel_edits.is_empty());
+        assert_eq!(alignment.misalignment_offset(Some(500)), 0);
     }
 
     /// A three-exon mapper on `strand`: cDNA 1-100 on the first exon, 101-300

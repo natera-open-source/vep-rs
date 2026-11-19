@@ -1,0 +1,352 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh37",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "included_records": {
+  "cadd": [
+   "coding_mnv",
+   "deletion_fwd",
+   "deletion_sv",
+   "insertion_fwd",
+   "intergenic_snv",
+   "intron_snv",
+   "missense_fwd_two_alts",
+   "missense_rev",
+   "shared_bases_substitution",
+   "start_lost_fwd",
+   "start_lost_rev",
+   "stop_gained_rev",
+   "stop_lost_fwd",
+   "synonymous_fwd_lowercase",
+   "synonymous_rev",
+   "unscored_snv"
+  ]
+ },
+ "max_span": 1000000,
+ "cache_cost_flank": 5000,
+ "flags": [
+  "--dir_plugins",
+  "{plugins}",
+  "--plugin",
+  "CADD,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,indels={corpus}/plugin_data/gnomad.genomes-exomes.r4.0.indel.synthetic.tsv.gz"
+ ],
+ "covers": [
+  "CADD"
+ ],
+ "suites": {
+  "cadd": {
+   "reference": "cand.txt",
+   "input": "cand.vcf",
+   "rows": 148,
+   "combinations": 21
+  }
+ },
+ "combinations": {
+  "5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,feature_truncation,intron_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,frameshift_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 2
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 18,
+   "exemplar_records": 3
+  },
+  "NMD_transcript_variant,stop_gained": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,stop_retained_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "NMD_transcript_variant,synonymous_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 2
+  },
+  "coding_sequence_variant,feature_truncation,intron_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 3
+  },
+  "frameshift_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 2
+  },
+  "intergenic_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 30,
+   "exemplar_records": 5
+  },
+  "missense_variant,splice_region_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 2
+  },
+  "non_coding_transcript_exon_variant,splice_region_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "splice_region_variant,start_lost": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "start_lost": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "stop_gained": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "stop_lost": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 3
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 5,
+   "exemplar_records": 3
+  }
+ },
+ "variant_classes": {
+  "deletion": 10,
+  "insertion": 10,
+  "mnv_or_complex": 20,
+  "snv": 98,
+  "symbolic_deletion": 10
+ },
+ "records": [
+  {
+   "suite": "cadd",
+   "vcf": "21\t17616932\tintron_snv\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t26078748\tintergenic_snv\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t31661647\tsynonymous_rev\tT\tC\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t33416423\tstop_lost_fwd\tT\tC\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t36252952\tshared_bases_substitution\tTCA\tTTA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,stop_retained_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t36252953\tmissense_rev\tC\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,stop_retained_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t40762624\tstart_lost_fwd\tA\tT\t.\t.\t.",
+   "combinations": [
+    "missense_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "splice_region_variant,start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t43505400\tdeletion_sv\tG\t<DEL>\t.\t.\tSVTYPE=DEL;END=43506400",
+   "combinations": [
+    "5_prime_UTR_variant,NMD_transcript_variant,coding_sequence_variant,feature_truncation,intron_variant",
+    "coding_sequence_variant,feature_truncation,intron_variant"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t43505445\tmissense_fwd_two_alts\tC\tG,T\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "NMD_transcript_variant,synonymous_variant",
+    "missense_variant",
+    "synonymous_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t43505446\tdeletion_fwd\tTG\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t43505450\tinsertion_fwd\tG\tGA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t43505452\tcoding_mnv\tAA\tCC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t43505455\tunscored_snv\tT\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t44492302\tstart_lost_rev\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "start_lost",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t45720003\tsynonymous_fwd_lowercase\tc\tt\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,synonymous_variant",
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "cadd",
+   "vcf": "21\t47734737\tstop_gained_rev\tC\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,stop_gained",
+    "downstream_gene_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "plugin_files": {
+  "CADD": [
+   "plugin_data/whole_genome_SNVs_synthetic.tsv.gz",
+   "plugin_data/whole_genome_SNVs_synthetic.tsv.gz.tbi",
+   "plugin_data/gnomad.genomes-exomes.r4.0.indel.synthetic.tsv.gz",
+   "plugin_data/gnomad.genomes-exomes.r4.0.indel.synthetic.tsv.gz.tbi"
+  ]
+ },
+ "flag_sets": [
+  {
+   "name": "cadd-force-annotate",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "CADD,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,indels={corpus}/plugin_data/gnomad.genomes-exomes.r4.0.indel.synthetic.tsv.gz,force_annotate=1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_cadd-force-annotate",
+   "covers": [
+    "CADD"
+   ],
+   "reference_warnings": [
+    "Using snv and/or indels CADD annotation file with structural variant can increase run time exponentially. Consider creating separate input files for SNV/indels and SV and use appropriate CADD annotation file."
+   ],
+   "reference": "the warning is Ensembl VEP's own, printed by CADD.pm:137-139 on standard error when force_annotate is set; vep-rs writes it to its warnings file",
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "cadd-positional",
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "CADD,{corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,{corpus}/plugin_data/gnomad.genomes-exomes.r4.0.indel.synthetic.tsv.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_cadd-positional",
+   "covers": [
+    "CADD"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

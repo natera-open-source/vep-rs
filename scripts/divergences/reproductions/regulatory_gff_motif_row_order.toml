@@ -1,0 +1,38 @@
+entry = "regulatory_gff_motif_row_order"
+page = "docs/divergences/regulatory-gff-motif-rows.md#1-two-motif-rows-of-one-record-in-the-order-of-a-read-counter"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 4,425 of 13,577 table rows · 6 flag sets, 1 corpus"
+notes = "A variant inside the motif pair ENSM00000574660 and ENSM00000574661 (21:5014058-5014072), the ninth and tenth motif records read for their region: Ensembl VEP sorts the rows by the text of that counter, 10 before 9; vep-rs by the stable id. The two rows are compared in the order written."
+
+[input]
+format = "vcf"
+text = """
+21	5014060	motif_9_and_10	G	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-regulatory-gff/json_cache"
+fasta = "tests/golden/116/GRCh38-regulatory-gff/reference.fa.gz"
+
+[run]
+flags = ["--regulatory_gff", "file={corpus}/gff/regulatory_features.gff3.gz,motifs={corpus}/gff/motif_features.gff3.gz,emars={corpus}/gff/EMARs.gff.gz"]
+
+[compare]
+kind = "rows"
+where = { record = "motif_9_and_10", feature_type = "MotifFeature" }
+columns = ["Location", "Allele", "Feature", "Consequence", "STRAND", "MOTIF_POS"]
+sorted = false
+
+[expected]
+ensembl_vep = [
+  "21:5014060 | A | ENSM00000574661 | TF_binding_site_variant | -1 | 13",
+  "21:5014060 | A | ENSM00000574660 | TF_binding_site_variant | 1 | 3",
+]
+vep_rs = [
+  "21:5014060 | A | ENSM00000574660 | TF_binding_site_variant | 1 | 3",
+  "21:5014060 | A | ENSM00000574661 | TF_binding_site_variant | -1 | 13",
+]

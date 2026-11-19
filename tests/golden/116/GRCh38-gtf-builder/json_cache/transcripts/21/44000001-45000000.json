@@ -1,0 +1,3397 @@
+[
+  {
+    "stable_id": "ENST00000862526",
+    "version": 2,
+    "gene_stable_id": "ENSG00000241945",
+    "start": 44107306,
+    "end": 44131180,
+    "strand": 1,
+    "biotype": "protein_coding",
+    "source": "havana_tagene",
+    "gene_symbol": "PWP2",
+    "ccds": "-",
+    "protein": "ENSP00000532585",
+    "exons": [
+      {
+        "stable_id": "ENSE00004779459",
+        "start": 44107306,
+        "end": 44107434,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00001177844",
+        "start": 44108984,
+        "end": 44109096,
+        "rank": 2,
+        "phase": 0,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050676",
+        "start": 44113753,
+        "end": 44113847,
+        "rank": 3,
+        "phase": 2,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00001050672",
+        "start": 44114179,
+        "end": 44114278,
+        "rank": 4,
+        "phase": 1,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003579779",
+        "start": 44114625,
+        "end": 44114768,
+        "rank": 5,
+        "phase": 2,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003682861",
+        "start": 44115264,
+        "end": 44115399,
+        "rank": 6,
+        "phase": 2,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00003660102",
+        "start": 44115691,
+        "end": 44115920,
+        "rank": 7,
+        "phase": 0,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050670",
+        "start": 44117820,
+        "end": 44117963,
+        "rank": 8,
+        "phase": 2,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050681",
+        "start": 44118763,
+        "end": 44118833,
+        "rank": 9,
+        "phase": 2,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00001050669",
+        "start": 44119387,
+        "end": 44119523,
+        "rank": 10,
+        "phase": 1,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00003612411",
+        "start": 44120348,
+        "end": 44120496,
+        "rank": 11,
+        "phase": 0,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003671210",
+        "start": 44120631,
+        "end": 44120778,
+        "rank": 12,
+        "phase": 2,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00001050666",
+        "start": 44120952,
+        "end": 44121102,
+        "rank": 13,
+        "phase": 0,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00001050680",
+        "start": 44122177,
+        "end": 44122357,
+        "rank": 14,
+        "phase": 1,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050675",
+        "start": 44124580,
+        "end": 44124727,
+        "rank": 15,
+        "phase": 2,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00003652919",
+        "start": 44126011,
+        "end": 44126119,
+        "rank": 16,
+        "phase": 0,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00003469591",
+        "start": 44126900,
+        "end": 44126965,
+        "rank": 17,
+        "phase": 1,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00003545412",
+        "start": 44127932,
+        "end": 44128150,
+        "rank": 18,
+        "phase": 1,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00003592879",
+        "start": 44128247,
+        "end": 44128397,
+        "rank": 19,
+        "phase": 1,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003554676",
+        "start": 44128552,
+        "end": 44128626,
+        "rank": 20,
+        "phase": 2,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00004779458",
+        "start": 44130603,
+        "end": 44131180,
+        "rank": 21,
+        "phase": 2,
+        "end_phase": -1
+      }
+    ],
+    "cdna_coding_start": 112,
+    "cdna_coding_end": 2865,
+    "translation": {
+      "stable_id": "ENSP00000532585",
+      "version": 1,
+      "start": 112,
+      "end": 169
+    },
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "value": "GENCODE basic"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 44107435,
+          "end": 44108983,
+          "rank": 1
+        },
+        {
+          "start": 44109097,
+          "end": 44113752,
+          "rank": 2
+        },
+        {
+          "start": 44113848,
+          "end": 44114178,
+          "rank": 3
+        },
+        {
+          "start": 44114279,
+          "end": 44114624,
+          "rank": 4
+        },
+        {
+          "start": 44114769,
+          "end": 44115263,
+          "rank": 5
+        },
+        {
+          "start": 44115400,
+          "end": 44115690,
+          "rank": 6
+        },
+        {
+          "start": 44115921,
+          "end": 44117819,
+          "rank": 7
+        },
+        {
+          "start": 44117964,
+          "end": 44118762,
+          "rank": 8
+        },
+        {
+          "start": 44118834,
+          "end": 44119386,
+          "rank": 9
+        },
+        {
+          "start": 44119524,
+          "end": 44120347,
+          "rank": 10
+        },
+        {
+          "start": 44120497,
+          "end": 44120630,
+          "rank": 11
+        },
+        {
+          "start": 44120779,
+          "end": 44120951,
+          "rank": 12
+        },
+        {
+          "start": 44121103,
+          "end": 44122176,
+          "rank": 13
+        },
+        {
+          "start": 44122358,
+          "end": 44124579,
+          "rank": 14
+        },
+        {
+          "start": 44124728,
+          "end": 44126010,
+          "rank": 15
+        },
+        {
+          "start": 44126120,
+          "end": 44126899,
+          "rank": 16
+        },
+        {
+          "start": 44126966,
+          "end": 44127931,
+          "rank": 17
+        },
+        {
+          "start": 44128151,
+          "end": 44128246,
+          "rank": 18
+        },
+        {
+          "start": 44128398,
+          "end": 44128551,
+          "rank": 19
+        },
+        {
+          "start": 44128627,
+          "end": 44130602,
+          "rank": 20
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "cdna_coding_start": 112,
+        "cdna_coding_end": 2865,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 129,
+            "to_start": 44107306,
+            "to_end": 44107434,
+            "ori": 1
+          },
+          {
+            "from_start": 130,
+            "from_end": 242,
+            "to_start": 44108984,
+            "to_end": 44109096,
+            "ori": 1
+          },
+          {
+            "from_start": 243,
+            "from_end": 337,
+            "to_start": 44113753,
+            "to_end": 44113847,
+            "ori": 1
+          },
+          {
+            "from_start": 338,
+            "from_end": 437,
+            "to_start": 44114179,
+            "to_end": 44114278,
+            "ori": 1
+          },
+          {
+            "from_start": 438,
+            "from_end": 581,
+            "to_start": 44114625,
+            "to_end": 44114768,
+            "ori": 1
+          },
+          {
+            "from_start": 582,
+            "from_end": 717,
+            "to_start": 44115264,
+            "to_end": 44115399,
+            "ori": 1
+          },
+          {
+            "from_start": 718,
+            "from_end": 947,
+            "to_start": 44115691,
+            "to_end": 44115920,
+            "ori": 1
+          },
+          {
+            "from_start": 948,
+            "from_end": 1091,
+            "to_start": 44117820,
+            "to_end": 44117963,
+            "ori": 1
+          },
+          {
+            "from_start": 1092,
+            "from_end": 1162,
+            "to_start": 44118763,
+            "to_end": 44118833,
+            "ori": 1
+          },
+          {
+            "from_start": 1163,
+            "from_end": 1299,
+            "to_start": 44119387,
+            "to_end": 44119523,
+            "ori": 1
+          },
+          {
+            "from_start": 1300,
+            "from_end": 1448,
+            "to_start": 44120348,
+            "to_end": 44120496,
+            "ori": 1
+          },
+          {
+            "from_start": 1449,
+            "from_end": 1596,
+            "to_start": 44120631,
+            "to_end": 44120778,
+            "ori": 1
+          },
+          {
+            "from_start": 1597,
+            "from_end": 1747,
+            "to_start": 44120952,
+            "to_end": 44121102,
+            "ori": 1
+          },
+          {
+            "from_start": 1748,
+            "from_end": 1928,
+            "to_start": 44122177,
+            "to_end": 44122357,
+            "ori": 1
+          },
+          {
+            "from_start": 1929,
+            "from_end": 2076,
+            "to_start": 44124580,
+            "to_end": 44124727,
+            "ori": 1
+          },
+          {
+            "from_start": 2077,
+            "from_end": 2185,
+            "to_start": 44126011,
+            "to_end": 44126119,
+            "ori": 1
+          },
+          {
+            "from_start": 2186,
+            "from_end": 2251,
+            "to_start": 44126900,
+            "to_end": 44126965,
+            "ori": 1
+          },
+          {
+            "from_start": 2252,
+            "from_end": 2470,
+            "to_start": 44127932,
+            "to_end": 44128150,
+            "ori": 1
+          },
+          {
+            "from_start": 2471,
+            "from_end": 2621,
+            "to_start": 44128247,
+            "to_end": 44128397,
+            "ori": 1
+          },
+          {
+            "from_start": 2622,
+            "from_end": 2696,
+            "to_start": 44128552,
+            "to_end": 44128626,
+            "ori": 1
+          },
+          {
+            "from_start": 2697,
+            "from_end": 3274,
+            "to_start": 44130603,
+            "to_end": 44131180,
+            "ori": 1
+          }
+        ]
+      },
+      "peptide": "MKFAYRFSNLLGTVYRRGNLNFTCDGNSVISPVGNRVTVFDLKNNKSDTLPLATRYNVKCVGLSPDGRLAIIVDEGGDALLVSLVCRSVLHHFHFKGSVHSVSFSPDGRKFVVTKGNIAQMYHAPGKKREFNAFVLDKTYFGPYDETTCIDWTDDSRCFVVGSKDMSTWVFGAERWDNLIYYALGGHKDAIVACFFESNSLDLYSLSQDGVLCMWQCDTPPEGLRLKPPAGWKADLLQREEEEEEEEDQEGDRETTIRGKATPAEEEKTGKVKYSRLAKYFFNKEGDFNNLTAAAFHKKSHLLVTGFASGIFHLHELPEFNLIHSLSISDQSIASVAINSSGDWIAFGCSGLGQLLVWEWQSESYVLKQQGHFNSMVALAYSPDGQYIVTGGDDGKVKVWNTLSGFCFVTFTEHSSGVTGVTFTATGYVVVTSSMDGTVRAFDLHRYRNFRTFTSPRPTQFSCVAVDASGEIVSAGAQDSFEIFVWSMQTGRLLDVLSGHEGPISGLCFNPMKSVLASASWDKTVRLWDMFDSWRTKETLALTSDALAVTFRPDGAELAVATLNSQITFWDPENAVQTGSIEGRHDLKTGRKELDKITAKHAAKGKAFTALCYSADGHSILAGGMSKFVCIYHVREQILMKRFEISCNLSLDAMEEFLNRRKMTEFGNLALIDQDAGQEDGVAIPLPGVRKGDMSSRHFKPEIRVTSLRFSPTGRCWAATTTEGLLIYSLDTRVLFDPFELDTSVTPGRVREALRQQDFTRAILMALRLNESKLVQEALEAVPRGEIEVVTSSLPELYVEKVLEFLASSFEVSRHLEFYLLWTHKLLMLHGQKLKSRAGTLLPVIQFLQKSIQRHLDDLSKLWNHYNMQYALAVSKQRGTKRSLDPLGSEEEAEASEDDSLHLLGGGGRDSEEEMLA",
+      "translateable_seq": "ATGAAGTTCGCTTACCGGTTTTCAAATTTGCTGGGTACGGTGTACCGGCGTGGGAACCTAAATTTTACCTGCGATGGAAATTCAGTTATCAGTCCCGTGGGCAATAGAGTCACTGTATTTGACCTTAAAAACAACAAATCTGACACGCTGCCCCTGGCCACTCGGTACAACGTCAAGTGCGTGGGGCTGTCCCCGGATGGCCGCCTCGCTATCATCGTCGATGAAGGGGGCGATGCGCTGCTGGTCAGCCTGGTCTGCAGGTCTGTGCTGCACCACTTCCACTTCAAGGGCTCTGTGCACAGTGTGTCCTTCTCCCCTGATGGCAGGAAGTTTGTTGTCACAAAGGGTAACATTGCCCAGATGTATCATGCCCCTGGGAAGAAGCGGGAGTTCAACGCCTTCGTTCTGGACAAGACCTATTTTGGGCCCTACGATGAGACCACCTGCATCGACTGGACGGATGACTCCAGGTGCTTTGTGGTTGGGAGCAAAGACATGTCCACCTGGGTGTTCGGAGCCGAGCGCTGGGACAACCTCATCTACTATGCACTGGGGGGACATAAGGATGCCATCGTGGCCTGCTTCTTTGAATCCAACAGCCTGGACCTGTACTCACTCAGCCAGGACGGAGTGCTGTGCATGTGGCAGTGTGACACGCCCCCCGAGGGCTTGCGGCTGAAGCCCCCTGCGGGCTGGAAAGCAGACCTGTTGCAGCGGGAGGAGGAAGAGGAGGAGGAGGAGGACCAGGAGGGCGACAGAGAGACCACCATCCGGGGAAAAGCCACTCCGGCCGAGGAGGAGAAGACAGGAAAAGTGAAGTACTCACGGCTGGCCAAGTACTTCTTCAATAAAGAAGGGGATTTTAACAACCTGACAGCTGCAGCATTTCATAAGAAGTCTCACCTCTTGGTCACTGGCTTTGCTTCTGGAATCTTCCATCTTCATGAGCTGCCAGAGTTTAACCTCATCCACTCCCTGAGCATTTCAGATCAGAGCATCGCCTCAGTGGCCATCAATAGCTCGGGGGACTGGATTGCTTTTGGCTGTTCAGGCCTGGGCCAGCTGCTGGTGTGGGAGTGGCAGAGTGAGTCCTACGTGCTCAAGCAGCAGGGCCACTTCAACAGCATGGTGGCCCTGGCCTACTCGCCCGACGGACAGTACATCGTGACTGGCGGGGACGACGGCAAGGTCAAGGTGTGGAACACCCTCAGCGGCTTCTGCTTCGTCACTTTTACGGAGCACTCCAGCGGGGTGACCGGTGTGACCTTTACTGCCACCGGCTACGTTGTGGTGACCTCATCCATGGACGGGACCGTGCGAGCCTTTGACCTTCACAGGTACCGAAACTTCCGCACCTTCACCTCTCCACGCCCCACCCAGTTCTCCTGTGTGGCGGTGGATGCGAGCGGTGAGATCGTCTCTGCAGGGGCGCAGGACTCCTTTGAGATTTTCGTGTGGTCCATGCAGACAGGCAGGCTCCTTGATGTTTTGTCTGGACACGAAGGGCCCATCAGTGGTCTGTGTTTTAACCCAATGAAGTCCGTCCTGGCCAGTGCCTCCTGGGACAAGACAGTGCGCCTATGGGACATGTTTGACAGCTGGAGGACCAAGGAGACGCTGGCCCTGACCTCTGATGCTCTGGCTGTGACTTTTCGCCCTGATGGTGCGGAGCTGGCTGTGGCCACACTGAACTCACAGATCACCTTCTGGGACCCTGAGAACGCGGTGCAGACGGGCTCCATTGAGGGCAGGCATGACCTCAAGACTGGCAGGAAGGAGCTGGACAAGATTACAGCCAAGCACGCGGCCAAGGGGAAGGCCTTCACCGCCCTGTGCTACTCTGCAGACGGCCACAGCATCCTGGCGGGAGGCATGTCCAAGTTCGTGTGCATCTACCACGTCCGTGAGCAGATTCTCATGAAGAGGTTCGAGATCTCTTGCAACCTGTCTTTGGACGCCATGGAGGAATTTTTGAACCGAAGAAAAATGACAGAGTTTGGCAACCTGGCACTAATTGATCAGGATGCTGGGCAGGAGGATGGAGTCGCGATACCACTGCCAGGCGTCAGGAAAGGTGACATGAGTTCTCGGCACTTCAAACCTGAGATCAGGGTGACCTCACTCCGCTTCTCTCCCACTGGGCGCTGCTGGGCGGCCACCACCACGGAGGGACTCCTCATCTACTCCCTGGACACCCGCGTGCTCTTTGACCCGTTTGAGCTGGACACCAGCGTCACCCCCGGGAGGGTGCGCGAGGCACTGCGCCAGCAGGACTTCACCAGGGCCATCCTCATGGCCCTCCGGCTCAACGAGAGCAAACTGGTGCAGGAGGCCCTGGAGGCGGTGCCCAGGGGCGAGATTGAAGTGGTCACCTCCTCCCTTCCTGAACTGTATGTGGAGAAAGTGCTGGAGTTTTTAGCTTCCTCCTTTGAAGTGTCTCGCCACCTGGAATTCTACCTCCTCTGGACTCACAAACTGCTCATGTTGCACGGACAGAAGCTGAAGTCCAGAGCCGGGACGCTGCTGCCTGTCATTCAGTTCCTCCAGAAGAGCATCCAGCGGCACCTGGACGACCTGTCGAAACTCTGGAACCACTATAACATGCAGTACGCACTAGCAGTTTCCAAGCAGCGGGGCACAAAACGCTCCCTAGACCCGCTGGGAAGTGAGGAGGAGGCAGAAGCATCTGAAGATGACAGCCTGCATCTGCTTGGAGGAGGAGGCAGAGACTCAGAAGAAGAGATGCTGGCCTAG",
+      "five_prime_utr": "ACGCCGTCGCTTCCCGGAAGTGCGTGCTGTGGGCGGTGCCGCGCGGACCCCCGGGAAGTGTCTCTGTGGGCGGCCGCCGGGTTGAGCTGCGGCACACGTGCGACGGCCGTG",
+      "three_prime_utr": "AGCCAGCCGGTTGCAGCGTTGGATTGTGCCGGCTAAGACCTGCCAGGGAGATGGGACCCTTGTGCCACCTGGGCCAGCAAAGAGGAGGGGTCCAGAGAACAGCTGAAATACTGTCACTAGTGGTAGTGACTTGCTTTTCCTGTGCACACATGTAGCCCATCAGGACAGCGAGCCGACGGGTCACGCCAGGGGCCGGCACGCACTGGCACCTGGCCCCAGGAGCGGGGCCGTGTGAACGGTGATGAATGTTGAAAATGCGTCTCAGAGAGGTATTCACATGAACTTTGTATGAGACTTATTTATATCTTTAACATAAAGGTTTGATAAAGAACTTAGGGATTAAAAAAAAGATGGAGTTTTCTAACGTGAGGATGAAGTCTACACTTCAGATTAAAAAGGGTTATGTTGT",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004779459",
+          "start": 44107306,
+          "end": 44107434,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00001177844",
+          "start": 44108984,
+          "end": 44109096,
+          "rank": 2,
+          "phase": 0,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050676",
+          "start": 44113753,
+          "end": 44113847,
+          "rank": 3,
+          "phase": 2,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00001050672",
+          "start": 44114179,
+          "end": 44114278,
+          "rank": 4,
+          "phase": 1,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003579779",
+          "start": 44114625,
+          "end": 44114768,
+          "rank": 5,
+          "phase": 2,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003682861",
+          "start": 44115264,
+          "end": 44115399,
+          "rank": 6,
+          "phase": 2,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00003660102",
+          "start": 44115691,
+          "end": 44115920,
+          "rank": 7,
+          "phase": 0,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050670",
+          "start": 44117820,
+          "end": 44117963,
+          "rank": 8,
+          "phase": 2,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050681",
+          "start": 44118763,
+          "end": 44118833,
+          "rank": 9,
+          "phase": 2,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00001050669",
+          "start": 44119387,
+          "end": 44119523,
+          "rank": 10,
+          "phase": 1,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00003612411",
+          "start": 44120348,
+          "end": 44120496,
+          "rank": 11,
+          "phase": 0,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003671210",
+          "start": 44120631,
+          "end": 44120778,
+          "rank": 12,
+          "phase": 2,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00001050666",
+          "start": 44120952,
+          "end": 44121102,
+          "rank": 13,
+          "phase": 0,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00001050680",
+          "start": 44122177,
+          "end": 44122357,
+          "rank": 14,
+          "phase": 1,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050675",
+          "start": 44124580,
+          "end": 44124727,
+          "rank": 15,
+          "phase": 2,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00003652919",
+          "start": 44126011,
+          "end": 44126119,
+          "rank": 16,
+          "phase": 0,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00003469591",
+          "start": 44126900,
+          "end": 44126965,
+          "rank": 17,
+          "phase": 1,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00003545412",
+          "start": 44127932,
+          "end": 44128150,
+          "rank": 18,
+          "phase": 1,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00003592879",
+          "start": 44128247,
+          "end": 44128397,
+          "rank": 19,
+          "phase": 1,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003554676",
+          "start": 44128552,
+          "end": 44128626,
+          "rank": 20,
+          "phase": 2,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00004779458",
+          "start": 44130603,
+          "end": 44131180,
+          "rank": 21,
+          "phase": 2,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000862525",
+    "version": 2,
+    "gene_stable_id": "ENSG00000241945",
+    "start": 44107306,
+    "end": 44131181,
+    "strand": 1,
+    "biotype": "protein_coding",
+    "source": "havana_tagene",
+    "gene_symbol": "PWP2",
+    "ccds": "-",
+    "protein": "ENSP00000532584",
+    "exons": [
+      {
+        "stable_id": "ENSE00004779459",
+        "start": 44107306,
+        "end": 44107434,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00001177844",
+        "start": 44108984,
+        "end": 44109096,
+        "rank": 2,
+        "phase": 0,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050676",
+        "start": 44113753,
+        "end": 44113847,
+        "rank": 3,
+        "phase": 2,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00001050672",
+        "start": 44114179,
+        "end": 44114278,
+        "rank": 4,
+        "phase": 1,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003579779",
+        "start": 44114625,
+        "end": 44114768,
+        "rank": 5,
+        "phase": 2,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003682861",
+        "start": 44115264,
+        "end": 44115399,
+        "rank": 6,
+        "phase": 2,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00003660102",
+        "start": 44115691,
+        "end": 44115920,
+        "rank": 7,
+        "phase": 0,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050670",
+        "start": 44117820,
+        "end": 44117963,
+        "rank": 8,
+        "phase": 2,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050681",
+        "start": 44118763,
+        "end": 44118833,
+        "rank": 9,
+        "phase": 2,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00001050669",
+        "start": 44119387,
+        "end": 44119523,
+        "rank": 10,
+        "phase": 1,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00003612411",
+        "start": 44120348,
+        "end": 44120496,
+        "rank": 11,
+        "phase": 0,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003671210",
+        "start": 44120631,
+        "end": 44120778,
+        "rank": 12,
+        "phase": 2,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00001050666",
+        "start": 44120952,
+        "end": 44121102,
+        "rank": 13,
+        "phase": 0,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00001050680",
+        "start": 44122177,
+        "end": 44122357,
+        "rank": 14,
+        "phase": 1,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050675",
+        "start": 44124580,
+        "end": 44124727,
+        "rank": 15,
+        "phase": 2,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00003652919",
+        "start": 44126011,
+        "end": 44126119,
+        "rank": 16,
+        "phase": 0,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00003469591",
+        "start": 44126900,
+        "end": 44126965,
+        "rank": 17,
+        "phase": 1,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00004301704",
+        "start": 44127914,
+        "end": 44128150,
+        "rank": 18,
+        "phase": 1,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00003592879",
+        "start": 44128247,
+        "end": 44128397,
+        "rank": 19,
+        "phase": 1,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003554676",
+        "start": 44128552,
+        "end": 44128626,
+        "rank": 20,
+        "phase": 2,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050684",
+        "start": 44130597,
+        "end": 44131181,
+        "rank": 21,
+        "phase": 2,
+        "end_phase": -1
+      }
+    ],
+    "cdna_coding_start": 112,
+    "cdna_coding_end": 2889,
+    "translation": {
+      "stable_id": "ENSP00000532584",
+      "version": 1,
+      "start": 112,
+      "end": 175
+    },
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "value": "GENCODE basic"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 44107435,
+          "end": 44108983,
+          "rank": 1
+        },
+        {
+          "start": 44109097,
+          "end": 44113752,
+          "rank": 2
+        },
+        {
+          "start": 44113848,
+          "end": 44114178,
+          "rank": 3
+        },
+        {
+          "start": 44114279,
+          "end": 44114624,
+          "rank": 4
+        },
+        {
+          "start": 44114769,
+          "end": 44115263,
+          "rank": 5
+        },
+        {
+          "start": 44115400,
+          "end": 44115690,
+          "rank": 6
+        },
+        {
+          "start": 44115921,
+          "end": 44117819,
+          "rank": 7
+        },
+        {
+          "start": 44117964,
+          "end": 44118762,
+          "rank": 8
+        },
+        {
+          "start": 44118834,
+          "end": 44119386,
+          "rank": 9
+        },
+        {
+          "start": 44119524,
+          "end": 44120347,
+          "rank": 10
+        },
+        {
+          "start": 44120497,
+          "end": 44120630,
+          "rank": 11
+        },
+        {
+          "start": 44120779,
+          "end": 44120951,
+          "rank": 12
+        },
+        {
+          "start": 44121103,
+          "end": 44122176,
+          "rank": 13
+        },
+        {
+          "start": 44122358,
+          "end": 44124579,
+          "rank": 14
+        },
+        {
+          "start": 44124728,
+          "end": 44126010,
+          "rank": 15
+        },
+        {
+          "start": 44126120,
+          "end": 44126899,
+          "rank": 16
+        },
+        {
+          "start": 44126966,
+          "end": 44127913,
+          "rank": 17
+        },
+        {
+          "start": 44128151,
+          "end": 44128246,
+          "rank": 18
+        },
+        {
+          "start": 44128398,
+          "end": 44128551,
+          "rank": 19
+        },
+        {
+          "start": 44128627,
+          "end": 44130596,
+          "rank": 20
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "cdna_coding_start": 112,
+        "cdna_coding_end": 2889,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 129,
+            "to_start": 44107306,
+            "to_end": 44107434,
+            "ori": 1
+          },
+          {
+            "from_start": 130,
+            "from_end": 242,
+            "to_start": 44108984,
+            "to_end": 44109096,
+            "ori": 1
+          },
+          {
+            "from_start": 243,
+            "from_end": 337,
+            "to_start": 44113753,
+            "to_end": 44113847,
+            "ori": 1
+          },
+          {
+            "from_start": 338,
+            "from_end": 437,
+            "to_start": 44114179,
+            "to_end": 44114278,
+            "ori": 1
+          },
+          {
+            "from_start": 438,
+            "from_end": 581,
+            "to_start": 44114625,
+            "to_end": 44114768,
+            "ori": 1
+          },
+          {
+            "from_start": 582,
+            "from_end": 717,
+            "to_start": 44115264,
+            "to_end": 44115399,
+            "ori": 1
+          },
+          {
+            "from_start": 718,
+            "from_end": 947,
+            "to_start": 44115691,
+            "to_end": 44115920,
+            "ori": 1
+          },
+          {
+            "from_start": 948,
+            "from_end": 1091,
+            "to_start": 44117820,
+            "to_end": 44117963,
+            "ori": 1
+          },
+          {
+            "from_start": 1092,
+            "from_end": 1162,
+            "to_start": 44118763,
+            "to_end": 44118833,
+            "ori": 1
+          },
+          {
+            "from_start": 1163,
+            "from_end": 1299,
+            "to_start": 44119387,
+            "to_end": 44119523,
+            "ori": 1
+          },
+          {
+            "from_start": 1300,
+            "from_end": 1448,
+            "to_start": 44120348,
+            "to_end": 44120496,
+            "ori": 1
+          },
+          {
+            "from_start": 1449,
+            "from_end": 1596,
+            "to_start": 44120631,
+            "to_end": 44120778,
+            "ori": 1
+          },
+          {
+            "from_start": 1597,
+            "from_end": 1747,
+            "to_start": 44120952,
+            "to_end": 44121102,
+            "ori": 1
+          },
+          {
+            "from_start": 1748,
+            "from_end": 1928,
+            "to_start": 44122177,
+            "to_end": 44122357,
+            "ori": 1
+          },
+          {
+            "from_start": 1929,
+            "from_end": 2076,
+            "to_start": 44124580,
+            "to_end": 44124727,
+            "ori": 1
+          },
+          {
+            "from_start": 2077,
+            "from_end": 2185,
+            "to_start": 44126011,
+            "to_end": 44126119,
+            "ori": 1
+          },
+          {
+            "from_start": 2186,
+            "from_end": 2251,
+            "to_start": 44126900,
+            "to_end": 44126965,
+            "ori": 1
+          },
+          {
+            "from_start": 2252,
+            "from_end": 2488,
+            "to_start": 44127914,
+            "to_end": 44128150,
+            "ori": 1
+          },
+          {
+            "from_start": 2489,
+            "from_end": 2639,
+            "to_start": 44128247,
+            "to_end": 44128397,
+            "ori": 1
+          },
+          {
+            "from_start": 2640,
+            "from_end": 2714,
+            "to_start": 44128552,
+            "to_end": 44128626,
+            "ori": 1
+          },
+          {
+            "from_start": 2715,
+            "from_end": 3299,
+            "to_start": 44130597,
+            "to_end": 44131181,
+            "ori": 1
+          }
+        ]
+      },
+      "peptide": "MKFAYRFSNLLGTVYRRGNLNFTCDGNSVISPVGNRVTVFDLKNNKSDTLPLATRYNVKCVGLSPDGRLAIIVDEGGDALLVSLVCRSVLHHFHFKGSVHSVSFSPDGRKFVVTKGNIAQMYHAPGKKREFNAFVLDKTYFGPYDETTCIDWTDDSRCFVVGSKDMSTWVFGAERWDNLIYYALGGHKDAIVACFFESNSLDLYSLSQDGVLCMWQCDTPPEGLRLKPPAGWKADLLQREEEEEEEEDQEGDRETTIRGKATPAEEEKTGKVKYSRLAKYFFNKEGDFNNLTAAAFHKKSHLLVTGFASGIFHLHELPEFNLIHSLSISDQSIASVAINSSGDWIAFGCSGLGQLLVWEWQSESYVLKQQGHFNSMVALAYSPDGQYIVTGGDDGKVKVWNTLSGFCFVTFTEHSSGVTGVTFTATGYVVVTSSMDGTVRAFDLHRYRNFRTFTSPRPTQFSCVAVDASGEIVSAGAQDSFEIFVWSMQTGRLLDVLSGHEGPISGLCFNPMKSVLASASWDKTVRLWDMFDSWRTKETLALTSDALAVTFRPDGAELAVATLNSQITFWDPENAVQTGSIEGRHDLKTGRKELDKITAKHAAKGKAFTALCYSADGHSILAGGMSKFVCIYHVREQILMKRFEISCNLSLDAMEEFLNRRKMTEFGNLALIDQDAGQEDGVAIPLPGVRKGDMSSRHFKPEIRVTSLRFSPTALLNFPGRCWAATTTEGLLIYSLDTRVLFDPFELDTSVTPGRVREALRQQDFTRAILMALRLNESKLVQEALEAVPRGEIEVVTSSLPELYVEKVLEFLASSFEVSRHLEFYLLWTHKLLMLHGQKLKSRAGTLLPVIQFLQKSIQRHLDDLSKLCSWNHYNMQYALAVSKQRGTKRSLDPLGSEEEAEASEDDSLHLLGGGGRDSEEEMLA",
+      "translateable_seq": "ATGAAGTTCGCTTACCGGTTTTCAAATTTGCTGGGTACGGTGTACCGGCGTGGGAACCTAAATTTTACCTGCGATGGAAATTCAGTTATCAGTCCCGTGGGCAATAGAGTCACTGTATTTGACCTTAAAAACAACAAATCTGACACGCTGCCCCTGGCCACTCGGTACAACGTCAAGTGCGTGGGGCTGTCCCCGGATGGCCGCCTCGCTATCATCGTCGATGAAGGGGGCGATGCGCTGCTGGTCAGCCTGGTCTGCAGGTCTGTGCTGCACCACTTCCACTTCAAGGGCTCTGTGCACAGTGTGTCCTTCTCCCCTGATGGCAGGAAGTTTGTTGTCACAAAGGGTAACATTGCCCAGATGTATCATGCCCCTGGGAAGAAGCGGGAGTTCAACGCCTTCGTTCTGGACAAGACCTATTTTGGGCCCTACGATGAGACCACCTGCATCGACTGGACGGATGACTCCAGGTGCTTTGTGGTTGGGAGCAAAGACATGTCCACCTGGGTGTTCGGAGCCGAGCGCTGGGACAACCTCATCTACTATGCACTGGGGGGACATAAGGATGCCATCGTGGCCTGCTTCTTTGAATCCAACAGCCTGGACCTGTACTCACTCAGCCAGGACGGAGTGCTGTGCATGTGGCAGTGTGACACGCCCCCCGAGGGCTTGCGGCTGAAGCCCCCTGCGGGCTGGAAAGCAGACCTGTTGCAGCGGGAGGAGGAAGAGGAGGAGGAGGAGGACCAGGAGGGCGACAGAGAGACCACCATCCGGGGAAAAGCCACTCCGGCCGAGGAGGAGAAGACAGGAAAAGTGAAGTACTCACGGCTGGCCAAGTACTTCTTCAATAAAGAAGGGGATTTTAACAACCTGACAGCTGCAGCATTTCATAAGAAGTCTCACCTCTTGGTCACTGGCTTTGCTTCTGGAATCTTCCATCTTCATGAGCTGCCAGAGTTTAACCTCATCCACTCCCTGAGCATTTCAGATCAGAGCATCGCCTCAGTGGCCATCAATAGCTCGGGGGACTGGATTGCTTTTGGCTGTTCAGGCCTGGGCCAGCTGCTGGTGTGGGAGTGGCAGAGTGAGTCCTACGTGCTCAAGCAGCAGGGCCACTTCAACAGCATGGTGGCCCTGGCCTACTCGCCCGACGGACAGTACATCGTGACTGGCGGGGACGACGGCAAGGTCAAGGTGTGGAACACCCTCAGCGGCTTCTGCTTCGTCACTTTTACGGAGCACTCCAGCGGGGTGACCGGTGTGACCTTTACTGCCACCGGCTACGTTGTGGTGACCTCATCCATGGACGGGACCGTGCGAGCCTTTGACCTTCACAGGTACCGAAACTTCCGCACCTTCACCTCTCCACGCCCCACCCAGTTCTCCTGTGTGGCGGTGGATGCGAGCGGTGAGATCGTCTCTGCAGGGGCGCAGGACTCCTTTGAGATTTTCGTGTGGTCCATGCAGACAGGCAGGCTCCTTGATGTTTTGTCTGGACACGAAGGGCCCATCAGTGGTCTGTGTTTTAACCCAATGAAGTCCGTCCTGGCCAGTGCCTCCTGGGACAAGACAGTGCGCCTATGGGACATGTTTGACAGCTGGAGGACCAAGGAGACGCTGGCCCTGACCTCTGATGCTCTGGCTGTGACTTTTCGCCCTGATGGTGCGGAGCTGGCTGTGGCCACACTGAACTCACAGATCACCTTCTGGGACCCTGAGAACGCGGTGCAGACGGGCTCCATTGAGGGCAGGCATGACCTCAAGACTGGCAGGAAGGAGCTGGACAAGATTACAGCCAAGCACGCGGCCAAGGGGAAGGCCTTCACCGCCCTGTGCTACTCTGCAGACGGCCACAGCATCCTGGCGGGAGGCATGTCCAAGTTCGTGTGCATCTACCACGTCCGTGAGCAGATTCTCATGAAGAGGTTCGAGATCTCTTGCAACCTGTCTTTGGACGCCATGGAGGAATTTTTGAACCGAAGAAAAATGACAGAGTTTGGCAACCTGGCACTAATTGATCAGGATGCTGGGCAGGAGGATGGAGTCGCGATACCACTGCCAGGCGTCAGGAAAGGTGACATGAGTTCTCGGCACTTCAAACCTGAGATCAGGGTGACCTCACTCCGCTTCTCTCCCACTGCACTGCTTAATTTCCCAGGGCGCTGCTGGGCGGCCACCACCACGGAGGGACTCCTCATCTACTCCCTGGACACCCGCGTGCTCTTTGACCCGTTTGAGCTGGACACCAGCGTCACCCCCGGGAGGGTGCGCGAGGCACTGCGCCAGCAGGACTTCACCAGGGCCATCCTCATGGCCCTCCGGCTCAACGAGAGCAAACTGGTGCAGGAGGCCCTGGAGGCGGTGCCCAGGGGCGAGATTGAAGTGGTCACCTCCTCCCTTCCTGAACTGTATGTGGAGAAAGTGCTGGAGTTTTTAGCTTCCTCCTTTGAAGTGTCTCGCCACCTGGAATTCTACCTCCTCTGGACTCACAAACTGCTCATGTTGCACGGACAGAAGCTGAAGTCCAGAGCCGGGACGCTGCTGCCTGTCATTCAGTTCCTCCAGAAGAGCATCCAGCGGCACCTGGACGACCTGTCGAAACTCTGTAGCTGGAACCACTATAACATGCAGTACGCACTAGCAGTTTCCAAGCAGCGGGGCACAAAACGCTCCCTAGACCCGCTGGGAAGTGAGGAGGAGGCAGAAGCATCTGAAGATGACAGCCTGCATCTGCTTGGAGGAGGAGGCAGAGACTCAGAAGAAGAGATGCTGGCCTAG",
+      "five_prime_utr": "ACGCCGTCGCTTCCCGGAAGTGCGTGCTGTGGGCGGTGCCGCGCGGACCCCCGGGAAGTGTCTCTGTGGGCGGCCGCCGGGTTGAGCTGCGGCACACGTGCGACGGCCGTG",
+      "three_prime_utr": "AGCCAGCCGGTTGCAGCGTTGGATTGTGCCGGCTAAGACCTGCCAGGGAGATGGGACCCTTGTGCCACCTGGGCCAGCAAAGAGGAGGGGTCCAGAGAACAGCTGAAATACTGTCACTAGTGGTAGTGACTTGCTTTTCCTGTGCACACATGTAGCCCATCAGGACAGCGAGCCGACGGGTCACGCCAGGGGCCGGCACGCACTGGCACCTGGCCCCAGGAGCGGGGCCGTGTGAACGGTGATGAATGTTGAAAATGCGTCTCAGAGAGGTATTCACATGAACTTTGTATGAGACTTATTTATATCTTTAACATAAAGGTTTGATAAAGAACTTAGGGATTAAAAAAAAGATGGAGTTTTCTAACGTGAGGATGAAGTCTACACTTCAGATTAAAAAGGGTTATGTTGTA",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004779459",
+          "start": 44107306,
+          "end": 44107434,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00001177844",
+          "start": 44108984,
+          "end": 44109096,
+          "rank": 2,
+          "phase": 0,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050676",
+          "start": 44113753,
+          "end": 44113847,
+          "rank": 3,
+          "phase": 2,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00001050672",
+          "start": 44114179,
+          "end": 44114278,
+          "rank": 4,
+          "phase": 1,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003579779",
+          "start": 44114625,
+          "end": 44114768,
+          "rank": 5,
+          "phase": 2,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003682861",
+          "start": 44115264,
+          "end": 44115399,
+          "rank": 6,
+          "phase": 2,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00003660102",
+          "start": 44115691,
+          "end": 44115920,
+          "rank": 7,
+          "phase": 0,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050670",
+          "start": 44117820,
+          "end": 44117963,
+          "rank": 8,
+          "phase": 2,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050681",
+          "start": 44118763,
+          "end": 44118833,
+          "rank": 9,
+          "phase": 2,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00001050669",
+          "start": 44119387,
+          "end": 44119523,
+          "rank": 10,
+          "phase": 1,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00003612411",
+          "start": 44120348,
+          "end": 44120496,
+          "rank": 11,
+          "phase": 0,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003671210",
+          "start": 44120631,
+          "end": 44120778,
+          "rank": 12,
+          "phase": 2,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00001050666",
+          "start": 44120952,
+          "end": 44121102,
+          "rank": 13,
+          "phase": 0,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00001050680",
+          "start": 44122177,
+          "end": 44122357,
+          "rank": 14,
+          "phase": 1,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050675",
+          "start": 44124580,
+          "end": 44124727,
+          "rank": 15,
+          "phase": 2,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00003652919",
+          "start": 44126011,
+          "end": 44126119,
+          "rank": 16,
+          "phase": 0,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00003469591",
+          "start": 44126900,
+          "end": 44126965,
+          "rank": 17,
+          "phase": 1,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00004301704",
+          "start": 44127914,
+          "end": 44128150,
+          "rank": 18,
+          "phase": 1,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00003592879",
+          "start": 44128247,
+          "end": 44128397,
+          "rank": 19,
+          "phase": 1,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003554676",
+          "start": 44128552,
+          "end": 44128626,
+          "rank": 20,
+          "phase": 2,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050684",
+          "start": 44130597,
+          "end": 44131181,
+          "rank": 21,
+          "phase": 2,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00001131826",
+    "version": 1,
+    "gene_stable_id": "ENSG00000241945",
+    "start": 44107306,
+    "end": 44131181,
+    "strand": 1,
+    "biotype": "protein_coding",
+    "source": "ensembl_havana",
+    "gene_symbol": "PWP2",
+    "ccds": "CCDS33579",
+    "protein": "ENSP00000804827",
+    "exons": [
+      {
+        "stable_id": "ENSE00004779459",
+        "start": 44107306,
+        "end": 44107434,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00001177844",
+        "start": 44108984,
+        "end": 44109096,
+        "rank": 2,
+        "phase": 0,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050676",
+        "start": 44113753,
+        "end": 44113847,
+        "rank": 3,
+        "phase": 2,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00001050672",
+        "start": 44114179,
+        "end": 44114278,
+        "rank": 4,
+        "phase": 1,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003579779",
+        "start": 44114625,
+        "end": 44114768,
+        "rank": 5,
+        "phase": 2,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003682861",
+        "start": 44115264,
+        "end": 44115399,
+        "rank": 6,
+        "phase": 2,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00003660102",
+        "start": 44115691,
+        "end": 44115920,
+        "rank": 7,
+        "phase": 0,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050670",
+        "start": 44117820,
+        "end": 44117963,
+        "rank": 8,
+        "phase": 2,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050681",
+        "start": 44118763,
+        "end": 44118833,
+        "rank": 9,
+        "phase": 2,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00001050669",
+        "start": 44119387,
+        "end": 44119523,
+        "rank": 10,
+        "phase": 1,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00003612411",
+        "start": 44120348,
+        "end": 44120496,
+        "rank": 11,
+        "phase": 0,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003671210",
+        "start": 44120631,
+        "end": 44120778,
+        "rank": 12,
+        "phase": 2,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00001050666",
+        "start": 44120952,
+        "end": 44121102,
+        "rank": 13,
+        "phase": 0,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00001050680",
+        "start": 44122177,
+        "end": 44122357,
+        "rank": 14,
+        "phase": 1,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050675",
+        "start": 44124580,
+        "end": 44124727,
+        "rank": 15,
+        "phase": 2,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00003652919",
+        "start": 44126011,
+        "end": 44126119,
+        "rank": 16,
+        "phase": 0,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00003469591",
+        "start": 44126900,
+        "end": 44126965,
+        "rank": 17,
+        "phase": 1,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00003545412",
+        "start": 44127932,
+        "end": 44128150,
+        "rank": 18,
+        "phase": 1,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00003592879",
+        "start": 44128247,
+        "end": 44128397,
+        "rank": 19,
+        "phase": 1,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003554676",
+        "start": 44128552,
+        "end": 44128626,
+        "rank": 20,
+        "phase": 2,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050684",
+        "start": 44130597,
+        "end": 44131181,
+        "rank": 21,
+        "phase": 2,
+        "end_phase": -1
+      }
+    ],
+    "cdna_coding_start": 112,
+    "cdna_coding_end": 2871,
+    "translation": {
+      "stable_id": "ENSP00000804827",
+      "version": 1,
+      "start": 112,
+      "end": 175
+    },
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "value": "GENCODE basic"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 44107435,
+          "end": 44108983,
+          "rank": 1
+        },
+        {
+          "start": 44109097,
+          "end": 44113752,
+          "rank": 2
+        },
+        {
+          "start": 44113848,
+          "end": 44114178,
+          "rank": 3
+        },
+        {
+          "start": 44114279,
+          "end": 44114624,
+          "rank": 4
+        },
+        {
+          "start": 44114769,
+          "end": 44115263,
+          "rank": 5
+        },
+        {
+          "start": 44115400,
+          "end": 44115690,
+          "rank": 6
+        },
+        {
+          "start": 44115921,
+          "end": 44117819,
+          "rank": 7
+        },
+        {
+          "start": 44117964,
+          "end": 44118762,
+          "rank": 8
+        },
+        {
+          "start": 44118834,
+          "end": 44119386,
+          "rank": 9
+        },
+        {
+          "start": 44119524,
+          "end": 44120347,
+          "rank": 10
+        },
+        {
+          "start": 44120497,
+          "end": 44120630,
+          "rank": 11
+        },
+        {
+          "start": 44120779,
+          "end": 44120951,
+          "rank": 12
+        },
+        {
+          "start": 44121103,
+          "end": 44122176,
+          "rank": 13
+        },
+        {
+          "start": 44122358,
+          "end": 44124579,
+          "rank": 14
+        },
+        {
+          "start": 44124728,
+          "end": 44126010,
+          "rank": 15
+        },
+        {
+          "start": 44126120,
+          "end": 44126899,
+          "rank": 16
+        },
+        {
+          "start": 44126966,
+          "end": 44127931,
+          "rank": 17
+        },
+        {
+          "start": 44128151,
+          "end": 44128246,
+          "rank": 18
+        },
+        {
+          "start": 44128398,
+          "end": 44128551,
+          "rank": 19
+        },
+        {
+          "start": 44128627,
+          "end": 44130596,
+          "rank": 20
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "cdna_coding_start": 112,
+        "cdna_coding_end": 2871,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 129,
+            "to_start": 44107306,
+            "to_end": 44107434,
+            "ori": 1
+          },
+          {
+            "from_start": 130,
+            "from_end": 242,
+            "to_start": 44108984,
+            "to_end": 44109096,
+            "ori": 1
+          },
+          {
+            "from_start": 243,
+            "from_end": 337,
+            "to_start": 44113753,
+            "to_end": 44113847,
+            "ori": 1
+          },
+          {
+            "from_start": 338,
+            "from_end": 437,
+            "to_start": 44114179,
+            "to_end": 44114278,
+            "ori": 1
+          },
+          {
+            "from_start": 438,
+            "from_end": 581,
+            "to_start": 44114625,
+            "to_end": 44114768,
+            "ori": 1
+          },
+          {
+            "from_start": 582,
+            "from_end": 717,
+            "to_start": 44115264,
+            "to_end": 44115399,
+            "ori": 1
+          },
+          {
+            "from_start": 718,
+            "from_end": 947,
+            "to_start": 44115691,
+            "to_end": 44115920,
+            "ori": 1
+          },
+          {
+            "from_start": 948,
+            "from_end": 1091,
+            "to_start": 44117820,
+            "to_end": 44117963,
+            "ori": 1
+          },
+          {
+            "from_start": 1092,
+            "from_end": 1162,
+            "to_start": 44118763,
+            "to_end": 44118833,
+            "ori": 1
+          },
+          {
+            "from_start": 1163,
+            "from_end": 1299,
+            "to_start": 44119387,
+            "to_end": 44119523,
+            "ori": 1
+          },
+          {
+            "from_start": 1300,
+            "from_end": 1448,
+            "to_start": 44120348,
+            "to_end": 44120496,
+            "ori": 1
+          },
+          {
+            "from_start": 1449,
+            "from_end": 1596,
+            "to_start": 44120631,
+            "to_end": 44120778,
+            "ori": 1
+          },
+          {
+            "from_start": 1597,
+            "from_end": 1747,
+            "to_start": 44120952,
+            "to_end": 44121102,
+            "ori": 1
+          },
+          {
+            "from_start": 1748,
+            "from_end": 1928,
+            "to_start": 44122177,
+            "to_end": 44122357,
+            "ori": 1
+          },
+          {
+            "from_start": 1929,
+            "from_end": 2076,
+            "to_start": 44124580,
+            "to_end": 44124727,
+            "ori": 1
+          },
+          {
+            "from_start": 2077,
+            "from_end": 2185,
+            "to_start": 44126011,
+            "to_end": 44126119,
+            "ori": 1
+          },
+          {
+            "from_start": 2186,
+            "from_end": 2251,
+            "to_start": 44126900,
+            "to_end": 44126965,
+            "ori": 1
+          },
+          {
+            "from_start": 2252,
+            "from_end": 2470,
+            "to_start": 44127932,
+            "to_end": 44128150,
+            "ori": 1
+          },
+          {
+            "from_start": 2471,
+            "from_end": 2621,
+            "to_start": 44128247,
+            "to_end": 44128397,
+            "ori": 1
+          },
+          {
+            "from_start": 2622,
+            "from_end": 2696,
+            "to_start": 44128552,
+            "to_end": 44128626,
+            "ori": 1
+          },
+          {
+            "from_start": 2697,
+            "from_end": 3281,
+            "to_start": 44130597,
+            "to_end": 44131181,
+            "ori": 1
+          }
+        ]
+      },
+      "peptide": "MKFAYRFSNLLGTVYRRGNLNFTCDGNSVISPVGNRVTVFDLKNNKSDTLPLATRYNVKCVGLSPDGRLAIIVDEGGDALLVSLVCRSVLHHFHFKGSVHSVSFSPDGRKFVVTKGNIAQMYHAPGKKREFNAFVLDKTYFGPYDETTCIDWTDDSRCFVVGSKDMSTWVFGAERWDNLIYYALGGHKDAIVACFFESNSLDLYSLSQDGVLCMWQCDTPPEGLRLKPPAGWKADLLQREEEEEEEEDQEGDRETTIRGKATPAEEEKTGKVKYSRLAKYFFNKEGDFNNLTAAAFHKKSHLLVTGFASGIFHLHELPEFNLIHSLSISDQSIASVAINSSGDWIAFGCSGLGQLLVWEWQSESYVLKQQGHFNSMVALAYSPDGQYIVTGGDDGKVKVWNTLSGFCFVTFTEHSSGVTGVTFTATGYVVVTSSMDGTVRAFDLHRYRNFRTFTSPRPTQFSCVAVDASGEIVSAGAQDSFEIFVWSMQTGRLLDVLSGHEGPISGLCFNPMKSVLASASWDKTVRLWDMFDSWRTKETLALTSDALAVTFRPDGAELAVATLNSQITFWDPENAVQTGSIEGRHDLKTGRKELDKITAKHAAKGKAFTALCYSADGHSILAGGMSKFVCIYHVREQILMKRFEISCNLSLDAMEEFLNRRKMTEFGNLALIDQDAGQEDGVAIPLPGVRKGDMSSRHFKPEIRVTSLRFSPTGRCWAATTTEGLLIYSLDTRVLFDPFELDTSVTPGRVREALRQQDFTRAILMALRLNESKLVQEALEAVPRGEIEVVTSSLPELYVEKVLEFLASSFEVSRHLEFYLLWTHKLLMLHGQKLKSRAGTLLPVIQFLQKSIQRHLDDLSKLCSWNHYNMQYALAVSKQRGTKRSLDPLGSEEEAEASEDDSLHLLGGGGRDSEEEMLA",
+      "translateable_seq": "ATGAAGTTCGCTTACCGGTTTTCAAATTTGCTGGGTACGGTGTACCGGCGTGGGAACCTAAATTTTACCTGCGATGGAAATTCAGTTATCAGTCCCGTGGGCAATAGAGTCACTGTATTTGACCTTAAAAACAACAAATCTGACACGCTGCCCCTGGCCACTCGGTACAACGTCAAGTGCGTGGGGCTGTCCCCGGATGGCCGCCTCGCTATCATCGTCGATGAAGGGGGCGATGCGCTGCTGGTCAGCCTGGTCTGCAGGTCTGTGCTGCACCACTTCCACTTCAAGGGCTCTGTGCACAGTGTGTCCTTCTCCCCTGATGGCAGGAAGTTTGTTGTCACAAAGGGTAACATTGCCCAGATGTATCATGCCCCTGGGAAGAAGCGGGAGTTCAACGCCTTCGTTCTGGACAAGACCTATTTTGGGCCCTACGATGAGACCACCTGCATCGACTGGACGGATGACTCCAGGTGCTTTGTGGTTGGGAGCAAAGACATGTCCACCTGGGTGTTCGGAGCCGAGCGCTGGGACAACCTCATCTACTATGCACTGGGGGGACATAAGGATGCCATCGTGGCCTGCTTCTTTGAATCCAACAGCCTGGACCTGTACTCACTCAGCCAGGACGGAGTGCTGTGCATGTGGCAGTGTGACACGCCCCCCGAGGGCTTGCGGCTGAAGCCCCCTGCGGGCTGGAAAGCAGACCTGTTGCAGCGGGAGGAGGAAGAGGAGGAGGAGGAGGACCAGGAGGGCGACAGAGAGACCACCATCCGGGGAAAAGCCACTCCGGCCGAGGAGGAGAAGACAGGAAAAGTGAAGTACTCACGGCTGGCCAAGTACTTCTTCAATAAAGAAGGGGATTTTAACAACCTGACAGCTGCAGCATTTCATAAGAAGTCTCACCTCTTGGTCACTGGCTTTGCTTCTGGAATCTTCCATCTTCATGAGCTGCCAGAGTTTAACCTCATCCACTCCCTGAGCATTTCAGATCAGAGCATCGCCTCAGTGGCCATCAATAGCTCGGGGGACTGGATTGCTTTTGGCTGTTCAGGCCTGGGCCAGCTGCTGGTGTGGGAGTGGCAGAGTGAGTCCTACGTGCTCAAGCAGCAGGGCCACTTCAACAGCATGGTGGCCCTGGCCTACTCGCCCGACGGACAGTACATCGTGACTGGCGGGGACGACGGCAAGGTCAAGGTGTGGAACACCCTCAGCGGCTTCTGCTTCGTCACTTTTACGGAGCACTCCAGCGGGGTGACCGGTGTGACCTTTACTGCCACCGGCTACGTTGTGGTGACCTCATCCATGGACGGGACCGTGCGAGCCTTTGACCTTCACAGGTACCGAAACTTCCGCACCTTCACCTCTCCACGCCCCACCCAGTTCTCCTGTGTGGCGGTGGATGCGAGCGGTGAGATCGTCTCTGCAGGGGCGCAGGACTCCTTTGAGATTTTCGTGTGGTCCATGCAGACAGGCAGGCTCCTTGATGTTTTGTCTGGACACGAAGGGCCCATCAGTGGTCTGTGTTTTAACCCAATGAAGTCCGTCCTGGCCAGTGCCTCCTGGGACAAGACAGTGCGCCTATGGGACATGTTTGACAGCTGGAGGACCAAGGAGACGCTGGCCCTGACCTCTGATGCTCTGGCTGTGACTTTTCGCCCTGATGGTGCGGAGCTGGCTGTGGCCACACTGAACTCACAGATCACCTTCTGGGACCCTGAGAACGCGGTGCAGACGGGCTCCATTGAGGGCAGGCATGACCTCAAGACTGGCAGGAAGGAGCTGGACAAGATTACAGCCAAGCACGCGGCCAAGGGGAAGGCCTTCACCGCCCTGTGCTACTCTGCAGACGGCCACAGCATCCTGGCGGGAGGCATGTCCAAGTTCGTGTGCATCTACCACGTCCGTGAGCAGATTCTCATGAAGAGGTTCGAGATCTCTTGCAACCTGTCTTTGGACGCCATGGAGGAATTTTTGAACCGAAGAAAAATGACAGAGTTTGGCAACCTGGCACTAATTGATCAGGATGCTGGGCAGGAGGATGGAGTCGCGATACCACTGCCAGGCGTCAGGAAAGGTGACATGAGTTCTCGGCACTTCAAACCTGAGATCAGGGTGACCTCACTCCGCTTCTCTCCCACTGGGCGCTGCTGGGCGGCCACCACCACGGAGGGACTCCTCATCTACTCCCTGGACACCCGCGTGCTCTTTGACCCGTTTGAGCTGGACACCAGCGTCACCCCCGGGAGGGTGCGCGAGGCACTGCGCCAGCAGGACTTCACCAGGGCCATCCTCATGGCCCTCCGGCTCAACGAGAGCAAACTGGTGCAGGAGGCCCTGGAGGCGGTGCCCAGGGGCGAGATTGAAGTGGTCACCTCCTCCCTTCCTGAACTGTATGTGGAGAAAGTGCTGGAGTTTTTAGCTTCCTCCTTTGAAGTGTCTCGCCACCTGGAATTCTACCTCCTCTGGACTCACAAACTGCTCATGTTGCACGGACAGAAGCTGAAGTCCAGAGCCGGGACGCTGCTGCCTGTCATTCAGTTCCTCCAGAAGAGCATCCAGCGGCACCTGGACGACCTGTCGAAACTCTGTAGCTGGAACCACTATAACATGCAGTACGCACTAGCAGTTTCCAAGCAGCGGGGCACAAAACGCTCCCTAGACCCGCTGGGAAGTGAGGAGGAGGCAGAAGCATCTGAAGATGACAGCCTGCATCTGCTTGGAGGAGGAGGCAGAGACTCAGAAGAAGAGATGCTGGCCTAG",
+      "five_prime_utr": "ACGCCGTCGCTTCCCGGAAGTGCGTGCTGTGGGCGGTGCCGCGCGGACCCCCGGGAAGTGTCTCTGTGGGCGGCCGCCGGGTTGAGCTGCGGCACACGTGCGACGGCCGTG",
+      "three_prime_utr": "AGCCAGCCGGTTGCAGCGTTGGATTGTGCCGGCTAAGACCTGCCAGGGAGATGGGACCCTTGTGCCACCTGGGCCAGCAAAGAGGAGGGGTCCAGAGAACAGCTGAAATACTGTCACTAGTGGTAGTGACTTGCTTTTCCTGTGCACACATGTAGCCCATCAGGACAGCGAGCCGACGGGTCACGCCAGGGGCCGGCACGCACTGGCACCTGGCCCCAGGAGCGGGGCCGTGTGAACGGTGATGAATGTTGAAAATGCGTCTCAGAGAGGTATTCACATGAACTTTGTATGAGACTTATTTATATCTTTAACATAAAGGTTTGATAAAGAACTTAGGGATTAAAAAAAAGATGGAGTTTTCTAACGTGAGGATGAAGTCTACACTTCAGATTAAAAAGGGTTATGTTGTA",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004779459",
+          "start": 44107306,
+          "end": 44107434,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00001177844",
+          "start": 44108984,
+          "end": 44109096,
+          "rank": 2,
+          "phase": 0,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050676",
+          "start": 44113753,
+          "end": 44113847,
+          "rank": 3,
+          "phase": 2,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00001050672",
+          "start": 44114179,
+          "end": 44114278,
+          "rank": 4,
+          "phase": 1,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003579779",
+          "start": 44114625,
+          "end": 44114768,
+          "rank": 5,
+          "phase": 2,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003682861",
+          "start": 44115264,
+          "end": 44115399,
+          "rank": 6,
+          "phase": 2,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00003660102",
+          "start": 44115691,
+          "end": 44115920,
+          "rank": 7,
+          "phase": 0,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050670",
+          "start": 44117820,
+          "end": 44117963,
+          "rank": 8,
+          "phase": 2,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050681",
+          "start": 44118763,
+          "end": 44118833,
+          "rank": 9,
+          "phase": 2,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00001050669",
+          "start": 44119387,
+          "end": 44119523,
+          "rank": 10,
+          "phase": 1,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00003612411",
+          "start": 44120348,
+          "end": 44120496,
+          "rank": 11,
+          "phase": 0,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003671210",
+          "start": 44120631,
+          "end": 44120778,
+          "rank": 12,
+          "phase": 2,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00001050666",
+          "start": 44120952,
+          "end": 44121102,
+          "rank": 13,
+          "phase": 0,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00001050680",
+          "start": 44122177,
+          "end": 44122357,
+          "rank": 14,
+          "phase": 1,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050675",
+          "start": 44124580,
+          "end": 44124727,
+          "rank": 15,
+          "phase": 2,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00003652919",
+          "start": 44126011,
+          "end": 44126119,
+          "rank": 16,
+          "phase": 0,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00003469591",
+          "start": 44126900,
+          "end": 44126965,
+          "rank": 17,
+          "phase": 1,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00003545412",
+          "start": 44127932,
+          "end": 44128150,
+          "rank": 18,
+          "phase": 1,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00003592879",
+          "start": 44128247,
+          "end": 44128397,
+          "rank": 19,
+          "phase": 1,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003554676",
+          "start": 44128552,
+          "end": 44128626,
+          "rank": 20,
+          "phase": 2,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050684",
+          "start": 44130597,
+          "end": 44131181,
+          "rank": 21,
+          "phase": 2,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000456705",
+    "version": 1,
+    "gene_stable_id": "ENSG00000241945",
+    "start": 44107373,
+    "end": 44115744,
+    "strand": 1,
+    "biotype": "protein_coding",
+    "source": "havana",
+    "gene_symbol": "PWP2",
+    "ccds": "-",
+    "protein": "ENSP00000411749",
+    "exons": [
+      {
+        "stable_id": "ENSE00001605720",
+        "start": 44107373,
+        "end": 44107434,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00001177844",
+        "start": 44108984,
+        "end": 44109096,
+        "rank": 2,
+        "phase": 0,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050676",
+        "start": 44113753,
+        "end": 44113847,
+        "rank": 3,
+        "phase": 2,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00003646685",
+        "start": 44114625,
+        "end": 44114768,
+        "rank": 4,
+        "phase": 1,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00003465236",
+        "start": 44115264,
+        "end": 44115399,
+        "rank": 5,
+        "phase": 1,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001738496",
+        "start": 44115691,
+        "end": 44115744,
+        "rank": 6,
+        "phase": 2,
+        "end_phase": 2
+      }
+    ],
+    "cdna_coding_start": 45,
+    "cdna_coding_end": 604,
+    "translation": {
+      "stable_id": "ENSP00000411749",
+      "version": 1,
+      "start": 45,
+      "end": 54
+    },
+    "attributes": [
+      {
+        "code": "TSL",
+        "value": "tsl3"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 44107435,
+          "end": 44108983,
+          "rank": 1
+        },
+        {
+          "start": 44109097,
+          "end": 44113752,
+          "rank": 2
+        },
+        {
+          "start": 44113848,
+          "end": 44114624,
+          "rank": 3
+        },
+        {
+          "start": 44114769,
+          "end": 44115263,
+          "rank": 4
+        },
+        {
+          "start": 44115400,
+          "end": 44115690,
+          "rank": 5
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "cdna_coding_start": 45,
+        "cdna_coding_end": 604,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 62,
+            "to_start": 44107373,
+            "to_end": 44107434,
+            "ori": 1
+          },
+          {
+            "from_start": 63,
+            "from_end": 175,
+            "to_start": 44108984,
+            "to_end": 44109096,
+            "ori": 1
+          },
+          {
+            "from_start": 176,
+            "from_end": 270,
+            "to_start": 44113753,
+            "to_end": 44113847,
+            "ori": 1
+          },
+          {
+            "from_start": 271,
+            "from_end": 414,
+            "to_start": 44114625,
+            "to_end": 44114768,
+            "ori": 1
+          },
+          {
+            "from_start": 415,
+            "from_end": 550,
+            "to_start": 44115264,
+            "to_end": 44115399,
+            "ori": 1
+          },
+          {
+            "from_start": 551,
+            "from_end": 604,
+            "to_start": 44115691,
+            "to_end": 44115744,
+            "ori": 1
+          }
+        ]
+      },
+      "peptide": "MKFAYRFSNLLGTVYRRGNLNFTCDGNSVISPVGNRVTVFDLKNNKSDTLPLATRYNVKCVGLSPDGRLAIIVDEGSLLSQRVTLPRCIMPLGRSGSSTPSFWTRPILGPTMRPPASTGRMTPGALWLGAKTCPPGCSEPSAGTTSSTMHWGDIRMPSWPASLNPTAWTCTHSARTECCACGSVTR",
+      "translateable_seq": "ATGAAGTTCGCTTACCGGTTTTCAAATTTGCTGGGTACGGTGTACCGGCGTGGGAACCTAAATTTTACCTGCGATGGAAATTCAGTTATCAGTCCCGTGGGCAATAGAGTCACTGTATTTGACCTTAAAAACAACAAATCTGACACGCTGCCCCTGGCCACTCGGTACAACGTCAAGTGCGTGGGGCTGTCCCCGGATGGCCGCCTCGCTATCATCGTCGATGAAGGAAGTTTGTTGTCACAAAGGGTAACATTGCCCAGATGTATCATGCCCCTGGGAAGAAGCGGGAGTTCAACGCCTTCGTTCTGGACAAGACCTATTTTGGGCCCTACGATGAGACCACCTGCATCGACTGGACGGATGACTCCAGGTGCTTTGTGGTTGGGAGCAAAGACATGTCCACCTGGGTGTTCGGAGCCGAGCGCTGGGACAACCTCATCTACTATGCACTGGGGGGACATAAGGATGCCATCGTGGCCTGCTTCTTTGAATCCAACAGCCTGGACCTGTACTCACTCAGCCAGGACGGAGTGCTGTGCATGTGGCAGTGTGACACGCCC",
+      "five_prime_utr": "GGGCGGCCGCCGGGTTGAGCTGCGGCACACGTGCGACGGCCGTG",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00001605720",
+          "start": 44107373,
+          "end": 44107434,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00001177844",
+          "start": 44108984,
+          "end": 44109096,
+          "rank": 2,
+          "phase": 0,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050676",
+          "start": 44113753,
+          "end": 44113847,
+          "rank": 3,
+          "phase": 2,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00003646685",
+          "start": 44114625,
+          "end": 44114768,
+          "rank": 4,
+          "phase": 1,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00003465236",
+          "start": 44115264,
+          "end": 44115399,
+          "rank": 5,
+          "phase": 1,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001738496",
+          "start": 44115691,
+          "end": 44115744,
+          "rank": 6,
+          "phase": 2,
+          "end_phase": 2
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000291576",
+    "version": 12,
+    "gene_stable_id": "ENSG00000241945",
+    "start": 44107399,
+    "end": 44131181,
+    "strand": 1,
+    "biotype": "protein_coding",
+    "source": "ensembl_havana",
+    "gene_symbol": "PWP2",
+    "is_canonical": 1,
+    "ccds": "CCDS33579",
+    "protein": "ENSP00000291576",
+    "exons": [
+      {
+        "stable_id": "ENSE00001367795",
+        "start": 44107399,
+        "end": 44107434,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00001177844",
+        "start": 44108984,
+        "end": 44109096,
+        "rank": 2,
+        "phase": 0,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050676",
+        "start": 44113753,
+        "end": 44113847,
+        "rank": 3,
+        "phase": 2,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00001050672",
+        "start": 44114179,
+        "end": 44114278,
+        "rank": 4,
+        "phase": 1,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003579779",
+        "start": 44114625,
+        "end": 44114768,
+        "rank": 5,
+        "phase": 2,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003682861",
+        "start": 44115264,
+        "end": 44115399,
+        "rank": 6,
+        "phase": 2,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00003660102",
+        "start": 44115691,
+        "end": 44115920,
+        "rank": 7,
+        "phase": 0,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050670",
+        "start": 44117820,
+        "end": 44117963,
+        "rank": 8,
+        "phase": 2,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050681",
+        "start": 44118763,
+        "end": 44118833,
+        "rank": 9,
+        "phase": 2,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00001050669",
+        "start": 44119387,
+        "end": 44119523,
+        "rank": 10,
+        "phase": 1,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00003612411",
+        "start": 44120348,
+        "end": 44120496,
+        "rank": 11,
+        "phase": 0,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003671210",
+        "start": 44120631,
+        "end": 44120778,
+        "rank": 12,
+        "phase": 2,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00001050666",
+        "start": 44120952,
+        "end": 44121102,
+        "rank": 13,
+        "phase": 0,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00001050680",
+        "start": 44122177,
+        "end": 44122357,
+        "rank": 14,
+        "phase": 1,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050675",
+        "start": 44124580,
+        "end": 44124727,
+        "rank": 15,
+        "phase": 2,
+        "end_phase": 0
+      },
+      {
+        "stable_id": "ENSE00003652919",
+        "start": 44126011,
+        "end": 44126119,
+        "rank": 16,
+        "phase": 0,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00003469591",
+        "start": 44126900,
+        "end": 44126965,
+        "rank": 17,
+        "phase": 1,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00003545412",
+        "start": 44127932,
+        "end": 44128150,
+        "rank": 18,
+        "phase": 1,
+        "end_phase": 1
+      },
+      {
+        "stable_id": "ENSE00003592879",
+        "start": 44128247,
+        "end": 44128397,
+        "rank": 19,
+        "phase": 1,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00003554676",
+        "start": 44128552,
+        "end": 44128626,
+        "rank": 20,
+        "phase": 2,
+        "end_phase": 2
+      },
+      {
+        "stable_id": "ENSE00001050684",
+        "start": 44130597,
+        "end": 44131181,
+        "rank": 21,
+        "phase": 2,
+        "end_phase": -1
+      }
+    ],
+    "cdna_coding_start": 19,
+    "cdna_coding_end": 2778,
+    "translation": {
+      "stable_id": "ENSP00000291576",
+      "version": 1,
+      "start": 19,
+      "end": 175
+    },
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "value": "GENCODE basic"
+      },
+      {
+        "code": "gencode_primary",
+        "value": "GENCODE primary"
+      },
+      {
+        "code": "TSL",
+        "value": "tsl1 (assigned to previous version 11)"
+      },
+      {
+        "code": "MANE_Select",
+        "value": ""
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 44107435,
+          "end": 44108983,
+          "rank": 1
+        },
+        {
+          "start": 44109097,
+          "end": 44113752,
+          "rank": 2
+        },
+        {
+          "start": 44113848,
+          "end": 44114178,
+          "rank": 3
+        },
+        {
+          "start": 44114279,
+          "end": 44114624,
+          "rank": 4
+        },
+        {
+          "start": 44114769,
+          "end": 44115263,
+          "rank": 5
+        },
+        {
+          "start": 44115400,
+          "end": 44115690,
+          "rank": 6
+        },
+        {
+          "start": 44115921,
+          "end": 44117819,
+          "rank": 7
+        },
+        {
+          "start": 44117964,
+          "end": 44118762,
+          "rank": 8
+        },
+        {
+          "start": 44118834,
+          "end": 44119386,
+          "rank": 9
+        },
+        {
+          "start": 44119524,
+          "end": 44120347,
+          "rank": 10
+        },
+        {
+          "start": 44120497,
+          "end": 44120630,
+          "rank": 11
+        },
+        {
+          "start": 44120779,
+          "end": 44120951,
+          "rank": 12
+        },
+        {
+          "start": 44121103,
+          "end": 44122176,
+          "rank": 13
+        },
+        {
+          "start": 44122358,
+          "end": 44124579,
+          "rank": 14
+        },
+        {
+          "start": 44124728,
+          "end": 44126010,
+          "rank": 15
+        },
+        {
+          "start": 44126120,
+          "end": 44126899,
+          "rank": 16
+        },
+        {
+          "start": 44126966,
+          "end": 44127931,
+          "rank": 17
+        },
+        {
+          "start": 44128151,
+          "end": 44128246,
+          "rank": 18
+        },
+        {
+          "start": 44128398,
+          "end": 44128551,
+          "rank": 19
+        },
+        {
+          "start": 44128627,
+          "end": 44130596,
+          "rank": 20
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "cdna_coding_start": 19,
+        "cdna_coding_end": 2778,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 36,
+            "to_start": 44107399,
+            "to_end": 44107434,
+            "ori": 1
+          },
+          {
+            "from_start": 37,
+            "from_end": 149,
+            "to_start": 44108984,
+            "to_end": 44109096,
+            "ori": 1
+          },
+          {
+            "from_start": 150,
+            "from_end": 244,
+            "to_start": 44113753,
+            "to_end": 44113847,
+            "ori": 1
+          },
+          {
+            "from_start": 245,
+            "from_end": 344,
+            "to_start": 44114179,
+            "to_end": 44114278,
+            "ori": 1
+          },
+          {
+            "from_start": 345,
+            "from_end": 488,
+            "to_start": 44114625,
+            "to_end": 44114768,
+            "ori": 1
+          },
+          {
+            "from_start": 489,
+            "from_end": 624,
+            "to_start": 44115264,
+            "to_end": 44115399,
+            "ori": 1
+          },
+          {
+            "from_start": 625,
+            "from_end": 854,
+            "to_start": 44115691,
+            "to_end": 44115920,
+            "ori": 1
+          },
+          {
+            "from_start": 855,
+            "from_end": 998,
+            "to_start": 44117820,
+            "to_end": 44117963,
+            "ori": 1
+          },
+          {
+            "from_start": 999,
+            "from_end": 1069,
+            "to_start": 44118763,
+            "to_end": 44118833,
+            "ori": 1
+          },
+          {
+            "from_start": 1070,
+            "from_end": 1206,
+            "to_start": 44119387,
+            "to_end": 44119523,
+            "ori": 1
+          },
+          {
+            "from_start": 1207,
+            "from_end": 1355,
+            "to_start": 44120348,
+            "to_end": 44120496,
+            "ori": 1
+          },
+          {
+            "from_start": 1356,
+            "from_end": 1503,
+            "to_start": 44120631,
+            "to_end": 44120778,
+            "ori": 1
+          },
+          {
+            "from_start": 1504,
+            "from_end": 1654,
+            "to_start": 44120952,
+            "to_end": 44121102,
+            "ori": 1
+          },
+          {
+            "from_start": 1655,
+            "from_end": 1835,
+            "to_start": 44122177,
+            "to_end": 44122357,
+            "ori": 1
+          },
+          {
+            "from_start": 1836,
+            "from_end": 1983,
+            "to_start": 44124580,
+            "to_end": 44124727,
+            "ori": 1
+          },
+          {
+            "from_start": 1984,
+            "from_end": 2092,
+            "to_start": 44126011,
+            "to_end": 44126119,
+            "ori": 1
+          },
+          {
+            "from_start": 2093,
+            "from_end": 2158,
+            "to_start": 44126900,
+            "to_end": 44126965,
+            "ori": 1
+          },
+          {
+            "from_start": 2159,
+            "from_end": 2377,
+            "to_start": 44127932,
+            "to_end": 44128150,
+            "ori": 1
+          },
+          {
+            "from_start": 2378,
+            "from_end": 2528,
+            "to_start": 44128247,
+            "to_end": 44128397,
+            "ori": 1
+          },
+          {
+            "from_start": 2529,
+            "from_end": 2603,
+            "to_start": 44128552,
+            "to_end": 44128626,
+            "ori": 1
+          },
+          {
+            "from_start": 2604,
+            "from_end": 3188,
+            "to_start": 44130597,
+            "to_end": 44131181,
+            "ori": 1
+          }
+        ]
+      },
+      "peptide": "MKFAYRFSNLLGTVYRRGNLNFTCDGNSVISPVGNRVTVFDLKNNKSDTLPLATRYNVKCVGLSPDGRLAIIVDEGGDALLVSLVCRSVLHHFHFKGSVHSVSFSPDGRKFVVTKGNIAQMYHAPGKKREFNAFVLDKTYFGPYDETTCIDWTDDSRCFVVGSKDMSTWVFGAERWDNLIYYALGGHKDAIVACFFESNSLDLYSLSQDGVLCMWQCDTPPEGLRLKPPAGWKADLLQREEEEEEEEDQEGDRETTIRGKATPAEEEKTGKVKYSRLAKYFFNKEGDFNNLTAAAFHKKSHLLVTGFASGIFHLHELPEFNLIHSLSISDQSIASVAINSSGDWIAFGCSGLGQLLVWEWQSESYVLKQQGHFNSMVALAYSPDGQYIVTGGDDGKVKVWNTLSGFCFVTFTEHSSGVTGVTFTATGYVVVTSSMDGTVRAFDLHRYRNFRTFTSPRPTQFSCVAVDASGEIVSAGAQDSFEIFVWSMQTGRLLDVLSGHEGPISGLCFNPMKSVLASASWDKTVRLWDMFDSWRTKETLALTSDALAVTFRPDGAELAVATLNSQITFWDPENAVQTGSIEGRHDLKTGRKELDKITAKHAAKGKAFTALCYSADGHSILAGGMSKFVCIYHVREQILMKRFEISCNLSLDAMEEFLNRRKMTEFGNLALIDQDAGQEDGVAIPLPGVRKGDMSSRHFKPEIRVTSLRFSPTGRCWAATTTEGLLIYSLDTRVLFDPFELDTSVTPGRVREALRQQDFTRAILMALRLNESKLVQEALEAVPRGEIEVVTSSLPELYVEKVLEFLASSFEVSRHLEFYLLWTHKLLMLHGQKLKSRAGTLLPVIQFLQKSIQRHLDDLSKLCSWNHYNMQYALAVSKQRGTKRSLDPLGSEEEAEASEDDSLHLLGGGGRDSEEEMLA",
+      "translateable_seq": "ATGAAGTTCGCTTACCGGTTTTCAAATTTGCTGGGTACGGTGTACCGGCGTGGGAACCTAAATTTTACCTGCGATGGAAATTCAGTTATCAGTCCCGTGGGCAATAGAGTCACTGTATTTGACCTTAAAAACAACAAATCTGACACGCTGCCCCTGGCCACTCGGTACAACGTCAAGTGCGTGGGGCTGTCCCCGGATGGCCGCCTCGCTATCATCGTCGATGAAGGGGGCGATGCGCTGCTGGTCAGCCTGGTCTGCAGGTCTGTGCTGCACCACTTCCACTTCAAGGGCTCTGTGCACAGTGTGTCCTTCTCCCCTGATGGCAGGAAGTTTGTTGTCACAAAGGGTAACATTGCCCAGATGTATCATGCCCCTGGGAAGAAGCGGGAGTTCAACGCCTTCGTTCTGGACAAGACCTATTTTGGGCCCTACGATGAGACCACCTGCATCGACTGGACGGATGACTCCAGGTGCTTTGTGGTTGGGAGCAAAGACATGTCCACCTGGGTGTTCGGAGCCGAGCGCTGGGACAACCTCATCTACTATGCACTGGGGGGACATAAGGATGCCATCGTGGCCTGCTTCTTTGAATCCAACAGCCTGGACCTGTACTCACTCAGCCAGGACGGAGTGCTGTGCATGTGGCAGTGTGACACGCCCCCCGAGGGCTTGCGGCTGAAGCCCCCTGCGGGCTGGAAAGCAGACCTGTTGCAGCGGGAGGAGGAAGAGGAGGAGGAGGAGGACCAGGAGGGCGACAGAGAGACCACCATCCGGGGAAAAGCCACTCCGGCCGAGGAGGAGAAGACAGGAAAAGTGAAGTACTCACGGCTGGCCAAGTACTTCTTCAATAAAGAAGGGGATTTTAACAACCTGACAGCTGCAGCATTTCATAAGAAGTCTCACCTCTTGGTCACTGGCTTTGCTTCTGGAATCTTCCATCTTCATGAGCTGCCAGAGTTTAACCTCATCCACTCCCTGAGCATTTCAGATCAGAGCATCGCCTCAGTGGCCATCAATAGCTCGGGGGACTGGATTGCTTTTGGCTGTTCAGGCCTGGGCCAGCTGCTGGTGTGGGAGTGGCAGAGTGAGTCCTACGTGCTCAAGCAGCAGGGCCACTTCAACAGCATGGTGGCCCTGGCCTACTCGCCCGACGGACAGTACATCGTGACTGGCGGGGACGACGGCAAGGTCAAGGTGTGGAACACCCTCAGCGGCTTCTGCTTCGTCACTTTTACGGAGCACTCCAGCGGGGTGACCGGTGTGACCTTTACTGCCACCGGCTACGTTGTGGTGACCTCATCCATGGACGGGACCGTGCGAGCCTTTGACCTTCACAGGTACCGAAACTTCCGCACCTTCACCTCTCCACGCCCCACCCAGTTCTCCTGTGTGGCGGTGGATGCGAGCGGTGAGATCGTCTCTGCAGGGGCGCAGGACTCCTTTGAGATTTTCGTGTGGTCCATGCAGACAGGCAGGCTCCTTGATGTTTTGTCTGGACACGAAGGGCCCATCAGTGGTCTGTGTTTTAACCCAATGAAGTCCGTCCTGGCCAGTGCCTCCTGGGACAAGACAGTGCGCCTATGGGACATGTTTGACAGCTGGAGGACCAAGGAGACGCTGGCCCTGACCTCTGATGCTCTGGCTGTGACTTTTCGCCCTGATGGTGCGGAGCTGGCTGTGGCCACACTGAACTCACAGATCACCTTCTGGGACCCTGAGAACGCGGTGCAGACGGGCTCCATTGAGGGCAGGCATGACCTCAAGACTGGCAGGAAGGAGCTGGACAAGATTACAGCCAAGCACGCGGCCAAGGGGAAGGCCTTCACCGCCCTGTGCTACTCTGCAGACGGCCACAGCATCCTGGCGGGAGGCATGTCCAAGTTCGTGTGCATCTACCACGTCCGTGAGCAGATTCTCATGAAGAGGTTCGAGATCTCTTGCAACCTGTCTTTGGACGCCATGGAGGAATTTTTGAACCGAAGAAAAATGACAGAGTTTGGCAACCTGGCACTAATTGATCAGGATGCTGGGCAGGAGGATGGAGTCGCGATACCACTGCCAGGCGTCAGGAAAGGTGACATGAGTTCTCGGCACTTCAAACCTGAGATCAGGGTGACCTCACTCCGCTTCTCTCCCACTGGGCGCTGCTGGGCGGCCACCACCACGGAGGGACTCCTCATCTACTCCCTGGACACCCGCGTGCTCTTTGACCCGTTTGAGCTGGACACCAGCGTCACCCCCGGGAGGGTGCGCGAGGCACTGCGCCAGCAGGACTTCACCAGGGCCATCCTCATGGCCCTCCGGCTCAACGAGAGCAAACTGGTGCAGGAGGCCCTGGAGGCGGTGCCCAGGGGCGAGATTGAAGTGGTCACCTCCTCCCTTCCTGAACTGTATGTGGAGAAAGTGCTGGAGTTTTTAGCTTCCTCCTTTGAAGTGTCTCGCCACCTGGAATTCTACCTCCTCTGGACTCACAAACTGCTCATGTTGCACGGACAGAAGCTGAAGTCCAGAGCCGGGACGCTGCTGCCTGTCATTCAGTTCCTCCAGAAGAGCATCCAGCGGCACCTGGACGACCTGTCGAAACTCTGTAGCTGGAACCACTATAACATGCAGTACGCACTAGCAGTTTCCAAGCAGCGGGGCACAAAACGCTCCCTAGACCCGCTGGGAAGTGAGGAGGAGGCAGAAGCATCTGAAGATGACAGCCTGCATCTGCTTGGAGGAGGAGGCAGAGACTCAGAAGAAGAGATGCTGGCCTAG",
+      "five_prime_utr": "ACACGTGCGACGGCCGTG",
+      "three_prime_utr": "AGCCAGCCGGTTGCAGCGTTGGATTGTGCCGGCTAAGACCTGCCAGGGAGATGGGACCCTTGTGCCACCTGGGCCAGCAAAGAGGAGGGGTCCAGAGAACAGCTGAAATACTGTCACTAGTGGTAGTGACTTGCTTTTCCTGTGCACACATGTAGCCCATCAGGACAGCGAGCCGACGGGTCACGCCAGGGGCCGGCACGCACTGGCACCTGGCCCCAGGAGCGGGGCCGTGTGAACGGTGATGAATGTTGAAAATGCGTCTCAGAGAGGTATTCACATGAACTTTGTATGAGACTTATTTATATCTTTAACATAAAGGTTTGATAAAGAACTTAGGGATTAAAAAAAAGATGGAGTTTTCTAACGTGAGGATGAAGTCTACACTTCAGATTAAAAAGGGTTATGTTGTA",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00001367795",
+          "start": 44107399,
+          "end": 44107434,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00001177844",
+          "start": 44108984,
+          "end": 44109096,
+          "rank": 2,
+          "phase": 0,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050676",
+          "start": 44113753,
+          "end": 44113847,
+          "rank": 3,
+          "phase": 2,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00001050672",
+          "start": 44114179,
+          "end": 44114278,
+          "rank": 4,
+          "phase": 1,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003579779",
+          "start": 44114625,
+          "end": 44114768,
+          "rank": 5,
+          "phase": 2,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003682861",
+          "start": 44115264,
+          "end": 44115399,
+          "rank": 6,
+          "phase": 2,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00003660102",
+          "start": 44115691,
+          "end": 44115920,
+          "rank": 7,
+          "phase": 0,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050670",
+          "start": 44117820,
+          "end": 44117963,
+          "rank": 8,
+          "phase": 2,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050681",
+          "start": 44118763,
+          "end": 44118833,
+          "rank": 9,
+          "phase": 2,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00001050669",
+          "start": 44119387,
+          "end": 44119523,
+          "rank": 10,
+          "phase": 1,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00003612411",
+          "start": 44120348,
+          "end": 44120496,
+          "rank": 11,
+          "phase": 0,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003671210",
+          "start": 44120631,
+          "end": 44120778,
+          "rank": 12,
+          "phase": 2,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00001050666",
+          "start": 44120952,
+          "end": 44121102,
+          "rank": 13,
+          "phase": 0,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00001050680",
+          "start": 44122177,
+          "end": 44122357,
+          "rank": 14,
+          "phase": 1,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050675",
+          "start": 44124580,
+          "end": 44124727,
+          "rank": 15,
+          "phase": 2,
+          "end_phase": 0
+        },
+        {
+          "stable_id": "ENSE00003652919",
+          "start": 44126011,
+          "end": 44126119,
+          "rank": 16,
+          "phase": 0,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00003469591",
+          "start": 44126900,
+          "end": 44126965,
+          "rank": 17,
+          "phase": 1,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00003545412",
+          "start": 44127932,
+          "end": 44128150,
+          "rank": 18,
+          "phase": 1,
+          "end_phase": 1
+        },
+        {
+          "stable_id": "ENSE00003592879",
+          "start": 44128247,
+          "end": 44128397,
+          "rank": 19,
+          "phase": 1,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00003554676",
+          "start": 44128552,
+          "end": 44128626,
+          "rank": 20,
+          "phase": 2,
+          "end_phase": 2
+        },
+        {
+          "stable_id": "ENSE00001050684",
+          "start": 44130597,
+          "end": 44131181,
+          "rank": 21,
+          "phase": 2,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000486126",
+    "version": 1,
+    "gene_stable_id": "ENSG00000241945",
+    "start": 44114576,
+    "end": 44117843,
+    "strand": 1,
+    "biotype": "protein_coding_CDS_not_defined",
+    "source": "havana",
+    "gene_symbol": "PWP2",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00001843881",
+        "start": 44114576,
+        "end": 44114768,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003485231",
+        "start": 44115264,
+        "end": 44115399,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003657793",
+        "start": 44115691,
+        "end": 44115920,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001907344",
+        "start": 44117820,
+        "end": 44117843,
+        "rank": 4,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "TSL",
+        "value": "tsl5"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 44114769,
+          "end": 44115263,
+          "rank": 1
+        },
+        {
+          "start": 44115400,
+          "end": 44115690,
+          "rank": 2
+        },
+        {
+          "start": 44115921,
+          "end": 44117819,
+          "rank": 3
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 193,
+            "to_start": 44114576,
+            "to_end": 44114768,
+            "ori": 1
+          },
+          {
+            "from_start": 194,
+            "from_end": 329,
+            "to_start": 44115264,
+            "to_end": 44115399,
+            "ori": 1
+          },
+          {
+            "from_start": 330,
+            "from_end": 559,
+            "to_start": 44115691,
+            "to_end": 44115920,
+            "ori": 1
+          },
+          {
+            "from_start": 560,
+            "from_end": 583,
+            "to_start": 44117820,
+            "to_end": 44117843,
+            "ori": 1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00001843881",
+          "start": 44114576,
+          "end": 44114768,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00003485231",
+          "start": 44115264,
+          "end": 44115399,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00003657793",
+          "start": 44115691,
+          "end": 44115920,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001907344",
+          "start": 44117820,
+          "end": 44117843,
+          "rank": 4,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000471490",
+    "version": 1,
+    "gene_stable_id": "ENSG00000241945",
+    "start": 44119159,
+    "end": 44127855,
+    "strand": 1,
+    "biotype": "retained_intron",
+    "source": "havana",
+    "gene_symbol": "PWP2",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00001914183",
+        "start": 44119159,
+        "end": 44119523,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003620555",
+        "start": 44120348,
+        "end": 44120496,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003495215",
+        "start": 44120631,
+        "end": 44120778,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001899443",
+        "start": 44120952,
+        "end": 44122357,
+        "rank": 4,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001888031",
+        "start": 44124580,
+        "end": 44126119,
+        "rank": 5,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001908491",
+        "start": 44126900,
+        "end": 44127855,
+        "rank": 6,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "TSL",
+        "value": "tsl2"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 44119524,
+          "end": 44120347,
+          "rank": 1
+        },
+        {
+          "start": 44120497,
+          "end": 44120630,
+          "rank": 2
+        },
+        {
+          "start": 44120779,
+          "end": 44120951,
+          "rank": 3
+        },
+        {
+          "start": 44122358,
+          "end": 44124579,
+          "rank": 4
+        },
+        {
+          "start": 44126120,
+          "end": 44126899,
+          "rank": 5
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 365,
+            "to_start": 44119159,
+            "to_end": 44119523,
+            "ori": 1
+          },
+          {
+            "from_start": 366,
+            "from_end": 514,
+            "to_start": 44120348,
+            "to_end": 44120496,
+            "ori": 1
+          },
+          {
+            "from_start": 515,
+            "from_end": 662,
+            "to_start": 44120631,
+            "to_end": 44120778,
+            "ori": 1
+          },
+          {
+            "from_start": 663,
+            "from_end": 2068,
+            "to_start": 44120952,
+            "to_end": 44122357,
+            "ori": 1
+          },
+          {
+            "from_start": 2069,
+            "from_end": 3608,
+            "to_start": 44124580,
+            "to_end": 44126119,
+            "ori": 1
+          },
+          {
+            "from_start": 3609,
+            "from_end": 4564,
+            "to_start": 44126900,
+            "to_end": 44127855,
+            "ori": 1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00001914183",
+          "start": 44119159,
+          "end": 44119523,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00003620555",
+          "start": 44120348,
+          "end": 44120496,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00003495215",
+          "start": 44120631,
+          "end": 44120778,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001899443",
+          "start": 44120952,
+          "end": 44122357,
+          "rank": 4,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001888031",
+          "start": 44124580,
+          "end": 44126119,
+          "rank": 5,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001908491",
+          "start": 44126900,
+          "end": 44127855,
+          "rank": 6,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000494310",
+    "version": 5,
+    "gene_stable_id": "ENSG00000241945",
+    "start": 44126011,
+    "end": 44128599,
+    "strand": 1,
+    "biotype": "protein_coding_CDS_not_defined",
+    "source": "havana",
+    "gene_symbol": "PWP2",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00003693408",
+        "start": 44126011,
+        "end": 44126119,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003498598",
+        "start": 44126900,
+        "end": 44126965,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001911388",
+        "start": 44127575,
+        "end": 44127693,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003535688",
+        "start": 44127932,
+        "end": 44128150,
+        "rank": 4,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003549438",
+        "start": 44128247,
+        "end": 44128397,
+        "rank": 5,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001936802",
+        "start": 44128552,
+        "end": 44128599,
+        "rank": 6,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "TSL",
+        "value": "tsl5"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 44126120,
+          "end": 44126899,
+          "rank": 1
+        },
+        {
+          "start": 44126966,
+          "end": 44127574,
+          "rank": 2
+        },
+        {
+          "start": 44127694,
+          "end": 44127931,
+          "rank": 3
+        },
+        {
+          "start": 44128151,
+          "end": 44128246,
+          "rank": 4
+        },
+        {
+          "start": 44128398,
+          "end": 44128551,
+          "rank": 5
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 109,
+            "to_start": 44126011,
+            "to_end": 44126119,
+            "ori": 1
+          },
+          {
+            "from_start": 110,
+            "from_end": 175,
+            "to_start": 44126900,
+            "to_end": 44126965,
+            "ori": 1
+          },
+          {
+            "from_start": 176,
+            "from_end": 294,
+            "to_start": 44127575,
+            "to_end": 44127693,
+            "ori": 1
+          },
+          {
+            "from_start": 295,
+            "from_end": 513,
+            "to_start": 44127932,
+            "to_end": 44128150,
+            "ori": 1
+          },
+          {
+            "from_start": 514,
+            "from_end": 664,
+            "to_start": 44128247,
+            "to_end": 44128397,
+            "ori": 1
+          },
+          {
+            "from_start": 665,
+            "from_end": 712,
+            "to_start": 44128552,
+            "to_end": 44128599,
+            "ori": 1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00003693408",
+          "start": 44126011,
+          "end": 44126119,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00003498598",
+          "start": 44126900,
+          "end": 44126965,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001911388",
+          "start": 44127575,
+          "end": 44127693,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00003535688",
+          "start": 44127932,
+          "end": 44128150,
+          "rank": 4,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00003549438",
+          "start": 44128247,
+          "end": 44128397,
+          "rank": 5,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001936802",
+          "start": 44128552,
+          "end": 44128599,
+          "rank": 6,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000476948",
+    "version": 1,
+    "gene_stable_id": "ENSG00000241945",
+    "start": 44127799,
+    "end": 44128651,
+    "strand": 1,
+    "biotype": "retained_intron",
+    "source": "havana",
+    "gene_symbol": "PWP2",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00001937792",
+        "start": 44127799,
+        "end": 44128150,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003549438",
+        "start": 44128247,
+        "end": 44128397,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001936461",
+        "start": 44128552,
+        "end": 44128651,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "TSL",
+        "value": "tsl3"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 44128151,
+          "end": 44128246,
+          "rank": 1
+        },
+        {
+          "start": 44128398,
+          "end": 44128551,
+          "rank": 2
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 352,
+            "to_start": 44127799,
+            "to_end": 44128150,
+            "ori": 1
+          },
+          {
+            "from_start": 353,
+            "from_end": 503,
+            "to_start": 44128247,
+            "to_end": 44128397,
+            "ori": 1
+          },
+          {
+            "from_start": 504,
+            "from_end": 603,
+            "to_start": 44128552,
+            "to_end": 44128651,
+            "ori": 1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00001937792",
+          "start": 44127799,
+          "end": 44128150,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00003549438",
+          "start": 44128247,
+          "end": 44128397,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001936461",
+          "start": 44128552,
+          "end": 44128651,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  }
+]

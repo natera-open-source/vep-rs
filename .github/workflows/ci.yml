@@ -51,6 +51,9 @@ jobs:
             while IFS= read -r -d '' path; do
               n=$((n + 1))
               echo "changed: $path"
+              # The Rust tests assert sentences of README.md as they do the pages under docs/,
+              # so it keeps Test; the `case` below still reads it as no code path.
+              [ "$path" != README.md ] || docs=true
               case "$path" in
                 .github/workflows/*) code=true ;;
                 # The Rust tests assert the CLI reference and the sentences of many pages.
@@ -79,22 +82,35 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # tools/vep-fields-compare is its own Cargo root, so a `--workspace` command
-        # never reaches it; `comparator` is the same check over that package. `gate`
-        # names the `changes` output that decides whether the entry's steps run.
+        # tools/vep-fields-compare, tools/vep-outputs-compare, tools/vep-plugin-pairs and
+        # tools/vep-formats-remainder are their own Cargo roots, so a `--workspace` command
+        # never reaches them; `comparator`, `outputs_comparator`, `plugin_pairs` and
+        # `formats_remainder` are the same check over those packages. `gate` names the
+        # `changes` output that decides whether the entry's steps run.
         include:
           - name: Test
             gate: test
             command: cargo test --workspace --locked
             comparator: cargo test --locked --manifest-path tools/vep-fields-compare/Cargo.toml
+            outputs_comparator: cargo test --locked --manifest-path tools/vep-outputs-compare/Cargo.toml
+            plugin_pairs: cargo test --locked --manifest-path tools/vep-plugin-pairs/Cargo.toml
+            formats_remainder: cargo test --locked --manifest-path tools/vep-formats-remainder/Cargo.toml
           - name: Clippy
             gate: rust
-            command: cargo clippy --workspace -- -D warnings
+            # `vep-cli/bench` puts the `bench_plugins` binary, which builds only
+            # under that feature, under the lint.
+            command: cargo clippy --workspace --features vep-cli/bench -- -D warnings
             comparator: cargo clippy --all-targets --locked --manifest-path tools/vep-fields-compare/Cargo.toml -- -D warnings
+            outputs_comparator: cargo clippy --all-targets --locked --manifest-path tools/vep-outputs-compare/Cargo.toml -- -D warnings
+            plugin_pairs: cargo clippy --all-targets --locked --manifest-path tools/vep-plugin-pairs/Cargo.toml -- -D warnings
+            formats_remainder: cargo clippy --all-targets --locked --manifest-path tools/vep-formats-remainder/Cargo.toml -- -D warnings
           - name: Format
             gate: rust
             command: cargo fmt --all -- --check
             comparator: cargo fmt --all --manifest-path tools/vep-fields-compare/Cargo.toml -- --check
+            outputs_comparator: cargo fmt --all --manifest-path tools/vep-outputs-compare/Cargo.toml -- --check
+            plugin_pairs: cargo fmt --all --manifest-path tools/vep-plugin-pairs/Cargo.toml -- --check
+            formats_remainder: cargo fmt --all --manifest-path tools/vep-formats-remainder/Cargo.toml -- --check
           # Catches a license header run into a module's `//!` doc line with no
           # blank line between them. Test/Clippy/Format are all blind to it: the
           # joined line is a valid comment, so everything compiles and passes while
@@ -116,18 +132,62 @@ jobs:
           components: clippy, rustfmt
       - if: needs.changes.outputs[matrix.gate] != 'false'
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      # The Parquet round-trip test skips itself without the DuckDB CLI; the
-      # Test job installs it so the skip cannot hide a regression.
-      - if: matrix.name == 'Test' && needs.changes.outputs[matrix.gate] != 'false'
-        run: |
-          curl -fsSL -o /tmp/duckdb.tar.gz https://github.com/duckdb/duckdb/releases/download/v2.0.0/duckdb-cli-linux-amd64.tar.gz
-          echo "c6507206baf7793c6013dbd82368469a45f20dc0e17a6f92f204602f652ed2bc  /tmp/duckdb.tar.gz" | sha256sum --check --strict -
-          sudo tar -xzf /tmp/duckdb.tar.gz -C /usr/local/bin duckdb
-          duckdb --version
       - if: needs.changes.outputs[matrix.gate] != 'false'
         run: ${{ matrix.command }}
       - if: needs.changes.outputs[matrix.gate] != 'false'
         run: ${{ matrix.comparator }}
+      - if: matrix.outputs_comparator && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.outputs_comparator }}
+      - if: matrix.plugin_pairs && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.plugin_pairs }}
+      - if: matrix.formats_remainder && needs.changes.outputs[matrix.gate] != 'false'
+        run: ${{ matrix.formats_remainder }}
+      # The Parquet adapter's corpus round trips run only where a vep binary
+      # exists, and the Test job's cargo test leaves target/debug/vep, so the
+      # Python inverse of the writer's cell contract is held to the writer here;
+      # the three round trips must run, not skip.
+      - if: matrix.name == 'Test' && needs.changes.outputs[matrix.gate] != 'false'
+        run: |
+          set -eo pipefail
+          python3 -m pip install --quiet pytest pyarrow==26.0.0 pyyaml
+          python3 -m pytest -q scripts/adapters/test_parquet_to_vep_tab.py
+          python3 -m pytest -q scripts/adapters/test_parquet_to_vep_tab.py -k golden_corpus | tee /tmp/round_trips.txt
+          grep -q '^3 passed' /tmp/round_trips.txt
+      # The tuple comparator's test of its Rust build runs only where the tool's binary exists,
+      # and the Test job's cargo test leaves
+      # tools/vep-outputs-compare/target/debug/vep-outputs-compare: the test must run, not
+      # skip, so both programs are held to one set of reports over its output pairs.
+      - if: matrix.name == 'Test' && needs.changes.outputs[matrix.gate] != 'false'
+        run: |
+          set -eo pipefail
+          export VEP_OUTPUTS_COMPARE="$PWD/tools/vep-outputs-compare/target/debug/vep-outputs-compare"
+          python3 -m pytest -q scripts/concordance/test_compare_vep_outputs.py -k OutputsToolWritesTheSameReports | tee /tmp/outputs_tool.txt
+          grep -q '^1 passed' /tmp/outputs_tool.txt
+      # The plugin scorer's tests of the pairing tool run only where its binary exists, and
+      # the Test job's cargo test leaves tools/vep-plugin-pairs/target/debug/vep-plugin-pairs:
+      # the tests named for the tool must run, not skip, and then every test of the module
+      # that scores runs through the binary, so both paths are held to one set of outputs.
+      - if: matrix.name == 'Test' && needs.changes.outputs[matrix.gate] != 'false'
+        run: |
+          set -eo pipefail
+          export VEP_PLUGIN_PAIRS="$PWD/tools/vep-plugin-pairs/target/debug/vep-plugin-pairs"
+          python3 -m pytest -q scripts/concordance/test_score_plugin_tuples.py -k pairing_tool | tee /tmp/pairing_tool.txt
+          grep -q '^9 passed' /tmp/pairing_tool.txt
+          SCORE_PLUGIN_TUPLES_PATH=pairing-tool python3 -m pytest -q scripts/concordance/test_score_plugin_tuples.py | tee /tmp/through_the_tool.txt
+          grep -q '^248 passed, 1 skipped' /tmp/through_the_tool.txt
+      # The plugin concordance driver's scoring path needs a vep binary and the pairing tool, and
+      # the Test job's cargo test leaves both: one committed corpus is annotated and scored through
+      # the tool against the corpus's committed Ensembl VEP output, with no container, and the rows
+      # printed are held to the committed ones.
+      - if: matrix.name == 'Test' && needs.changes.outputs[matrix.gate] != 'false'
+        run: |
+          set -eo pipefail
+          python3 scripts/concordance/reproduce_plugin_concordance.py \
+            --run GRCh38-plugin-transcript-annotator --set base \
+            --vep "$PWD/target/debug/vep" \
+            --pairing-tool "$PWD/tools/vep-plugin-pairs/target/debug/vep-plugin-pairs" \
+            --work-dir "$RUNNER_TEMP/plugin-concordance" | tee "$RUNNER_TEMP/plugin_rows.jsonl"
+          cmp scripts/concordance/testdata/reproduce_plugin_concordance/GRCh38-plugin-transcript-annotator.base.jsonl "$RUNNER_TEMP/plugin_rows.jsonl"
 
   # The Python comparators and the golden-corpus generator ship with their own
   # test files; a file that fails to import reports zero failures, so the
@@ -140,50 +200,89 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - run: pip install --quiet pytest pyyaml
+      # pyarrow: the Parquet adapter reads the writer's files through it, and its
+      # test module skips itself without it, so the collected count below holds
+      # the install; pinned, so every run reads the files with one reader version.
+      - run: pip install --quiet pytest pyarrow==26.0.0 pyyaml
+      # The hand-over tests of test_compare_vep_formats.py compare through the front end,
+      # tools/vep-formats-remainder, and skip themselves without its release build; this job
+      # builds it, and the step after the run holds those tests to have run.
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        with:
+          toolchain: 1.97.1
+      - run: cargo build --release --locked --manifest-path tools/vep-formats-remainder/Cargo.toml
+      # The custom-source fixture test skips itself without bgzip, tabix and bigtools;
+      # this job installs them so the skip cannot hide a regression.
+      - run: |
+          set -eo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends tabix
+          curl -fsSL -o /tmp/bigtools.zip https://github.com/jackh726/bigtools/releases/download/v0.5.8/bigtools-linux-gnu-noremote.zip
+          echo "9dff216a9d9089f6b05871016d96396cf1fc5562c87c3019a6f5db00dfab9664  /tmp/bigtools.zip" | sha256sum --check --strict -
+          unzip -q -j /tmp/bigtools.zip release/bigtools -d /tmp/bigtools
+          sudo install -m 0755 /tmp/bigtools/bigtools /usr/local/bin/bigtools
+          bgzip --version | head -1 && tabix --version | head -1 && bigtools --version
+      # One list feeds the per-file floor check and the run, so a file cannot be
+      # floored without being run or run without a floor. Each floor is the count
+      # `python3 -m pytest --collect-only -q <file> | grep -cE '^scripts/.*::'`
+      # reports; the anchored pattern counts node ids alone, never a summary or
+      # warning line that happens to carry `::`.
       - run: |
           set -e
+          tests=(
+            "scripts/concordance/test_compare_vep_outputs.py 314"
+            "scripts/validation/test_compare_sv_concordance.py 290"
+            "scripts/concordance/test_reference_release.py 17"
+            "scripts/validation/test_breakend_mate_context.py 24"
+            "scripts/concordance/test_compare_vep_formats.py 578"
+            "scripts/concordance/test_compare_vep_stats.py 6"
+            "scripts/adapters/test_parquet_to_vep_tab.py 14"
+            "scripts/concordance/test_compare_vep_fields.py 9"
+            "scripts/concordance/test_compare_plugin_outputs.py 24"
+            "scripts/concordance/test_score_plugin_tuples.py 249"
+            "scripts/concordance/test_plugin_gate_runs.py 15"
+            "scripts/concordance/test_reproduce_plugin_concordance.py 42"
+            "scripts/concordance/test_fastvep_plugin_tuples.py 94"
+            "scripts/concordance/test_species_harness.py 3"
+            "scripts/golden/test_golden_scripts.py 374"
+            "scripts/fixtures/test_cut_plugin_regions.py 10"
+            "scripts/fixtures/test_plugin_score_fixtures.py 27"
+            "scripts/fixtures/test_make_plugin_fixture.py 9"
+            "scripts/release/test_render_release_notes.py 197"
+            "scripts/release/test_check_glibc_floor.py 8"
+            "scripts/parity/test_check_parity_matrix.py 72"
+            "scripts/parity/test_plugin_gate_rows.py 41"
+            "scripts/validation/test_diff_caches.py 4"
+            "scripts/docs/test_site_tools.py 149"
+            "scripts/docs/test_render_release_figure.py 172"
+            "scripts/fixtures/test_maxentscan_fixture_matrices.py 19"
+            "scripts/data/test_write_loftee_stand_ins.py 14"
+            "scripts/divergences/test_check_divergence_order.py 34"
+            "scripts/divergences/test_reevaluate.py 25"
+            "scripts/ci/test_admission.py 475"
+            "scripts/docs/test_contributor_guide.py 16"
+            "scripts/bioconda/test_recipe.py 24"
+          )
           fail=0
-          check() {
-            n=$(python3 -m pytest --collect-only -q "$1" | grep -cE '::' || true)
-            echo "collected $n from $1 (floor $2)"
-            if [ "$n" -lt "$2" ]; then
-              echo "ERROR: [comparator-tests] $1 collected $n tests, expected >= $2." >&2
+          files=()
+          for entry in "${tests[@]}"; do
+            read -r file floor <<<"$entry"
+            n=$(python3 -m pytest --collect-only -q "$file" | grep -cE '^scripts/.*::' || true)
+            echo "collected $n from $file (floor $floor)"
+            if [ "$n" -lt "$floor" ]; then
+              echo "ERROR: [comparator-tests] $file collected $n tests, expected >= $floor." >&2
               fail=1
             fi
-          }
-          check scripts/concordance/test_compare_vep_outputs.py 211
-          check scripts/validation/test_compare_sv_concordance.py 248
-          check scripts/concordance/test_reference_release.py 17
-          check scripts/validation/test_breakend_mate_context.py 24
-          check scripts/concordance/test_compare_vep_formats.py 64
-          check scripts/concordance/test_compare_vep_fields.py 9
-          check scripts/concordance/test_compare_plugin_outputs.py 3
-          check scripts/golden/test_golden_scripts.py 140
-          check scripts/release/test_render_release_notes.py 137
-          check scripts/release/test_check_glibc_floor.py 8
-          check scripts/parity/test_check_parity_matrix.py 60
-          check scripts/validation/test_diff_caches.py 4
-          check scripts/docs/test_site_tools.py 77
-          check scripts/ci/test_admission.py 421
-          check scripts/bioconda/test_recipe.py 8
+            files+=("$file")
+          done
           [ "$fail" -eq 0 ]
-          python3 -m pytest -q \
-            scripts/validation/test_compare_sv_concordance.py \
-            scripts/validation/test_breakend_mate_context.py \
-            scripts/concordance/test_compare_vep_outputs.py \
-            scripts/concordance/test_reference_release.py \
-            scripts/concordance/test_compare_vep_formats.py \
-            scripts/concordance/test_compare_vep_fields.py \
-            scripts/concordance/test_compare_plugin_outputs.py \
-            scripts/golden/test_golden_scripts.py \
-            scripts/release/test_render_release_notes.py \
-            scripts/release/test_check_glibc_floor.py \
-            scripts/parity/test_check_parity_matrix.py \
-            scripts/validation/test_diff_caches.py \
-            scripts/docs/test_site_tools.py \
-            scripts/ci/test_admission.py \
-            scripts/bioconda/test_recipe.py
+          python3 -m pytest -q "${files[@]}"
+      # The twenty-two hand-over tests must run, not skip: each compares planted outputs on the
+      # whole outputs and through the front end built above.
+      - run: |
+          set -eo pipefail
+          python3 -m pytest -q scripts/concordance/test_compare_vep_formats.py -k front_end | tee /tmp/front_end.txt
+          grep -q '^22 passed' /tmp/front_end.txt
       # The Rust field comparator's goldens are what compare_vep_fields.py writes over its
       # fixture pairs; the Test job holds the binary to them, this step holds the Python,
       # so a change to either side that moves the contract fails here or there. From the
@@ -201,20 +300,55 @@ jobs:
           python3 "$py" --perl tests/fixtures/disjoint_reference.txt --rust tests/fixtures/disjoint_scored.txt --out "$actual/disjoint_fields.json" --tmp-dir "$actual" > "$actual/disjoint_stdout.txt"
           cmp "$actual/disjoint_fields.json" tests/fixtures/expected_disjoint_fields.json
           cmp "$actual/disjoint_stdout.txt" tests/fixtures/expected_disjoint_stdout.txt
+      # The same hold for the Rust outputs comparator: compare_vep_outputs.py over its fixture
+      # directories in the three modes, every report file against the committed golden, the
+      # checkout-dependent values (the resolved directories, the timestamp) masked to the
+      # tokens the goldens carry.
+      - run: |
+          set -e
+          cd tools/vep-outputs-compare
+          py=../../scripts/concordance/compare_vep_outputs.py
+          fx=$(cd tests/fixtures && pwd -P)
+          actual=$(mktemp -d)
+          mask() { sed -E "s/\"generated_at_utc\": \"[^\"]*\"/\"generated_at_utc\": \"{{GENERATED_AT}}\"/; s#$actual/report_[a-z0-9]*#{{REPORT_DIR}}#g; s#$fx/perl#{{PERL_DIR}}#g; s#$fx/rust#{{RUST_DIR}}#g; s#$fx/input#{{INPUT_DIR}}#g; s#$actual#{{SCRATCH}}#g"; }
+          check() { mask < "$1" | cmp - "tests/fixtures/$2"; }
+          python3 "$py" --perl-dir tests/fixtures/perl --rust-dir tests/fixtures/rust --assembly GRCh38 --input-dir tests/fixtures/input --report-dir "$actual/report_c116" > "$actual/c116.stdout" 2> "$actual/c116.stderr"
+          for f in summary.json summary.md discordant.tsv discordant_open.tsv; do check "$actual/report_c116/$f" "expected_c116_$f"; done
+          check "$actual/c116.stdout" expected_c116_stdout.txt
+          check "$actual/c116.stderr" expected_c116_stderr.txt
+          python3 "$py" --perl-dir tests/fixtures/perl --rust-dir tests/fixtures/rust --assembly GRCh38 --reference-release 115.2 --report-dir "$actual/report_c115" > "$actual/c115.stdout"
+          for f in summary.json summary.md discordant.tsv discordant_open.tsv; do check "$actual/report_c115/$f" "expected_c115_$f"; done
+          check "$actual/c115.stdout" expected_c115_stdout.txt
+          python3 "$py" --perl-dir tests/fixtures/perl --rust-dir tests/fixtures/rust --no-canonical-contigs --input-vcf tests/fixtures/input/sample_a.vcf --fail-below-f1 0.99 --report-dir "$actual/report_cnone" > "$actual/cnone.stdout" || [ $? -eq 2 ]
+          for f in discordant.tsv discordant_open.tsv; do check "$actual/report_cnone/$f" "expected_cnone_$f"; done
+          check "$actual/cnone.stdout" expected_cnone_stdout.txt
+          d116=tests/fixtures/expected_c116_discordant.tsv; d115=tests/fixtures/expected_c115_discordant.tsv
+          python3 "$py" --by-consequence-class --perl-dir tests/fixtures/perl --discordant-in $d116 --dataset ds_a --class-csv "$actual/per_class.csv" --sweep-id sweep0001 --binary-md5 0123abcd --assembly GRCh38 > "$actual/k1.stdout"
+          python3 "$py" --by-consequence-class --perl-dir tests/fixtures/perl --discordant-in $d115 --dataset ds_b --class-csv "$actual/per_class.csv" --sweep-id sweep0002 --binary-md5 4567ef01 --assembly GRCh38 --engine fastvep --append --assembly-label hg38 --min-tuples 3 --vep-totals-cache "$actual/totals_cache.csv" > "$actual/k2.stdout"
+          python3 "$py" --by-consequence-class --perl-dir tests/fixtures/perl --discordant-in $d116 --dataset ds_c --class-csv "$actual/per_class.csv" --sweep-id sweep0001 --binary-md5 0123abcd --assembly GRCh38 --append --vep-totals-cache "$actual/totals_cache.csv" > "$actual/k3.stdout"
+          python3 "$py" --pool-consequence-class --class-csv "$actual/per_class.csv" --pooled-csv "$actual/pooled.csv" --per-term tests/fixtures/per_term.tsv --min-tuples 2 > "$actual/p1.stdout"
+          python3 "$py" --pool-consequence-class --class-csv "$actual/per_class.csv" --pooled-csv "$actual/pooled_plain.csv" > "$actual/p2.stdout"
+          for n in k1 k2 k3 p1 p2; do check "$actual/$n.stdout" "expected_${n}_stdout.txt"; done
+          cmp "$actual/per_class.csv" tests/fixtures/expected_per_class.csv
+          cmp "$actual/pooled.csv" tests/fixtures/expected_pooled.csv
+          cmp "$actual/pooled_plain.csv" tests/fixtures/expected_pooled_plain.csv
+          tail -n +2 "$actual/totals_cache.csv" | cmp - tests/fixtures/expected_totals_cache_body.csv
       # The parity matrix (tests/parity/matrix.tsv) must name every flag args.rs declares,
       # and every landed row's tests must resolve in this tree.
       - run: python3 scripts/parity/check_parity_matrix.py
-      # Every plugin data path run_concordance.sh passes is a file setup_plugin_data.sh
-      # stages; both read scripts/data/plugin_data_layout.sh, and this suite proves it.
+      # Every layout path run_concordance.sh passes is a file setup_plugin_data.sh stages
+      # (both read scripts/data/plugin_data_layout.sh), and CADD, SpliceAI, AVI, dbNSFP and
+      # dbscSNV are passed the user's own file; the test file below proves it.
       - run: |
           bash -n scripts/concordance/run_concordance.sh
+          floor=103
           out=$(bash scripts/data/test_plugin_data_layout.sh 2>&1) || { printf '%s\n' "$out"; exit 1; }
           n=$(printf '%s\n' "$out" | grep -c '^  ok ') || n=0
-          echo "plugin data layout suite reported $n ok lines (floor 46)"
-          [ "$n" -ge 46 ]
+          echo "plugin data layout suite reported $n ok lines (floor $floor)"
+          [ "$n" -ge "$floor" ]
 
   # The measurement harness and the reference-output generator each ship with a
-  # pure-bash test suite (stub engines, a stub bcftools, a stub docker) whose
+  # Bash and python3 test suite (stub engines, a stub bcftools, a stub docker) whose
   # checks inject a fault and prove the matching fail-closed gate fires. A suite
   # exits 1 on any failure and prints one `ok` line per passing check; the count
   # is asserted so a suite that silently ran nothing cannot pass.
@@ -228,6 +362,15 @@ jobs:
         run: echo "No path this check reads changed; its steps are skipped."
       - if: needs.changes.outputs.harness != 'false'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # test_feature_oracle.sh runs one case through the runner on both sides of the format
+      # comparator's switch and skips those checks without the front end's release build; the
+      # floor below counts them, so the build must be here.
+      - if: needs.changes.outputs.harness != 'false'
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        with:
+          toolchain: 1.97.1
+      - if: needs.changes.outputs.harness != 'false'
+        run: cargo build --release --locked --manifest-path tools/vep-formats-remainder/Cargo.toml
       - if: needs.changes.outputs.harness != 'false'
         run: |
           set -e
@@ -237,12 +380,18 @@ jobs:
             echo "$1 reported $n ok lines (floor $2)"
             [ "$n" -ge "$2" ]
           }
-          check scripts/concordance/test_run_clone_measurement.sh 120
-          check scripts/concordance/test_generate_reference_output.sh 170
-          check scripts/concordance/test_feature_oracle.sh 148
+          check scripts/concordance/test_run_clone_measurement.sh 203
+          check scripts/concordance/test_tuple_comparator_switch.sh 25
+          check scripts/concordance/test_generate_reference_output.sh 296
+          check scripts/concordance/test_feature_oracle.sh 340
+          check scripts/docker/test_image_source.sh 26
           check scripts/docker/test_image_tags.sh 8
+          check scripts/docker/test_release_recipe.sh 11
+          check scripts/docker/test_require_images.sh 16
           check scripts/docker/test_stage_release.sh 17
-          check scripts/docker/test_smoke_test.sh 15
+          check scripts/docker/test_stage_tree.sh 32
+          check scripts/docker/test_smoke_test.sh 28
+          check scripts/docker/test_workflow_jobs.sh 14
 
   # A `cargo audit` advisory is a failure only when the advisory's crate is
   # reachable from the `vep` binary; scripts/check_advisory_reachability.sh makes
@@ -280,6 +429,12 @@ jobs:
       # out, fails here and is cleared by a bump.
       - if: needs.changes.outputs.rust != 'false'
         run: cargo audit --deny warnings --file tools/vep-fields-compare/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-outputs-compare/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-plugin-pairs/Cargo.lock
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo audit --deny warnings --file tools/vep-formats-remainder/Cargo.lock
 
   # Builds on the DECLARED minimum supported Rust version rather than the
   # pinned toolchain. Every job above runs the pinned 1.97.1, the toolchain the
@@ -312,7 +467,7 @@ jobs:
         if: needs.changes.outputs.rust != 'false'
         run: |
           actual=$(rustc --version | awk '{print $2}')
-          for manifest in Cargo.toml tools/vep-fields-compare/Cargo.toml; do
+          for manifest in Cargo.toml tools/vep-fields-compare/Cargo.toml tools/vep-outputs-compare/Cargo.toml tools/vep-plugin-pairs/Cargo.toml tools/vep-formats-remainder/Cargo.toml; do
             declared=$(sed -n 's/^rust-version *= *"\([^"]*\)".*/\1/p' "$manifest" | head -1)
             echo "$manifest: declared rust-version=$declared, toolchain=$actual"
             case "$actual" in
@@ -323,9 +478,15 @@ jobs:
       - if: needs.changes.outputs.rust != 'false'
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - if: needs.changes.outputs.rust != 'false'
-        run: cargo build --workspace --locked
+        run: cargo build --workspace --locked --features vep-cli/bench
       - if: needs.changes.outputs.rust != 'false'
         run: cargo build --locked --manifest-path tools/vep-fields-compare/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-outputs-compare/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-plugin-pairs/Cargo.toml
+      - if: needs.changes.outputs.rust != 'false'
+        run: cargo build --locked --manifest-path tools/vep-formats-remainder/Cargo.toml
 
   build-release:
     name: Build Release

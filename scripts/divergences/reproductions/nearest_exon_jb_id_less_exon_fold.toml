@@ -1,0 +1,36 @@
+entry = "nearest_exon_jb_id_less_exon_fold"
+page = "docs/divergences/nearest-exon-jb-id-less-exon-fold.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 675 of 77,601 cache transcripts · 0 flag sets, 2 corpora"
+
+# compmerge.2.Heart.chr21 is an aligned RefSeq-source model whose exons carry no stable id. The deletion
+# 10578401-10578530 takes the last 18 bases of the exon at 10578337-10578418 (82 bases), the 98-base intron
+# and the first 14 bases of the exon at 10578517-10578605 (89 bases). Ensembl VEP's plugin files both exons
+# under the empty id, so its item pairs the first exon's junction, 64 bases away, with the second exon's
+# length; vep-rs writes the first exon's own item. The Ensembl transcripts of the same exons, with ids,
+# get ENSE00001659869|64|start|82 in both engines.
+[input]
+format = "vcf"
+text = """
+21	10578400	idless_two_exons	ATAATGTCCCCACTCTACAGTAAGTTTTATGCTAAATTGACTATCAGAAGAGGGCTAAATATATTGGGCTTGATTTTTTGAAAATATTTTAACTAAAAATCTTAAACTTGAAATCAGTCAGATGGTGGTTT	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "merged"
+json_cache = "tests/golden/116/GRCh38-merged/json_cache"
+
+[run]
+flags = ["--merged", "--all_refseq", "--use_given_ref", "--plugin", "NearestExonJB"]
+
+[compare]
+kind = "field"
+field = "NearestExonJB"
+where = { record = "idless_two_exons", feature = "compmerge.2.Heart.chr21" }
+
+[expected]
+ensembl_vep = ["|64|start|89"]
+vep_rs = ["|64|start|82"]

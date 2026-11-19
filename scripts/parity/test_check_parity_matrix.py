@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -157,6 +158,29 @@ def rows_with(item, **fields) -> list[str]:
     return [row(item, **fields) if r.startswith(item + "\t") else r for r in BASE_ROWS]
 
 
+TABLE_HEADER = (
+    "## Support table\n\nOne row per Ensembl VEP plugin.\n\n"
+    "| Plugin | Data file and provider | Terms | Assemblies | Status | Reason |\n"
+    "| --- | --- | --- | --- | --- | --- |\n"
+)
+REAL = "supported, verified on real data"
+FIXTURES = "supported on the user's licensed file, verified on synthetic fixtures"
+NOT_PORTED = "not ported"
+
+
+def table_row(name, status=REAL, link=None, cells=None) -> str:
+    """A support table row; `link` wraps the name in a Markdown link, `cells` replaces the four
+    descriptive cells (data, terms, assemblies, reason)."""
+    plugin = f"[{name}]({link})" if link else name
+    data, terms, assemblies, reason = cells or ("`x.tsv.gz`; a lab", "CC0", "GRCh38", "open data")
+    return f"| {plugin} | {data} | {terms} | {assemblies} | {status} | {reason} |\n"
+
+
+def write_plugins_page(root: Path, table, before=TABLE_HEADER, after="\n## Usage\n") -> None:
+    (root / "docs").mkdir(exist_ok=True)
+    (root / "docs" / "plugins.md").write_text("# Plugins\n\n" + before + "".join(table) + after)
+
+
 def build_tree(
     tmp_path: Path,
     rows=None,
@@ -165,11 +189,13 @@ def build_tree(
     fns=("symbol_column_matches",),
     with_corpus=True,
     args_rs=ARGS_RS,
+    table=(),
 ) -> Path:
     root = tmp_path / "repo"
     (root / "crates" / "vep-cli" / "src").mkdir(parents=True)
     (root / "crates" / "vep-cli" / "tests").mkdir(parents=True)
     (root / "tests" / "parity").mkdir(parents=True)
+    write_plugins_page(root, table)
     (root / "crates" / "vep-cli" / "src" / "args.rs").write_text(args_rs)
     body = "\n".join(f"#[test]\nfn {fn}() {{}}\n" for fn in fns)
     (root / "crates" / "vep-cli" / "src" / "fields.rs").write_text(body)
@@ -203,7 +229,7 @@ def test_clean_tree_passes_with_summary(tmp_path):
     assert errors == []
     assert (
         summary
-        == "parity: 16 rows, 15 flags covered, 0 landed, 0 interim entries resolve"
+        == "parity: 16 rows, 15 flags covered, 0 landed, 0 interim entries resolve, 0 support table rows"
     )
 
 
@@ -297,7 +323,7 @@ def test_landed_documented_subset_row_with_both_tests_passes(tmp_path):
     )
     errors, summary = cpm.check(build_tree(tmp_path, rows))
     assert errors == []
-    assert summary.endswith("1 landed, 0 interim entries resolve")
+    assert summary.endswith("1 landed, 0 interim entries resolve, 0 support table rows")
 
 
 def test_landed_row_has_no_interim(tmp_path):
@@ -450,7 +476,7 @@ def test_process_row_test2_is_a_covering_corpus(tmp_path):
     root = with_script_test(build_tree(tmp_path / "ok", rows))
     errors, summary = cpm.check(root)
     assert errors == []
-    assert summary.endswith("1 landed, 0 interim entries resolve")
+    assert summary.endswith("1 landed, 0 interim entries resolve, 0 support table rows")
     root = with_script_test(build_tree(tmp_path / "other", rows, covers=("max_af",)))
     assert errors_of(root) == [
         "tests/parity/matrix.tsv:4: symbol: test2 tests/golden/116/GRCh38 tests/golden/116/GRCh38/manifest.json covers does not name symbol"
@@ -622,7 +648,7 @@ def test_interim_resolves_to_a_test_function(tmp_path):
     )
     errors, summary = cpm.check(root2)
     assert errors == []
-    assert summary.endswith("0 landed, 1 interim entries resolve")
+    assert summary.endswith("0 landed, 1 interim entries resolve, 0 support table rows")
 
 
 def test_landed_at_another_target_fails(tmp_path):
@@ -704,7 +730,7 @@ def test_cli_exit_codes_and_output(tmp_path):
     assert ok.returncode == 0
     assert (
         ok.stdout
-        == "parity: 16 rows, 15 flags covered, 0 landed, 0 interim entries resolve\n"
+        == "parity: 16 rows, 15 flags covered, 0 landed, 0 interim entries resolve, 0 support table rows\n"
     )
     assert ok.stderr == ""
     (root / "tests" / "parity" / "matrix.tsv").write_text(
@@ -717,6 +743,202 @@ def test_cli_exit_codes_and_output(tmp_path):
         "ERROR: [parity] tests/parity/matrix.tsv:4: symbol: landed with no test1\n"
         "ERROR: [parity] tests/parity/matrix.tsv:4: symbol: landed implemented with no test2\n"
     )
+
+
+# A matrix with three plugin rows: two named `<item>.pm`, LoFTEE named `LoF.pm` as the module is.
+PLUGIN_ROWS = BASE_ROWS + [
+    row("AlphaMissense", perl="AlphaMissense.pm", state="landed:implemented", test1=TEST1, test2=TEST2),
+    row("AVADA", target="error", perl="AVADA.pm", state="landed:error", test1=TEST1),
+    row("LoFTEE", perl="LoF.pm", state="landed:implemented", test1=TEST1, test2=TEST2),
+]
+PLUGIN_COVERS = ("symbol", "AlphaMissense", "LoFTEE")
+PLUGIN_TABLE = [
+    table_row("AlphaMissense", REAL, link="plugins/annotation-store.md#alphamissense"),
+    table_row("AVADA", NOT_PORTED, cells=("`avada.vcf.gz`", "not stated", "GRCh37", "one GRCh37 file")),
+    table_row("LoFTEE", REAL, link="plugins/loftee.md"),
+]
+PAGE = "docs/plugins.md"
+
+
+def test_support_table_rows_match_matrix_targets(tmp_path):
+    """A table whose every row names a matrix row with the target its status asserts is clean, a
+    linked name read as its text, and the summary counts the table's rows."""
+    errors, summary = cpm.check(build_tree(tmp_path, PLUGIN_ROWS, covers=PLUGIN_COVERS, table=PLUGIN_TABLE))
+    assert errors == []
+    assert summary.endswith("3 landed, 0 interim entries resolve, 3 support table rows")
+    table, reasons = cpm.read_support_table(tmp_path / "repo")
+    assert reasons == []
+    assert [(entry["name"], entry["status"], entry["lineno"]) for entry in table] == [
+        ("AlphaMissense", REAL, 9),
+        ("AVADA", NOT_PORTED, 10),
+        ("LoFTEE", REAL, 11),
+    ]
+
+
+def test_support_table_row_without_matrix_row_fails(tmp_path):
+    table = PLUGIN_TABLE[:2] + [table_row("Ghost", FIXTURES, link="ghost.md")] + PLUGIN_TABLE[2:]
+    assert errors_of(build_tree(tmp_path, PLUGIN_ROWS, covers=PLUGIN_COVERS, table=table)) == [
+        f"{PAGE}: support table row Ghost has no matrix row"
+    ]
+
+
+def test_supported_status_requires_implemented(tmp_path):
+    table = [PLUGIN_TABLE[0], table_row("AVADA", REAL), PLUGIN_TABLE[2]]
+    assert errors_of(build_tree(tmp_path, PLUGIN_ROWS, covers=PLUGIN_COVERS, table=table)) == [
+        f"{PAGE}: support table row AVADA status {REAL} does not match target error"
+    ]
+
+
+def test_synthetic_fixtures_status_requires_implemented(tmp_path):
+    table = [PLUGIN_TABLE[0], table_row("AVADA", FIXTURES), PLUGIN_TABLE[2]]
+    assert errors_of(build_tree(tmp_path, PLUGIN_ROWS, covers=PLUGIN_COVERS, table=table)) == [
+        f"{PAGE}: support table row AVADA status {FIXTURES} does not match target error"
+    ]
+    # The synthetic-fixtures phrase asserts `implemented` like the real-data one.
+    table = [table_row("AlphaMissense", FIXTURES), PLUGIN_TABLE[1], PLUGIN_TABLE[2]]
+    assert errors_of(build_tree(tmp_path / "ok", PLUGIN_ROWS, covers=PLUGIN_COVERS, table=table)) == []
+
+
+def test_not_ported_status_requires_error(tmp_path):
+    table = [table_row("AlphaMissense", NOT_PORTED), PLUGIN_TABLE[1], PLUGIN_TABLE[2]]
+    assert errors_of(build_tree(tmp_path, PLUGIN_ROWS, covers=PLUGIN_COVERS, table=table)) == [
+        f"{PAGE}: support table row AlphaMissense status not ported does not match target implemented"
+    ]
+    # A landed `documented_subset` target matches no phrase either.
+    rows = [
+        row("AVADA", target="documented_subset", perl="AVADA.pm", state="landed:documented_subset", test1=TEST1, test2=TEST2)
+        if r.startswith("AVADA\t")
+        else r
+        for r in PLUGIN_ROWS
+    ]
+    root = build_tree(tmp_path / "subset", rows, covers=PLUGIN_COVERS + ("AVADA",), table=PLUGIN_TABLE)
+    assert errors_of(root) == [
+        f"{PAGE}: support table row AVADA status not ported does not match target documented_subset"
+    ]
+
+
+def test_plugin_matrix_row_absent_from_table_fails(tmp_path):
+    """A matrix row whose perl_reference is `<item>.pm` needs a table row; a row named after any
+    other module (`Config.pm`, the flags) does not."""
+    assert errors_of(build_tree(tmp_path, PLUGIN_ROWS, covers=PLUGIN_COVERS, table=PLUGIN_TABLE[:1] + PLUGIN_TABLE[2:])) == [
+        "tests/parity/matrix.tsv:19: AVADA is a plugin row (perl_reference AVADA.pm) absent from the support table"
+    ]
+    assert errors_of(build_tree(tmp_path / "flags", BASE_ROWS)) == []
+
+
+def test_loftee_row_resolves_through_the_table(tmp_path):
+    """LoFTEE's matrix row names `LoF.pm`, so the `.pm` rule never reaches it: its table row resolves
+    through the item name, and a table without it raises no absence error."""
+    assert errors_of(build_tree(tmp_path, PLUGIN_ROWS, covers=PLUGIN_COVERS, table=PLUGIN_TABLE)) == []
+    assert errors_of(build_tree(tmp_path / "absent", PLUGIN_ROWS, covers=PLUGIN_COVERS, table=PLUGIN_TABLE[:2])) == []
+    rows = [row("LoFTEE", target="error", perl="LoF.pm", state="landed:error", test1=TEST1) if r.startswith("LoFTEE\t") else r for r in PLUGIN_ROWS]
+    assert errors_of(build_tree(tmp_path / "target", rows, covers=PLUGIN_COVERS, table=PLUGIN_TABLE)) == [
+        f"{PAGE}: support table row LoFTEE status {REAL} does not match target error"
+    ]
+
+
+def test_malformed_table_row_fails(tmp_path):
+    """A row without six cells, a repeated name and an empty name are malformed, each at its line;
+    a `\\|` inside a cell is a pipe, not a cell boundary; the matrix rules do not run on a
+    malformed table."""
+    malformed = f"{PAGE}: support table malformed at line"
+    table = [
+        PLUGIN_TABLE[0],
+        "| AVADA | `avada.vcf.gz` | not stated | GRCh37 | not ported |\n",
+        PLUGIN_TABLE[2],
+        table_row("AlphaMissense", REAL),
+        table_row("", REAL),
+    ]
+    root = build_tree(tmp_path, PLUGIN_ROWS, covers=PLUGIN_COVERS, table=table)
+    assert errors_of(root) == [
+        f"{malformed} 10: 5 cells, not 6",
+        f"{malformed} 12: AlphaMissense repeats line 9",
+        f"{malformed} 13: empty plugin name",
+    ]
+    piped = table_row("AVADA", NOT_PORTED, cells=("`cover=0\\|1`", "not stated", "GRCh37", "one file"))
+    root = build_tree(tmp_path / "pipe", PLUGIN_ROWS, covers=PLUGIN_COVERS, table=[PLUGIN_TABLE[0], piped, PLUGIN_TABLE[2]])
+    assert errors_of(root) == []
+    assert cpm.table_cells("| a | `b\\|c` | d |") == ["a", "`b|c`", "d"]
+    # The table's shape: the page, the heading, a table under it, six header cells, a separator.
+    root = build_tree(tmp_path / "shape", PLUGIN_ROWS, covers=PLUGIN_COVERS, table=PLUGIN_TABLE)
+    (root / "docs" / "plugins.md").unlink()
+    assert errors_of(root) == [f"{PAGE} is missing"]
+    write_plugins_page(root, PLUGIN_TABLE, before="## Plugins\n\n| Plugin | --- |\n")
+    assert errors_of(root) == [f"{PAGE}: no '## Support table' heading"]
+    write_plugins_page(root, [], before="## Support table\n\nProse only.\n\n")
+    assert errors_of(root) == [f"{PAGE}: no table under '## Support table'"]
+    write_plugins_page(root, PLUGIN_TABLE, before="## Support table\n\n| Plugin | Status |\n| --- | --- |\n")
+    assert errors_of(root) == [f"{malformed} 5: the header has 2 cells, not 6"]
+    header = TABLE_HEADER.splitlines()[-2] + "\n"
+    write_plugins_page(root, PLUGIN_TABLE, before="## Support table\n\n" + header)
+    assert errors_of(root) == [f"{malformed} 6: no separator row"]
+    write_plugins_page(root, PLUGIN_TABLE, before="## Support table\n\n" + header + "| --- | --- |\n")
+    assert errors_of(root) == [f"{malformed} 6: the separator has 2 cells, not 6"]
+
+
+def test_unknown_status_fails(tmp_path):
+    table = [PLUGIN_TABLE[0], table_row("AVADA", "ported"), PLUGIN_TABLE[2]]
+    phrases = f"'{REAL}', \"{FIXTURES}\", 'not ported'"
+    assert errors_of(build_tree(tmp_path, PLUGIN_ROWS, covers=PLUGIN_COVERS, table=table)) == [
+        f"{PAGE}: support table malformed at line 10: status 'ported' is not one of {phrases}"
+    ]
+    # The matrix rule asserts no target for it: called directly, the row is neither a match nor a mismatch.
+    rows, _ = cpm.read_matrix(tmp_path / "repo")
+    parsed, _ = cpm.read_support_table(tmp_path / "repo")
+    assert [entry["status"] for entry in parsed] == [REAL, "ported", REAL]
+    assert cpm.check_support_table(parsed, rows) == []
+
+
+def test_supported_status_requires_a_landed_row(tmp_path):
+    """A supported status is a claim about shipped code: a matrix row still open, whatever its target,
+    cannot carry one, while `not ported` fits any open row, a port decided but not landed included."""
+    alphamissense_open = [row("AlphaMissense", perl="AlphaMissense.pm") if r.startswith("AlphaMissense\t") else r for r in PLUGIN_ROWS]
+    root = build_tree(tmp_path, alphamissense_open, covers=PLUGIN_COVERS, table=PLUGIN_TABLE)
+    assert errors_of(root) == [
+        f"{PAGE}: support table row AlphaMissense status {REAL} names an open matrix row"
+    ]
+    table = [table_row("AlphaMissense", FIXTURES), PLUGIN_TABLE[1], PLUGIN_TABLE[2]]
+    root = build_tree(tmp_path / "fixtures", alphamissense_open, covers=PLUGIN_COVERS, table=table)
+    assert errors_of(root) == [
+        f"{PAGE}: support table row AlphaMissense status {FIXTURES} names an open matrix row"
+    ]
+    avada_open = [row("AVADA", target="error", perl="AVADA.pm") if r.startswith("AVADA\t") else r for r in PLUGIN_ROWS]
+    assert errors_of(build_tree(tmp_path / "open-error", avada_open, covers=PLUGIN_COVERS, table=PLUGIN_TABLE)) == []
+    table = [table_row("AlphaMissense", NOT_PORTED), PLUGIN_TABLE[1], PLUGIN_TABLE[2]]
+    assert errors_of(build_tree(tmp_path / "open-port", alphamissense_open, covers=PLUGIN_COVERS, table=table)) == []
+
+
+def test_table_rows_keep_alphabetical_order(tmp_path):
+    """The rows follow the plugin name, case ignored, so a lower-case `avocado` sits between `AVADA`
+    and `LoFTEE`; a row out of place is named with the row before it."""
+    table = [PLUGIN_TABLE[1], PLUGIN_TABLE[0], PLUGIN_TABLE[2]]
+    assert errors_of(build_tree(tmp_path, PLUGIN_ROWS, covers=PLUGIN_COVERS, table=table)) == [
+        f"{PAGE}: support table row AlphaMissense is out of alphabetical order after AVADA"
+    ]
+    rows = PLUGIN_ROWS + [row("avocado", perl="avocado.pm", target="error", state="landed:error", test1=TEST1)]
+    table = PLUGIN_TABLE[:2] + [table_row("avocado", NOT_PORTED)] + PLUGIN_TABLE[2:]
+    assert errors_of(build_tree(tmp_path / "casefold", rows, covers=PLUGIN_COVERS, table=table)) == []
+
+
+README_PLUGINS_ROW_RE = re.compile(r"^\| \*\*Plugins\*\* +\| (\d+) of the (\d+) Ensembl VEP plugins built in", re.MULTILINE)
+
+
+def test_repository_table_is_clean():
+    """The repository's support table parses, every plugin row of the matrix and every table row
+    agree, which `cpm.check` proves in full on the tree, and the README's plugin count is the
+    table's."""
+    repo = HERE.parent.parent
+    table, reasons = cpm.read_support_table(repo)
+    assert reasons == []
+    rows, _ = cpm.read_matrix(repo)
+    assert cpm.check_support_table(table, rows) == []
+    assert {entry["name"] for entry in table} >= {
+        row["item"] for row in rows if row["perl_reference"] == f"{row['item']}.pm"
+    } | {"LoFTEE"}
+    supported = sum(1 for entry in table if entry["status"] != NOT_PORTED)
+    match = README_PLUGINS_ROW_RE.search((repo / "README.md").read_text(encoding="utf-8"))
+    assert match is not None, "README.md has no Plugins row counting the built-in plugins"
+    assert (int(match.group(1)), int(match.group(2))) == (supported, len(table))
 
 
 def test_repository_matrix_is_clean():

@@ -1,0 +1,74 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species saccharomyces_cerevisiae --assembly R64-1-1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "saccharomyces_cerevisiae/116_R64-1-1",
+ "fasta": "the thirteen chromosomes the records and the pruned cache's transcripts sit on (I, II, III, IV, V, IX, X, XII, XIII, XIV, XV, XVI and Mito) at their full length from Saccharomyces_cerevisiae.R64-1-1.dna.toplevel.fa, every base outside the regions a run reads (each cached transcript's span with 5,000 bases of flank and each record with 2,000) masked to N; reference.fa.gz beside this file, compressed with bgzip, with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form; Ensembl VEP received the decompressed file as --fasta on every run",
+ "input": "variants.vcf: 263 records on the mitochondrion and twelve nuclear chromosomes. 25 come from the SGRP set of Saccharomyces cerevisiae variants Ensembl Fungi distributes (saccharomyces_cerevisiae.vcf.gz, release 63 of Ensembl Genomes), every one a single-nucleotide substitution with its Ensembl identifier, five of them multi-allelic. 238 are designed records derived from the reference FASTA, their IDs naming the set, chromosome, position and alleles: every single-nucleotide substitution of the mitochondrion and a family of deletions of 1 to 4 bases, insertions of 1 to 3 and a two-base substitution every 29th mitochondrial position; the same single-nucleotide probes every 13th position and indel family every 97th across the transcript windows of chromosome I; and the three other bases at the first two and last two positions of every intron of every cached transcript, with the indel family at each intron's first position. An indel family is placed only where its position lies more than 1,000 bases from either end of its sequence. Two exemplars per consequence-set combination the two references show, stratified by variant class and strand, six per combination carrying a protein-level term, plus the records the manifest's included_records name: the genetic code table 3 shapes of the mitochondrion (ATA kept as a start codon by a change to ATG and lost by a change to ATT or CTA, a CTT codon read as threonine and a change within CTN read as synonymous, TGA read as tryptophan, a stop codon lost to TGA, a stop gained to TAA, a frameshift and an in-frame insertion in Q0010, a splice donor shared by the five transcripts of the Q0045 locus), one SGRP record on each of a transposable element, a pseudogene, an snRNA, an ncRNA and a tRNA transcript, and a multi-allelic SGRP record whose two alternate alleles are both missense on a protein-coding transcript",
+ "sha256": {
+  "default.txt": "2c3d1a8c68ecd9381d96bd3b5ec6d61a91ac86349c816aa9d422da9c33089222",
+  "tab.txt": "4af0f443e23d8908b3215c0f41e2167df27c186b19dce704c5aad426ed0046d6",
+  "vcf.vcf": "746a68e06fbd3f4ff4aed070270d476ded564729ad7dc1a7f04edb33d22608ee",
+  "json.jsonl": "0610ba212a4942c46be87116c99a6b0f96e996361aa2200befbb01b24d811892"
+ },
+ "variants_vcf_sha256": "49b8ad9f5e2fae4b55be6e4250b297ee8aaf75a69dddb522a054c92b480b2ac7",
+ "flag_sets": {
+  "everything": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species saccharomyces_cerevisiae --assembly R64-1-1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --everything [--tab|--vcf|--json]",
+   "perl_cache": "saccharomyces_cerevisiae/116_R64-1-1",
+   "fasta": "reference.fa.gz beside this file, decompressed, on both sides",
+   "input": "variants.vcf; the cache carries SIFT matrices and no PolyPhen matrix, so Ensembl VEP reports disabling PolyPhen alone and the SIFT column is populated on both sides; the cache names the SGRP variants, so Existing_variation is populated where a record sits on one, and every frequency, phenotype and clinical column is empty on both sides",
+   "sha256": {
+    "default.txt": "7e2b63f3b8749dd877782bc817eac45ca470c6f73b83290d9111cfb435f5ec45",
+    "tab.txt": "4005aae1bdca235b5f2165f23b120d250d4928f2e0084ca065fe14edc17a5eff",
+    "vcf.vcf": "1b6c47c77bd8a6064588a64620abed7e2f741116eaabf742a6294fc83eb03017",
+    "json.jsonl": "f8cea0ec4fa651898291a54cc053d1b52027a3d57c497791181432357c573256"
+   },
+   "variants_vcf_sha256": "49b8ad9f5e2fae4b55be6e4250b297ee8aaf75a69dddb522a054c92b480b2ac7"
+  },
+  "hgvs": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species saccharomyces_cerevisiae --assembly R64-1-1 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --no_stats --quiet --force_overwrite --hgvs [--tab|--vcf|--json]",
+   "perl_cache": "saccharomyces_cerevisiae/116_R64-1-1",
+   "fasta": "reference.fa.gz beside this file, decompressed, on both sides",
+   "input": "variants.vcf; the mitochondrial records' HGVSp follow genetic code table 3",
+   "sha256": {
+    "default.txt": "dd71ce7a8be7aee63418f0553008446f44a522610ae161057de2e47a662687fa",
+    "tab.txt": "e644158080509f0d25829849e8d73e1b75e60752253a656a77129b0b45744b6a",
+    "vcf.vcf": "d47fc0d8ad64e470f414cf226de19e6905f31ab8585900f404cbbd57f6d6a0c7",
+    "json.jsonl": "ae8e44e25f8ac6994c32f1d06ab0d1e9a3b1ac4fb7529295dd66198134fc152c"
+   },
+   "variants_vcf_sha256": "49b8ad9f5e2fae4b55be6e4250b297ee8aaf75a69dddb522a054c92b480b2ac7"
+  }
+ },
+ "generator": "Ensembl VEP over the two inputs under the corpus flags; scripts/golden/build_golden_corpus.py select --release 116 --assembly R64-1-1 --species saccharomyces_cerevisiae --suite sgrp_all=<reference>=<the SGRP set> --suite probe=<reference>=<the designed records> --k 2 --seed 1 --max-span 1000000 --cache <converted cache> --flank 5000 --focus-term <frameshift_variant, inframe_deletion, inframe_insertion, protein_altering_variant, start_lost, start_retained_variant, stop_lost, stop_retained_variant, stop_gained, missense_variant, synonymous_variant, incomplete_terminal_codon_variant> --focus-k 6 --include <the named records> --covers species-yeast-r64 --covers genetic-code-tables --matrix tests/parity/matrix.tsv --fasta-name reference.fa.gz; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --perl-info <cache>/info.txt --cache-version 116 --variations <cache>/variations over the whole cache scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 R64-1-1 cache (the protein features and the SIFT matrices kept for the DOMAINS and SIFT columns of the everything set; the variation slices cut from the cache's SGRP records within one base of a record); scripts/concordance/generate_reference_output.sh --corpus --no-stats for the manifest's run and each flag set; scripts/golden/build_golden_corpus.py flag-set (everything, hgvs) and classify (the manifest's run and both flag sets, --field HGVSc --field HGVSp for the hgvs set)",
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "I": 84,
+   "II": 28,
+   "III": 7,
+   "IV": 10,
+   "IX": 15,
+   "Mito": 55,
+   "V": 15,
+   "X": 23,
+   "XII": 6,
+   "XIII": 13,
+   "XIV": 5,
+   "XV": 15,
+   "XVI": 29
+  },
+  "shards": 13,
+  "synonym_lines": 13,
+  "variation_slices": "all_vars.gz with its index under variations/<chr>/ for the twelve chromosome directories whose SGRP records lie within one base of a record (I, II, IV, IX, Mito, V, X, XII, XIII, XIV, XV, XVI); chromosome III, whose records sit on no SGRP variant, has none"
+ }
+}

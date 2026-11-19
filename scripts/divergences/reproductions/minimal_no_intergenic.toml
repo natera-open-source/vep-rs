@@ -1,0 +1,30 @@
+entry = "minimal_no_intergenic"
+page = "docs/divergences/minimal-no-intergenic.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 121.0 per million · 0 flag sets, 24 corpora"
+
+[input]
+format = "vcf"
+text = """
+21	8885975	str_ENST00000624291_8885976	GT	GA,GTC	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-pick-summary/json_cache"
+
+[run]
+flags = ["--minimal", "--no_intergenic"]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = "str_ENST00000624291_8885976" }
+columns = ["Location", "Allele", "Feature", "Consequence", "DISTANCE"]
+
+[expected]
+ensembl_vep = []
+vep_rs = ["21:8885976 | A | ENST00000624291 | downstream_gene_variant | 5000"]

@@ -1,0 +1,79 @@
+entry = "file_cache_reads_ncrna_gene_lines"
+page = "docs/divergences/file-cache-reads-ncrna-gene-lines.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 313 of 77,675 cache transcripts · 0 flag sets, 3 corpora"
+notes = "The GRCh38 release-116 GFF3 lines of LINC00308, a lncRNA gene typed ncRNA_gene with two lnc_RNA transcripts, and of TMPRSS3, typed gene, with its transcript ENST00000398397. Ensembl VEP 116.2's --gff source reads only the types GFF.pm:71-116 lists, ncRNA_gene not among them, so BaseGXF.pm:224 drops the gene line, :430-435 prunes the two transcripts whose Parent names it, and the record inside their first exon is written intergenic_variant (VariationFeature.pm:822-840); vep-rs reads the line as a gene. Release 116.3 adds ncRNA_gene to the list; retyping the line gene makes 116.2 agree. The TMPRSS3 record is the control: both engines write start_lost."
+prepare = [
+  '''cat > "$STAGE/linc00308_tmprss3.gff3" <<'GFF'
+##gff-version 3
+21	havana	ncRNA_gene	22098616	22116605	.	+	.	ID=gene:ENSG00000184856;Name=LINC00308;biotype=lncRNA;description=long intergenic non-protein coding RNA 308 [Source:HGNC Symbol%3BAcc:HGNC:16023];gene_id=ENSG00000184856;logic_name=havana_homo_sapiens;version=7
+21	havana_tagene	lnc_RNA	22098616	22116605	.	+	.	ID=transcript:ENST00000657104;Parent=gene:ENSG00000184856;Name=LINC00308-202;biotype=lncRNA;tag=gencode_primary,Ensembl_canonical;transcript_id=ENST00000657104;version=1
+21	havana	lnc_RNA	22098617	22116528	.	+	.	ID=transcript:ENST00000419431;Parent=gene:ENSG00000184856;Name=LINC00308-201;biotype=lncRNA;tag=gencode_basic;transcript_id=ENST00000419431;transcript_support_level=5;version=2
+21	havana_tagene	exon	22098616	22098712	.	+	.	Parent=transcript:ENST00000657104;Name=ENSE00003873878;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00003873878;rank=1;version=1
+21	havana_tagene	exon	22109446	22109553	.	+	.	Parent=transcript:ENST00000657104;Name=ENSE00001643098;constitutive=1;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00001643098;rank=2;version=2
+21	havana_tagene	exon	22114958	22115112	.	+	.	Parent=transcript:ENST00000657104;Name=ENSE00003869352;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00003869352;rank=3;version=1
+21	havana_tagene	exon	22116336	22116605	.	+	.	Parent=transcript:ENST00000657104;Name=ENSE00003882553;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00003882553;rank=4;version=1
+21	havana	exon	22098617	22098712	.	+	.	Parent=transcript:ENST00000419431;Name=ENSE00001543427;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00001543427;rank=1;version=2
+21	havana	exon	22109446	22109553	.	+	.	Parent=transcript:ENST00000419431;Name=ENSE00001643098;constitutive=1;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00001643098;rank=2;version=2
+21	havana	exon	22111771	22111826	.	+	.	Parent=transcript:ENST00000419431;Name=ENSE00001794212;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00001794212;rank=3;version=1
+21	havana	exon	22114760	22114898	.	+	.	Parent=transcript:ENST00000419431;Name=ENSE00001798738;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00001798738;rank=4;version=1
+21	havana	exon	22114978	22115112	.	+	.	Parent=transcript:ENST00000419431;Name=ENSE00001684289;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00001684289;rank=5;version=1
+21	havana	exon	22116336	22116528	.	+	.	Parent=transcript:ENST00000419431;Name=ENSE00001612574;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00001612574;rank=6;version=1
+21	ensembl_havana	gene	42371840	42396122	.	-	.	ID=gene:ENSG00000160183;Name=TMPRSS3;biotype=protein_coding;description=transmembrane serine protease 3 [Source:HGNC Symbol%3BAcc:HGNC:11877];gene_id=ENSG00000160183;logic_name=ensembl_havana_gene_homo_sapiens;version=19
+21	havana	mRNA	42381876	42396122	.	-	.	ID=transcript:ENST00000398397;Parent=gene:ENSG00000160183;Name=TMPRSS3-201;biotype=protein_coding;ccdsid=CCDS42939.1;tag=gencode_basic;transcript_id=ENST00000398397;transcript_support_level=1;version=4
+21	havana	three_prime_UTR	42381876	42381981	.	-	.	Parent=transcript:ENST00000398397
+21	havana	exon	42381876	42382234	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00001533046;constitutive=0;ensembl_end_phase=-1;ensembl_phase=2;exon_id=ENSE00001533046;rank=9;version=3
+21	havana	CDS	42381982	42382234	.	-	1	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42383033	42383198	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00003564347;constitutive=0;ensembl_end_phase=2;ensembl_phase=1;exon_id=ENSE00003564347;rank=8;version=1
+21	havana	CDS	42383033	42383198	.	-	2	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42383970	42384013	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00003594737;constitutive=0;ensembl_end_phase=1;ensembl_phase=2;exon_id=ENSE00003594737;rank=7;version=1
+21	havana	CDS	42383970	42384013	.	-	1	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42385409	42385534	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00003503535;constitutive=0;ensembl_end_phase=2;ensembl_phase=2;exon_id=ENSE00003503535;rank=6;version=1
+21	havana	CDS	42385409	42385534	.	-	1	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42388403	42388526	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00003610022;constitutive=0;ensembl_end_phase=2;ensembl_phase=1;exon_id=ENSE00003610022;rank=5;version=1
+21	havana	CDS	42388403	42388526	.	-	2	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42388929	42389045	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00003625818;constitutive=0;ensembl_end_phase=1;ensembl_phase=1;exon_id=ENSE00003625818;rank=4;version=1
+21	havana	CDS	42388929	42389045	.	-	2	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42389927	42390037	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00001050357;constitutive=0;ensembl_end_phase=1;ensembl_phase=1;exon_id=ENSE00001050357;rank=3;version=1
+21	havana	CDS	42389927	42390037	.	-	2	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	CDS	42395324	42395417	.	-	0	ID=CDS:ENSP00000381434;Parent=transcript:ENST00000398397;protein_id=ENSP00000381434;version=3
+21	havana	exon	42395324	42395468	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00003591562;constitutive=0;ensembl_end_phase=1;ensembl_phase=-1;exon_id=ENSE00003591562;rank=2;version=1
+21	havana	five_prime_UTR	42395418	42395468	.	-	.	Parent=transcript:ENST00000398397
+21	havana	exon	42395942	42396122	.	-	.	Parent=transcript:ENST00000398397;Name=ENSE00004778870;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00004778870;rank=1;version=1
+21	havana	five_prime_UTR	42395942	42396122	.	-	.	Parent=transcript:ENST00000398397
+GFF''',
+  "(grep '^#' \"$STAGE/linc00308_tmprss3.gff3\"; grep -v '^#' \"$STAGE/linc00308_tmprss3.gff3\" | sort -k1,1 -k4,4n -k5,5n) | bgzip -c > \"$STAGE/linc00308_tmprss3.gff3.gz\" && tabix -p gff \"$STAGE/linc00308_tmprss3.gff3.gz\"",
+  "\"$VEP_CACHE_BUILDER\" --species homo_sapiens --assembly GRCh38 --release 116 --gff3 \"$STAGE/linc00308_tmprss3.gff3\" --genome-fasta \"$CORPUS/reference.fa.gz\" --output-dir \"$STAGE/json_cache\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	22098664	linc00308_exon_snv	T	C	.	.	.
+21	42395417	1995820	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json_cache"
+corpus = "tests/golden/116/GRCh38-gtf-builder"
+gxf = "{stage}/linc00308_tmprss3.gff3.gz"
+gxf_kind = "gff"
+fasta = "tests/golden/116/GRCh38-gtf-builder/reference.fa.gz"
+
+[run]
+flags = ["--symbol", "--biotype", "--canonical", "--mane", "--tsl", "--protein", "--protein_version", "--gene_version", "--transcript_version"]
+
+[compare]
+kind = "rows"
+where = { record = "linc00308_exon_snv" }
+
+[expected]
+ensembl_vep = ["21:22098664 | C | - | intergenic_variant"]
+vep_rs = [
+  "21:22098664 | C | ENST00000419431.2 | non_coding_transcript_exon_variant",
+  "21:22098664 | C | ENST00000657104.1 | non_coding_transcript_exon_variant",
+]

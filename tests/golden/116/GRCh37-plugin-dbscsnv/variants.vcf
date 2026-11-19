@@ -1,0 +1,9 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	10942709	splice_donor_a	A	C	.	.	.
+21	17616932	intron_snv	G	A	.	.	.
+21	30961158	splice_donor_b	C	G	.	.	.
+21	31661647	synonymous_rev	T	C	.	.	.
+21	36252953	missense_rev	C	T	.	.	.
+21	43505445	missense_fwd_two_alts	C	G,T	.	.	.
+21	43505446	deletion_fwd	TG	T	.	.	.

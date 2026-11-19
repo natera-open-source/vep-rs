@@ -1,0 +1,80 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh37",
+ "fasta": "none on either side",
+ "input": "14 hand-built VCF records on chromosome 21 of the release-116 GRCh37 cache: an intronic SNV, an intergenic SNV, single-base substitutions called synonymous (one lower-case), stop_lost, missense (one with two alternate alleles), start_lost and stop_gained on transcripts of both strands, a deletion, an insertion, a two-base substitution and a missense SNV the score file leaves out",
+ "sha256": {
+  "default.txt": "576f7d5412af0d9b3033964c882f457283492a00dc39d926972e9fa42085b1ac",
+  "tab.txt": "e4c6fc5aef91f9ffa238e62c6d53199389a3e9736b74075f1bbe7b53a79c5014",
+  "vcf.vcf": "4255ea1dad4391330c9179c213ec105daabb29c5b7721fb00396c369f376cb27",
+  "json.jsonl": "3c0f0c6f195b80e591a2aaa38005e386de1331018fc18b2a106f159562a13f45"
+ },
+ "variants_vcf_sha256": "84e8ee50c44725f8ad6f1d5b6a398b9932cfb8ff251c547049713fd9c45492da",
+ "plugin_fixtures": {
+  "ClinPred_tabbed_synthetic.tsv.gz": {
+   "generator": "scripts/fixtures/plugin_score_fixtures.py",
+   "shape": "clinpred",
+   "seed": 37,
+   "chr_style": "bare",
+   "misses": [
+    "21:43505455"
+   ],
+   "variants_vcf_sha256": "84e8ee50c44725f8ad6f1d5b6a398b9932cfb8ff251c547049713fd9c45492da",
+   "rows": {
+    "snv": 30,
+    "non_snv": 0,
+    "miss": 1
+   },
+   "files": {
+    "data/ClinPred_tabbed_synthetic.tsv.gz": "a2b6ec5ede35534df52098930a796ac8bce4e94b4d2e82c19c176ad483ca819d",
+    "data/ClinPred_tabbed_synthetic.tsv.gz.tbi": "c7c23775d2ce7bd12da663e9a10cac6f2323ef89ef489d24def418e93350f905"
+   },
+   "tools": {
+    "bgzip": "bgzip (htslib) 1.22.1",
+    "tabix": "tabix (htslib) 1.22.1"
+   }
+  }
+ },
+ "flag_sets": {
+  "clinpred-file": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin ClinPred,file={corpus}/data/ClinPred_tabbed_synthetic.tsv.gz [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_clinpred-file",
+   "sha256": {
+    "default.txt": "4078b79c368ab422d4bf5365556e7b0233bb155dd8d66d29026e0601d9c27ffe",
+    "tab.txt": "4fe02b18fc2b9ccc79f775b929693b41d725b322372fe81b9ae5d0fe5290dd1c",
+    "vcf.vcf": "b6f06d07eb22a4d184c49425388d7887fd59820ef7aa8841a752f54880d1f9db",
+    "json.jsonl": "627570cbac1d3caabb3150ddd6d3c91958c5c999cff4ce4ba39c7b472b04377d"
+   }
+  },
+  "clinpred-positional": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh37 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin ClinPred,{corpus}/data/ClinPred_tabbed_synthetic.tsv.gz [--tab|--vcf|--json]",
+   "formats_compared": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_clinpred-positional",
+   "sha256": {
+    "default.txt": "403c7d5a0f10844e63aae4a44fcea7635fa65c1f6d03e3eaa8f6a2812fe1f06e",
+    "tab.txt": "a461b32365d471d80258c9bc96d25c67498a46cc1725797363c990c7a8c2456f",
+    "vcf.vcf": "965500a871d85163429f7373feefc9b4c08e5f60adc569b5d772c58e54fe1a19",
+    "json.jsonl": "594f07312aade40dab3c2ea69e7bcd1019cdb8d56139f94c4ad5fea2e6d48623"
+   }
+  }
+ },
+ "generator": "data/ClinPred_tabbed_synthetic.tsv.gz: scripts/fixtures/plugin_score_fixtures.py from variants.vcf, the layout the plugin's documentation prepares (ClinPred.pm:38-44), in the fixture the header line `#chr Start Ref Alt ClinPred_Score`, with fabricated scores, one row per alternate base at every single-base site (the row the plugin must pick beside two it must not), no row at the unscored site, bgzip and tabix -s 1 -b 2 -e 2 (seed and digests under plugin_fixtures); the file's name is the name the plugin's documentation gives (ClinPred.pm:23), with the word `synthetic` added before the extension to say that the file is made up; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice scripts/data/storable_to_json.pl converted from the Ensembl VEP 116 GRCh37 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the manifest's run, and one Ensembl VEP 116.2 container run per format for each flag set from the vep command recorded under its flag_sets entry, the corpus mounted read-only at /work/corpus and the ClinPred plugin read from the container's plugin directory; manifest: scripts/golden/build_golden_corpus.py select --include for every record, flag-set, then classify for the manifest's run and each flag set against the committed tree's binary",
+ "pruned_cache_transcripts": {
+  "21": 87
+ }
+}

@@ -1,0 +1,2 @@
+WARNING: 13 : substr outside of string at /plugins/Downstream.pm line 115, <__ANONIO__> line 12.
+Use of uninitialized value $downstream_seq in concatenation (.) or string at /plugins/Downstream.pm line 118, <__ANONIO__> line 12.

@@ -1,0 +1,30 @@
+entry = "transcript_filter_abbreviated_fields"
+page = "docs/divergences/transcript-filter-fields.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the filter notation, where a field may be its first few characters (Ensembl VEP documentation, \"Filtering results\", Writing filters); not seen in the measured datasets; classed by its most reachable shape, an abbreviated field: a match unit with no value breaks that section's three-component filter string"
+notes = "The first mechanism of the entry: stable is a prefix of stable_id, and Ensembl VEP's prefix branch records the synonym and reads no value on the first transcript it evaluates for the record, ENST00000626994, so the match fails there; vep-rs resolves the prefix once and reads every transcript's value."
+
+[input]
+format = "vcf"
+text = """
+21	17608184	tf_17608184	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-transcript-filter/json_cache"
+
+[run]
+flags = ["--transcript_filter", "stable match ENST"]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = "tf_17608184", feature = "ENST00000626994" }
+
+[expected]
+ensembl_vep = []
+vep_rs = ["21:17608184 | G | ENST00000626994 | upstream_gene_variant"]

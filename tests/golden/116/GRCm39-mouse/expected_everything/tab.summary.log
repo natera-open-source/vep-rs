@@ -1,0 +1,263 @@
+[VEP run statistics]
+VEP version (API)	 116.2 (116)
+Annotation sources	Cache: /work/cache/mus_musculus/116_GRCm39
+Species	mus_musculus
+Command line options	vep --assembly GRCm39 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --everything --fasta [PATH]/ref.fa --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --offline --output_file [PATH]/tab.txt --quiet --species mus_musculus --stats_text --tab
+Start time	2026-10-28 18:21:53
+End time	2026-10-28 18:22:00
+Run time	7 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/tab.txt
+
+[Data version]
+assembly	GRCm39
+dbSNP	150
+gencode	GENCODE M39
+genebuild	GENCODEM39
+regbuild	1.0
+sift	sift6.2.1
+
+[General statistics]
+Lines of input read	502
+Variants processed	502
+Variants filtered out	0
+Novel / existing variants	228 (45.4) / 274 (54.6)
+Overlapped genes	493
+Overlapped transcripts	3713
+Overlapped regulatory features	29
+
+[Variant classes]
+substitution	5
+sequence_alteration	9
+insertion	121
+deletion	174
+SNV	193
+
+[Consequences (most severe)]
+splice_acceptor_variant	38
+splice_donor_variant	49
+stop_gained	83
+frameshift_variant	44
+stop_lost	33
+start_lost	19
+inframe_insertion	26
+inframe_deletion	20
+missense_variant	42
+protein_altering_variant	14
+splice_donor_5th_base_variant	6
+splice_region_variant	33
+splice_donor_region_variant	6
+splice_polypyrimidine_tract_variant	6
+incomplete_terminal_codon_variant	7
+start_retained_variant	4
+stop_retained_variant	15
+synonymous_variant	14
+coding_sequence_variant	2
+mature_miRNA_variant	1
+5_prime_UTR_variant	4
+3_prime_UTR_variant	4
+non_coding_transcript_exon_variant	8
+intron_variant	12
+upstream_gene_variant	4
+downstream_gene_variant	3
+intergenic_variant	5
+
+[Consequences (all)]
+splice_acceptor_variant	227
+splice_donor_variant	230
+stop_gained	416
+frameshift_variant	531
+stop_lost	88
+start_lost	162
+inframe_insertion	231
+inframe_deletion	256
+missense_variant	176
+protein_altering_variant	133
+splice_donor_5th_base_variant	125
+splice_region_variant	848
+splice_donor_region_variant	73
+splice_polypyrimidine_tract_variant	113
+incomplete_terminal_codon_variant	15
+start_retained_variant	87
+stop_retained_variant	39
+synonymous_variant	237
+coding_sequence_variant	168
+mature_miRNA_variant	1
+5_prime_UTR_variant	177
+3_prime_UTR_variant	554
+non_coding_transcript_exon_variant	230
+intron_variant	1547
+NMD_transcript_variant	1584
+non_coding_transcript_variant	239
+upstream_gene_variant	1133
+downstream_gene_variant	1151
+regulatory_region_variant	34
+intergenic_variant	14
+
+[Coding consequences]
+stop_gained	416
+frameshift_variant	531
+stop_lost	88
+start_lost	162
+inframe_insertion	231
+inframe_deletion	256
+missense_variant	176
+protein_altering_variant	133
+incomplete_terminal_codon_variant	15
+start_retained_variant	87
+stop_retained_variant	39
+synonymous_variant	237
+coding_sequence_variant	168
+
+[SIFT summary]
+tolerated	24
+tolerated_low_confidence	38
+deleterious_low_confidence	72
+deleterious	75
+
+[Variants by chromosome]
+19	371
+GL456219.1	5
+GL456239.1	1
+GL456212.1	3
+GL456381.1	1
+GL456211.1	2
+GL456354.1	8
+GL456372.1	2
+GL456385.1	1
+GL456221.1	10
+GL456210.1	5
+JH584299.1	24
+JH584297.1	5
+JH584304.1	11
+JH584296.1	9
+JH584298.1	2
+JH584303.1	1
+MT	41
+
+[Distribution of variants on chromosome 19]
+0	0
+1	0
+2	0
+3	3
+4	17
+5	8
+6	19
+7	12
+8	11
+9	3
+10	18
+11	18
+12	9
+13	16
+14	0
+15	2
+16	4
+17	5
+18	11
+19	0
+20	5
+21	11
+22	0
+23	7
+24	6
+25	5
+26	3
+27	2
+28	4
+29	4
+30	4
+31	1
+32	4
+33	3
+34	5
+35	4
+36	4
+37	4
+38	9
+39	9
+40	13
+41	6
+42	8
+43	3
+44	13
+45	3
+46	15
+47	9
+48	5
+49	0
+50	4
+51	1
+52	1
+53	4
+54	0
+55	10
+56	2
+57	3
+58	4
+59	2
+60	10
+61	5
+
+[Distribution of variants on chromosome GL456210.1]
+0	5
+
+[Distribution of variants on chromosome GL456211.1]
+0	2
+
+[Distribution of variants on chromosome GL456212.1]
+0	3
+
+[Distribution of variants on chromosome GL456219.1]
+0	5
+
+[Distribution of variants on chromosome GL456221.1]
+0	10
+
+[Distribution of variants on chromosome GL456239.1]
+0	1
+
+[Distribution of variants on chromosome GL456354.1]
+0	8
+
+[Distribution of variants on chromosome GL456372.1]
+0	2
+
+[Distribution of variants on chromosome GL456381.1]
+0	1
+
+[Distribution of variants on chromosome GL456385.1]
+0	1
+
+[Distribution of variants on chromosome JH584296.1]
+0	9
+
+[Distribution of variants on chromosome JH584297.1]
+0	5
+
+[Distribution of variants on chromosome JH584298.1]
+0	2
+
+[Distribution of variants on chromosome JH584299.1]
+0	24
+
+[Distribution of variants on chromosome JH584303.1]
+0	1
+
+[Distribution of variants on chromosome JH584304.1]
+0	11
+
+[Distribution of variants on chromosome MT]
+0	41
+
+[Position in protein]
+00-10%	416
+10-20%	239
+20-30%	184
+30-40%	149
+40-50%	144
+50-60%	143
+60-70%	143
+70-80%	100
+80-90%	119
+90-100%	232

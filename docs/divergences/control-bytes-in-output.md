@@ -1,6 +1,6 @@
 # Control bytes in output values
 
-A difference in the text of a field, not in any tuple: the comparators key rows by Location, Allele and Feature, which are ASCII, and nothing is set aside.
+A difference in the text of a field, not in any tuple: the comparators key rows by Location, Allele and Feature, which are ASCII, and nothing is set aside. Ensembl VEP writes a value that carries an ASCII control byte as it read it; vep-rs writes each such byte of a default or tab value as its percent-encoding.
 
 A value read from an input file can carry an ASCII control byte: an identifier, a chromosome name or a sample column with a carriage return, a form feed, an escape or a NUL in it, a plugin data field with one. Ensembl VEP writes such a value as it read it.
 
@@ -10,4 +10,4 @@ vep-rs writes every byte from `0x00` to `0x1F`, and `0x7F`, in a default or tab 
 
 The columns a VCF line copies from the input, the ID among them, stay the input's bytes in both engines, as every format's header lines do. The VCF line vep-rs builds for a record of another input format has each column encoded like any value; Ensembl VEP writes that line's columns as read.
 
-A value with no control byte is written the same by both engines. A row whose field carries one differs in that field's text alone and is charged to vep-rs in both figures.
+A value with no control byte is written the same by both engines. A row whose field carries one differs in that field's text alone and is reported as a difference and charged to vep-rs.

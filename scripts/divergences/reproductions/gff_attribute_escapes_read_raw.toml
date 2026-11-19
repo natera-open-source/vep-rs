@@ -1,0 +1,74 @@
+entry = "gff_attribute_escapes_read_raw"
+page = "docs/divergences/gff-attribute-escapes-read-raw.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "seen in the Arabidopsis thaliana TAIR10 GFF3 and the Saccharomyces cerevisiae R64-1-1 GFF3: 115 gene names with an escaped semicolon and three with an escaped comma; classed by that shape: the escape of a character the GFF3 specification does not list breaks its \"no other characters may be encoded\" (\"Description of the Format\")"
+notes = "The GRCh38 release-116 GFF3 lines of TMPRSS3 and ENST00001113783 with the gene's Name rewritten `A%2CB`, the GFF3 spelling of the symbol `A,B`, beside the lines of PWP2 and ENST00000456705 as a control whose rows agree. Ensembl VEP's --gff source reads the ninth column through GFF3.pm's get_attributes (lines 190-198), which splits the raw column and decodes nothing, so the symbol prints as `A%2CB`; the same parser's get_attribute_by_name would decode it. A --custom GFF source of promoter windows reads the same hash (GFF.pm lines 198-201), so a window `ID=PROM%2c1%3E;gene_id=ENSG%3B1` over the first record prints feature_id `PROM%2c1%3E` and associated_gene `ENSG%3B1`, the lower-case escape and the escape of a character GFF3 does not reserve as written too. vep-rs decodes every `%XX` escape, in either letter case, in both routes. A GTF value is decoded by both engines, so the GTF form agrees."
+prepare = [
+  '''cat > "$STAGE/tmprss3_escaped_name.gff3" <<'GFF'
+##gff-version 3
+21	ensembl_havana	gene	42371840	42396122	.	-	.	ID=gene:ENSG00000160183;Name=A%2CB;biotype=protein_coding;description=transmembrane serine protease 3 [Source:HGNC Symbol%3BAcc:HGNC:11877];gene_id=ENSG00000160183;logic_name=ensembl_havana_gene_homo_sapiens;version=19
+21	havana_tagene	mRNA	42393803	42396122	.	-	.	ID=transcript:ENST00001113783;Parent=gene:ENSG00000160183;Name=TMPRSS3-224;biotype=protein_coding;tag=gencode_basic;transcript_id=ENST00001113783;version=1
+21	havana_tagene	exon	42393803	42395084	.	-	.	Parent=transcript:ENST00001113783;Name=ENSE00004748399;constitutive=0;ensembl_end_phase=-1;ensembl_phase=1;exon_id=ENSE00004748399;rank=3;version=1
+21	havana_tagene	CDS	42394915	42395084	.	-	2	ID=CDS:ENSP00000783588;Parent=transcript:ENST00001113783;protein_id=ENSP00000783588;version=1
+21	havana_tagene	CDS	42395324	42395417	.	-	0	ID=CDS:ENSP00000783588;Parent=transcript:ENST00001113783;protein_id=ENSP00000783588;version=1
+21	havana_tagene	exon	42395324	42395468	.	-	.	Parent=transcript:ENST00001113783;Name=ENSE00003591562;constitutive=0;ensembl_end_phase=1;ensembl_phase=-1;exon_id=ENSE00003591562;rank=2;version=1
+21	havana_tagene	exon	42395942	42396122	.	-	.	Parent=transcript:ENST00001113783;Name=ENSE00004778870;constitutive=0;ensembl_end_phase=-1;ensembl_phase=-1;exon_id=ENSE00004778870;rank=1;version=1
+21	ensembl_havana	gene	44107306	44131181	.	+	.	ID=gene:ENSG00000241945;Name=PWP2;biotype=protein_coding;description=PWP2 small subunit processome component [Source:HGNC Symbol%3BAcc:HGNC:9711];gene_id=ENSG00000241945;logic_name=ensembl_havana_gene_homo_sapiens;version=10
+21	havana	mRNA	44107373	44115744	.	+	.	ID=transcript:ENST00000456705;Parent=gene:ENSG00000241945;Name=PWP2-202;biotype=protein_coding;transcript_id=ENST00000456705;transcript_support_level=3;version=1
+21	havana	exon	44107373	44107434	.	+	.	Parent=transcript:ENST00000456705;Name=ENSE00001605720;constitutive=0;ensembl_end_phase=0;ensembl_phase=-1;exon_id=ENSE00001605720;rank=1;version=1
+21	havana	CDS	44107417	44107434	.	+	0	ID=CDS:ENSP00000411749;Parent=transcript:ENST00000456705;protein_id=ENSP00000411749;version=1
+21	havana	exon	44108984	44109096	.	+	.	Parent=transcript:ENST00000456705;Name=ENSE00001177844;constitutive=0;ensembl_end_phase=2;ensembl_phase=0;exon_id=ENSE00001177844;rank=2;version=2
+21	havana	CDS	44108984	44109096	.	+	0	ID=CDS:ENSP00000411749;Parent=transcript:ENST00000456705;protein_id=ENSP00000411749;version=1
+21	havana	exon	44113753	44113847	.	+	.	Parent=transcript:ENST00000456705;Name=ENSE00001050676;constitutive=0;ensembl_end_phase=1;ensembl_phase=2;exon_id=ENSE00001050676;rank=3;version=1
+21	havana	CDS	44113753	44113847	.	+	1	ID=CDS:ENSP00000411749;Parent=transcript:ENST00000456705;protein_id=ENSP00000411749;version=1
+21	havana	exon	44114625	44114768	.	+	.	Parent=transcript:ENST00000456705;Name=ENSE00003646685;constitutive=0;ensembl_end_phase=1;ensembl_phase=1;exon_id=ENSE00003646685;rank=4;version=1
+21	havana	CDS	44114625	44114768	.	+	2	ID=CDS:ENSP00000411749;Parent=transcript:ENST00000456705;protein_id=ENSP00000411749;version=1
+21	havana	exon	44115264	44115399	.	+	.	Parent=transcript:ENST00000456705;Name=ENSE00003465236;constitutive=0;ensembl_end_phase=2;ensembl_phase=1;exon_id=ENSE00003465236;rank=5;version=1
+21	havana	CDS	44115264	44115399	.	+	2	ID=CDS:ENSP00000411749;Parent=transcript:ENST00000456705;protein_id=ENSP00000411749;version=1
+21	havana	exon	44115691	44115744	.	+	.	Parent=transcript:ENST00000456705;Name=ENSE00001738496;constitutive=0;ensembl_end_phase=2;ensembl_phase=2;exon_id=ENSE00001738496;rank=6;version=1
+21	havana	CDS	44115691	44115744	.	+	1	ID=CDS:ENSP00000411749;Parent=transcript:ENST00000456705;protein_id=ENSP00000411749;version=1
+GFF''',
+  "bgzip -c \"$STAGE/tmprss3_escaped_name.gff3\" > \"$STAGE/tmprss3_escaped_name.gff3.gz\" && tabix -p gff \"$STAGE/tmprss3_escaped_name.gff3.gz\"",
+  "printf '21\\t.\\tpromoter_window\\t42395390\\t42395410\\t.\\t+\\t.\\tID=PROM%%2c1%%3E;gene_id=ENSG%%3B1\\n' | bgzip > \"$STAGE/promoters.gff.gz\" && tabix -p gff \"$STAGE/promoters.gff.gz\"",
+  "\"$VEP_CACHE_BUILDER\" --species homo_sapiens --assembly GRCh38 --release 116 --gff3 \"$STAGE/tmprss3_escaped_name.gff3\" --genome-fasta \"$CORPUS/reference.fa.gz\" --output-dir \"$STAGE/json_cache\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	42395401	tmprss3_codon6	G	A	.	.	.
+21	44107424	pwp2_codon3	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json_cache"
+corpus = "tests/golden/116/GRCh38-gtf-builder"
+gxf = "{stage}/tmprss3_escaped_name.gff3.gz"
+gxf_kind = "gff"
+fasta = "tests/golden/116/GRCh38-gtf-builder/reference.fa.gz"
+
+[run]
+flags = [
+  "--symbol",
+  "--custom", "file={stage}/promoters.gff.gz,format=gff,gff_type=gencode_promoter",
+]
+format = "tab"
+
+[compare]
+kind = "rows"
+where = { record = ["tmprss3_codon6", "pwp2_codon3"] }
+columns = ["Location", "Allele", "Gene", "SYMBOL", "GENCODE_PROMOTER_feature_id", "GENCODE_PROMOTER_associated_gene", "Consequence"]
+
+[expected]
+ensembl_vep = [
+  "21:42395401 | A | ENSG00000160183 | A%2CB | PROM%2c1%3E | ENSG%3B1 | missense_variant",
+  "21:44107424 | C | ENSG00000241945 | PWP2 | - | - | missense_variant",
+]
+vep_rs = [
+  "21:42395401 | A | ENSG00000160183 | A,B | PROM,1> | ENSG;1 | missense_variant",
+  "21:44107424 | C | ENSG00000241945 | PWP2 | - | - | missense_variant",
+]

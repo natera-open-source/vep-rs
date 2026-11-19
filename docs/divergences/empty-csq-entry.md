@@ -1,12 +1,14 @@
 # An empty `CSQ` entry in an input VCF's INFO
 
-A difference in the text of a VCF output's INFO column, not in any tuple: the comparators score consequence sets and never read another INFO field, and nothing is set aside.
+A difference in the text of a VCF output's INFO column, not in any tuple: the comparators score consequence sets and never read another INFO field, and nothing is set aside. For an input entry with no value, `CSQ=`, Ensembl VEP removes the field after it as well, or leaves the entry where it ends the field. vep-rs removes the entry and keeps every other field.
 
 A VCF output rewrites each input record with the annotation appended to INFO, and an earlier annotation under the same key (`CSQ`, or the `--vcf_info_field` name) is removed first unless `--keep_csq` is given. Ensembl VEP removes it with one substitution over the INFO text: the key and its `=`, then one or more non-blank characters, up to the next `;` or the end of the field (`OutputFactory/VCF.pm` lines 327-331).
 
 An entry with no value, `CSQ=`, gives those characters nothing of their own to match, so they take the `;` and the field after it: `CSQ=;DP=4` loses `DP=4`, and `DP=4;CSQ=;AF=0.5` loses `AF=0.5`. What is left of the field, with the new entry appended, is the output's INFO; a record with no consequence and nothing left prints `.`. An empty entry that ends the field, `DP=4;CSQ=`, matches nothing and stays, so the output carries two `CSQ` entries.
 
 vep-rs splits INFO on `;`, removes the first entry under the key whatever its value, and keeps every other field. For `CSQ=;DP=4`, `DP=4;CSQ=;AF=0.5` and `DP=4;CSQ=` it writes `DP=4;CSQ=...`, `DP=4;AF=0.5;CSQ=...` and `DP=4;CSQ=...`. An entry with a value is removed alike by both engines: `CSQ=G|old;DP=4` becomes `DP=4;CSQ=...` in each.
+
+An INFO column that begins with `;`, which VCF does not allow, keeps that `;` here. Ensembl VEP 116.2 drops it when, and only when, it removed an entry under the field's name (`OutputFactory/VCF.pm` line 330): `;DP=13;CSQ=G|old` becomes `DP=13;CSQ=...` there and `;DP=13;CSQ=...` here, while `;DP=13` alone keeps its `;` in both engines.
 
 Under `--keep_csq` neither engine removes anything: both write the INFO as read, `CSQ=;DP=4`, and append the new entry after a `;` when the record has consequences.
 

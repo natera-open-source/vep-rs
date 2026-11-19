@@ -1,0 +1,44 @@
+{
+  "date": "2026-11-02",
+  "record": "cache_variation_counts",
+  "purpose": "The chromosome 19 counts the Species and assembly table of docs/cli/cache-species-runtime.md states for the --pubmed and --var_synonyms row: how many variants of the Ensembl release 116 mouse cache's chromosome 19 variation file carry a citation and how many a synonym.",
+  "cache": {
+    "species": "mus_musculus",
+    "assembly": "GRCm39",
+    "cache_version": 116,
+    "source": "https://ftp.ensembl.org/pub/release-116/variation/indexed_vep_cache/mus_musculus_vep_116_GRCm39.tar.gz",
+    "source_dbSNP": "150",
+    "source_genebuild": "GENCODEM39",
+    "variation_cols": [
+      "chr",
+      "variation_name",
+      "failed",
+      "somatic",
+      "start",
+      "end",
+      "allele_string",
+      "strand",
+      "clin_sig",
+      "phenotype_or_disease",
+      "clin_sig_allele",
+      "clin_sig_ref_allele",
+      "clinical_impact",
+      "pubmed",
+      "var_synonyms"
+    ]
+  },
+  "inputs": {
+    "file": "mus_musculus/116_GRCm39/19/all_vars.gz",
+    "sha256": "79024713e5b90cfa7ac4a724ebb29006d0d223868ff55e76795298815c00202d",
+    "bytes": 29110955
+  },
+  "commands": {
+    "count": "zcat all_vars.gz | awk -F'\\t' '{ n++; if ($14 != \".\") p++; if ($15 != \".\") s++ } END { print n, p, s }'",
+    "note": "one tab-separated row per variant; column 14 is pubmed and column 15 var_synonyms in variation_cols, each `.` where the variant carries none"
+  },
+  "counts": {
+    "variants": 2809961,
+    "with_pubmed": 186,
+    "with_var_synonyms": 19293
+  }
+}

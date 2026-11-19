@@ -1,0 +1,46 @@
+entry = "nmd_minimal_rejoined_end"
+page = "docs/divergences/nmd-minimal-rejoined-end.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 121.0 per million · 0 flag sets, 24 corpora"
+
+# Two records on CBR1 (ENST00000290349, forward strand; exons 36070024-36070404, 36070950-36071057,
+# 36072446-36073164), each split by --minimal into alleles of different spans. In acgta_agta_acgtc the
+# record spans 36071004-36071007; AGTA trims to the deletion of coding base 344 at 36071004, two bases
+# before the penultimate exon's 51-base window starts at 36071006, and ACGTC to a substitution at
+# 36071007, inside it. Ensembl VEP's plugin tests the rejoined record's end on every allele's rows;
+# vep-rs tests the deletion's own end. In gtg_gg_g the record spans coding bases 101-102; GG trims to
+# the deletion of base 101, whose own CDS end escapes under the plugin's first rule, where the
+# default and tab formats of Ensembl VEP read the rejoined record's CDS end, 102.
+[input]
+format = "vcf"
+text = """
+21	36071003	acgta_agta_acgtc	ACGTA	AGTA,ACGTC	.	.	.
+21	36070215	gtg_gg_g	GTG	GG,G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-nmd/json_cache"
+
+[run]
+flags = ["--minimal", "--plugin", "NMD"]
+
+[compare]
+kind = "rows"
+where = { record = ["acgta_agta_acgtc", "gtg_gg_g"], feature = "ENST00000290349", consequence = "frameshift_variant" }
+columns = ["Location", "Allele", "Feature", "Consequence", "CDS_position", "ALLELE_NUM", "NMD"]
+
+[expected]
+ensembl_vep = [
+  "21:36070216-36070217 | - | ENST00000290349 | frameshift_variant | 101-102 | 1 | -",
+  "21:36070216-36070217 | - | ENST00000290349 | frameshift_variant | 101-102 | 2 | -",
+  "21:36071004-36071007 | - | ENST00000290349 | frameshift_variant | 344-347 | 1 | NMD_escaping_variant",
+]
+vep_rs = [
+  "21:36070216-36070217 | - | ENST00000290349 | frameshift_variant | 101-102 | 1 | NMD_escaping_variant",
+  "21:36070216-36070217 | - | ENST00000290349 | frameshift_variant | 101-102 | 2 | -",
+  "21:36071004-36071007 | - | ENST00000290349 | frameshift_variant | 344-347 | 1 | -",
+]

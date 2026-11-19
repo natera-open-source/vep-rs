@@ -1,6 +1,6 @@
 # Reproducing these examples
 
-Every example on the defect pages is one or two VCF records, from a public dataset or hand-written and printed in full in its section, run through both engines with their default consequence settings.
+Every example on the defect pages is a few VCF records, from a public dataset or hand-written and printed in full in its section, run through both engines with their default consequence settings. A page outside the numbered classes names its own input where it differs.
 
 ## The engines
 
@@ -8,7 +8,7 @@ Every command on the defect pages and on this one writes both binaries as `vep`.
 
 ## The inputs
 
-All are fetched and laid out by `scripts/data/download_real_world_vcfs.sh`, which pins the ClinVar release:
+The public datasets are fetched and laid out by `scripts/data/download_real_world_vcfs.sh`, which pins the ClinVar release; the synthetic sets are committed:
 
 - ClinVar's GRCh37 and GRCh38 VCFs (`clinvar_grch37.vcf.gz`, `clinvar_grch38.vcf.gz`);
 - gnomAD-SV v2.1 (GRCh37, `gnomad_sv_v2.1_chr21.vcf.gz`) and v4.1 (GRCh38, `gnomad_sv_v4.1_chr21.vcf.gz`), chromosome 21;
@@ -20,7 +20,7 @@ Contig names are Ensembl's (`21`, not `chr21`; `scripts/README.md` describes the
 
 ## The transcripts
 
-The transcript sets are Ensembl release 116's: Ensembl VEP reads its own cache (`homo_sapiens/116_GRCh37` and `homo_sapiens/116_GRCh38`), and vep-rs reads the JSON conversion of the same cache (`scripts/data/storable_to_json.pl`, described in [`docs/cache-setup.md`](../cache-setup.md), laid out as `json_cache/homo_sapiens/116_GRCh37` and `json_cache/homo_sapiens/116_GRCh38`), so both engines see identical transcripts. Transcript coordinates quoted on the defect pages are read from that cache. The worked examples of classes 13 to 22 run vep-rs on the pruned slice of the GRCh38 cache committed with the golden corpus, `tests/golden/116/GRCh38-release116/json_cache`, which holds the transcripts the corpus's records reach.
+The transcript sets are Ensembl release 116's: Ensembl VEP reads its own cache (`homo_sapiens/116_GRCh37` and `homo_sapiens/116_GRCh38`), and vep-rs reads the JSON conversion of the same cache (`scripts/data/storable_to_json.pl`, described in [`docs/cache-conversion.md`](../cache-conversion.md), laid out as `json_cache/homo_sapiens/116_GRCh37` and `json_cache/homo_sapiens/116_GRCh38`), so both engines see identical transcripts. Transcript coordinates quoted on the defect pages are read from that cache. The worked examples of classes 13 to 22 run vep-rs on the pruned slice of the GRCh38 cache committed with the golden corpus, `tests/golden/116/GRCh38-release116/json_cache`, which holds the transcripts the corpus's records reach.
 
 ## The reference genome
 
@@ -61,7 +61,9 @@ Substitute `GRCh37` and its cache and FASTA for the GRCh37 examples.
 
 ## The order-dependent class
 
-The reference outputs behind the counts used `--fork 4` for the structural-variant sets and `--fork 16` for the SNP/indel datasets. Two classes depend on the other records of a buffer: [class 23](defect-p.md#23-a-bracket-breakends-own-end-rows-lost-to-the-first-transcript-that-reaches-it) on the order in which the buffer's records ask for their regions, and [class 14](defect-g.md#14-a-coordinate-at-or-past-2147478648-a-breakend-mate-a-span-end-or-the-records-own-position-turns-the-references-buffer-intergenic) on the records loaded beside the one whose coordinate reaches 2,147,478,648, which the turn makes intergenic too. Their pages say which inputs give which rows. No neighbouring record, `--fork` or `--buffer_size` value changes the outcome of any other class.
+The reference outputs behind the counts used `--fork 4` for the structural-variant sets and `--fork 16` for the SNP/indel datasets. Two numbered classes depend on a buffer's other records: [class 23](defect-p.md#23-a-bracket-breakends-own-end-rows-lost-to-the-first-transcript-that-reaches-it) on the order in which the buffer's records ask for their regions, and [class 14](defect-g.md#14-a-coordinate-at-or-past-2147478648-a-breakend-mate-a-span-end-or-the-records-own-position-turns-the-references-buffer-intergenic) on the records loaded beside the one whose coordinate reaches 2,147,478,648, which the turn makes intergenic too. A difference outside the numbered classes, [section 27 of Defect N's page](defect-n.md#27-a-promoter-whose-extended_start-is-not-a-number-is-widened-to-position-0), turns on how far the buffer's regions reach, which bounds the variants that gain the widened promoter's row. Their pages say which inputs give which rows.
+
+No neighbouring record, `--fork` or `--buffer_size` value changes the outcome of any other numbered class. A difference outside the numbered classes that turns on the buffer's other records, `--fork` or `--buffer_size` says so on its own page.
 
 Flags that do change an outcome are named in the sections that use them:
 

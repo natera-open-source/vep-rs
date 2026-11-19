@@ -1,6 +1,6 @@
 # VEP default and tab formats
 
-This page describes the two tab-delimited text formats. The default format gathers the optional fields into one `Extra` column. The `tab` format gives every Extra key a named column of its own. The rules that decide what a row says, where a reader of Ensembl VEP's output might expect something else, close the page.
+The two tab-delimited text formats. The default format gathers the optional fields into one `Extra` column. The `tab` format gives every Extra key a named column of its own. The rules that decide what a row says, where a reader of Ensembl VEP's output might expect otherwise, follow the formats.
 
 ## VEP default format
 
@@ -10,7 +10,7 @@ One line per (allele, transcript) consequence, plus one intergenic line per alle
 
 ```
 ## ENSEMBL VARIANT EFFECT PREDICTOR v116.2
-## vep-rs 0.5.0
+## vep-rs 0.6.0
 ## Output produced at [TIME]
 ## Using cache in [PATH]/116
 ## Using API version 116, DB version ?
@@ -31,15 +31,15 @@ One line per (allele, transcript) consequence, plus one intergenic line per alle
 #Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
 ```
 
-The source-version lines come from the cache's `info.json` (`source_versions`). That file is written by `scripts/data/storable_to_json.pl` and `vep-cache-builder`, or by `scripts/golden/prune_json_cache.py --perl-info` from a VEP cache's `info.txt`. The `Using cache in` line prints the cache directory as given. Under `--mask_header_cache_path` it prints `[PATH]/<leaf>`, the last component alone; the same masking applies in the `--tab` header, in the VCF `cache=` token and in the Parquet footer.
-
 The default and `tab` headers are Ensembl VEP's `##` block. It opens with the version line, then the engine line `## vep-rs <version>` ([Engine identity](../output-formats.md#engine-identity)), the time, in UTC where Ensembl VEP prints the process's local time (`Utils.pm` lines 467-468), the cache path and the API line. One `## <source> version <value>` line per source version of the cache follows, then the column descriptions, the command line and the column line.
 
-Two kinds of line Ensembl VEP prints there have no counterpart. The Perl API component versions (`## ensembl version 116.0d85231`, `## ensembl-variation version ...`) are not written, since no Perl API runs here. The `## Connected to <database>` line of a database run is not written, since vep-rs reads a local cache only. The `## <short name> : [PATH]/<file>` lines of `--custom` sources are not written either, since custom annotation sources are not supported. The VCF header's `##INFO` definition and plugin lines follow the same rule ([VCF format](vcf.md#header)).
+Two kinds of line Ensembl VEP prints there have no counterpart. The Perl API component versions (`## ensembl version 116.0d85231`, `## ensembl-variation version ...`) are not written, since no Perl API runs here. The `## Connected to <database>` line of a database run is not written, since vep-rs reads a local cache only. The `## <short name> : [PATH]/<file>` lines of `--custom` sources follow the plugin lines, one per key of each source ([Custom annotation](../custom-annotation.md#output)). The VCF header's `##INFO` definition and plugin lines follow the same rule ([VCF format](vcf.md#header)).
 
 The `Extra column keys` block lists every key the active flags can produce. Then comes one `## <KEY> : <description>` line per field of each loaded built-in plugin, with the plugin's own text, as Ensembl VEP lists its plugins' header info. `--fields` changes nothing in the default format: it keeps its thirteen columns and its `Extra` column whatever the list names, as in Ensembl VEP.
 
-Every text format opens with a header block. `--no_headers` suppresses it whole, the column line included, in the default, `tab` and `vcf` formats; `json` has none. The Parquet TSV intermediate keeps its column line, which DuckDB reads as the schema, whatever the flag.
+Every text format opens with a header block. `--no_headers` suppresses it whole, the column line included, in the default, `tab` and `vcf` formats; `json` has none. Parquet has none either. The column names are the schema of every part, the run's identity is the footer's key-value metadata ([Parquet](parquet.md#footer-metadata)), and the flag changes nothing there.
+
+The source-version lines come from the cache's `info.json` (`source_versions`). That file is written by `scripts/data/storable_to_json.pl` and `vep-cache-builder`, or by `scripts/golden/prune_json_cache.py --perl-info` from an Ensembl VEP cache's `info.txt`. The `Using cache in` line prints the cache directory as given. Under `--mask_header_cache_path` it prints `[PATH]/<leaf>`, the last component alone. The same masking applies in the `--tab` header, in the VCF `cache=` token and in the Parquet footer.
 
 ### Columns
 
@@ -50,7 +50,7 @@ Every text format opens with a header block. `--no_headers` suppresses it whole,
 | 3   | Allele             | The ALT allele of this row; a structural variant prints the SO term of its class (see below)   |
 | 4   | Gene               | Ensembl gene stable ID                                                                          |
 | 5   | Feature            | Ensembl transcript stable ID                                                                    |
-| 6   | Feature_type       | `Transcript`, `RegulatoryFeature`, `MotifFeature`, or `-` on an intergenic row; regulatory and motif rows require `--regulatory` and a converted regulatory cache |
+| 6   | Feature_type       | `Transcript`, `RegulatoryFeature`, `MotifFeature`, or `-` on an intergenic row; regulatory and motif rows come under `--regulatory` from a cache converted with its regulatory features, or under `--regulatory_gff` from Ensembl's regulatory GFF files ([Regulatory and motif features](../regulatory.md)) |
 | 7   | Consequence        | SO consequence term(s), comma-separated                                                         |
 | 8   | cDNA_position      | Position or range in the cDNA; `?` for an unmappable end                                        |
 | 9   | CDS_position       | Position or range in the coding sequence                                                        |
@@ -60,54 +60,13 @@ Every text format opens with a header block. `--no_headers` suppresses it whole,
 | 13  | Existing_variation | Co-located known variant IDs, comma-separated                                                   |
 | 14  | Extra              | `KEY=VALUE` pairs joined by `;`, in VEP's key order (see below); `-` when empty                  |
 
-The Allele column of a structural variant carries the SO term of its class (`deletion`, `duplication`, `Alu_insertion`). A breakend keeps its literal ALT instead (`N.`, `A[21:27348902[`, or `N[21:00030425700[` for a mate named by `CHR2`). `chromosome_breakpoint` is printed for a record without a parsed mate, a single breakend or a bare `<BND>`. Every ALT of a multi-allelic structural variant prints the record's class term, and an unsupported type prints Ensembl VEP's type string: the ALT as written (`<CPX>`), or `INFO/SVTYPE` when that names the type (`CPX`). A sequence allele whose reference base is ambiguous (`N G`) prints `G` with `coding_sequence_variant` and no amino acids, since no peptide is read from an ambiguous reference.
+The Allele column of a structural variant carries the SO term of its class (`deletion`, `duplication`, `Alu_insertion`).
 
-### Extra field
-
-Keys appear in Ensembl VEP's order: `IMPACT`, `DISTANCE`, `STRAND` and `FLAGS`, with `IND` and `ZYG` under `--individual`, `ZYG` under `--individual_zyg`, `ALLELE_NUM` under `--allele_number` and `REF_ALLELE` under `--show_ref_allele` before them. Then come the fields of the active flags in VEP's flag order (the table names the common ones, in that order), then every other key alphabetically: the structural-variant `OverlapBP` and `OverlapPC`, and plugin keys. The co-located variant keys, the frequency keys, `FREQS` and `SV` have [a page of their own](known-variants.md).
-
-| Key                                              | Type or values                                                             | Notes                                                                                            |
-| ------------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `IND`                                            | sample name                                                                | Under `--individual`; the copy's individual, first of the keys                                   |
-| `ZYG`                                            | `HET`, `HOM`, `HETREF`, `HOMREF`, or a `sample:ZYG` list                   | Under `--individual`, `REF` appended when the genotype names no alternate allele; under `--individual_zyg` one entry per named sample whose genotype is called, joined by `,` |
-| `ALLELE_NUM`                                     | integer, from 1                                                            | Under `--allele_number`; precedes `IMPACT`                                                       |
-| `REF_ALLELE`                                     | allele string                                                              | Under `--show_ref_allele`; precedes `IMPACT`                                                     |
-| `IMPACT`                                         | `HIGH`, `MODERATE`, `LOW`, `MODIFIER`                                      | On every row; an intergenic row carries `IMPACT=MODIFIER` and no `STRAND`, `DISTANCE` or `FLAGS` |
-| `DISTANCE`                                       | integer, bases                                                             | Up- and downstream rows only; the shortest gap between the variant and the transcript            |
-| `STRAND`                                         | `1` or `-1`                                                                | The feature's strand                                                                             |
-| `FLAGS`                                          | `cds_start_NF`, `cds_end_NF`                                               | Every `cds_` transcript attribute, comma-joined                                                  |
-| Flag fields: class, notations and gene           | `VARIANT_CLASS`, `SPDI`, `GA4GH_VRS`, `CLINVAR_SOMATIC_CLASSIFICATION`, `SYMBOL`, `SYMBOL_SOURCE`, `HGNC_ID`, `BIOTYPE` | In VEP's flag order, each only under its own flag; `VARIANT_CLASS` also joins an intergenic row  |
-| Flag fields: transcript                          | `CANONICAL`, `MANE`, `TSL`, `APPRIS`, `CCDS`, `ENSP`, `RefSeq`             | Same order rule                                                                                  |
-| Flag fields: the reference allele                | `GIVEN_REF`, `USED_REF`                                                    | Under `--use_transcript_ref`, after `RefSeq` and before `NEAREST`; the input's and the row's reference allele |
-| Flag fields: the nearest start site              | `NEAREST`                                                                  | Same order rule; also joins an intergenic row                                                    |
-| Flag fields: predictions and structure           | `SIFT`, `PolyPhen`, `EXON`, `INTRON`, `DOMAINS`                            | Same order rule                                                                                  |
-| Flag fields: HGVS                                | `HGVSc`, `HGVSp`, `HGVS_OFFSET`                                            | Same order rule; the `=` of an `HGVSp` value is escaped as `%3D`                                 |
-| Flag fields: frequencies and co-located variants | the allele frequencies, `MAX_AF`, `FREQS`, `CLIN_SIG`, `SOMATIC`, `PHENO`, `PUBMED` | Same order rule; `CLIN_SIG` also joins an intergenic row; [Co-located variants](known-variants.md) |
-| Flag fields: the last two                        | `SHIFT_LENGTH`, `VAR_SYNONYMS`                                             | Same order rule; after every other flag field                                                    |
-| `OverlapBP`, `OverlapPC`                         | integer; percentage                                                        | Structural-variant rows that overlap their feature; alphabetical after the flag fields           |
-| Plugin keys                                      | per plugin                                                                 | Alphabetical after the flag fields; a variant-level plugin key also joins an intergenic row      |
-
-Inside a value `;` is escaped as `%3B` and, unless `--no_escape`, the `=` of an HGVSp value as `%3D`; the JSON output, unescaped as under Ensembl VEP's `--no_escape`, keeps the `=`. Lists join with `,`. An `Extra` column with no key prints `-`.
-
-#### Consequence vocabulary and total lengths
-
-`--terms display` or `--terms NCBI` renders every consequence term in that vocabulary, repeats included on a feature row (`SPLICE_SITE,SPLICE_SITE,INTRONIC`) and each label once on a `--summary` row. The ranks, the impacts and the most severe term stay on the Sequence Ontology term. `DISTANCE` is printed only when the rendered list names `upstream_gene_variant` or `downstream_gene_variant`, so the display vocabulary, whose labels are `UPSTREAM` and `DOWNSTREAM`, never prints it, as Ensembl VEP does not.
-
-`--total_length` appends `/<total>` to `cDNA_position` (the transcript's exon length sum), `CDS_position` (the coding sequence length) and `Protein_position` (the peptide length) wherever the column applies, a `-` placeholder included (`-/1200`).
-
-#### HGVS_OFFSET and SHIFT_LENGTH
-
-`HGVS_OFFSET` is the number of bases the HGVS notations moved an insertion or deletion 3' along the transcript, negative on the reverse strand, present only when something moved. Under `--shift_hgvs 0` nothing moves and the key never appears.
-
-`SHIFT_LENGTH` (`--shift_length`) is the number of bases `--shift_3prime 1` moved the allele before its terms and positions were computed. It is written on every transcript row of a sequence variant, `0` included, and on no intergenic or structural-variant row; without `--shift_3prime 1` the column is listed and left empty. Under `--shift_3prime 1 --shift_genomic 1` the `Location` column prints the moved position (a transcript row along its transcript's strand, an intergenic row towards higher coordinates) and `Allele` the inserted bases rotated along the move; `Uploaded_variation` keeps the input's name.
-
-The reference row of `--process_ref_homs` is read at the span the record's last alternate allele shifts to: its positions, codons and coding terms are that span's, and its `SHIFT_LENGTH` is `0`. Ensembl VEP leaves the coordinates the record's alleles share at the last allele's shift (`OutputFactory.pm` lines 306-323), while the reference allele carries no shift of its own. Its non-coding terms are that span's as well, where Ensembl VEP keeps the unshifted span's and rewrites the alternates' rows. A record whose alleles shift by different lengths shares one allele's span predicates in Ensembl VEP too; [the divergence page](../divergences/shift-3prime-shared-predicates.md) states both.
-
-#### Allele on a coding row after a shift
-
-Under `--shift_3prime 1` without `--shift_genomic 1`, a coding row of a shifted insertion prints the inserted bases rotated along the shift. Ensembl VEP prints the allele sequence its codon computation rotated: `TranscriptVariationAllele.pm` line 820 calls the rotation of lines 1330-1347, and `OutputFactory.pm` line 1347 prints the rotated sequence. On a forward-strand transcript the rotation runs one place per base of the shift. On a reverse-strand transcript it runs the allele's length less the shift, so a shift of the allele's length or more leaves the allele as written.
-
-The record's non-coding rows, whose codon is never computed, keep the written bases. For `21 26021981 26021980 -/AAG 1` on APP, both engines print `GAA` on the coding rows and `AAG` on the non-coding rows.
+- A breakend keeps its literal ALT instead (`N.`, `A[21:27348902[`, or `N[21:00030425700[` for a mate named by `CHR2`).
+- `chromosome_breakpoint` is printed for a record without a parsed mate, a single breakend or a bare `<BND>`.
+- Every ALT of a multi-allelic structural variant prints the record's class term.
+- An unsupported type prints Ensembl VEP's type string: the ALT as written (`<CPX>`), or `INFO/SVTYPE` when that names the type (`CPX`).
+- A sequence allele whose reference base is ambiguous (`N G`) prints `G` with `coding_sequence_variant` and no amino acids, since no peptide is read from an ambiguous reference.
 
 ### Example
 
@@ -122,41 +81,122 @@ The example shows two records of the GRCh37 golden corpus as Ensembl VEP 116.2 w
 21_10795228_C/G/T	21:10795228	T	-	-	-	intergenic_variant	-	-	-	-	-	-	IMPACT=MODIFIER
 ```
 
+### Extra field
+
+Keys appear in Ensembl VEP's order:
+
+1. `IND` and `ZYG` under `--individual`, `ZYG` under `--individual_zyg`, `ALLELE_NUM` under `--allele_number` and `REF_ALLELE` under `--show_ref_allele`.
+2. `IMPACT`, `DISTANCE`, `STRAND` and `FLAGS`.
+3. The fields of the active flags in Ensembl VEP's flag order (the table names the common ones, in that order).
+4. Every other key alphabetically: the structural-variant `OverlapBP` and `OverlapPC`, and plugin keys.
+
+| Key                                              | Type or values                                                             | Notes                                                                                            |
+| ------------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `IND`                                            | sample name                                                                | Under `--individual`; the copy's individual, first of the keys                                   |
+| `ZYG`                                            | `HET`, `HOM`, `HETREF`, `HOMREF`, or a `sample:ZYG` list                   | Under `--individual`, `REF` appended when the genotype names no alternate allele; under `--individual_zyg` one entry per named sample whose genotype is called, joined by `,` |
+| `ALLELE_NUM`                                     | integer, from 1                                                            | Under `--allele_number`; precedes `IMPACT`                                                       |
+| `REF_ALLELE`                                     | allele string                                                              | Under `--show_ref_allele`; precedes `IMPACT`                                                     |
+| `IMPACT`                                         | `HIGH`, `MODERATE`, `LOW`, `MODIFIER`                                      | On every row; an intergenic row carries `IMPACT=MODIFIER` and no `STRAND`, `DISTANCE` or `FLAGS` |
+| `DISTANCE`                                       | integer, bases                                                             | Up- and downstream rows only; the shortest gap between the variant and the transcript            |
+| `STRAND`                                         | `1` or `-1`                                                                | The feature's strand                                                                             |
+| `FLAGS`                                          | `cds_start_NF`, `cds_end_NF`                                               | Every `cds_` transcript attribute, comma-joined                                                  |
+| Flag fields: class, notations and gene           | `VARIANT_CLASS`, `SPDI`, `GA4GH_VRS`, `CLINVAR_SOMATIC_CLASSIFICATION`, `SYMBOL`, `SYMBOL_SOURCE`, `HGNC_ID`, `BIOTYPE` | In VEP's flag order, each only under its own flag; `VARIANT_CLASS` also joins an intergenic row  |
+| Flag fields: motif                               | `MOTIF_NAME`, `MOTIF_POS`, `HIGH_INF_POS`, `MOTIF_SCORE_CHANGE`, `TRANSCRIPTION_FACTORS` | Under `--regulatory`, after `BIOTYPE`, on a sequence variant's `MotifFeature` rows alone ([Motif fields](#motif-fields)) |
+| Flag fields: transcript                          | `CANONICAL`, `MANE`, `TSL`, `APPRIS`, `CCDS`, `ENSP`, `RefSeq`             | Same order rule; `TSL` carries the attribute's digit run as written, as Ensembl VEP prints it: `1` to `5` from an Ensembl gene set, and another shape, `007` or `999`, only from a third-party GFF3 build or an edited cache; two levels past 64 bits under the pick order are [`tsl_pick_order_past_sixty_four_bits`](../divergences/tsl-pick-order-past-sixty-four-bits.md) |
+| Flag fields: RefSeq and merged caches            | `REFSEQ_MATCH`, `SOURCE`, `REFSEQ_OFFSET`                                  | After `RefSeq`: `REFSEQ_MATCH` and `REFSEQ_OFFSET` under `--refseq`, all three under `--merged`; the `rseq_*` match codes comma-joined, the source cache, the model's misalignment offset at the allele when not 0 ([RefSeq and merged cache columns](refseq-and-merged.md)) |
+| Flag fields: the reference allele                | `GIVEN_REF`, `USED_REF`, `BAM_EDIT`                                        | Under `--use_transcript_ref`, after `REFSEQ_OFFSET` and before `NEAREST`; the input's and the row's reference allele, and on a BAM-edited cache the model's edit status, `OK` or `FAILED` |
+| Flag fields: the nearest start site              | `NEAREST`                                                                  | Same order rule; also joins an intergenic row                                                    |
+| Flag fields: predictions and structure           | `SIFT`, `PolyPhen`, `EXON`, `INTRON`, `DOMAINS`                            | Same order rule                                                                                  |
+| Flag fields: HGVS                                | `HGVSc`, `HGVSp`, `HGVS_OFFSET`                                            | Same order rule; the `=` of an `HGVSp` value is escaped as `%3D`                                 |
+| Flag fields: frequencies and co-located variants | the allele frequencies, `MAX_AF`, `FREQS`, `CLIN_SIG`, `SOMATIC`, `PHENO`, `PUBMED` | Same order rule; `CLIN_SIG` also joins an intergenic row; [Co-located variants](known-variants.md) |
+| Flag fields: the last two                        | `SHIFT_LENGTH`, `VAR_SYNONYMS`                                             | Same order rule; after every other flag field but the regulatory ones and `CELL_TYPE`            |
+| Flag fields: cell types                          | `CELL_TYPE`                                                                | Under `--cell_type`, the last flag field: `<epigenome>:<activity>` for each listed epigenome the regulatory feature has an activity for, in the order listed, `ACTIVE`, `INACTIVE`, `POISED`, `REPRESSED` or `NA`, comma-joined (`&` in VCF); empty on a motif row and on a feature with none of them; only on regulatory and motif rows ([Regulatory and motif features](../regulatory.md)) |
+| `OverlapBP`, `OverlapPC`                         | integer; percentage                                                        | Structural-variant rows that overlap their feature; alphabetical after the flag fields           |
+| Plugin keys                                      | per plugin                                                                 | Alphabetical after the flag fields; a variant-level plugin key also joins an intergenic row; a key named as a flag field (a dbNSFP column named `TSL`) takes the flag's place under its flag, once where Ensembl VEP [lists it twice](../divergences/duplicate-output-column.md), and a key named as one of the 13 columns prints in that column, not here |
+
+Inside a value `;` is escaped as `%3B` and, unless `--no_escape`, the `=` of an HGVSp value as `%3D`. The JSON output, unescaped as under Ensembl VEP's `--no_escape`, keeps the `=`. Lists join with `,`.
+
+#### Consequence vocabulary and total lengths
+
+`--terms display` or `--terms NCBI` renders every consequence term in that vocabulary, repeats included on a feature row (`SPLICE_SITE,SPLICE_SITE,INTRONIC`) and each label once on a `--summary` row. The ranks, the impacts and the most severe term stay on the Sequence Ontology term. `DISTANCE` is printed only when the rendered list names `upstream_gene_variant` or `downstream_gene_variant`. So the display vocabulary, whose labels are `UPSTREAM` and `DOWNSTREAM`, never prints it, as Ensembl VEP does not.
+
+`--total_length` appends `/<total>` to `cDNA_position` (cDNA's length: exons and bases the transcript's `_rna_edit` attributes add or remove), `CDS_position` (coding sequence's) and `Protein_position` (peptide's) wherever applicable, `-` placeholders included (`-/1200`).
+
+#### HGVS_OFFSET and SHIFT_LENGTH
+
+`HGVS_OFFSET` is the number of bases the HGVS notations moved an insertion or deletion 3' along the transcript, negative on the reverse strand. It is present only when something moved. Under `--shift_hgvs 0` nothing moves and the key never appears.
+
+`SHIFT_LENGTH` (`--shift_length`) is the number of bases `--shift_3prime 1` moved the allele before its terms and positions were computed. It is written on every transcript row of a sequence variant, `0` included, and on no intergenic or structural-variant row. Without `--shift_3prime 1` the column is listed and left empty. Under `--shift_3prime 1 --shift_genomic 1` the `Location` column prints the moved position (a transcript row along its transcript's strand, an intergenic row towards higher coordinates). `Allele` prints the inserted bases rotated along the move, and `Uploaded_variation` keeps the input's name.
+
+The reference row of `--process_ref_homs` is read at the span the record's last alternate allele shifts to. Its positions, codons and coding terms are that span's, and its `SHIFT_LENGTH` is `0`. Ensembl VEP leaves the coordinates the record's alleles share at the last allele's shift (`OutputFactory.pm` lines 306-323), while the reference allele carries no shift of its own. Its non-coding terms are that span's as well, where Ensembl VEP keeps the unshifted span's and rewrites the alternates' rows. A record whose alleles shift by different lengths shares one allele's span predicates in Ensembl VEP too; [the divergence page](../divergences/shift-3prime-shared-predicates.md) states both.
+
+#### Motif fields
+
+A sequence variant's `MotifFeature` row carries five fields read from the binding matrix the motif names (`OutputFactory.pm` lines 1910 to 1939); [Regulatory and motif features](../regulatory.md#the-fields) gives the arithmetic.
+
+| Field                   | Value                                                      | Notes                                                                                                   |
+| ----------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `MOTIF_NAME`            | the matrix's stable id (`ENSPFM0290`)                      | On every motif row                                                                                      |
+| `MOTIF_POS`             | integer, from 1                                            | The variant's start as a position in the matrix, along the motif's strand; absent outside the motif. Written with or without a FASTA, where Ensembl VEP omits it from a `--regulatory_gff` motif without one ([the `MOTIF_POS` class](../divergences/regulatory-gff-motif-rows.md#2-motif_pos-omitted-from-a-motif-row-without-a-fasta)) |
+| `HIGH_INF_POS`          | `Y` or `N`                                                 | `Y` when the variant spans one base, not a deletion, at a position carrying more than 1.5 bits; `N` otherwise |
+| `MOTIF_SCORE_CHANGE`    | decimal, three places (`-0.089`)                           | The motif's relative similarity score with the allele written in, minus its own score                   |
+| `TRANSCRIPTION_FACTORS` | comma-joined names (`HNF4A,NR2F1,RXRA`), `&`-joined in VCF | The matrix's transcription factor complexes; a matrix naming none writes the key with an empty value    |
+
+A motif whose matrix carries no counts writes neither `HIGH_INF_POS` nor `MOTIF_SCORE_CHANGE`.
+
+#### Allele on a coding row after a shift
+
+Under `--shift_3prime 1` without `--shift_genomic 1`, a coding row of a shifted insertion prints the inserted bases rotated along the shift. Ensembl VEP prints the allele sequence its codon computation rotated. `TranscriptVariationAllele.pm` line 820 calls the rotation of lines 1330-1347, and `OutputFactory.pm` line 1347 prints the rotated sequence.
+
+Read on the transcript's strand, the bases rotate one place per shifted base. Ensembl VEP 116.2 counts the places by the transcript's strand alone. So a shift beyond the allele rotates nothing and a reverse-strand record rotates the other way.
+
+The record's non-coding rows, whose codon is never computed, keep the written bases. For `21 26021981 26021980 -/AAG 1` on APP, both engines print `GAA` on the coding rows and `AAG` on the non-coding rows.
+
 ## Tab format
 
 Selected with `--tab` or `--output_format tab`. A row holds the 13 default columns, then one column per Extra key the active flags can produce, in the Extra key order above, then one column per built-in plugin field. An absent value prints `-`; lists join with `,`. The header repeats the default format's block with a `## <column> : <description>` line for every column (a plugin column takes the plugin's own description) and no `Extra column keys` block. Its column line names every column.
 
-A plugin header key listed twice, the plugin named twice on the command line or two plugins sharing a key, prints one column, where Ensembl VEP prints one per instance (`OutputFactory/Tab.pm` line 195 appends every key it is handed).
+A plugin key listed twice, by a plugin named twice or two plugins sharing a key, prints one column where Ensembl VEP prints one per instance ([a key listed twice](../divergences/duplicate-output-column.md)).
 
-### Choosing the columns (--fields)
+### Choosing the columns (`--fields`) {#choosing-the-columns-fields}
 
-`--fields` names the columns, comma-separated, and the list stands in for the whole default set, defaults included, in the order given: `--fields Location,Allele,Feature,Consequence,SYMBOL` writes exactly those five columns, each with its description line. Any field a flag or a plugin produces is a valid name; a field whose flag is off prints `-`, so `SYMBOL` needs `--symbol`. A name nothing produces prints `-` in every row; its description line is Ensembl VEP's text when its description table has the name (`ID`, `ExAC_AF`, `REFSEQ_MATCH`) and `## <name> : ?` otherwise, as Ensembl VEP writes it. Nothing is trimmed and a trailing comma opens no column.
+`--fields` names the columns, comma-separated, and the list stands in for the whole default set, defaults included, in the order given. `--fields Location,Allele,Feature,Consequence,SYMBOL` writes exactly those five columns, each with its description line. Any field a flag or a plugin produces is a valid name; a field whose flag is off prints `-`, so `SYMBOL` needs `--symbol`.
 
-An empty list writes the tab header block and no data line, as Ensembl VEP's output loop does (every row is the empty string, which ends it); the VCF output's entries are then empty (`CSQ=,,`) on both engines. That loop also ends at a row whose whole line is `0`, so `--tab --fields SIFT` makes Ensembl VEP stop at the first SIFT score of `0` and lose every later row; vep-rs writes every row.
+A name nothing produces prints `-` in every row. Its description line is Ensembl VEP's text when its description table has the name (`ID`, `ExAC_AF`, `REFSEQ_MATCH`) and `## <name> : ?` otherwise, as Ensembl VEP writes it. Nothing is trimmed and a trailing comma opens no column.
+
+An empty list writes the tab header block and no data line, as Ensembl VEP's output loop does (every row is the empty string, which ends it). The VCF output's entries are then empty (`CSQ=,,`) on both engines. That loop also ends at a row whose whole line is `0`. So `--tab --fields SIFT` makes Ensembl VEP stop at the first SIFT score of `0` and lose every later row; vep-rs writes every row.
 
 The list applies to the `tab` and `vcf` outputs; the default and JSON formats ignore it, as Ensembl VEP's do. `--output_format parquet` refuses it, since the Parquet column set is fixed (`ERROR: [output] --fields applies to --tab and --vcf output; the Parquet column set is fixed`, one of the [rules of vep-rs's own](../cli-reference.md#rules-of-vep-rss-own)). The `GRCh38-writers` corpus runs a list that reorders the columns and names both a field whose flag is off and a field nothing produces, in every format.
 
 ## Differences a reader will notice
 
-Every formatter follows Ensembl VEP's own rules, cited to their Perl sources in the code: `crates/vep-io/src/output/fields.rs` holds the single field table every format shares, `crates/vep-effects/src/display.rs` the positions, codons and peptides, and the formatters sit beside them. The rules below are the ones a reader of these two formats most often needs. Structural variants have [a page of their own](structural-variants.md).
+Every formatter follows Ensembl VEP's rules, cited to their Perl sources in the code. `crates/vep-io/src/output/fields.rs` holds the single field table every format shares, `crates/vep-effects/src/display.rs` the positions, codons and peptides, and the formatters sit beside them. The rules below are the ones a reader most often needs.
 
 ### Row order
 
-Rows of one input record come by feature kind, transcript rows, then regulatory-feature rows, then motif-feature rows, each kind feature-major and allele-minor: sorted by stable id, then by ALT order within a feature. Intergenic rows come last, one per allele that overlapped no transcript. A record's rows are contiguous in the default and tab formats; the VCF output folds them into one line and the JSON output into one object.
+A record's rows come by feature kind: transcript, then regulatory-feature, then motif-feature rows. Each kind is feature-major, by Ensembl VEP's key (a transcript's stable id, `_` and database id; a regulatory feature's stable id; a motif's database id), and allele-minor, by ALT order. A `--regulatory_gff` motif has no database id and takes its stable id ([the motif row order class](../divergences/regulatory-gff-motif-rows.md#1-two-motif-rows-of-one-record-in-the-order-of-a-read-counter)). Intergenic rows come last, one per allele overlapping no transcript. A record's rows are contiguous in the default and tab formats; the VCF output folds them into one line, the JSON into one object.
+
+A structural variant's regulatory-feature and motif-feature rows come as their source lists them. That is file order from `--regulatory_gff`, read or baked, and the cache's order from a converted cache ([Regulatory and motif features](../regulatory.md)).
 
 ### Uploaded_variation
 
-The column takes the first `;`-element of a VCF record's ID; an Ensembl-format ID column is taken whole. The element is not used when it is `.`, empty or `0`, the values VEP reads as no ID, or when it is the `chr_start_alleles` name VEP generates for an empty ID column. So `rs2;.` names the record `rs2`, while `.;rs2`, `;rs2`, `0` and `0;rs2` do not name it.
+The column takes the first `;`-element of a VCF record's ID; an Ensembl-format ID column is taken whole. The element is not used when it is `.`, empty or `0`, the values Ensembl VEP reads as no ID. Nor is it used when it is the `chr_start_alleles` name Ensembl VEP generates for an empty ID column. So `rs2;.` names the record `rs2`, while `.;rs2`, `;rs2`, `0` and `0;rs2` do not name it.
 
-A record with no ID is named from its own input line, as Ensembl VEP 116 names it: `CHROM_POS_REF/ALT1/ALT2`, with POS and every allele exactly as the VCF line spells them, case included. `21_10795228_C/G/T` is one such name. `21_30425650_a/g` names the lowercase `21 30425650 . a g`. `21_47612512_C/CTG` names the insertion `21 47612512 . C CTG`, whose variant starts at 47612513. `21_33867341_C/<CN2>` names the symbolic record `21 33867341 . C <CN2>`, whose variant starts at 33867342.
+A record with no ID is named from its own input line, as Ensembl VEP 116 names it. The name is `CHROM_POS_REF/ALT1/ALT2`, with POS and every allele exactly as the VCF line spells them, case included. `21_10795228_C/G/T` is one such name.
 
-A VCF record whose ID column is `0` or empty, the values Perl reads as false, takes Ensembl VEP's generated name when its alleles are lower case: `chr_start_alleles` from the alleles as the anchor chop left them, built before the upper-casing. So `21_30319404_ca/-` names `21 30319403 0 tca t`, while `21_30319403_tca/t` names `21 30319403 . tca t`. An `--individual` copy is named from its own alleles the same way, [in the record's order](../divergences/individual-allele-order.md).
+| Name | The record it names |
+| --- | --- |
+| `21_30425650_a/g` | the lowercase `21 30425650 . a g` |
+| `21_47612512_C/CTG` | the insertion `21 47612512 . C CTG`, whose variant starts at 47612513 |
+| `21_33867341_C/<CN2>` | the symbolic record `21 33867341 . C <CN2>`, whose variant starts at 33867342 |
 
-An Ensembl-format line is named `chr_start_alleles`, start the lower of its two coordinates. An Ensembl-format line whose alleles are written in lower case is the exception: it is named at the start and from the alleles its record carries after Ensembl VEP's own minimisation, the name Ensembl VEP builds before it upper-cases them. `21_30348410_ta/-` names `21 30348409 30348411 cta/c`. An HGVS or SPDI input is named by its notation as written, whitespace removed (`21:g.30282169C>A`, `NC_000021.9:10538884:A:C`), and a region input by its line as written (`21:25585733-25585733:1/G`), in both engines.
+A VCF record whose ID column is `0` or empty, the values Perl reads as false, takes Ensembl VEP's generated name when its alleles are lower case. That name is `chr_start_alleles` from the alleles as the anchor chop left them, built before the upper-casing. So `21_30319404_ca/-` names `21 30319403 0 tca t`, while `21_30319403_tca/t` names `21 30319403 . tca t`. An `--individual` copy is named from its own alleles the same way, [in the record's order](../divergences/individual-allele-order.md).
+
+An Ensembl-format line is named `chr_start_alleles`, start the lower of its two coordinates. An Ensembl-format line whose alleles are written in lower case is the exception. It is named at the start and from the alleles its record carries after Ensembl VEP's own minimisation, the name Ensembl VEP builds before it upper-cases them. `21_30348410_ta/-` names `21 30348409 30348411 cta/c`. An HGVS or SPDI input is named by its notation as written, whitespace removed (`21:g.30282169C>A`, `NC_000021.9:10538884:A:C`), and a region input by its line as written (`21:25585733-25585733:1/G`), in both engines.
 
 ### Positions
 
-`cDNA_position`, `CDS_position` and `Protein_position` are `start-end` ranges, printed as a single value when both ends coincide. An end that falls in an intron or outside the transcript prints `?`; for the CDS and protein columns an end in a UTR prints `?` as well (`?-335`, `493-?`). An insertion prints the two flanking bases (`1161-1162`). `cDNA_position` appears only on exon-overlapping rows; the CDS and protein columns, `Amino_acids` and `Codons` only on coding rows.
+`cDNA_position`, `CDS_position` and `Protein_position` are `start-end` ranges, printed as a single value when both ends coincide. An end that falls in an intron or outside the transcript prints `?`. For the CDS and protein columns an end in a UTR prints `?` as well (`?-335`, `493-?`). An insertion prints the two flanking bases (`1161-1162`). `cDNA_position` appears only on exon-overlapping rows; the CDS and protein columns, `Amino_acids` and `Codons` only on coding rows.
 
 ### Amino_acids and Codons
 
@@ -164,13 +204,15 @@ An Ensembl-format line is named `chr_start_alleles`, start the lower of its two 
 
 ### DISTANCE
 
-The value is the shortest gap between the variant and the transcript: the smallest of the four gaps between the record's start or end and the transcript's start or end. So the pair `POS+1..POS` of a zero-length structural variant measures from whichever flank is nearer. A `<CNV:TR>` read without a FASTA measures from the run it is located on. The key is printed on up- and downstream rows only.
+The value is the shortest gap between the variant and the transcript. It is the smallest of the four gaps between the record's start or end and the transcript's start or end. So the pair `POS+1..POS` of a zero-length structural variant measures from whichever flank is nearer. A `<CNV:TR>` read without a FASTA measures from the run it is located on.
 
 ### FLAGS, OverlapBP and OverlapPC
 
 `FLAGS` lists every `cds_` transcript attribute (`cds_start_NF,cds_end_NF`).
 
-**OverlapBP** and **OverlapPC** appear on every structural variant row that overlaps its feature, breakends excepted, in the default Extra column and in JSON (`bp_overlap`, `percentage_overlap`). `--overlaps` adds them as columns to `tab`, `vcf` and Parquet. They are reported on transcript, regulatory-feature and motif-feature rows, as in Ensembl VEP.
+**OverlapBP** and **OverlapPC** appear on every structural variant row that overlaps its feature, breakends excepted, in the default Extra column and in JSON (`bp_overlap`, `percentage_overlap`). `--overlaps` adds them as columns to `tab`, `vcf` and Parquet. They are reported on transcript, regulatory-feature and motif-feature rows alike.
+
+A structural variant's regulatory-feature and motif-feature rows carry `Feature_type`, `Feature`, the two overlap fields and the consequence terms, none of a sequence variant's `BIOTYPE`, `STRAND` and motif fields. The terms of each structural class and the rows of a paired breakend are on [Regulatory and motif features](../regulatory.md#the-fields).
 
 ### ENSP
 
@@ -178,9 +220,17 @@ Under `--protein` every transcript row of a transcript with a translation carrie
 
 ### The row filters
 
-`--no_intergenic` and `--coding_only` run before the pick family, where Ensembl VEP's `get_all_VariationFeatureOverlapAlleles` applies them. `--no_intergenic` removes the intergenic row of every allele that overlaps no transcript. `--coding_only` keeps the rows whose allele affects the transcript's coding sequence, as Ensembl VEP's `within_cds` judges it: a CDS position, a coding consequence term where the position columns print `-`, or a variant covering a translated transcript whole. A deletion whose ends both lie outside the coding sequence keeps its row by the start, stop or coding-sequence term its inner span earns. Every other transcript row and the intergenic rows go.
+`--no_intergenic` and `--coding_only` run before the pick family, where Ensembl VEP's `get_all_VariationFeatureOverlapAlleles` applies them. `--no_intergenic` removes the intergenic row of every allele that overlaps no transcript.
 
-A record left with no row is written as an unannotated record: no row in the default and tab formats, its VCF line without a CSQ entry, and in JSON the record's identity, coordinates and allele string with `"most_severe_consequence":"?"` and no consequence list. A pick flag then ranks the rows the filters leave, so `--coding_only --pick` keeps one coding row per record and none for a record without one.
+`--coding_only` keeps the rows whose allele affects the transcript's coding sequence, as Ensembl VEP's `within_cds` judges it. That is a CDS position, a coding consequence term where the position columns print `-`, or a variant covering a translated transcript whole. A deletion whose ends both lie outside the coding sequence keeps its row by the start, stop or coding-sequence term its inner span earns. Every other transcript row and the intergenic rows go.
+
+A record left with no row is written as an unannotated record:
+
+- no row in the default and tab formats;
+- its VCF line without a CSQ entry;
+- in JSON the record's identity, coordinates and allele string with `"most_severe_consequence":"?"` and no consequence list.
+
+A pick flag then ranks the rows the filters leave. So `--coding_only --pick` keeps one coding row per record and none for a record without one.
 
 ### The pick family
 
@@ -196,9 +246,9 @@ The pick family acts on a whole input record, as Ensembl VEP's `filter_Variation
 | `--flag_pick_allele`      | groups the rows by the Allele column first, then flags            | collapses to `--flag_pick`                      |
 | `--flag_pick_allele_gene` | groups the rows by allele, then gene, then flags                  | one flagged row per gene over the whole record  |
 
-The ranking follows `--pick_order` (default `mane_select,mane_plus_clinical,canonical,appris,tsl,biotype,ccds,rank,length,ensembl,refseq`): each criterion in turn, a lower value better, the rows tied on it compared on the next. `rank` is the lowest consequence rank of the row. `length` is the translateable-sequence length of a translated transcript and the spliced length otherwise, longer better. `ensembl` and `refseq` read the source cache of a merged cache and tie on every other cache. A shorter list falls through to the first row in Ensembl VEP's order: transcript rows, then regulatory-feature and motif-feature rows, each kind by stable id and allele. A full tie keeps the transcript row with the lexicographically first stable id, else a regulatory-feature row over a motif-feature or intergenic row.
+The ranking follows `--pick_order` (default `mane_select,mane_plus_clinical,canonical,appris,tsl,biotype,ccds,rank,length,ensembl,refseq`): each criterion in turn, a lower value better, the rows tied on it compared on the next. `rank` is the lowest consequence rank of the row. `length` is the translateable-sequence length of a translated transcript and the spliced length otherwise, longer better. `ensembl` and `refseq` read the source cache of a merged cache and tie on every other cache. A shorter list, or a full tie, falls through to the first row in [Ensembl VEP's order](#row-order).
 
-A record overlapping no transcript has one intergenic row per allele, which `--pick` keeps for the first allele alone and the flagging variants mark like a transcript row. Ensembl VEP emits the gene buckets of `--per_gene`, the allele buckets of `--pick_allele` and both of `--pick_allele_gene` in Perl hash order, which differs from run to run. vep-rs keeps the row order above, and the golden runs of those three sets compare the rows without their order (`"unordered": true` in the corpus manifest).
+A record overlapping no transcript has one intergenic row per allele, which `--pick` keeps for the first allele alone and the flagging variants mark like a transcript row. Ensembl VEP emits the gene buckets of `--per_gene`, the allele buckets of `--pick_allele` and both of `--pick_allele_gene` in Perl hash order, which differs from run to run. vep-rs keeps the row order above. The golden runs of those three sets compare the rows without their order (`"unordered": true` in the corpus manifest).
 
 ### --most_severe and --summary {#most_severe-and-summary}
 
@@ -208,34 +258,49 @@ The JSON object files the row under `intergenic_consequences` as `{"consequence_
 
 ### NEAREST
 
-Under `--nearest transcript|gene|symbol` every row of a record, intergenic rows and the `--summary` row included, carries the identifier(s) of the protein-coding transcription start site(s) nearest the record, found as Ensembl VEP's `TranscriptTree::nearest` finds them. The start site of a protein-coding transcript is its start on the forward strand and its end on the reverse. Under `--minimal` every row of a multi-allelic record prints the sites nearest the first alternate allele's trimmed span, the first split feature Ensembl VEP keeps at the rejoin, whether or not that allele writes a row.
+Under `--nearest transcript|gene|symbol` every row of a record, intergenic rows and the `--summary` row included, carries the identifier(s) of the protein-coding transcription start site(s) nearest the record. They are found as Ensembl VEP's `TranscriptTree::nearest` finds them. The start site of a protein-coding transcript is its start on the forward strand and its end on the reverse. Under `--minimal` every row of a multi-allelic record prints the sites nearest the first alternate allele's trimmed span, the first split feature Ensembl VEP keeps at the rejoin, whether or not that allele writes a row.
 
-The two candidates are the highest site at or below the record's end and the lowest site at or above its start plus two. A site exactly one base above the start is the interval containing the start in Ensembl VEP's tree and is never a candidate. Each candidate is measured to the nearer end of the record, and both are reported when they tie, the site at or below the end first. A site on an end of the record is at distance zero.
+The two candidates are the highest site at or below the record's end and the lowest site at or above its start plus two. A site exactly one base above the start is the interval containing the start in Ensembl VEP's tree and is never a candidate. Each candidate is measured to the nearer end of the record. Both are reported when they tie, the site at or below the end first. A site on an end of the record is at distance zero.
 
-The identifier is the transcript stable id, the gene stable id, or the gene symbol falling back to the gene stable id; values repeat once. Where several transcripts start at the winning coordinate, Ensembl VEP reports the one object each of its two tree searches returns, which depends on the search direction and on the order of its table file's lines ([the shared-site page](../divergences/nearest-shared-site.md)). vep-rs reports every transcript at that coordinate in stable-id order; `gene` and `symbol` agree with Ensembl VEP whenever those transcripts belong to one gene.
+The identifier is the transcript stable id, the gene stable id, or the gene symbol falling back to the gene stable id; values repeat once. Where several transcripts start at the winning coordinate, Ensembl VEP reports the one object each of its two tree searches returns. That object depends on the search direction and on the order of its table file's lines ([the shared-site page](../divergences/nearest-shared-site.md)). vep-rs reports every transcript at that coordinate in stable-id order; `gene` and `symbol` agree with Ensembl VEP whenever those transcripts belong to one gene.
 
 The site table is built from the run's own transcript set, so `--gencode_basic` or `--gencode_primary` narrows it. Ensembl VEP writes its table (`transcript_gene_tss.txt`) under the filters of the first `--nearest` run on a cache directory and reuses that file afterwards. A chromosome with no protein-coding transcript prints `NEAREST=` with no value in the default format, an empty tab cell and `"nearest": []`, as Ensembl VEP does. The JSON key is the top-level `nearest` array; the VCF CSQ field joins values with `&`.
 
 ### HGVSg
 
-Under `--hgvsg` (which needs a reference FASTA) every row of a sequence variant, intergenic rows included, carries the HGVS genomic notation of its own allele, as Ensembl VEP's `hgvs_genomic` writes it ([one exception](../divergences/hgvsg-allele-lookup.md)). The notation names the chromosome as the input names it, uses `g.` numbering, or `m.` on the mitochondrial chromosome, and reads the reference bases from the FASTA. An insertion or deletion is described at its most 3' position along the chromosome, and an insertion repeating the bases beside it as a duplication (`21:g.46925315_46925323dup` for `21 46925297 C CCCCCCTGGG`). A same-length change that is the reverse complement is an inversion, and any other change is clipped to the bases that differ (`21:g.34775851T>C` for `21 34775850 ATG ACG`).
+Under `--hgvsg` (which needs a reference FASTA) every row of a sequence variant, intergenic rows included, carries the HGVS genomic notation of its own allele, as Ensembl VEP's `hgvs_genomic` writes it ([one exception](../divergences/hgvsg-allele-lookup.md)). The notation names the chromosome as the input names it, uses `g.` numbering, or `m.` on the mitochondrial chromosome, and reads the reference bases from the FASTA. An insertion or deletion is described at its most 3' position along the chromosome, and an insertion repeating the bases beside it as a duplication (`21:g.46925315_46925323dup` for `21 46925297 C CCCCCCTGGG`). A same-length change that is the reverse complement is an inversion. Any other change is clipped to the bases that differ (`21:g.34775851T>C` for `21 34775850 ATG ACG`).
 
 Each allele of a multi-allelic record is trimmed against the reference on its own to place and class it. An insertion or deletion is then written from the trimmed bases, any other allele with the bases the record's working allele string holds for it, at the trimmed span, as Ensembl VEP writes it. `21:g.34775850delinsGT` is the `CGT` allele of `21 34775849 CAT C,CGT`, whose working allele string is `AT/-/GT`. An allele outside `ACGT`, an allele equal to the reference bases and a structural variant carry no value. The JSON key is `hgvsg`.
 
 ### SPDI
 
-Under `--spdi` every row of a sequence variant carries its allele in SPDI notation, as Ensembl VEP's `spdi_genomic` writes it from the record as the parser leaves it: the chromosome, the 0-based position, the deleted bases and the inserted bases joined by `:`. `21:10538884:A:C` is `21 10538885 A C`, `21:10578406::A` an insertion, `21:20000325:T:` a one-base deletion, and `21:30000000:25:` a deletion of more than 20 bases, written as their count. A multi-allelic record's alleles are the anchor-trimmed pair at the record's span, so `21 14144642 AT CT,A` prints `21:14144641:AT:CT` and `21:14144641:AT:A`. An allele given on the reverse strand is complemented; nothing is shifted.
+Under `--spdi` every row of a sequence variant carries its allele in SPDI notation, as Ensembl VEP's `spdi_genomic` writes it from the record as the parser leaves it. The notation is the chromosome, the 0-based position, the deleted bases and the inserted bases joined by `:`.
 
-The chromosome is named as the cache names it on every row overlapping a transcript, and on an intergenic row as the reference FASTA names it. Ensembl VEP needs a FASTA for those rows and stops without one; vep-rs then prints the cache's name.
+| Notation | What it names |
+| --- | --- |
+| `21:10538884:A:C` | `21 10538885 A C` |
+| `21:10578406::A` | an insertion |
+| `21:20000325:T:` | a one-base deletion |
+| `21:30000000:25:` | a deletion of more than 20 bases, written as their count |
 
-Ensembl VEP keeps the record's notations by allele and looks them up by the row's `Allele`. So under `--shift_3prime 1` a row whose inserted bases the shift rotated (every row under `--shift_genomic 1`, a coding row without it) carries no `SPDI`, unless the rotation lands on another allele of the record, in which case the row carries that allele's notation. For `21 13620283 G GTCA,GCAT` the `TCA` allele moved 10 bases prints `CAT` as its Allele and `21:13620283::CAT` as its `SPDI`.
+A multi-allelic record's alleles are the anchor-trimmed pair at the record's span, so `21 14144642 AT CT,A` prints `21:14144641:AT:CT` and `21:14144641:AT:A`. An allele given on the reverse strand is complemented; nothing is shifted.
+
+The chromosome is named as the cache names it on every row overlapping a transcript, and on an intergenic row as the reference FASTA names it. Ensembl VEP needs a FASTA for those rows and stops without one; vep-rs then prints the cache's name. When the FASTA has no record for the chromosome, Ensembl VEP 116.2 names it as the input spells it, from a placeholder slice (`BaseVEP.pm` lines 428-434), and vep-rs as the cache does.
+
+Ensembl VEP keeps the record's notations by allele and looks them up by the row's `Allele`. So under `--shift_3prime 1` a row whose inserted bases the shift rotated (every row under `--shift_genomic 1`, a coding row without it) carries no `SPDI`. Where the rotation lands on another allele of the record, the row carries that allele's notation instead. For `21 13620283 G GTCA,GCAT` the `TCA` allele moved 10 bases prints `CAT` as its Allele and `21:13620283::CAT` as its `SPDI`.
 
 A structural variant carries none, as does an allele outside `ACGTN` after a parenthesised tandem notation is expanded (`(AC)3` reads `ACACAC`, so `21 10538885 10538890 (AC)3/- +` prints `21:10538884:ACACAC:`), as Ensembl VEP expands it. A record whose reference allele ends in a character outside `ACGTN-` after that expansion (`AR/CA`, `(AC)/-`) is annotated with no `SPDI` on any row. Ensembl VEP's `spdi_genomic` throws on such a record (`VariationFeature.pm` line 2159), under `--ga4gh_vrs` too, and the run ends with exit 255 before any row of the record's buffer is written. The JSON key is `spdi`.
 
 ### GA4GH_VRS
 
-Under `--ga4gh_vrs` (refused with `--vcf`) every row that has an SPDI, whether or not `--spdi` prints it, also carries the GA4GH Variation Representation Specification `Allele` Ensembl VEP derives from that SPDI. The object is a `SequenceLocation` on `refseq:<NC_ accession>` with a `SimpleInterval` from the SPDI's position to that position plus the deleted length, and a `SequenceState` holding the inserted bases; it has no digest.
+Under `--ga4gh_vrs` (refused with `--vcf`) every row that has an SPDI also carries the GA4GH Variation Representation Specification `Allele` Ensembl VEP derives from that SPDI. It does so whether or not `--spdi` prints the SPDI. The object is a `SequenceLocation` on `refseq:<NC_ accession>` with a `SimpleInterval` from the SPDI's position to that position plus the deleted length. It has a `SequenceState` holding the inserted bases and no digest.
 
-Ensembl VEP builds it only from an SPDI named by an `NC_` accession, which it has with a database, or offline on an intergenic row alone when the FASTA record carries that name. vep-rs takes the accession from the chromosome synonyms table (`--synonyms` or the cache's `chr_synonyms.txt`, the first `NC_` synonym of the cache's chromosome name) and writes the object Ensembl VEP writes with a database, or nothing for a chromosome with no such synonym.
+Ensembl VEP builds it only from an SPDI named by an `NC_` accession, which it has with a database, or offline on an intergenic row alone when the FASTA record carries that name. vep-rs takes the accession from the chromosome synonyms table (`--synonyms` or the cache's `chr_synonyms.txt`). It takes the first `NC_` synonym of the cache's chromosome name, in the latest form the table lists it in. It writes the object Ensembl VEP writes with a database, or nothing for a chromosome with no such synonym.
 
-The text formats carry the object JSON-encoded on one line, `start` a string and `end` a number as Ensembl VEP's encoder writes them, with the keys in a fixed order where Ensembl VEP's follow its hash order. The JSON format nests the object under `ga4gh_vrs`, both bounds numbers.
+The text formats carry the object JSON-encoded on one line, `start` a string and `end` a number as Ensembl VEP's encoder writes them. The keys come in a fixed order where Ensembl VEP's follow its hash order. The JSON format nests the object under `ga4gh_vrs`, both bounds numbers.
+
+## Where next
+
+- [How structural variants are written](structural-variants.md): the rules for structural variants, on a page of their own.
+- [Known variants](known-variants.md): the co-located variant keys, the frequency keys, `FREQS` and `SV`.
+- [Output formats](../output-formats.md): the other formats and the rules every format follows.

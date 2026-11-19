@@ -1,0 +1,76 @@
+entry = "hgvs_added_bases_written_outside_the_transcript"
+page = "docs/divergences/hgvs-added-bases-written-outside-the-transcript.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 63,698 per million · 23 flag sets, 93 corpora"
+notes = "Six ClinVar records on GRCh37, each on a row both engines annotate outside a transcript. 801709, 89510 and 89511 insert one, two and three bases between 2:48033890 and 2:48033891, the last base of the reverse-strand ENST00000465204, and repeat its last bases. 3895388 inserts one base directly before 1:2179435, the first base of the forward-strand ENST00000478223, and a run of seven equal bases carries it inside. 802400 inserts two bases directly before 8:41517959, the first base of the forward-strand ENST00000408108, and that base carries them one base in, where they copy nothing. 637079 inserts one base one position before 12:32735313, the first base of the forward-strand ENST00000494977, and a run carries it to the third base. Ensembl VEP writes no HGVSc and no HGVS_OFFSET on the six rows, and its plugin writes no field, 0 and 0, or 1 and 0; vep-rs writes the duplication or insertion the 3' rule gives, its HGVS_OFFSET on an upstream row and the plugin's two fields of that notation. ENST00000405808, ENST00000378536 and ENST00000427716 hold the same records inside, and there both engines write the same duplication. No committed FASTA holds chromosome 1, 2, 8 or 12 and no committed cache these transcripts, so the first prepare step copies info.txt, chr_synonyms.txt and four region files from the Ensembl VEP GRCh37 cache under the --perl-cache-dir roots and the second converts them with scripts/data/storable_to_json.pl in the image the run names; both engines read that cut. --hgvs needs a FASTA offline and the cache holds the bases of no transcript: the run needs --extra-dir grch37_fasta=<a directory holding Ensembl's GRCh37 primary assembly as Homo_sapiens.GRCh37.75.dna.primary_assembly.fa with its .fai>, and --plugins-dir for the plugin."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the cut of the cache is converted in the Ensembl VEP image: pass --image" >&2; exit 1; }
+[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosomes 1, 2, 8 and 12 under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
+mkdir -p "$cut/1" "$cut/2" "$cut/8" "$cut/12"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
+cp "$PERL_CACHE/1/2000001-3000000.gz" "$cut/1/"
+cp "$PERL_CACHE/2/48000001-49000000.gz" "$cut/2/"
+cp "$PERL_CACHE/8/41000001-42000000.gz" "$cut/8/"
+cp "$PERL_CACHE/12/32000001-33000000.gz" "$cut/12/"''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens/116_GRCh37 /stage/json-cache 1,2,8,12 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+1	2179434	3895388	C	CG	.	.	.
+2	48033890	801709	C	CT	.	.	.
+2	48033890	89510	C	CTT	.	.	.
+2	48033890	89511	C	CTTT	.	.	.
+8	41517958	802400	A	AGG	.	.	.
+12	32735311	637079	A	AG	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = [
+  "--hgvs", "--plugin", "HGVSIntronOffset",
+  "--fasta", "{grch37_fasta}/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa",
+]
+
+[compare]
+kind = "rows"
+where = { record = ["3895388", "801709", "89510", "89511", "802400", "637079"], feature = ["ENST00000478223", "ENST00000378536", "ENST00000465204", "ENST00000405808", "ENST00000408108", "ENST00000494977", "ENST00000427716"] }
+columns = ["Uploaded_variation", "Feature", "Consequence", "DISTANCE", "HGVSc", "HGVS_OFFSET", "HGVS_IntronStartOffset", "HGVS_IntronEndOffset"]
+
+[expected]
+ensembl_vep = [
+  "3895388 | ENST00000378536 | intron_variant | - | ENST00000378536.4:c.969+18267dup | 7 | 18267 | 18267",
+  "3895388 | ENST00000478223 | upstream_gene_variant | 0 | - | - | 0 | 0",
+  "637079 | ENST00000427716 | frameshift_variant | - | ENST00000427716.2:c.514dup | 4 | 0 | 0",
+  "637079 | ENST00000494977 | upstream_gene_variant | 1 | - | - | - | -",
+  "801709 | ENST00000405808 | intron_variant | - | ENST00000405808.1:c.169+1443dup | - | 1443 | 1443",
+  "801709 | ENST00000465204 | downstream_gene_variant | 0 | - | - | - | -",
+  "802400 | ENST00000408108 | upstream_gene_variant | 0 | - | - | 0 | 0",
+  "89510 | ENST00000405808 | intron_variant | - | ENST00000405808.1:c.169+1442_169+1443dup | - | 1442 | 1443",
+  "89510 | ENST00000465204 | downstream_gene_variant | 0 | - | - | 0 | 0",
+  "89511 | ENST00000405808 | intron_variant | - | ENST00000405808.1:c.169+1441_169+1443dup | - | 1441 | 1443",
+  "89511 | ENST00000465204 | downstream_gene_variant | 0 | - | - | 1 | 0",
+]
+vep_rs = [
+  "3895388 | ENST00000378536 | intron_variant | - | ENST00000378536.4:c.969+18267dup | 7 | 18267 | 18267",
+  "3895388 | ENST00000478223 | upstream_gene_variant | 0 | ENST00000478223.2:n.7dup | 7 | 0 | 0",
+  "637079 | ENST00000427716 | frameshift_variant | - | ENST00000427716.2:c.514dup | 4 | 0 | 0",
+  "637079 | ENST00000494977 | upstream_gene_variant | 1 | ENST00000494977.1:c.3dup | 4 | 0 | 0",
+  "801709 | ENST00000405808 | intron_variant | - | ENST00000405808.1:c.169+1443dup | - | 1443 | 1443",
+  "801709 | ENST00000465204 | downstream_gene_variant | 0 | ENST00000465204.1:n.3158dup | - | 0 | 0",
+  "802400 | ENST00000408108 | upstream_gene_variant | 0 | ENST00000408108.1:n.1_2insGG | 1 | 0 | 0",
+  "89510 | ENST00000405808 | intron_variant | - | ENST00000405808.1:c.169+1442_169+1443dup | - | 1442 | 1443",
+  "89510 | ENST00000465204 | downstream_gene_variant | 0 | ENST00000465204.1:n.3157_3158dup | - | 0 | 0",
+  "89511 | ENST00000405808 | intron_variant | - | ENST00000405808.1:c.169+1441_169+1443dup | - | 1441 | 1443",
+  "89511 | ENST00000465204 | downstream_gene_variant | 0 | ENST00000465204.1:n.3156_3158dup | - | 0 | 0",
+]

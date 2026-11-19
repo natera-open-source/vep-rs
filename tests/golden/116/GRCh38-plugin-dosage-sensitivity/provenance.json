@@ -1,0 +1,63 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "variants.vcf: hand-placed records named by their design, nine on chromosome 21: an intergenic substitution; an exonic substitution in APP; a substitution upstream of BACH1's canonical transcript and inside its longer transcripts; an exonic substitution in BACH1; a 260-base deletion covering the single-exon transcript of KRTAP20-4 whole and a substitution inside that exon; a substitution 2,000 bases upstream of SOD1 and one in each of its second exon and an intron and one on chromosome 22 in an exon shared by the transcripts of LINC01664 (gene ENSG00000235478), the gene whose stable id the plugin maps to the table's clone-based symbol AC006946.15. Reference alleles read from the GRCh38 primary assembly. Under cover=1 only the deletion's KRTAP20-4 row spans its transcript; APP, BACH1, SOD1, KRTAP20-4 and the remapped gene carry scores in the table, the SCAF4 rows downstream of the SOD1 records too.",
+ "sha256": {
+  "default.txt": "5eb55ef7d380861949e4b3ef9dae827e5d72b859d22f755b56eb297a2ffc3436",
+  "tab.txt": "10f9551da5ea07c17fb06e9402a186b5f06ebc81e3f2dc68ca7147721839d604",
+  "vcf.vcf": "c9789a7fd474ae30b09f9acf6f2eb6d554707a91b76ec44db8c2e9c9122bf69d",
+  "json.jsonl": "1db3a692590cbc91d958b898f7bfa7563b6b225a3e8f58ce74ad249a9fadcbd4"
+ },
+ "variants_vcf_sha256": "8af929bb4a0c43eac902ec85a5f9658ce6f4989b34a0f899a946a7486c336430",
+ "flag_sets": {
+  "file": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin DosageSensitivity,file={corpus}/data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz [--tab|--vcf|--json]",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/data",
+    "--plugin",
+    "DosageSensitivity,file={corpus}/data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_file",
+   "sha256": {
+    "default.txt": "fcf51535052430732b3c6f38645f967d330c7540d698d5db162044e09b04105d",
+    "tab.txt": "a8e515c639731a9cc2c43fffe48e5d485a4f46784be4115d9bd2d04e75f3d4c2",
+    "vcf.vcf": "19df0bbee1b450110a97f7ee93d7dc3a5422cae5f8d78f3312559c863e6fbc2d",
+    "json.jsonl": "e9a93d902d70e34b65d92758cd47a0d9b482ede2b53e8b9e419034e60b7a0a76"
+   }
+  },
+  "file-cover": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin DosageSensitivity,file={corpus}/data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz,cover=1 [--tab|--vcf|--json]",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/data",
+    "--plugin",
+    "DosageSensitivity,file={corpus}/data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz,cover=1"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_file-cover",
+   "sha256": {
+    "default.txt": "46cffcc53961e394877339ccd035484a6cb6707276ee4dda52d6245a37dc4eae",
+    "tab.txt": "d40aa0e5d7b6b446bab1e346cc4039f3f1d589eb83a63db30348250a1dc6cb7c",
+    "vcf.vcf": "9301b78ddc12265b5e11820e92478e07942fe679c8bb8ca9762ea60ef66074d9",
+    "json.jsonl": "cf6c513f5dafdbfe575184fecd6195bcf0bc22f975527b4d1fd0cf0bf19bd086"
+   }
+  }
+ },
+ "data": {
+  "description": "data/: the slice of the DosageSensitivity table the flag sets read, identical on both sides: vep-rs through the corpus directory, Ensembl VEP through its read-only mount",
+  "source": "Collins et al. 2022 dosage sensitivity scores (Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz, Zenodo record 6347673); three tab-separated columns gene, pHaplo, pTriplo under a #-prefixed header",
+  "licence": "CC BY 4.0",
+  "slice": "the header line and the row of every gene symbol a transcript within 5,000 bases of a corpus record carries in either assembly's cache, plus AC006946.15, the clone-based symbol the plugin maps gene ENSG00000235478 to; gzip-compressed",
+  "sha256": {
+   "data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz": "2a8d001816b19c9662948ab2ff6da8b7f199a68da213d4549d4425b176d1cfbd"
+  }
+ },
+ "generator": "manifest: scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite plugin-dosage=<reference>=<candidates> --k 3 --seed 1 --include <each record's ID> --covers DosageSensitivity --matrix tests/parity/matrix.tsv, then flag-set for each flag_sets entry; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 and 22 slices of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh38 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the default run and, per flag set, for a copy of the corpus carrying the set's flags as its own, whose outputs and record are the set's"
+}

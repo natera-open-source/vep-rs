@@ -1,0 +1,30 @@
+entry = "conservation_max_text_order"
+page = "docs/plugins/conservation.md#where-max-differs-from-ensembl-vep"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 137,763 per million · 3 flag sets, 105 corpora"
+notes = "A two-base substitution over 21:18383679-18383680, whose scores in the corpus bigWig are -3.29 and -4.96: as text -4.96 sorts last, as numbers -3.29 is the maximum."
+
+[input]
+format = "vcf"
+text = """
+21	18383679	all_negative_span	TT	AA	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-conservation/json_cache"
+
+[run]
+flags = ["--plugin", "Conservation,{corpus}/plugin_data/gerp.bw,MAX"]
+
+[compare]
+kind = "field"
+field = "Conservation"
+where = { record = "all_negative_span", feature = "ENST00000284885" }
+
+[expected]
+ensembl_vep = ["-4.960"]
+vep_rs = ["-3.290"]

@@ -23,7 +23,7 @@ use vep_core::variant::InputVariant;
 use crate::error::IoError;
 use crate::input::ReferenceSequence;
 
-use super::fields::{self, FieldOptions, PluginHeader};
+use super::fields::{self, CustomHeader, FieldOptions, PluginHeader};
 use super::OutputFormatter;
 
 /// The field-selection options, shared with every other format.
@@ -48,6 +48,9 @@ pub struct VcfOutputFormatter {
     /// The plugin fields and their descriptions, one `##<KEY>=<description>`
     /// header line each.
     plugin_headers: Vec<PluginHeader>,
+    /// The `--custom` sources' keys and their descriptions, one `##INFO` header
+    /// line each after the plugin lines (`OutputFactory/VCF.pm:273-276`).
+    custom_headers: Vec<CustomHeader>,
     /// `--keep_csq`: an input's existing annotation stays, header lines and INFO
     /// entry, beside the new one.
     keep_csq: bool,
@@ -68,25 +71,25 @@ impl VcfOutputFormatter {
     /// `selected_fields` is the `--fields` list, which replaces the CSQ subfields.
     pub fn new(
         info_field_name: String,
-        options: FieldOptions,
+        mut options: FieldOptions,
         plugin_headers: Vec<PluginHeader>,
         selected_fields: Option<Vec<String>>,
     ) -> Self {
-        let fields = build_csq_field_list(
-            &options,
-            &fields::plugin_field_names(&plugin_headers),
-            selected_fields.as_deref(),
-        );
+        let plugin_fields = fields::plugin_field_names(&plugin_headers);
+        options.set_plugin_fields(plugin_fields.iter().cloned());
+        let fields = build_csq_field_list(&options, &plugin_fields, selected_fields.as_deref());
         let produced = fields
             .iter()
             .map(|f| fields::field_is_produced(f, &options))
             .collect();
+        let custom_headers = fields::custom_headers(&options.custom_sources);
         Self {
             info_field_name,
             fields,
             produced,
             options,
             plugin_headers,
+            custom_headers,
             keep_csq: false,
             vep_meta_line: fields::vcf_vep_meta_line("", None),
             command_line: String::new(),
@@ -118,7 +121,7 @@ impl VcfOutputFormatter {
     }
 
     /// The record's VCF line, read from any allele `first` of it: a VCF input's
-    /// own line as read, the bytes when the line is not UTF-8
+    /// own stored line, as bytes when the line is not UTF-8
     /// (`OutputFactory/VCF.pm:315`), else the line Ensembl VEP builds from the
     /// record (`:336-337`, [`to_vcf_record`]).
     fn record_line<'a>(&self, first: &'a InputVariant) -> Cow<'a, [u8]> {
@@ -152,8 +155,10 @@ impl VcfOutputFormatter {
     /// input metas minus any earlier definition of the INFO field, `##VEP` or
     /// `##vep-rs` line (every input meta under `--keep_csq`), the `##VEP=` line,
     /// the `##vep-rs=<version>` line, the field's `##INFO` definition, one
-    /// `##<KEY>=<description>` line per plugin field, the command line, then the
-    /// column line (`OutputFactory/VCF.pm` `headers`).
+    /// `##<KEY>=<description>` line per plugin field, one
+    /// `##INFO=<ID=<KEY>,Number=.,Type=String,Description="<description>">` line
+    /// per custom key, the command line, then the column line
+    /// (`OutputFactory/VCF.pm` `headers`, :262-281).
     pub fn header_lines(&self, input_headers: &[String]) -> Vec<String> {
         let mut lines: Vec<String> = Vec::new();
         let mut col_heading = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO".to_string();
@@ -187,6 +192,11 @@ impl VcfOutputFormatter {
         lines.push(self.info_line());
         for (name, description) in &self.plugin_headers {
             lines.push(format!("##{name}={description}"));
+        }
+        for (name, description) in &self.custom_headers {
+            lines.push(format!(
+                "##INFO=<ID={name},Number=.,Type=String,Description=\"{description}\">"
+            ));
         }
         lines.push(format!("##VEP-command-line='{}'", self.command_line));
         lines.push(col_heading);
@@ -231,9 +241,10 @@ const VCF_COLS: [&str; 18] = [
 ];
 
 /// The CSQ subfields: `@VCF_COLS`, then the active flag fields not already in
-/// it, then plugin fields, each name once; or, under `--fields`, that list in its
-/// own order and nothing else (`OutputFactory/VCF.pm` `fields`, where the flag's
-/// value pre-empts the list).
+/// it, then plugin fields, then the custom keys, each name once; or, under
+/// `--fields`, that list in its own order and nothing else
+/// (`OutputFactory/VCF.pm` `fields`, :440-453, where the flag's value pre-empts
+/// the list).
 pub(crate) fn build_csq_field_list(
     options: &FieldOptions,
     plugin_fields: &[String],
@@ -248,7 +259,10 @@ pub(crate) fn build_csq_field_list(
             fields.push(f.to_string());
         }
     }
-    for f in plugin_fields {
+    for f in plugin_fields
+        .iter()
+        .chain(&fields::custom_field_names(&options.custom_sources))
+    {
         if !fields.contains(f) {
             fields.push(f.clone());
         }
@@ -652,8 +666,10 @@ impl OutputFormatter for VcfOutputFormatter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::output::fields::fixtures::edit_transcript;
     use smallvec::smallvec;
     use vep_core::consequence::{Consequence, FeatureType, Impact, TranscriptConsequence};
+    use vep_core::transcript::Transcript;
 
     #[test]
     fn test_csq_header_generation() {
@@ -738,9 +754,12 @@ mod tests {
         v.raw_input = Some("21\t100\trs1\tA\tG\t.\t.\tDP=3;CSQ=G|old|entry".into());
         v.id = Some("rs1".into());
         v.transcript_consequences = vec![TranscriptConsequence {
-            transcript_id: "ENST1".into(),
-            gene_id: "ENSG1".into(),
-            gene_symbol: Some("GENE1".into()),
+            transcript: Some(Arc::new(Transcript {
+                stable_id: "ENST1".into(),
+                gene_stable_id: "ENSG1".into(),
+                gene_symbol: Some("GENE1".into()),
+                ..Transcript::default()
+            })),
             consequences: smallvec![Consequence::MissenseVariant],
             impact: Impact::MODERATE,
             feature_type: FeatureType::Transcript,
@@ -911,6 +930,75 @@ mod tests {
         assert!(header[2].starts_with(VCF_IDENTITY_KEY));
     }
 
+    /// `OutputFactory/VCF.pm` `headers` (:273-276): each custom key is one
+    /// `##INFO=<ID=<key>,Number=.,Type=String,Description="<description>">` line
+    /// after the `##<plugin>=` lines, and the CSQ Format lists the custom keys
+    /// after the plugin keys (:449) with `SOURCE` among the flag fields
+    /// (Constants.pm:101). A CSQ entry joins a custom list with `&` and escapes
+    /// a `FILTER` list's `;` as `%3B` (:392-404); an `exact` record's fields
+    /// print on its allele's entry alone.
+    #[test]
+    fn custom_headers_are_info_lines_after_plugin_lines() {
+        use crate::output::fields::fixtures::{
+            clinvar_annotations, clinvar_source, conservation_source,
+        };
+        let options = VcfFieldOptions {
+            custom_sources: vec![clinvar_source(), conservation_source()],
+            ..vcf_options()
+        };
+        let formatter = VcfOutputFormatter::new("CSQ".to_string(), options, plugin_headers(), None)
+            .with_run_info("/c", None, "vep --vcf");
+        let header = formatter.header_lines(&[]);
+        let tail: Vec<&str> = header.iter().map(String::as_str).skip(4).collect();
+        assert_eq!(
+            tail,
+            [
+                "##CADD_PHRED=CADD PHRED-scaled pathogenicity score",
+                "##REVEL_score=REVEL pathogenicity score",
+                "##INFO=<ID=ClinVar,Number=.,Type=String,Description=\"[PATH]/custom.vcf.gz\">",
+                "##INFO=<ID=ClinVar_CLNSIG,Number=.,Type=String,Description=\"Clinical significance. CLNSIG field from [PATH]/custom.vcf.gz\">",
+                "##INFO=<ID=ClinVar_CLNREVSTAT,Number=.,Type=String,Description=\"CLNREVSTAT. CLNREVSTAT field from [PATH]/custom.vcf.gz\">",
+                "##INFO=<ID=cons,Number=.,Type=String,Description=\"[PATH]/cons.bw\">",
+                "##INFO=<ID=cons_PC,Number=.,Type=String,Description=\"Percentage of the input variant covered by the annotation record from [PATH]/cons.bw\">",
+                "##INFO=<ID=cons_min,Number=.,Type=String,Description=\"min data from [PATH]/cons.bw\">",
+                "##INFO=<ID=cons_count,Number=.,Type=String,Description=\"count data from [PATH]/cons.bw\">",
+                "##VEP-command-line='vep --vcf'",
+                "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO",
+            ]
+        );
+        assert!(header[3].ends_with(
+            "|SOURCE|CADD_PHRED|REVEL_score|ClinVar|ClinVar_CLNSIG|ClinVar_CLNREVSTAT|cons|cons_PC|cons_min|cons_count\">"
+        ));
+        let mut variant = annotated_variant();
+        variant.custom_annotations = vec![clinvar_annotations(b"G")];
+        let mut other = annotated_variant();
+        other.alt_alleles = vec![b"T".to_vec()];
+        other.allele_index = 1;
+        other.custom_annotations = vec![clinvar_annotations(b"G")];
+        let lines = formatter.format_record(&[&variant, &other]).unwrap();
+        let entries: Vec<&str> = info_of(&lines[0])
+            .split("CSQ=")
+            .nth(1)
+            .unwrap()
+            .split(',')
+            .collect();
+        assert!(
+            entries[0].ends_with("|21:100-100&rs1|Benign&Pathogenic|criteria_provided||||"),
+            "{}",
+            entries[0]
+        );
+        assert!(
+            entries[1].ends_with("|21:100-100|Benign|criteria_provided||||"),
+            "{}",
+            entries[1]
+        );
+        assert_eq!(
+            fields::field_value("ClinVar_FILTER", &variant, None, &formatter.options, "&"),
+            "q10;s50"
+        );
+        assert_eq!(vcf_encode("q10;s50"), "q10%3Bs50");
+    }
+
     /// `--vcf_info_field ANN` (`VCF.pm` 147, 221, 267, 328, 349): the `##INFO`
     /// definition and the INFO key take the name, an input header defining `ANN`
     /// is removed while one defining `CSQ` stays, and an existing `CSQ=` entry on
@@ -984,13 +1072,16 @@ mod tests {
         variant.raw_input = Some("21\t25585733\trs123\tA\tG\t100\tPASS\t.".into());
         variant.id = Some("rs123".into());
         variant.transcript_consequences = vec![TranscriptConsequence {
-            transcript_id: "ENST00000352957".into(),
-            gene_id: "ENSG00000154719".into(),
-            gene_symbol: Some("MRPL39".into()),
+            transcript: Some(Arc::new(Transcript {
+                stable_id: "ENST00000352957".into(),
+                gene_stable_id: "ENSG00000154719".into(),
+                gene_symbol: Some("MRPL39".into()),
+                biotype: "protein_coding".into(),
+                ..Transcript::default()
+            })),
             consequences: smallvec![Consequence::SynonymousVariant],
             impact: Impact::LOW,
             feature_type: FeatureType::Transcript,
-            biotype: Some("protein_coding".into()),
             cdna_position: Some("1033".into()),
             cds_position: Some("991".into()),
             protein_position: Some("331".into()),
@@ -1031,8 +1122,11 @@ mod tests {
         variant.raw_input = Some("21\t25585733\t.\tA\tG\t100\tPASS\t.".into());
         variant.transcript_consequences = vec![
             TranscriptConsequence {
-                transcript_id: "ENST00000001".into(),
-                gene_id: "ENSG00000001".into(),
+                transcript: Some(Arc::new(Transcript {
+                    stable_id: "ENST00000001".into(),
+                    gene_stable_id: "ENSG00000001".into(),
+                    ..Transcript::default()
+                })),
                 consequences: smallvec![Consequence::MissenseVariant],
                 impact: Impact::MODERATE,
                 feature_type: FeatureType::Transcript,
@@ -1040,8 +1134,11 @@ mod tests {
                 ..Default::default()
             },
             TranscriptConsequence {
-                transcript_id: "ENST00000002".into(),
-                gene_id: "ENSG00000001".into(),
+                transcript: Some(Arc::new(Transcript {
+                    stable_id: "ENST00000002".into(),
+                    gene_stable_id: "ENSG00000001".into(),
+                    ..Transcript::default()
+                })),
                 consequences: smallvec![Consequence::IntronVariant],
                 impact: Impact::MODIFIER,
                 feature_type: FeatureType::Transcript,
@@ -1074,7 +1171,9 @@ mod tests {
     #[test]
     fn symbol_whitespace_escapes_percent20() {
         let mut v = annotated_variant();
-        v.transcript_consequences[0].gene_symbol = Some("GENE 1\t X\u{A0}Y".into());
+        edit_transcript(&mut v.transcript_consequences[0], |t| {
+            t.gene_symbol = Some("GENE 1\t X\u{A0}Y".into())
+        });
         v.transcript_consequences[0]
             .plugin_data
             .insert("Note".to_string(), "a b".to_string());
@@ -1110,8 +1209,10 @@ mod tests {
     #[test]
     fn dash_sentinel_is_an_empty_subfield_and_lists_join_with_ampersand() {
         let mut v = annotated_variant();
-        v.transcript_consequences[0].ccds = Some("-".into());
-        v.transcript_consequences[0].refseq = Some("NM_1.1,NM_2.2".into());
+        edit_transcript(&mut v.transcript_consequences[0], |t| {
+            t.ccds = Some("-".into());
+            t.refseq = Some("NM_1.1,NM_2.2".into());
+        });
         let formatter = VcfOutputFormatter::new(
             "CSQ".to_string(),
             VcfFieldOptions {
@@ -1157,7 +1258,9 @@ mod tests {
     #[test]
     fn control_bytes_in_a_csq_value_are_percent_encoded() {
         let mut v = annotated_variant();
-        v.transcript_consequences[0].gene_symbol = Some("GEN\0E\tX".into());
+        edit_transcript(&mut v.transcript_consequences[0], |t| {
+            t.gene_symbol = Some("GEN\0E\tX".into())
+        });
         v.transcript_consequences[0]
             .plugin_data
             .insert("Note".to_string(), "a\0b\tc\x01".to_string());
@@ -1184,10 +1287,13 @@ mod tests {
     fn symbol_whitespace_is_percent20_in_vcf_unless_no_escape() {
         let variant = InputVariant::new("21".into(), 100, 100, b"A".to_vec(), b"G".to_vec());
         let tc = TranscriptConsequence {
-            transcript_id: "ENST1".into(),
-            gene_id: "ENSG1".into(),
-            gene_symbol: Some("MY GENE".into()),
-            gene_symbol_source: Some("HGNC Symbol".into()),
+            transcript: Some(Arc::new(Transcript {
+                stable_id: "ENST1".into(),
+                gene_stable_id: "ENSG1".into(),
+                gene_symbol: Some("MY GENE".into()),
+                gene_symbol_source: Some("HGNC Symbol".into()),
+                ..Transcript::default()
+            })),
             consequences: smallvec![Consequence::MissenseVariant],
             impact: Impact::MODERATE,
             feature_type: FeatureType::Transcript,
@@ -1221,8 +1327,11 @@ mod tests {
         a.raw_input = Some("21\t100\t.\tA\tG,T\t.\t.\t.".into());
         a.allele_index = 0;
         a.transcript_consequences = vec![TranscriptConsequence {
-            transcript_id: "ENST1".into(),
-            gene_id: "ENSG1".into(),
+            transcript: Some(Arc::new(Transcript {
+                stable_id: "ENST1".into(),
+                gene_stable_id: "ENSG1".into(),
+                ..Transcript::default()
+            })),
             consequences: smallvec![Consequence::MissenseVariant],
             impact: Impact::MODERATE,
             ..Default::default()
@@ -1283,7 +1392,10 @@ mod tests {
         v.raw_input = Some("21\t100\t.\tA\tG\t.\t.\tCSQ=old|stuff;DP=3".into());
         v.vep_skip = true;
         v.transcript_consequences = vec![TranscriptConsequence {
-            transcript_id: "ENST1".into(),
+            transcript: Some(Arc::new(Transcript {
+                stable_id: "ENST1".into(),
+                ..Transcript::default()
+            })),
             consequences: smallvec![Consequence::MissenseVariant],
             ..Default::default()
         }];
@@ -1320,7 +1432,10 @@ mod tests {
         het.individual = Some("S1".into());
         het.genotype = vec!["A".into(), "G".into()];
         het.transcript_consequences = vec![TranscriptConsequence {
-            transcript_id: "ENST1".into(),
+            transcript: Some(Arc::new(Transcript {
+                stable_id: "ENST1".into(),
+                ..Transcript::default()
+            })),
             consequences: smallvec![Consequence::MissenseVariant],
             ..Default::default()
         }];

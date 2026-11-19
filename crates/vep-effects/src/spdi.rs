@@ -26,6 +26,11 @@ pub struct SpdiOptions {
     /// SPDI that names no `NC_` sequence (OutputFactory.pm 1403). `None` builds
     /// no object.
     pub vrs_accessions: Option<HashMap<String, String>>,
+    /// Name the sequence as the cache names it on every row, as a database
+    /// slice names itself (ensembl-variation VariationFeature.pm 2151), the
+    /// name `variant_recoder` writes; `false` takes the FASTA's name on a row
+    /// that overlaps no transcript, as Ensembl VEP's offline run does.
+    pub cache_name_on_every_row: bool,
 }
 
 /// Sets `variant.spdi`, and `variant.ga4gh_vrs` when asked, for a sequence
@@ -41,10 +46,12 @@ pub fn annotate(variant: &mut InputVariant, config: &EffectsConfig) {
     // Ensembl VEP builds a notation per allele after the first of the feature's
     // string and looks the row's allele up among them (OutputFactory.pm:1396-1400;
     // VariationFeature.pm:2153 drops the first), so the reference row of
-    // `--process_ref_homs` carries none, except on a reference-homozygous
-    // individual's copy, whose string is the reference twice (Parser/VCF.pm:646)
-    // and whose one notation is the reference against itself.
-    if variant.is_structural || (variant.reference_allele_row && !variant.hom_ref) {
+    // `--process_ref_homs` carries none unless the string lists the reference
+    // again: a reference-homozygous individual's copy is the reference twice
+    // (Parser/VCF.pm:646), its one notation the reference against itself, until
+    // `--lookup_ref` rewrites it to the looked-up reference and the written one
+    // (Parser.pm:645).
+    if variant.is_structural || (variant.reference_allele_row && !reference_listed_again(variant)) {
         return;
     }
     let spdi = |name: &str, alt: &[u8]| {
@@ -95,6 +102,16 @@ pub fn annotate(variant: &mut InputVariant, config: &EffectsConfig) {
     variant.sibling_spdi = siblings;
 }
 
+/// Whether the record's working allele string lists its first allele again
+/// after the first, the one case in which a reference row's allele has a
+/// notation to be looked up by (OutputFactory.pm:1400).
+fn reference_listed_again(variant: &InputVariant) -> bool {
+    let string = variant.record_allele_string();
+    let mut alleles = string.split('/');
+    let first = alleles.next();
+    alleles.any(|allele| Some(allele) == first)
+}
+
 /// The chromosome name an SPDI carries offline, `seq_region_name` of the slice
 /// the variation feature ends up on (ensembl-variation VariationFeature.pm
 /// 2150-2151): a variant that overlaps a transcript takes the transcript's
@@ -110,7 +127,11 @@ fn reference_name(variant: &InputVariant, config: &EffectsConfig) -> String {
         .transcript_consequences
         .iter()
         .any(|tc| tc.feature_type == FeatureType::Transcript);
-    if !overlaps_a_transcript {
+    let cache_name_on_every_row = config
+        .spdi
+        .as_ref()
+        .is_some_and(|options| options.cache_name_on_every_row);
+    if !overlaps_a_transcript && !cache_name_on_every_row {
         if let Some(name) = config
             .reference_fasta
             .as_deref()
@@ -259,6 +280,7 @@ mod tests {
                     "21".to_string(),
                     "NC_000021.9".to_string(),
                 )])),
+                cache_name_on_every_row: false,
             }),
             ..Default::default()
         };
@@ -296,6 +318,7 @@ mod tests {
                     "21".to_string(),
                     "NC_000021.9".to_string(),
                 )])),
+                cache_name_on_every_row: false,
             }),
             ..Default::default()
         };
@@ -362,6 +385,29 @@ mod tests {
         assert_eq!(
             spdi_of(&mut insertion, &config).as_deref(),
             Some("21:30284295::-")
+        );
+    }
+
+    /// `--lookup_ref` rewrites a reference-homozygous copy whose written
+    /// reference the FASTA contradicts to the looked-up reference followed by
+    /// the written one (Parser.pm:645), so its reference row's allele is listed
+    /// nowhere after the first and the row carries no notation
+    /// (OutputFactory.pm:1396-1400), while the written reference's row, an
+    /// alternate of the rewritten string, carries its own.
+    #[test]
+    fn a_looked_up_reference_homozygous_copys_reference_row_has_no_notation() {
+        let config = spdi_only();
+        let mut copy = variant("21", 34974571, 34974571, "C", "T");
+        copy.record_allele_string_multi = Some(Arc::from("C/T"));
+        copy.individual = Some("S1".into());
+        copy.genotype = vec!["T".into(), "T".into()];
+        copy.hom_ref = true;
+        let mut reference_row = copy.reference_allele_row();
+        assert_eq!(spdi_of(&mut reference_row, &config), None);
+        assert!(reference_row.sibling_spdi.is_empty());
+        assert_eq!(
+            spdi_of(&mut copy, &config).as_deref(),
+            Some("21:34974570:C:T")
         );
     }
 }

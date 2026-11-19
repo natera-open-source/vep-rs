@@ -497,6 +497,58 @@
    "vep_rs_only_summary": {}
   },
   {
+   "name": "compress-bgzip-one-thread",
+   "flags": [
+    "--compress_output",
+    "bgzip",
+    "--compression_threads",
+    "1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_compress-bgzip",
+   "covers": [
+    "compress_output",
+    "compression_threads"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "compress-bgzip-three-threads",
+   "flags": [
+    "--compress_output",
+    "bgzip",
+    "--compression_threads",
+    "3"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_compress-bgzip",
+   "covers": [
+    "compress_output",
+    "compression_threads"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
    "name": "no-headers",
    "flags": [
     "--no_headers"

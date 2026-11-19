@@ -1,0 +1,53 @@
+entry = "hgvs_intron_offset_abutting_insertion"
+page = "docs/divergences/hgvs-intron-offset-abutting-insertion.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 63,698 per million · 2 flag sets, 93 corpora"
+notes = "The two ClinVar records of the entry's page, on GRCh37. 1365957 inserts one base between 2:27670443 and 2:27670444, and 27670443 is the first base of the reverse-strand ENST00000480892; 801710 inserts four bases between 2:48033890 and 2:48033891, and 48033891 is the last base of the reverse-strand ENST00000465204. Both engines write each row outside its transcript with DISTANCE=0 and no HGVSc. Ensembl VEP's plugin adds its two fields, 0 and 0 on the upstream row and 1 and 0 on the downstream row; vep-rs writes neither. ENST00000260570 holds the first insertion inside an exon, and there both engines write the HGVSc with the two fields. No committed FASTA holds chromosome 2 and the committed GRCh37 cache lacks ENST00000480892, so the first prepare step copies info.txt, chr_synonyms.txt and the two region files from the Ensembl VEP GRCh37 cache under the --perl-cache-dir roots and the second converts them with scripts/data/storable_to_json.pl in the image the run names; both engines read that cut. --hgvs needs a FASTA offline and the cache holds the bases of neither transcript: the run needs --extra-dir grch37_fasta=<a directory holding Ensembl's GRCh37 primary assembly as Homo_sapiens.GRCh37.75.dna.primary_assembly.fa with its .fai>."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the cut of the cache is converted in the Ensembl VEP image: pass --image" >&2; exit 1; }
+[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosome 2 under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
+mkdir -p "$cut/2"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
+cp "$PERL_CACHE/2/27000001-28000000.gz" "$PERL_CACHE/2/48000001-49000000.gz" "$cut/2/"''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens/116_GRCh37 /stage/json-cache 2 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+2	27670443	1365957	G	GT	.	.	.
+2	48033890	801710	C	CTTCT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = [
+  "--hgvs", "--plugin", "HGVSIntronOffset",
+  "--fasta", "{grch37_fasta}/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa",
+]
+
+[compare]
+kind = "rows"
+where = { record = ["1365957", "801710"], feature = ["ENST00000480892", "ENST00000260570", "ENST00000465204"] }
+columns = ["Uploaded_variation", "Feature", "Consequence", "DISTANCE", "HGVSc", "HGVS_IntronStartOffset", "HGVS_IntronEndOffset"]
+
+[expected]
+ensembl_vep = [
+  "1365957 | ENST00000260570 | frameshift_variant | - | ENST00000260570.3:c.4597dup | 0 | 0",
+  "1365957 | ENST00000480892 | upstream_gene_variant | 0 | - | 0 | 0",
+  "801710 | ENST00000465204 | downstream_gene_variant | 0 | - | 1 | 0",
+]
+vep_rs = [
+  "1365957 | ENST00000260570 | frameshift_variant | - | ENST00000260570.3:c.4597dup | 0 | 0",
+  "1365957 | ENST00000480892 | upstream_gene_variant | 0 | - | - | -",
+  "801710 | ENST00000465204 | downstream_gene_variant | 0 | - | - | -",
+]

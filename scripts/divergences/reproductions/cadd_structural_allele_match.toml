@@ -1,0 +1,30 @@
+entry = "cadd_structural_allele_match"
+page = "docs/plugins/annotation-store-divergences.md#2-cadd-structural-alleles-outside-insertion-deletion-and-duplication"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 33.1 per million · 11 flag sets, 19 corpora"
+notes = "The first mechanism the entry names: an inversion over the span the corpus's CADD-SV fixture scores throws in Ensembl VEP's plugin and is written once as a warning; both engines write its row without a CADD_ field and score the deletion over the same span."
+
+[input]
+format = "vcf"
+text = """
+21	5029000	inv	T	<INV>	.	.	SVTYPE=INV;END=5047000
+21	5029000	del	T	<DEL>	.	.	SVTYPE=DEL;END=5047000
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-cadd-sv/json_cache"
+
+[run]
+flags = ["--plugin", "CADD,sv={corpus}/plugin_data/1000G_phase3_SVs_synthetic.tsv.gz"]
+
+[compare]
+kind = "warnings"
+pattern = "Plugin 'CADD' went wrong"
+
+[expected]
+ensembl_vep = ["WARNING: Plugin 'CADD' went wrong:"]
+vep_rs = []

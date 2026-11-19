@@ -1,6 +1,6 @@
 # An individual's copy of a `--minimal` record under `--safe`
 
-A difference in the alleles annotated for an individual under a flag pair Ensembl VEP accepts only with `--safe`; nothing is set aside, since no measured dataset runs the flags.
+A difference in the alleles annotated for an individual under a flag pair Ensembl VEP accepts only with `--safe`; nothing is set aside, since no measured dataset runs the flags. Under `--safe --individual all --minimal`, Ensembl VEP lists a copy's two alternate alleles that trim in Perl's hash order, and vep-rs in the record's ALT order. For an indel minimised before the copies are made, Ensembl VEP annotates each copy's chopped alleles against the minimised reference, with a row for the `0/0` individual; vep-rs annotates the minimised record for the carriers alone.
 
 Ensembl VEP lists `--individual` against `--minimal` as incompatible (`Config.pm` line 626) and skips every incompatibility check under `--safe` (line 961, `unless($config->{safe})`), a flag whose stated purpose is to die when a plugin fails to compile (line 272). vep-rs skips the same check under `--safe`, so `--safe --individual all --minimal` runs in both engines.
 

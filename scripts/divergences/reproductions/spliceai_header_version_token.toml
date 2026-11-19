@@ -1,0 +1,38 @@
+entry = "spliceai_header_version_token"
+page = "docs/plugins/spliceai.md#output-shape-per-format"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification, section 1.2.2 \"Information field format\": the ##INFO Description is free text, and the Version key is recommended, not required; the SpliceAI plugin's header (SpliceAI.pm:24-133) sets no rule for the score file's header; not seen in the measured datasets"
+notes = "The version is read from the first file's `##INFO` line, `SpliceAIv1.3` in the corpus file; the prepared copy's line names none. Ensembl VEP also warns `Use of uninitialized value $spliceai_version` on standard error."
+# The corpus SNV file with the version token removed from its ##INFO description.
+prepare = [
+  "zcat \"$CORPUS/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz\" | sed 's/SpliceAIv1.3 synthetic fixture/SpliceAI synthetic fixture/' | bgzip > \"$STAGE/snv_no_version.synthetic.vcf.gz\"",
+  "tabix -p vcf \"$STAGE/snv_no_version.synthetic.vcf.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	21418500	snv_missense_fwd	G	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-spliceai/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-spliceai/reference.fa.gz"
+
+[run]
+flags = [
+  "--plugin",
+  "SpliceAI,snv={stage}/snv_no_version.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz",
+]
+
+[compare]
+kind = "header"
+pattern = "^## SpliceAI_pred"
+
+[expected]
+ensembl_vep = ["## SpliceAI_pred : SpliceAI () predicted effect on splicing. These include delta scores (DS) and delta positions (DP) for acceptor gain (AG), acceptor loss (AL), donor gain (DG), and donor loss (DL). Format: SYMBOL|DS_AG|DS_AL|DS_DG|DS_DL|DP_AG|DP_AL|DP_DG|DP_DL"]
+vep_rs = ["## SpliceAI_pred : SpliceAI predicted effect on splicing. These include delta scores (DS) and delta positions (DP) for acceptor gain (AG), acceptor loss (AL), donor gain (DG), and donor loss (DL). Format: SYMBOL|DS_AG|DS_AL|DS_DG|DS_DL|DP_AG|DP_AL|DP_DG|DP_DL"]

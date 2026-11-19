@@ -1,10 +1,10 @@
 # Defect A: a later differing region erases the splice-region term
 
-**The defect in one sentence.** Ensembl VEP decides the splice-region question once per changed place of a variant and keeps only the last answer, so a change inside the splice-region window loses its `splice_region_variant` term whenever a later change outside the window follows it.
+**The defect in one sentence.** Ensembl VEP decides the splice-region question once per changed place of a variant and keeps only the last answer, so a change inside the splice-region window loses its `splice_region_variant` term whenever a later change outside the window follows it. vep-rs keeps the term when any changed place earns it.
 
 **Why this is a defect.** A consequence term describes where a changed base falls. Whether base 3 of an exon is in the splice-region window does not depend on whether the same variant also changes base 5. Ensembl VEP agrees when the bases are changed one at a time: it writes `splice_region_variant` for the first change alone, and only the presence of the second change removes the term. An annotation that an unrelated second change can switch off is not an annotation of the first change.
 
-**What vep-rs does instead.** vep-rs keeps the term when any differing region, a run of changed bases, earns it. That is how Ensembl VEP already treats its other thirteen splice flags, computed [in the same loop](#14-why-ensembl-vep-writes-that), which are only ever switched on and never overwritten; the splice-region slot is the one exception, and the exception is the defect.
+**What vep-rs does instead.** vep-rs keeps the term when any differing region, a run of differing bases, earns it. That is how Ensembl VEP already treats its other thirteen splice flags, computed [in the same loop](#14-why-ensembl-vep-writes-that), which are only ever switched on and never overwritten; the splice-region slot is the one exception, and the exception is the defect.
 
 **Where it is in Ensembl VEP's source** (`ensembl-variation`):
 - `Bio/EnsEMBL/Variation/BaseTranscriptVariationAllele.pm`, `_intron_effects`, line 215: the verdict is stored by assignment, `$intron_effects->{splice_region} = _intron_overlap(...)`, inside the `foreach my $region` loop that starts at line 117.
@@ -14,7 +14,7 @@
 **What correcting it would change.** Classes 1 and 2 would vanish: Ensembl VEP would keep `splice_region_variant` wherever any region earned it, which is what vep-rs writes.
 
 **The classes it produces.**
-- Class 1: the ClinVar GRCh37 and GRCh38 datasets, 440 and 1,994 pairs; both members of each pair are set aside.
+- Class 1: the ClinVar GRCh37 and GRCh38 datasets, 440 and 1,994 pairs; both members of each pair are set aside. The comparators name it `splice_family_swap`: the SNP/indel comparator's excluding rule decides the pair, and the format comparator and the golden harness set the same pair aside under that name.
 - Class 2: the same shape on the structural-variant sets, scored by the structural-variant comparator, 20 pairs on the synthetic complex-substitution set; both members of each pair are set aside.
 
 Tuple, pair, set aside, charged and the other scoring terms are defined in [How to read the counts](../intended-divergences.md#how-to-read-the-counts).
@@ -32,6 +32,8 @@ Three Sequence Ontology terms appear in this class:
 - `synonymous_variant` (SO:0001819): "a sequence variant where there is no resulting change to the encoded amino acid".
 
 A variant that changes several bases at once (a multi-nucleotide variant or a deletion-insertion) may change bases that are not adjacent. Ensembl VEP compares the reference and alternate alleles position by position and evaluates each run of differing bases, called a differing region, on its own. A term that holds for any of those regions holds for the variant.
+
+By default Ensembl VEP trims from a record with several alternate alleles no more than a first base all its alleles share. An alternate allele of another length than the reference is then compared with it position by position too, where each still holds more than one base. The bases the two share after a place where the allele adds or removes bases are read one or more positions apart and can differ in some places and agree in others, so one such place can give several differing regions, some of unchanged bases.
 
 ### 1.2 The record
 
@@ -101,6 +103,8 @@ Each part alone is annotated identically by both engines. The two parts as one r
 ### 1.7 How the comparator treats this class
 
 `_is_covered_splice_region_swap` in `scripts/concordance/compare_vep_outputs.py` matches a pair when every term in Ensembl VEP's set is also in vep-rs's and vep-rs's set adds `splice_region_variant`, alone or together with `intron_variant`. Both members of a matching pair are set aside.
+
+Where the defect removes `splice_region_variant` from Ensembl VEP's frameshift row, its Downstream plugin writes `DownstreamProtein` and `ProteinLengthChange` on that row and vep-rs, whose row keeps the term, writes none. The format comparator (`scripts/concordance/compare_vep_formats.py`) sets the two fields aside with the pair; `compare_vep_outputs.py` reads no plugin field.
 
 The rule accepts `intron_variant` beside `splice_region_variant` for one case, a region Ensembl VEP skips in a short intron. The `intron_variant` allowance exists because Ensembl VEP's per-region loop steps over a region that lies in an intron of twelve bases or fewer before it sets either the intronic flag or the splice-region slot (`BaseTranscriptVariationAllele.pm` lines 139-141 and 172-174). A region skipped that way withholds both terms at once. None of the ClinVar pairs uses the allowance; every one of them adds `splice_region_variant` alone.
 

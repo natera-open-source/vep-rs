@@ -3128,7 +3128,7 @@
       }
     ],
     "n_gates": 911,
-    "note": "Whole-genome concordance of the released binary against Ensembl VEP 116.2's archived output on four population datasets, one clone per chromosome shard (the pool arch's), the same comparator, cache and reference FASTA as the genome-wide ClinVar and structural-variant cells. A variant is one VCF record; a tuple is one output row reduced to (Location, Allele, Feature, Feature_type, Consequence set); F1 is pooled by summed counts (micro-F1), raw with nothing set aside and adjusted with the documented divergence classes set aside. Wall time per shard is carried in the fleet archive as information only.",
+    "note": "Whole-genome concordance of the released binary against Ensembl VEP 116.2's archived output on four population datasets, one clone per chromosome shard (on the architecture pool_arch names), the same comparator, cache and reference FASTA as the genome-wide ClinVar and structural-variant cells. A variant is one VCF record; a tuple is one output row reduced to (Location, Allele, Feature, Feature_type, Consequence set); F1 is pooled by summed counts (micro-F1), raw with nothing set aside and adjusted with the documented divergence classes set aside. This block holds no wall time: the population record of the same version holds that version's wall-time measurement per dataset and chromosome, under wall_time.",
     "per_chromosome": [
       {
         "adjusted_f1": 1.0,

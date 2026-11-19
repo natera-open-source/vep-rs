@@ -1,0 +1,30 @@
+entry = "minimal_plugin_sees_the_rejoined_record"
+page = "docs/divergences/minimal-plugin-sees-the-rejoined-record.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 90.9 per million · 1 flag set, 19 corpora"
+notes = "Of the two plugins the entry measures this reproduces AVI: under --minimal each allele of AA/AG/AT at 21:5030191 trims to a one-base substitution at 21:5030192 the table scores, and the rejoin hands the plugin the record's two-base span, so AVI.pm:134 returns nothing on both allele rows. The OpenTargets shape, a matched export row written on every allele's rows of a split record, is read through the plugin's allele list (OpenTargets.pm:349) and is on the page."
+
+[input]
+format = "vcf"
+text = """
+21	5030191	avi_aa_ag_at	AA	AG,AT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-avi/json_cache"
+
+[run]
+flags = ["--minimal", "--plugin", "AVI,file={corpus}/avi_scores.synthetic.tsv.gz,raw=1,links=1"]
+
+[compare]
+kind = "field"
+field = "AVI_PHRED"
+where = { record = "avi_aa_ag_at" }
+
+[expected]
+ensembl_vep = ["-", "-"]
+vep_rs = ["2.071", "3.993"]

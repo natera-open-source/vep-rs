@@ -1,0 +1,28 @@
+{
+   "assembly" : "SYN1",
+   "cache_version" : 116,
+   "contig_order" : [
+      "1"
+   ],
+   "source_type" : "ensembl",
+   "source_versions" : {
+      "assembly" : "SYN1",
+      "genebuild" : "synthetic_1"
+   },
+   "species" : "synthetic_species",
+   "variation_cols" : [
+      "variation_name",
+      "failed",
+      "somatic",
+      "start",
+      "end",
+      "allele_string",
+      "strand",
+      "clin_sig",
+      "phenotype_or_disease",
+      "clin_sig_allele",
+      "clinical_impact",
+      "pubmed",
+      "var_synonyms"
+   ]
+}

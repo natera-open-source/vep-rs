@@ -8,7 +8,7 @@
 //!   protein notation), SPDI, region and variant identifier formats, and the
 //!   detection of a format from the first data line; VCF is read by the
 //!   command-line crate's line parser
-//! - Default, tab, VCF, JSON and Parquet-intermediate output formatters
+//! - Default, tab, VCF, JSON and Parquet output formatters
 
 pub mod error;
 pub mod input;

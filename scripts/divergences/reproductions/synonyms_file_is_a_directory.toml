@@ -1,0 +1,34 @@
+entry = "synonyms_file_is_a_directory"
+page = "docs/cache-setup.md#chromosome-names"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "malformed"
+input_class_basis = "the option is written \"--synonyms [file]\" and loads \"a file of chromosome synonyms\" (Ensembl VEP documentation, \"Running Ensembl VEP\", --synonyms), and \"A synonym file is included in Ensembl VEP's cache files\" (\"Annotation sources\", Chromosome synonyms): the value given, or the chr_synonyms.txt of the cache, is a directory"
+notes = "The record's chromosome is an alias only a --synonyms table could supply; Ensembl VEP reads the directory as an empty table and skips the record as not found."
+# A directory where --synonyms expects a file.
+prepare = [
+  "mkdir -p \"$STAGE/synonyms\"",
+]
+
+[input]
+format = "vcf"
+text = """
+hs21	43774760	syn_alias	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-synonyms/json_cache"
+chromosomes = ["21"]
+
+[run]
+flags = ["--synonyms", "{stage}/synonyms"]
+
+[compare]
+kind = "stderr"
+pattern = "Could not read synonyms file"
+
+[expected]
+ensembl_vep = []
+vep_rs = ["ERROR: [config] Could not read synonyms file <path> Is a directory"]

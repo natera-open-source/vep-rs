@@ -1,6 +1,6 @@
 # Defect O: a `<CNV:TR>` allele with `RN=0` drops a real allele of the record
 
-**The defect in one sentence.** With a FASTA, Ensembl VEP joins every allele of a multi-allelic `<CNV:TR>` record into one allele string, and an allele whose `RN` is 0 becomes an empty part of it, so one of the record's alleles is lost.
+**The defect in one sentence.** With a FASTA, Ensembl VEP joins every allele of a multi-allelic `<CNV:TR>` record into one allele string, and an allele whose `RN` is 0 becomes an empty part of it, so one of the record's alleles is lost. With a FASTA vep-rs annotates both alleles when the `RN=0` allele leads, while a trailing `RN=0` allele is lost in both engines.
 
 Each allele is expanded to literal sequence before the join, and the reference comes first in the string. An empty middle part hides the multi-allelic shape, so the record is minimised as a single-allele indel and only the empty allele survives. An empty last part is dropped by `split`, so only the first allele remains.
 
@@ -142,3 +142,29 @@ A vep-rs run that read a FASTA writes the dropped allele's literal reading inste
 A real allele that is a loss (`RUC=2` over the three-unit run) shares the symbolic tuple with the `RN=0` allele in a vep-rs run without a FASTA. Nothing is then left for this class to judge, and the reference's row is left to class 12. Behind a leading `RN=0`, a vep-rs run with a FASTA writes that allele's literal reading, `AGCAGC` as an `inframe_deletion` over the run, and the comparator sets those rows aside as it sets aside the gain's.
 
 An unchanged real allele before a trailing `RN=0` (`RN=1,0;RUC=3`) leaves the reference an allele string with no alternate and no row, which is [class 19](defect-l.md#19-an-empty-or-unchanged-cnvtr-expansion-dropped-without-a-row), not this one. The allele the reference kept is left to class 12, as every expanded `<CNV:TR>` is. Without a FASTA both engines write the symbolic rows for both alleles and nothing is set aside. The SNP/indel comparator, which opens the input only to recognise gVCF variant sites under `--input-dir` or `--input-vcf`, does not judge the class.
+
+## 25. A sequence record whose first ALT is empty
+
+Defect O's mechanism reaches a sequence record too. The behaviour is a documented class: the section names the rows a comparison sets aside, and no published dataset has its shape, so the comparison tools carry no rule for it, as [Intended divergences from Ensembl VEP](../intended-divergences.md) lists it. The class carries its tier under that page's rule: tier 1 is a shape the chromosome 21 population cuts carry with no flag, tier 2 one that needs a flag or plugin on ordinary data, tier 3 one ordinary data does not carry. The counts are over the cuts' 15,646,481 records, the 111 golden corpora and their 392 flag sets.
+
+**The defect in one sentence.** A two-ALT sequence record whose first ALT is empty takes the same path: its working allele string has an empty middle part, so the record is minimised as a single-allele deletion and the real allele is lost.
+
+**Why this is a defect.** The test for a multi-allelic string requires a character in every part, while its own comment says a feature with more than one alternate allele is to be left for the split. A string with an empty middle part fails it, is minimised as a bi-allelic indel and keeps only the first feature returned, so the record stated two alleles and one is annotated. The empty ALT is outside the VCF specification, but Ensembl VEP reads it as an allele, the deletion of the reference, and drops the real allele beside it without a row or a warning.
+
+**What vep-rs does instead.** vep-rs reads a two-ALT record as multi-allelic whatever its parts hold, so the empty ALT is the `-` allele, the real allele keeps its own rows, and the record's class is `sequence_alteration`.
+
+**Where it is in Ensembl VEP's source** (`ensembl-vep` at release/116.2, `ensembl-io` at release/116):
+
+- `Bio/EnsEMBL/IO/Parser/BaseVCF4.pm`, line 489: the ALT column is split on `,`; a leading empty field survives where a trailing one is dropped.
+- `Bio/EnsEMBL/VEP/Parser/VCF.pm`, lines 297 and 306-308: the empty ALT makes the record an indel and, with an empty first base of its own, blocks the anchor chop; line 342 joins the working string, `C//G`.
+- `Bio/EnsEMBL/VEP/Parser.pm`, lines 876-881: the length difference sends the record to `minimise_alleles`, and only the first feature returned is kept. Lines 972-978: the comment keeps a feature with more than one alternate for the split, but `/.+\/.+\/.+/` fails on a string whose middle part has no character, so lines 987-1014 minimise it as bi-allelic, `C/-` first.
+
+**What correcting it would change.** The record would be split into its two alleles, as vep-rs splits it and as Ensembl VEP splits `C G,,T`, whose empty part is not first.
+
+**The class it produces.** `leading_empty_alt_allele_dropped`: on a VCF record whose ALT column, split on `,` with trailing empty fields dropped, is an empty part followed by exactly one other, the rows vep-rs alone writes for the second allele are set aside. On the record's shared `-` rows it accepts a `VARIANT_CLASS` of `deletion` against `sequence_alteration` and, in JSON, the record's `allele_string` (`C/-` against `C//G`), `variant_class` and `most_severe_consequence`. No published dataset carries such a record, so nothing is set aside; a record with three or more parts, or an empty last part, is read alike by both engines.
+
+**How often the shape occurs.** Tier 3: the shape is an ALT column of exactly two parts whose first is empty, which none of the 15,646,481 records of the population cuts and no corpus record has; it needs no flag, so every one of the 392 flag sets reaches it.
+
+### 25.1 The record `21 30289183 lead_empty C ,G`
+
+**In short.** The record `21 30289183 lead_empty C ,G`, a crafted line under the header of the GRCh38 VCF edge-case dataset and run with its flags, has the working string `C//G`. Ensembl VEP 116.2 writes one row on ENST00000416044: allele `-`, `ALLELE_NUM=1`, `UPLOADED_ALLELE=C//G`, `VARIANT_CLASS=deletion`, `stop_retained_variant`; the `G` allele is gone, and its JSON `allele_string` is `C/-`. vep-rs writes that row with `VARIANT_CLASS=sequence_alteration` and a second, allele `G`, `ALLELE_NUM=2`, `stop_lost`, its JSON `allele_string` `C//G`. The record names two alternate alleles, and Ensembl VEP annotates the `G` of `C G,,T`, whose empty part is not first, and of `C G,`, whose empty part is dropped, exactly as vep-rs does.

@@ -1,0 +1,60 @@
+entry = "refseq_edited_model_shorter_insertion_term"
+page = "docs/divergences/refseq-edited-model-shorter-insertion-term.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", and the --refseq option, which reads the RefSeq cache (Ensembl VEP documentation, \"Running Ensembl VEP\", --refseq); not seen in the measured datasets"
+notes = "Two records written for the entry insert three bases between 4:3074935 and 4:3074936, where the forward-strand model NM_002111.8 carries the insertion edit `256 255` of six bases, the same three twice. The first is a plain insertion. The second holds both bases beside the point in its reference allele, and a second alternate allele that keeps the first base from being dropped. Both engines print the span the allele stands on, CDS 111-116 on the first record's row and 110-117 on the second's, in the codons of residues 37 to 39. Three bases standing on six take three bases and one residue out of the model, in frame. Ensembl VEP classes the allele by its genomic span as an insertion and does not ask inframe_deletion of it: on the second record's row no predicate accepts and it writes the default term, and on the first, whose reference codons are read after the span is cut out, protein_altering_variant. vep-rs writes inframe_deletion on both. The second allele of the second record is protein_altering_variant on both engines, and the rows of NM_001388492.1, a model of the same gene without those bases, are inframe_insertion and missense_variant on both. No committed cache holds a model with such bases inside its coding sequence, so the first prepare step copies info.txt and the region file 4/3000001-4000000 from the Ensembl VEP RefSeq GRCh38 cache under the --perl-cache-dir roots and the second converts them with scripts/data/storable_to_json.pl in the image the run names; both engines use that cut. A run on a cache of corrected models reads the reference allele from the model and needs a FASTA: the run needs --extra-dir grch38_fasta=<a directory holding Ensembl's GRCh38 primary assembly as Homo_sapiens.GRCh38.dna.primary_assembly.fa with its .fai>."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the cut of the RefSeq cache is converted in the Ensembl VEP image: pass --image" >&2; exit 1; }
+[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens_refseq/116_GRCh38 with chromosome 4 under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens_refseq/116_GRCh38"
+mkdir -p "$cut/4"
+cp "$PERL_CACHE/info.txt" "$cut/info.txt"
+cp "$PERL_CACHE/4/3000001-4000000.gz" "$cut/4/"''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens_refseq/116_GRCh38 /stage/json-cache/homo_sapiens_refseq/116_GRCh38 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+4	3074935	three_of_six	A	AGCA	.	.	.
+4	3074935	three_of_six_neighbours_kept	AA	AGCAA,CA	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "refseq"
+json_cache = "{stage}/json-cache/homo_sapiens_refseq/116_GRCh38"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = [
+  "--refseq",
+  "--fasta", "{grch38_fasta}/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
+]
+
+[compare]
+kind = "rows"
+where = { record = ["three_of_six", "three_of_six_neighbours_kept"], feature = ["NM_002111.8", "NM_001388492.1"] }
+columns = ["Uploaded_variation", "Allele", "Feature", "Consequence", "cDNA_position", "CDS_position", "Protein_position", "Amino_acids", "IMPACT"]
+
+[expected]
+ensembl_vep = [
+  "three_of_six | GCA | NM_001388492.1 | inframe_insertion | 255-256 | 110-111 | 37 | Q/QQ | MODERATE",
+  "three_of_six | GCA | NM_002111.8 | protein_altering_variant | 256-261 | 111-116 | 37-39 | QQP/QQ | MODERATE",
+  "three_of_six_neighbours_kept | AGCAA | NM_001388492.1 | inframe_insertion | 255-256 | 110-111 | 37 | Q/QQ | MODERATE",
+  "three_of_six_neighbours_kept | AGCAA | NM_002111.8 | intergenic_variant | 255-262 | 110-117 | 37-39 | QQQ/QQ | MODIFIER",
+  "three_of_six_neighbours_kept | CA | NM_001388492.1 | missense_variant | 255-256 | 110-111 | 37 | Q/P | MODERATE",
+  "three_of_six_neighbours_kept | CA | NM_002111.8 | protein_altering_variant | 255-262 | 110-117 | 37-39 | QQQ/P | MODERATE",
+]
+vep_rs = [
+  "three_of_six | GCA | NM_001388492.1 | inframe_insertion | 255-256 | 110-111 | 37 | Q/QQ | MODERATE",
+  "three_of_six | GCA | NM_002111.8 | inframe_deletion | 256-261 | 111-116 | 37-39 | QQQ/QQ | MODERATE",
+  "three_of_six_neighbours_kept | AGCAA | NM_001388492.1 | inframe_insertion | 255-256 | 110-111 | 37 | Q/QQ | MODERATE",
+  "three_of_six_neighbours_kept | AGCAA | NM_002111.8 | inframe_deletion | 255-262 | 110-117 | 37-39 | QQQ/QQ | MODERATE",
+  "three_of_six_neighbours_kept | CA | NM_001388492.1 | missense_variant | 255-256 | 110-111 | 37 | Q/P | MODERATE",
+  "three_of_six_neighbours_kept | CA | NM_002111.8 | protein_altering_variant | 255-262 | 110-117 | 37-39 | QQQ/P | MODERATE",
+]

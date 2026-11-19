@@ -1,0 +1,67 @@
+entry = "hgvs_added_bases_left_at_the_span_end"
+page = "docs/divergences/hgvs-added-bases-left-at-the-span-end.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 75.9 per million · 23 flag sets, 22 corpora"
+notes = "Two 1000 Genomes Phase 3 records of the entry's page, on GRCh37, each a record of several alternates with an allele that keeps the reference bases and adds one base to them. The first spans 2:96850597-96850600, the last four bases of the reverse-strand ENST00000337288, and its added base repeats the transcript's last base: Ensembl VEP writes an insertion one base past the last base with the plugin's pair 1 and 0, vep-rs the duplication of the last base with 0 and 0. The second keeps the base at 15:39547041, five bases before the last base of the forward-strand ENST00000318578, and adds a base that the five bases after it repeat: Ensembl VEP writes an insertion at the end of the record's span, vep-rs the duplication of the transcript's last base with HGVS_OFFSET=5. Both engines write the same rows for each record's other alleles. A third Phase 3 record shows the form the entry leaves: it spans 5:169931043-169931049, five bases before the first base of the forward-strand ENST00000390656 and its first two bases, and its allele keeps the span and adds seven bases that the bases after the span repeat. Ensembl VEP writes an insertion from one base before the first base with the plugin's pair 0 and -1, vep-rs the duplication the 3' rule gives with HGVS_OFFSET=17 and the pair 0 and 0; the end offset of that row is hgvs_clipped_reference_against_whole_alternate's, and its HGVSc and HGVS_OFFSET belong to no entry. The same seven bases written as an insertion at the span's end, 5:169931049-169931050, get that duplication, HGVS_OFFSET=17 and the pair 0 and 0 from both engines. No committed FASTA holds chromosome 2, 5 or 15 and no committed GRCh37 cache holds any of the three transcripts, so the first prepare step copies info.txt, chr_synonyms.txt and the three region files from the Ensembl VEP GRCh37 cache under the --perl-cache-dir roots and the second converts them with scripts/data/storable_to_json.pl in the image the run names; both engines read that cut. --hgvs needs a FASTA offline and the cache holds the bases of none of the transcripts: the run needs --extra-dir grch37_fasta=<a directory holding Ensembl's GRCh37 primary assembly as Homo_sapiens.GRCh37.75.dna.primary_assembly.fa with its .fai>."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the cut of the cache is converted in the Ensembl VEP image: pass --image" >&2; exit 1; }
+[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosomes 2, 5 and 15 under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
+mkdir -p "$cut/2" "$cut/5" "$cut/15"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
+cp "$PERL_CACHE/2/96000001-97000000.gz" "$cut/2/"
+cp "$PERL_CACHE/5/169000001-170000000.gz" "$cut/5/"
+cp "$PERL_CACHE/15/39000001-40000000.gz" "$cut/15/"''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens/116_GRCh37 /stage/json-cache 2,5,15 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+2	96850596	.	CTTTT	CTTTTT,CTTT,C	.	.	.
+15	39547041	.	T	A,TA	.	.	.
+5	169931042	.	TGGCAGCA	TGGCAGCAGGCAGCA,T	.	.	.
+5	169931049	.	A	AGGCAGCA	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = [
+  "--hgvs", "--plugin", "HGVSIntronOffset",
+  "--fasta", "{grch37_fasta}/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa",
+]
+
+[compare]
+kind = "rows"
+where = { location = ["2:96850597-96850600", "15:39547041", "5:169931043-169931049", "5:169931049-169931050"], feature = ["ENST00000337288", "ENST00000318578", "ENST00000390656"] }
+columns = ["Location", "Allele", "Feature", "Consequence", "HGVSc", "HGVS_OFFSET", "HGVS_IntronStartOffset", "HGVS_IntronEndOffset"]
+
+[expected]
+ensembl_vep = [
+  "15:39547041 | A | ENST00000318578 | 3_prime_UTR_variant | ENST00000318578.3:c.*2153T>A | - | 0 | 0",
+  "15:39547041 | TA | ENST00000318578 | 3_prime_UTR_variant | ENST00000318578.3:c.*2154_*2153insA | - | 0 | 0",
+  "2:96850597-96850600 | - | ENST00000337288 | 3_prime_UTR_variant | ENST00000337288.5:c.*1868_*1871del | - | 0 | 0",
+  "2:96850597-96850600 | TTT | ENST00000337288 | 3_prime_UTR_variant | ENST00000337288.5:c.*1871del | - | 0 | 0",
+  "2:96850597-96850600 | TTTTT | ENST00000337288 | 3_prime_UTR_variant | ENST00000337288.5:c.*1871+1_*1871insA | - | 1 | 0",
+  "5:169931043-169931049 | - | ENST00000390656 | 5_prime_UTR_variant | ENST00000390656.4:c.-529_-528del | - | 0 | 0",
+  "5:169931043-169931049 | GGCAGCAGGCAGCA | ENST00000390656 | 5_prime_UTR_variant | ENST00000390656.4:c.-529-1_-529insGGCAGCAGGCAG | - | 0 | -1",
+  "5:169931049-169931050 | GGCAGCA | ENST00000390656 | 5_prime_UTR_variant | ENST00000390656.4:c.-517_-511dup | 17 | 0 | 0",
+]
+vep_rs = [
+  "15:39547041 | A | ENST00000318578 | 3_prime_UTR_variant | ENST00000318578.3:c.*2153T>A | - | 0 | 0",
+  "15:39547041 | TA | ENST00000318578 | 3_prime_UTR_variant | ENST00000318578.3:c.*2158dup | 5 | 0 | 0",
+  "2:96850597-96850600 | - | ENST00000337288 | 3_prime_UTR_variant | ENST00000337288.5:c.*1868_*1871del | - | 0 | 0",
+  "2:96850597-96850600 | TTT | ENST00000337288 | 3_prime_UTR_variant | ENST00000337288.5:c.*1871del | - | 0 | 0",
+  "2:96850597-96850600 | TTTTT | ENST00000337288 | 3_prime_UTR_variant | ENST00000337288.5:c.*1871dup | - | 0 | 0",
+  "5:169931043-169931049 | - | ENST00000390656 | 5_prime_UTR_variant | ENST00000390656.4:c.-529_-528del | - | 0 | 0",
+  "5:169931043-169931049 | GGCAGCAGGCAGCA | ENST00000390656 | 5_prime_UTR_variant | ENST00000390656.4:c.-517_-511dup | 17 | 0 | 0",
+  "5:169931049-169931050 | GGCAGCA | ENST00000390656 | 5_prime_UTR_variant | ENST00000390656.4:c.-517_-511dup | 17 | 0 | 0",
+]

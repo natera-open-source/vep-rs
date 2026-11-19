@@ -1,0 +1,441 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 3,
+ "included_records": {
+  "gwas": [
+   "21_44928849_A/ACCCTGGATGCCTGTGGGCT",
+   "21_44928849_AGCCTTCCTCACCCTGGATGCCTGTGGGCAG/A",
+   "rs10854470",
+   "rs11088317",
+   "rs12482676",
+   "rs149487184",
+   "rs162375",
+   "rs1783006",
+   "rs2155889",
+   "rs2801270",
+   "rs2822690",
+   "rs2822999",
+   "rs2823265",
+   "rs2825516",
+   "rs2828827",
+   "rs2832810",
+   "rs2833522",
+   "rs2834259",
+   "rs2834439",
+   "rs3119481",
+   "rs434206",
+   "rs469709",
+   "rs4817614",
+   "rs4818032",
+   "rs552964654",
+   "rs559044903",
+   "rs6517101",
+   "rs74450405",
+   "rs858032",
+   "rs9976876",
+   "rs9978142"
+  ]
+ },
+ "max_span": 1000000,
+ "cache_cost_flank": 5000,
+ "flags": [
+  "--dir",
+  "plugin_data/vepdir",
+  "--dir_plugins",
+  "{plugins}",
+  "--plugin",
+  "GWAS,file=plugin_data/gwas_catalog_slice.tsv"
+ ],
+ "covers": [
+  "GWAS"
+ ],
+ "suites": {
+  "gwas": {
+   "reference": "reference.curated.txt",
+   "input": "candidates.vcf",
+   "rows": 447,
+   "combinations": 8
+  }
+ },
+ "combinations": {
+  "5_prime_UTR_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 2
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 37,
+   "exemplar_records": 6
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 86,
+   "exemplar_records": 9
+  },
+  "intergenic_variant": {
+   "observed_rows": 8,
+   "exemplar_records": 8
+  },
+  "intron_variant": {
+   "observed_rows": 129,
+   "exemplar_records": 14
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 137,
+   "exemplar_records": 20
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 16,
+   "exemplar_records": 4
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 28,
+   "exemplar_records": 7
+  }
+ },
+ "variant_classes": {
+  "deletion": 28,
+  "insertion": 27,
+  "snv": 392
+ },
+ "records": [
+  {
+   "suite": "gwas",
+   "vcf": "21\t9053097\trs552964654\tG\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t13297803\trs2801270\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t13413825\trs3119481\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t14482906\trs2822690\tC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t14482906\trs2822690\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t14988523\trs559044903\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t14992435\trs2822999\tT\tC,G\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t15201802\trs11088317\tC\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t15201802\trs11088317\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t15418128\trs2823265\tC\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t16890453\trs74450405\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t19318417\trs2825516\tA\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t20517528\trs2155889\tC\tA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t20517528\trs2155889\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t24109380\trs2828827\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t27428688\trs469709\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t30339574\trs2832810\tC\tA\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t30339574\trs2832810\tC\tT\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t31350874\trs1783006\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t31807059\trs2833522\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t31807059\trs2833522\tG\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t32496173\trs6517101\tT\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t33760786\trs2834259\tC\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t34036428\trs4817614\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t34233562\trs149487184\tC\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t34279939\trs9978142\tA\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t34300618\trs2834439\tA\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t34598414\trs12482676\tG\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t35598052\trs9976876\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t37729637\trs858032\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t39375657\trs4818032\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t43507135\trs162375\tCCT\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t44928849\t.\tA\tACCCTGGATGCCTGTGGGCT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t44928849\t.\tAGCCTTCCTCACCCTGGATGCCTGTGGGCAG\tA\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t45444973\trs10854470\tT\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gwas",
+   "vcf": "21\t45946888\trs434206\tG\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "plugin_files": {
+  "GWAS": [
+   "plugin_data/gwas_catalog_slice.tsv",
+   "plugin_data/17463246-GCST000028-EFO_0001360.h.tsv",
+   "plugin_data/vepdir/gwas_catalog_slice.tsv.gz",
+   "plugin_data/vepdir/gwas_catalog_slice.tsv.gz.tbi",
+   "plugin_data/vepdir/17463246-GCST000028-EFO_0001360.h.tsv.gz",
+   "plugin_data/vepdir/17463246-GCST000028-EFO_0001360.h.tsv.gz.tbi"
+  ]
+ },
+ "flag_sets": [
+  {
+   "name": "sstate",
+   "flags": [
+    "--dir",
+    "plugin_data/vepdir",
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "GWAS,type=sstate,file=plugin_data/17463246-GCST000028-EFO_0001360.h.tsv"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_sstate",
+   "covers": [
+    "GWAS"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

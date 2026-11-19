@@ -1,0 +1,31 @@
+entry = "cnv_tr_representation_pair"
+page = "docs/divergences/cnv-tr.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.4 specification, section 5.7 \"Representing tandem repeats\" (a <CNV:TR> record with SVLEN, RN, RUS and RUC, which the Ensembl VEP documentation, \"Data formats\", \"Structural variant types\", names as supported); not seen in the measured datasets"
+notes = "The two readings of one record: Ensembl VEP reads the FASTA and expands the allele to an insertion of one unit after the run; vep-rs runs without a FASTA and keeps the symbolic tandem_repeat over the run. With a FASTA on both sides, or on neither, the engines agree."
+
+[input]
+format = "vcf"
+text = """
+21	13620283	tr_gain	G	<CNV:TR>	.	.	SVLEN=9;RN=1;RUS=TCA;RUC=4
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-vcf-tandem-repeats/json_cache"
+
+[run]
+flags = []
+ensembl_vep_flags = ["--fasta", "{repo}/tests/golden/116/GRCh38-identifiers/reference.fa.gz"]
+
+[compare]
+kind = "rows"
+where = { record = "tr_gain", feature = "ENST00000299443" }
+columns = ["Location", "Allele", "Feature", "Consequence"]
+
+[expected]
+ensembl_vep = ["21:13620292-13620293 | TCA | ENST00000299443 | inframe_insertion"]
+vep_rs = ["21:13620284-13620292 | tandem_repeat | ENST00000299443 | feature_elongation,coding_sequence_variant"]

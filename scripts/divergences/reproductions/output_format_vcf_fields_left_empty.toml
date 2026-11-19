@@ -1,0 +1,32 @@
+entry = "output_format_vcf_fields_left_empty"
+page = "docs/divergences/output-format-vcf-fields.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --output_format option, declared as a string whose value vcf selects the VCF writer (Bio::EnsEMBL::VEP::Config, output_format); not seen in the measured datasets"
+notes = "The record lies in the first exon of ENST00000859469 (SLC19A1) and the one intron of ENST00000763268, so its CSQ entries carry all four fields. Ensembl VEP's `vcf` option set fires on the `--vcf` flag alone (Config.pm:500-508), so under `--output_format vcf` the fields its layout names (OutputFactory/VCF.pm:100-118) stay empty and the layout lacks the two columns `--symbol` adds; vep-rs writes what both engines write under `--vcf`."
+
+[input]
+format = "vcf"
+text = """
+21	45573402	utr_and_intron	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-pick-summary/json_cache"
+
+[run]
+flags = ["--output_format", "vcf"]
+format = "vcf"
+format_flag = false
+
+[compare]
+kind = "vcf"
+line = true
+where = { record = "utr_and_intron" }
+
+[expected]
+ensembl_vep = ["21\t45573402\tutr_and_intron\tC\tT\t.\t.\tCSQ=T|upstream_gene_variant|MODIFIER||ENSG00000173638|Transcript|ENST00000651099||||||||||||37|-1|,T|upstream_gene_variant|MODIFIER||ENSG00000299414|Transcript|ENST00000763267||||||||||||350|1|,T|intron_variant&non_coding_transcript_variant|MODIFIER||ENSG00000299414|Transcript|ENST00000763268|||||||||||||1|,T|upstream_gene_variant|MODIFIER||ENSG00000299414|Transcript|ENST00000763269||||||||||||312|1|,T|5_prime_UTR_variant|MODIFIER||ENSG00000173638|Transcript|ENST00000859469||||||163|||||||-1|"]
+vep_rs = ["21\t45573402\tutr_and_intron\tC\tT\t.\t.\tCSQ=T|upstream_gene_variant|MODIFIER|SLC19A1|ENSG00000173638|Transcript|ENST00000651099|protein_coding_CDS_not_defined|||||||||||37|-1||HGNC|HGNC:10937,T|upstream_gene_variant|MODIFIER||ENSG00000299414|Transcript|ENST00000763267|lncRNA|||||||||||350|1|||,T|intron_variant&non_coding_transcript_variant|MODIFIER||ENSG00000299414|Transcript|ENST00000763268|lncRNA||1/1||||||||||1|||,T|upstream_gene_variant|MODIFIER||ENSG00000299414|Transcript|ENST00000763269|lncRNA|||||||||||312|1|||,T|5_prime_UTR_variant|MODIFIER|SLC19A1|ENSG00000173638|Transcript|ENST00000859469|protein_coding|1/7||||163|||||||-1||HGNC|HGNC:10937"]

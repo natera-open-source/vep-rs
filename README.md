@@ -6,7 +6,7 @@
 
 Documentation: https://natera-open-source.github.io/vep-rs/
 
-A fast, memory-efficient reimplementation of the Ensembl Variant Effect Predictor (VEP) in Rust. It takes VEP's inputs and flags, writes VEP's consequence vocabulary in VEP's output formats, and annotates population-scale callsets two orders of magnitude faster than the Perl implementation.
+vep-rs is a fast, memory-efficient Rust reimplementation of Ensembl VEP, the Variant Effect Predictor, for VCF variant annotation. It takes VEP's inputs and flags, writes VEP's consequence vocabulary in VEP's output formats, and annotates population-scale callsets two orders of magnitude faster than the Perl implementation.
 
 In this README, "Ensembl VEP" is the reference implementation, `ensemblorg/ensembl-vep`, written in Perl; unqualified, it means release 116.2. The accompanying paper calls the same engine "VEP".
 
@@ -19,26 +19,30 @@ In this README, "Ensembl VEP" is the reference implementation, `ensemblorg/ensem
 | **All of gnomAD v4.1**           | 759,336,320 variants, 24 chromosomes: 624 s on one ARM machine, 1,012 s on x86      |
 | **Peak memory**                  | At most 4.0 GB RSS on any chromosome                                                |
 | **Concordance with Ensembl VEP** | Adjusted F1 1.000000000 on all six whole-genome datasets, raw F1 0.999998408 pooled |
-| **Plugins**                      | 10 built-in databases, plus C-ABI dynamic-library plugins                           |
-| **Output formats**               | VEP default, VCF, JSON, Tab, Parquet                                                |
-| **Threading**                    | `--fork N`; the default uses every logical CPU up to 32                             |
+| **Plugins**                      | 31 of the 87 Ensembl VEP plugins built in, verified on real data or, where the data cannot be redistributed, on synthetic fixtures in the layout each plugin's documentation gives ([the support table](docs/plugins.md#support-table)); C-ABI dynamic-library plugins |
+| **Output formats**               | VEP default, VCF, JSON, Tab, typed Parquet                                          |
+| **Threading**                    | `--fork N`; the default uses every logical CPU up to 32, less an inflate-bound input's decompression threads |
 
 The speed figures cover all of four population datasets (1,179,639,224 variants) under one protocol: the sum of per-chromosome medians at 16 threads, over 5 machines for vep-rs and fastVEP and over Ensembl VEP's one reference run per chromosome. The concordance figures cover those four plus the two genome-wide ClinVar releases, six whole-genome datasets in all (1,188,425,523 variants, 11,838,755,797 annotation tuples, 11,838,744,378 matched), against Ensembl VEP 116.2. The [Current release](#current-release-v050) section has the tables and the method.
 
 The adjusted F1 sets aside only the documented cases where Ensembl VEP's own output is wrong, or where the two engines represent a record differently. Each case is traced to the mechanism in Ensembl VEP's source and reproducible from the record ([docs/intended-divergences.md](docs/intended-divergences.md)). Outside those cases every tuple matches, so vep-rs's remaining disagreements with Ensembl VEP are deliberate, documented corrections rather than defects.
 
-The ten built-in plugin databases are CADD, REVEL, gnomADc, AlphaMissense, dbscSNV, LoFTEE, LoFtool and pLI on both GRCh37 and GRCh38, plus GWAS and SpliceAI on GRCh38. Dynamic-library plugins load from `--dir_plugins` ([docs/plugins.md](docs/plugins.md)). Parquet output needs the `duckdb` CLI on PATH.
+vep-rs is verified by concordance against Ensembl VEP 116.2 on human GRCh37 and GRCh38, the whole-genome datasets of the current release, and on mouse GRCm39, fruit fly BDGP6.54, Arabidopsis thaliana TAIR10 and yeast R64-1-1. Each of the four has a golden corpus of its own ([Other species](docs/cache-species.md)).
+
+Any other species in Ensembl release 116 or Ensembl Genomes release 63 with a GFF3 and a peptide FASTA, or with an Ensembl VEP cache to convert, builds a cache ([Cache setup](docs/cache-setup.md)) and annotates under the codon tables the cache names, without a concordance measurement. `--sift` and `--polyphen` refuse on a cache without their data, and `--af_gnomad` on a cache that declares variation columns without the gnomAD exome column; every other flag that reads data Ensembl ships for human alone runs there as [the flag table](docs/cli/cache-species-runtime.md#flags-that-read-data-ensembl-ships-for-human-alone) states. The Peak memory row is the largest per-chromosome median of the release measurement; [Installation](docs/getting-started/installation.md#memory) states what a run holds in memory and how the figure grows with the chromosomes one input file touches.
+
+The built-in plugins are ports of Ensembl VEP's, loaded by the same names and parameters. [The plugin support table](docs/plugins.md#support-table) gives every Ensembl VEP plugin's data file, terms, assemblies and status; a `--plugin` naming one vep-rs does not provide stops the run with the reason. Dynamic-library plugins load from `--dir_plugins` ([docs/plugins.md](docs/plugins.md)). Parquet output is written natively, with no external tool.
 
 ### What "drop-in" means
 
 vep-rs takes the same input files and flag names as Ensembl VEP and writes the same output layouts. Two things differ:
 
 - **The transcript cache.** The cache is a directory built by `vep-cache-builder` or converted from an Ensembl VEP cache ([docs/cache-setup.md](docs/cache-setup.md)), found under `--dir_cache`, `--species` and `--cache_version` in Ensembl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout or named directly with `--json_cache`; a run with no cache stops with an error, and vep-rs never contacts a database.
-- **Some flags are accepted but not implemented.** Among them are `--custom` and the statistics flags (vep-rs writes no summary file). `--regulatory` annotates regulatory and motif features from a converted Ensembl VEP cache ([docs/regulatory.md](docs/regulatory.md)). `--refseq` and `--merged` select the `_refseq` or `_merged` species directory, and `--refseq` also resolves an HGVS gene name among RefSeq transcripts first. [The CLI reference](docs/cli-reference.md) and [limitations page](docs/getting-started/what-vep-rs-does-not-do.md) detail supported flags and omissions.
+- **Some flags are refused or accepted without effect.** The database-connection flags, `--database` first among them, are refused with an error naming the flag, as are `--gff` and `--gtf`, which read a transcript model from a file in place of the cache: the file is built into a cache first ([docs/cache-from-gtf-or-gff3.md](docs/cache-from-gtf-or-gff3.md)). `--debug` is accepted without effect. `--regulatory`, alone or through `--everything`, annotates regulatory and motif features from a converted Ensembl VEP cache, and `--regulatory_gff` from Ensembl's regulatory GFF files ([docs/regulatory.md](docs/regulatory.md)). `--refseq` and `--merged` select the `_refseq` or `_merged` species directory, and `--refseq` also resolves an HGVS gene name among RefSeq transcripts first. [The CLI reference](docs/cli-reference.md) and [limitations page](docs/getting-started/what-vep-rs-does-not-do.md) detail supported flags and omissions.
 
 ## Installation
 
-Pre-built binaries for Linux x86_64, Linux aarch64 and macOS aarch64 are on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page; each Linux architecture has a measured archive and a generic one, and both run on glibc 2.17 or later. Building from source needs Rust 1.89+ ([rustup](https://rustup.rs/)):
+Pre-built binaries for Linux x86_64, Linux aarch64, macOS aarch64 and macOS x86_64 are on the [Releases](https://github.com/natera-open-source/vep-rs/releases) page; each Linux architecture has a measured archive and a generic one, and both run on glibc 2.17 or later. Building from source needs Rust 1.89+ ([rustup](https://rustup.rs/)):
 
 ```bash
 git clone https://github.com/natera-open-source/vep-rs.git
@@ -51,15 +55,15 @@ Each release from 0.2.0 on is also a container image, `ghcr.io/natera-open-sourc
 
 ## Quick start
 
-### 1. Try the bundled corpus
+### 1. Try the bundled example
 
-This needs no download. It runs the bundled 1,008-record excerpt of the benchmark datasets against the pruned GRCh37 cache that ships in `tests/golden/`:
+This needs no download. It annotates `examples/homo_sapiens_GRCh37.vcf`, 175 records cut from the GRCh37 golden corpus, against the pruned cache that ships beside that corpus in `tests/golden/` ([examples/README.md](examples/README.md) describes both example files):
 
 ```bash
 target/release/vep \
   --json_cache tests/golden/116/GRCh37/json_cache \
   --assembly GRCh37 \
-  -i tests/golden/116/GRCh37/variants.vcf -o output.txt
+  -i examples/homo_sapiens_GRCh37.vcf -o output.txt
 ```
 
 ### 2. Annotate your own data
@@ -166,10 +170,10 @@ Every value above is recorded in these files:
 
 The documentation site, https://natera-open-source.github.io/vep-rs/, describes the latest release; its pages are the `docs/` tree of this repository, in six sections.
 
-- **Getting started**: [Installation](docs/getting-started/installation.md), the transcript cache and the move from Ensembl VEP; [Examples](docs/examples.md), the common shapes of a run.
+- **Getting started**: [Installation](docs/getting-started/installation.md), the transcript cache and [the move from Ensembl VEP](docs/getting-started/coming-from-ensembl-vep.md); [Examples](docs/examples.md), the common shapes of a run.
 - **Reference**: [every flag](docs/cli-reference.md), with the option rules, the flags refused or accepted without effect and the exit-status contract; [every output format](docs/output-formats.md); [every plugin](docs/plugins.md).
 - **Concordance with Ensembl VEP**: [the divergence classes](docs/intended-divergences.md) the adjusted F1 sets aside.
-- **Benchmarks**: the [Current release](#current-release-v050) figures above, also on the site's [Benchmarks](docs/benchmarks/current-release.md) page, beside [the paper's figures](docs/published-figures.md).
+- **Benchmarks**: the [Current release](#current-release-v060) figures above, also on the site's [Benchmarks](docs/benchmarks/current-release.md) page, beside [the paper's figures](docs/published-figures.md).
 - **Developers**: [Writing a plugin](docs/developers/writing-a-plugin.md).
 - **Project**: [Citing vep-rs](docs/project/citing.md) and the [changelog](CHANGELOG.md).
 
@@ -206,13 +210,13 @@ If you use vep-rs in published work, cite the paper:
 
 > Porter M, Borkowski R. _vep-rs: high-throughput Rust variant annotation with population-scale concordance to Ensembl VEP._ bioRxiv (2026). [doi:10.64898/2026.09.22.753614](https://doi.org/10.64898/2026.09.22.753614).
 
-The journal DOI will be added here on acceptance. The paper's figures are in [docs/published-figures.md](docs/published-figures.md) and re-derive from `manuscript/data/*.csv` in this tree ([manuscript/data/README.md](manuscript/data/README.md)). The current release's own measurements are in [Current release](#current-release-v050).
+The paper's figures are in [docs/published-figures.md](docs/published-figures.md) and re-derive from `manuscript/data/*.csv` in this tree ([manuscript/data/README.md](manuscript/data/README.md)). The current release's own measurements are in [Current release](#current-release-v060).
 
 The software itself is archived at Zenodo, and that archive is the citation for the code and the released data files:
 
 > Porter M, Borkowski R. _vep-rs_, version 0.1.0. Zenodo (2026). [doi:10.5281/zenodo.22837897](https://doi.org/10.5281/zenodo.22837897)
 
-`CITATION.cff` at the repository root carries the software citation in machine-readable form, with the all-versions DOI ([10.5281/zenodo.22837896](https://doi.org/10.5281/zenodo.22837896)) and the archived version's own. GitHub's "Cite this repository" button and citation managers pick it up directly. The article is added there on acceptance.
+`CITATION.cff` at the repository root carries the software citation in machine-readable form, with the all-versions DOI ([10.5281/zenodo.22837896](https://doi.org/10.5281/zenodo.22837896)) and the archived version's own. GitHub's "Cite this repository" button and citation managers pick it up directly.
 
 ## Acknowledgments
 

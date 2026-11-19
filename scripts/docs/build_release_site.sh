@@ -10,12 +10,13 @@
 # takes it from the checkout. A SUMMARY.md entry naming a page the tag does not
 # have is dropped. So is a redirect whose destination page the tag does not
 # have, whose source anchor is still a heading of the tag's own page, or whose
-# fragment source names a page the build omits and that has no bare entry. Each
-# drop prints a line; a redirect entry the filter cannot read (anything but
-# "source" = "destination" on one line), or whose destination leaves the site,
-# fails the build. A tag whose
-# docs/index.md is absent, or is the stub that points at the README, keeps the
-# README as its home page (VEP_RS_DOCS_README_HOME=1).
+# fragment source names a page the build omits and that has no bare entry. A
+# redirect to an anchor the tag's own page does not have is sent to that page.
+# Each drop and each such change prints a line; a redirect entry the filter
+# cannot read (anything but "source" = "destination" on one line), or whose
+# destination leaves the site, fails the build. A tag whose docs/index.md is
+# absent, or is the stub that points at the README, keeps the README as its
+# home page (VEP_RS_DOCS_README_HOME=1).
 #
 # Preview form (--main). The pages come from HEAD; the site is titled
 # "vep-rs main", addressed under /vep-rs/main/ and marked with its channel, which
@@ -198,10 +199,12 @@ def in_docs(page):
     return os.path.exists(os.path.join(docs, re.sub(r"\.html$", ".md", page)))
 
 
-def destination_exists(key, dest):
+def destination_page(key, dest):
+    """The destination's page as a path under the docs root, or None for a
+    destination outside the book: a fragment of the source page or a URL."""
     page = dest.split("#")[0]
     if not page or SCHEME.match(page):
-        return True
+        return None
     if page.startswith("/"):
         # A leading slash is a browser path, as mdBook writes it, so it must
         # start with the site's own URL.
@@ -216,7 +219,24 @@ def destination_exists(key, dest):
         resolved = posixpath.normpath(posixpath.join(posixpath.dirname(key.lstrip("/")), page))
     if page.endswith("/"):
         resolved = posixpath.join(resolved, "index.md")
-    return in_docs(resolved)
+    return resolved
+
+
+def destination_exists(key, dest):
+    page = destination_page(key, dest)
+    return page is None or in_docs(page)
+
+
+def lacks_anchor(key, dest):
+    """Whether the destination names an anchor that its page, built from this
+    ref, does not have. The table names the anchors of the checkout's pages, and
+    a heading of the ref's own page can read otherwise."""
+    anchor = dest.partition("#")[2]
+    resolved = destination_page(key, dest)
+    if not anchor or resolved is None:
+        return False
+    built = re.sub(r"\.md$", ".html", resolved)
+    return os.path.isfile(os.path.join(site, built)) and anchor not in ids_of(built)
 
 
 lines, in_table = [], False
@@ -233,7 +253,7 @@ for line in open(toml, encoding="utf-8"):
 # in the final table, else mdBook refuses it, so a bare entry the destination
 # rule drops counts for nothing.
 bare = {m[1].lstrip("/") for _, m in lines if m and "#" not in m[1] and destination_exists(m[1], m[2])}
-kept, seen, dropped = [], 0, 0
+kept, seen, dropped, moved = [], 0, 0, 0
 for line, m in lines:
     if m:
         seen += 1
@@ -251,9 +271,13 @@ for line, m in lines:
             print(f"dropped redirect, source page not in {ref} and no bare entry for it: {key} -> {dest}")
             dropped += 1
             continue
+        if lacks_anchor(key, dest):
+            print(f"redirect sent to the page, anchor not on the {ref} page: {key} -> {dest}")
+            line = line[:m.start(2)] + dest.split("#")[0] + line[m.end(2):]
+            moved += 1
     kept.append(line)
 open(toml, "w", encoding="utf-8").writelines(kept)
-print(f"redirects kept: {seen - dropped}, dropped: {dropped}")
+print(f"redirects kept: {seen - dropped}, dropped: {dropped}, sent to the page: {moved}")
 EOF
 fi
 

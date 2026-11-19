@@ -1,0 +1,30 @@
+entry = "plugin_cols_names_matched_exactly"
+page = "docs/divergences/plugin-cols-names-matched-exactly.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "malformed"
+input_class_basis = "cols is a colon-separated list of columns of the plugin's file, to return, print or append (the OpenTargets, AlphaMissense and TranscriptAnnotator plugins' headers, \"cols\"): the value carries a name holding a regular-expression metacharacter that names no column of the file"
+notes = "OpenTargets under `cols=gwasGeneI.`, a name holding a metacharacter: Ensembl VEP tests the name as the pattern `/^gwasGeneI.$/`, which matches `gwasGeneId`, keeps it as typed and writes a field named by the pattern's text with `NA` for each of the record's four matched associations, under a header line with an empty description; vep-rs matches names exactly and refuses the plugin with `columns not found in the header of <file>: gwasGeneI.`, so the row carries no OpenTargets_ field. The same shape under AlphaMissense (`cols=am_pathogenicit.`) and TranscriptAnnotator (`cols=SIFT_.core`) is on the page."
+
+[input]
+format = "vcf"
+text = """
+21	14824378	ot_gwas_and_eqtl_leads	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-opentargets/json_cache"
+
+[run]
+flags = ["--plugin", "OpenTargets,file={corpus}/open_targets_vep.slice.tsv.gz,cols=gwasGeneI."]
+
+[compare]
+kind = "rows"
+where = { record = "ot_gwas_and_eqtl_leads", feature = "ENST00000432230" }
+columns = ["Location", "Allele", "Feature", "OpenTargets_gwasGeneI."]
+
+[expected]
+ensembl_vep = ["21:14824378 | T | ENST00000432230 | NA,NA,NA,NA"]
+vep_rs = ["21:14824378 | T | ENST00000432230 | -"]

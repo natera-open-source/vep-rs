@@ -1,0 +1,244 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 3,
+ "included_records": {
+  "GRCh38-plugin-clinpred-fixture": [
+   "coding_mnv",
+   "deletion_rev",
+   "insertion_rev",
+   "intergenic_snv",
+   "intron_snv",
+   "missense_fwd",
+   "missense_rev",
+   "missense_rev_two_alts",
+   "start_lost_fwd",
+   "start_lost_fwd_unscored",
+   "stop_gained_fwd",
+   "stop_lost_rev",
+   "synonymous_fwd",
+   "synonymous_fwd_lowercase"
+  ]
+ },
+ "max_span": 1000000,
+ "covers": [
+  "ClinPred"
+ ],
+ "suites": {
+  "GRCh38-plugin-clinpred-fixture": {
+   "reference": "default.txt",
+   "input": "variants.vcf",
+   "rows": 15,
+   "combinations": 8
+  }
+ },
+ "combinations": {
+  "frameshift_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "intergenic_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 3
+  },
+  "start_lost": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "stop_gained": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "stop_lost": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  }
+ },
+ "variant_classes": {
+  "deletion": 1,
+  "insertion": 1,
+  "mnv_or_complex": 1,
+  "snv": 12
+ },
+ "records": [
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t19268555\tintergenic_snv\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t20204701\tintron_snv\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t30282169\tstop_lost_rev\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t30282172\tmissense_rev\tT\tC\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t30282928\tmissense_rev_two_alts\tG\tT,A\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t30396087\tstart_lost_fwd\tA\tG\t.\t.\t.",
+   "combinations": [
+    "start_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t30396091\tmissense_fwd\tC\tT\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t30396092\tsynonymous_fwd\tC\tA\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t30396095\tsynonymous_fwd_lowercase\tc\tt\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t30396101\tstop_gained_fwd\tC\tA\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t30396104\tcoding_mnv\tCT\tAG\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t30642890\tstart_lost_fwd_unscored\tT\tC\t.\t.\t.",
+   "combinations": [
+    "start_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t30881493\tdeletion_rev\tGA\tG\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-clinpred-fixture",
+   "vcf": "21\t30881500\tinsertion_rev\tT\tTA\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "clinpred-file",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/data",
+    "--plugin",
+    "ClinPred,file={corpus}/data/ClinPred_hg38_sorted_tabbed_synthetic.tsv.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_clinpred-file",
+   "covers": [
+    "ClinPred",
+    "api-params-parsing"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "clinpred-positional",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/data",
+    "--plugin",
+    "ClinPred,{corpus}/data/ClinPred_hg38_sorted_tabbed_synthetic.tsv.gz"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_clinpred-positional",
+   "covers": [
+    "ClinPred",
+    "api-params-parsing"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

@@ -1,0 +1,9 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	16719000	first_stream_one_gene	A	G	.	.	.
+21	17619500	first_stream_two_genes	A	G	.	.	.
+21	18279000	opens_second_stream	A	G	.	.	.
+21	21324500	no_information	G	A	.	.	.
+21	21418500	alternates_joined	G	A	.	.	.
+21	26387000	any_base_reference	G	A	.	.	.
+21	26965500	second_stream_two_alternates	C	A,G	.	.	.

@@ -1,0 +1,30 @@
+# The mature miRNA test of a shifted indel under `--shift_3prime 1`
+
+**The defect in one sentence.** Under `--shift_3prime 1`, Ensembl VEP 116.2 decides `mature_miRNA_variant` from the unshifted span of an insertion or deletion while every other term of the row describes the shifted span. An indel the shift carries off the mature miRNA sequence therefore keeps `mature_miRNA_variant`, and one carried onto it keeps `non_coding_transcript_exon_variant`. vep-rs overlaps the mature sequence with the shifted span and writes the term of that span.
+
+**Why this is a defect.** The two terms are alternatives for one span: a non-coding exon variant inside the mature sequence is `mature_miRNA_variant`, outside it `non_coding_transcript_exon_variant`. Under the flag the row reports the shifted span, in `cDNA_position`, in the HGVSc and, under `--shift_genomic 1`, in `Location`, so the term that names a different span contradicts the rest of the row. Ensembl VEP's own row for the allele given at the shifted position is `non_coding_transcript_exon_variant`.
+
+**What vep-rs does instead.** vep-rs overlaps the mature sequence with the shifted span, as it reads every other test of the row.
+
+**Where it is in Ensembl VEP's source** (`ensembl-variation` at release/116):
+
+- `Bio/EnsEMBL/Variation/BaseVariationFeatureOverlapAllele.pm`, lines 269-282: for each predicate call the variation feature's `start` and `end` are moved by the shift and moved back after, so a predicate reading them sees the shifted span.
+- `Bio/EnsEMBL/Variation/Utils/VariationEffect.pm`, lines 532-558, `within_mature_miRNA`: lines 545-549 overlap the mature sequence's genomic span with `seq_region_start` and `seq_region_end` instead.
+- `Bio/EnsEMBL/Variation/BaseVariationFeature.pm`, lines 279-282 and 304-307: `seq_region_start` and `seq_region_end` are cached at their first read, which the shift itself makes before any predicate runs, so they keep the unshifted span.
+- `Utils/VariationEffect.pm`, lines 502-519, `non_coding_exon_variant`: false wherever `within_mature_miRNA` is true, and otherwise read from the moved `start` and `end`, the shifted span.
+
+**What correcting it would change.** The row would carry the term of the shifted span, as Ensembl VEP writes it for the allele given at the shifted position.
+
+**The class it produces.** `mature_mirna_unshifted_span`: two `Consequence` sets equal but for one engine's `mature_miRNA_variant` against the other's `non_coding_transcript_exon_variant`, on a transcript row whose `SHIFT_LENGTH` is positive, which only an insertion or deletion is given. The class takes either direction, since the shift may carry a span off the mature sequence or onto it. It is applied once per row with every other field of the row compared, and the JSON record's `most_severe_consequence` follows the term. The format comparator applies it without a manifest, as the oracle's population cases under `--shift_3prime 1` do. Nothing is set aside in the concordance figures, since no measured dataset runs the flag.
+
+## 1. A `G` inserted in the mature sequence of MIR3648-1
+
+**In short.** `21 8208517 . A AG` inserts a `G` after the `A` at 8208517, inside the mature sequence of MIR3648-1 (ENST00000615959, a forward-strand transcript of 180 bases whose mature sequence is `n.28-48`, 21:8208500-8208520). The bases at 8208518-8208520 are `GGG`, so under `--shift_3prime 1` the insertion moves three bases, to after `n.48`, the mature sequence's last base. Under `--hgvs` alone both engines write `mature_miRNA_variant` with `cDNA_position` `45-46`, `HGVSc=ENST00000615959.1:n.48dup` and `HGVS_OFFSET=3`. Under `--hgvs --shift_3prime 1 --shift_length` Ensembl VEP writes `mature_miRNA_variant`, vep-rs `non_coding_transcript_exon_variant`, both with `IMPACT=MODIFIER`, `cDNA_position` `48-49`, the same HGVSc, `HGVS_OFFSET=3` and `SHIFT_LENGTH=3`. The same allele given at the shifted position, `21 8208520 . G GG`, is `non_coding_transcript_exon_variant` on both engines.
+
+Two more records of the same transcript region show the shape. `21 8208519 . GGCCGGTCGGCCGCCCCGGGT G` deletes twenty bases from `n.48`, the mature sequence's last base, and the shift carries the deletion four bases along the repeat `GCCG`, to `n.52_71del`: Ensembl VEP writes `mature_miRNA_variant`, vep-rs `non_coding_transcript_exon_variant`. `21 8208891 . T TCGTGCGA` inserts seven bases after `n.48` of ENST00000614492, whose mature sequence is `n.35-58`; the insertion duplicates the following `CGTGCGA` and the shift carries it eleven bases, to `n.53_59dup` after the mature sequence, with the same two rows.
+
+## 2. Four bases deleted at the end of the mature sequence of MIR4759
+
+**In short.** `21 26953984 rs1324558451 TAGAC T` deletes `AGAC` at 26953985-26953988 of MIR4759 (ENST00000584048, a forward-strand transcript of 83 bases whose mature sequence is `n.5-25`, 21:26953965-26953985). The deletion's first base, 26953985, is the mature sequence's last, `n.25`. The bases at 26953984-26953992 are `TAGACAGAA`, so the deletion moves three bases under `--shift_3prime 1`, to `n.28_31del`, wholly after the mature sequence. Under `--hgvs` alone both engines write `mature_miRNA_variant` with `cDNA_position` `25-28`, `HGVSc=ENST00000584048.1:n.28_31del` and `HGVS_OFFSET=3`. Under `--hgvs --shift_3prime 1 --shift_length` Ensembl VEP writes `mature_miRNA_variant`, vep-rs `non_coding_transcript_exon_variant`, both with `IMPACT=MODIFIER`, `cDNA_position` `28-31`, the same HGVSc, `HGVS_OFFSET=3` and `SHIFT_LENGTH=3`. The same allele given at the shifted position, `21 26953987 . ACAGA A`, is `non_coding_transcript_exon_variant` on both engines.
+
+To reproduce: Ensembl VEP 116.2 with the GRCh38 cache and [the command of the closing section](reproducing.md#reproducing-these-examples), adding `--hgvs --shift_3prime 1 --shift_length`; vep-rs with the same flags over the same cache and FASTA. The committed reproduction runs the record of this section, whose transcript and reference bases the committed corpora carry.

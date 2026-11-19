@@ -61,10 +61,12 @@ fn short_twin_output(dir: &Path, corpus: &Corpus, format_flag: &str) -> Vec<Stri
 }
 
 /// Ensembl VEP 116.2 run on the corpus's `variants.short.vcf` with the
-/// manifest's flags writes 42 JSON objects for its 48 records (six are skipped),
-/// and 39 of them carry the record's line as written as `input`
-/// (OutputFactory/JSON.pm:247 joins the fields Perl's `split` read), the 32
-/// five-column sequence records included. Three differ from the written line:
+/// manifest's flags writes 46 JSON objects for its 52 records (six are skipped),
+/// and 43 of them carry the record's line as written as `input`
+/// (OutputFactory/JSON.pm:247 joins the fields Perl's `split` read), the 36
+/// five-column sequence records included, among them the record whose ID column
+/// is empty (`21\t30396602\t\tTTGA\tT`: an interior empty field survives the
+/// `split`). Three differ from the written line:
 /// the five-column structural `21 30165850 dup_short N <DUP>` is
 /// `21\t30165850\tdup_short\tN\t<DUP>\t.\t.\t.` (Parser/VCF.pm:464-466 fills
 /// QUAL, FILTER and INFO on the array `_line` holds, on the structural path
@@ -88,7 +90,7 @@ fn short_records_echo_the_line_ensembl_vep_stores() {
         .filter(|l| !l.starts_with('#'))
         .map(str::to_string)
         .collect();
-    assert_eq!(written.len(), 48);
+    assert_eq!(written.len(), 52);
     let by_identity: BTreeMap<String, &str> = written
         .iter()
         .map(|line| (vcf_line_key(line), line.as_str()))
@@ -105,7 +107,7 @@ fn short_records_echo_the_line_ensembl_vep_stores() {
     .collect();
 
     let objects = short_twin_output(dir.path(), &corpus, "--json");
-    assert_eq!(objects.len(), 43);
+    assert_eq!(objects.len(), 47);
     let mut as_written = 0;
     let mut block_only = 0;
     for line in &objects {
@@ -126,7 +128,7 @@ fn short_records_echo_the_line_ensembl_vep_stores() {
             }
         }
     }
-    assert_eq!((as_written, block_only), (39, 1));
+    assert_eq!((as_written, block_only), (43, 1));
 
     let lines = short_twin_output(dir.path(), &corpus, "--vcf");
     let columns = |id: &str| -> Vec<String> {

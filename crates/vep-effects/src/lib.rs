@@ -14,10 +14,13 @@ pub mod hgvs;
 pub mod hgvsg;
 pub mod mapper;
 pub mod overlap;
+pub mod regulatory;
 pub mod spdi;
 pub mod sv;
 
-pub use consequences::{calculate_consequences, shift_indel_3prime, shift_motif, EffectsConfig};
+pub use consequences::{
+    calculate_consequences, shift_indel_3prime, shift_motif, EffectsConfig, LofteeContextRows,
+};
 pub use overlap::find_overlapping_transcripts;
 
 /// Test helpers for building mock transcripts. Available in tests only.
@@ -61,7 +64,6 @@ pub(crate) mod test_helpers {
 
         let exons = vec![
             Exon {
-                stable_id: Some("ENSE00000000001".into()),
                 start: 25_000_000,
                 end: 25_000_299,
                 rank: 1,
@@ -69,7 +71,6 @@ pub(crate) mod test_helpers {
                 end_phase: 0,
             },
             Exon {
-                stable_id: Some("ENSE00000000002".into()),
                 start: 25_002_000,
                 end: 25_002_299,
                 rank: 2,
@@ -77,7 +78,6 @@ pub(crate) mod test_helpers {
                 end_phase: 0,
             },
             Exon {
-                stable_id: Some("ENSE00000000003".into()),
                 start: 25_004_000,
                 end: 25_006_000,
                 rank: 3,
@@ -124,6 +124,7 @@ pub(crate) mod test_helpers {
         ];
 
         let vefc = TranscriptVEFC {
+            spliced_seq: None,
             codon_table: 1,
             five_prime_utr: None,
             three_prime_utr: None,
@@ -156,6 +157,7 @@ pub(crate) mod test_helpers {
             source: "Ensembl".into(),
             gene_symbol: Some("TEST1".into()),
             gene_symbol_source: Some("HGNC".into()),
+            gene_symbol_id: None,
             hgnc_id: Some("HGNC:0001".into()),
             gene_phenotype: None,
             canonical: true,
@@ -171,6 +173,7 @@ pub(crate) mod test_helpers {
             uniparc: None,
             uniprot_isoform: None,
             exons: exons.clone(),
+            exon_ids: None,
             introns,
             cdna_coding_start: Some(51),
             cdna_coding_end: Some(900),
@@ -195,6 +198,8 @@ pub(crate) mod test_helpers {
             gencode_primary: false,
             attributes: vec![],
             vefc: Some(vefc),
+            source_cache: None,
+            bam_edit_status: None,
             derived: Default::default(),
             id_rank: 0,
         }
@@ -226,7 +231,6 @@ pub(crate) mod test_helpers {
             )
         };
         let exons = vec![Exon {
-            stable_id: Some("ENSE00000000001".into()),
             start: START,
             end,
             rank: 1,
@@ -241,6 +245,7 @@ pub(crate) mod test_helpers {
             ori,
         }];
         let vefc = TranscriptVEFC {
+            spliced_seq: None,
             codon_table: 1,
             five_prime_utr: None,
             three_prime_utr: Some(utr3.to_string()),
@@ -272,6 +277,7 @@ pub(crate) mod test_helpers {
             source: "Ensembl".into(),
             gene_symbol: Some("TEST1".into()),
             gene_symbol_source: Some("HGNC".into()),
+            gene_symbol_id: None,
             hgnc_id: Some("HGNC:0001".into()),
             gene_phenotype: None,
             canonical: true,
@@ -287,6 +293,7 @@ pub(crate) mod test_helpers {
             uniparc: None,
             uniprot_isoform: None,
             exons,
+            exon_ids: None,
             introns: vec![],
             cdna_coding_start: Some(SINGLE_EXON_UTR5 + 1),
             cdna_coding_end: Some(SINGLE_EXON_UTR5 + cds_len),
@@ -311,6 +318,8 @@ pub(crate) mod test_helpers {
             gencode_primary: false,
             attributes: vec![],
             vefc: Some(vefc),
+            source_cache: None,
+            bam_edit_status: None,
             derived: Default::default(),
             id_rank: 0,
         }
@@ -406,7 +415,7 @@ pub(crate) mod test_helpers {
             got,
             want,
             "consequence set mismatch for {}: missing {:?}, extra {:?}",
-            tc.transcript_id,
+            tc.transcript_id(),
             want.iter().filter(|t| !got.contains(t)).collect::<Vec<_>>(),
             got.iter().filter(|t| !want.contains(t)).collect::<Vec<_>>(),
         );
@@ -414,4 +423,10 @@ pub(crate) mod test_helpers {
 }
 
 #[cfg(test)]
+mod intron_end_insertion_tests;
+
+#[cfg(test)]
 mod concordance_tests;
+
+#[cfg(test)]
+mod stop_codon_tests;

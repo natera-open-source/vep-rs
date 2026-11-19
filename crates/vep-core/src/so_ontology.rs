@@ -264,7 +264,8 @@ pub fn descendants(parent: &str) -> Option<Vec<&'static str>> {
 }
 
 /// Whether `parent_name` lies above `name` on an `is_a` path. Both names are
-/// exact table names; the table is a directed acyclic graph of depth under ten.
+/// exact table names; the table is a directed acyclic graph, and no `is_a` chain
+/// is longer than the ten edges from `missense_variant` to `sequence_variant`.
 fn has_ancestor(name: &str, parent_name: &str) -> bool {
     term(name).is_some_and(|(_, _, parents)| {
         parents

@@ -17,6 +17,8 @@ pub mod duplication;
 pub mod insertion;
 pub mod inversion;
 
+use std::sync::Arc;
+
 use smallvec::SmallVec;
 use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
 use vep_core::coordinate::Strand;
@@ -45,7 +47,7 @@ pub(crate) fn mature_mirna_genomic_ranges(transcript: &Transcript) -> Vec<(u64, 
         return ranges;
     };
     for attr in &transcript.attributes {
-        if attr.code != "miRNA" {
+        if &*attr.code != "miRNA" {
             continue;
         }
         if let Some((cdna_start, cdna_end)) = parse_mirna_cdna_range(&attr.value) {
@@ -211,19 +213,85 @@ pub(crate) fn transcript_introns(transcript: &Transcript) -> &[vep_core::transcr
 /// 4 boundary bases gets no `intron_variant` from Perl.
 ///
 /// An intron of <= 4 bp has no interior at all under this rule and can never be
-/// `intronic`.
+/// `intronic`, and neither can a frameshift intron: `_intron_effects` flags the
+/// span that overlaps one and moves to the next intron before this test
+/// (`BaseTranscriptVariationAllele.pm:138-141`).
 pub(crate) fn overlaps_any_intron_trimmed(
     transcript: &Transcript,
     sv_start: u64,
     sv_end: u64,
 ) -> bool {
     transcript_introns(transcript).iter().any(|intron| {
+        if is_frameshift_intron(intron) {
+            return false;
+        }
         let trimmed_start = intron.start.saturating_add(2);
         let trimmed_end = intron.end.saturating_sub(2);
         if trimmed_start > trimmed_end {
             return false;
         }
         overlap_bp(sv_start, sv_end, trimmed_start, trimmed_end) > 0
+    })
+}
+
+/// Perl's `_frameshift` flag on an intron, one of at most 13 bases
+/// (`abs($intron_end - $intron_start) <= 12`, `BaseTranscriptVariation.pm:1032-1034`);
+/// an intron whose start lies past its end is never flagged (`:1014`).
+fn is_frameshift_intron(intron: &vep_core::transcript::Intron) -> bool {
+    intron.start <= intron.end && intron.end - intron.start <= 12
+}
+
+/// Which of Perl's positional predicates hold for a structural span wholly inside a
+/// frameshift intron.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FrameshiftIntronSpan {
+    /// `within_cds`: the span overlaps the coding region.
+    pub(crate) coding: bool,
+    /// `within_5_prime_utr`.
+    pub(crate) five_prime_utr: bool,
+    /// `within_3_prime_utr`.
+    pub(crate) three_prime_utr: bool,
+}
+
+/// Perl's reading of `sv_start..=sv_end` when it overlaps no exon and lies in a
+/// frameshift intron (`is_frameshift_intron`); `None` for every other span.
+///
+/// `_intron_effects` sets `within_frameshift_intron` for such an intron and moves to the
+/// next before its `intronic` test (`BaseTranscriptVariationAllele.pm:138-141`), so the
+/// span is not `intron_variant`. `within_cdna` returns `within_transcript` for it
+/// (`Utils/VariationEffect.pm:687-691`): `feature_truncation` and `feature_elongation`
+/// hold for the allele classes that carry them, and a span before or after the coding
+/// region takes its UTR term (`:696-756`). `within_cds` returns the span's overlap with
+/// the coding region (`:654-665`), which `coding_unknown` makes `coding_sequence_variant`
+/// for every structural allele.
+pub(crate) fn frameshift_intron_span(
+    transcript: &Transcript,
+    sv_start: u64,
+    sv_end: u64,
+) -> Option<FrameshiftIntronSpan> {
+    let in_frameshift_intron = transcript_introns(transcript).iter().any(|intron| {
+        is_frameshift_intron(intron) && sv_end >= intron.start && sv_start <= intron.end
+    });
+    if !in_frameshift_intron || overlaps_any_exon(transcript, sv_start, sv_end) {
+        return None;
+    }
+    let Some((cds_start, cds_end)) = crate::consequences::genomic_coding_bounds(transcript) else {
+        return Some(FrameshiftIntronSpan {
+            coding: false,
+            five_prime_utr: false,
+            three_prime_utr: false,
+        });
+    };
+    let before_coding = sv_start < cds_start;
+    let after_coding = sv_end > cds_end;
+    let (five_prime_utr, three_prime_utr) = match transcript.strand {
+        Strand::Forward => (before_coding, after_coding),
+        Strand::Reverse => (after_coding, before_coding),
+    };
+    Some(FrameshiftIntronSpan {
+        coding: sv_end >= cds_start && sv_start <= cds_end,
+        five_prime_utr,
+        three_prime_utr,
     })
 }
 
@@ -394,9 +462,8 @@ pub(crate) fn overlaps_cds_exon(transcript: &Transcript, sv_start: u64, sv_end: 
     })
 }
 
-/// Perl's `partial_codon` for a structural span (release/116 `Utils/VariationEffect.pm:1588-1614`):
-/// the span's `translation_start` lies in the partial terminal codon of a coding sequence
-/// whose length is not a multiple of three. `translation_start` is the first `genomic2pep`
+/// Perl's `partial_codon` for a structural span (`crate::mapper::partial_codon`, release/116
+/// `Utils/VariationEffect.pm:1588-1613`). `translation_start` is the first `genomic2pep`
 /// element in transcript order (`BaseTranscriptVariation.pm:365-380`; `Mapper.pm` reverses
 /// the list on the reverse strand), so the base read is the span's transcript-5' end, its
 /// start on the forward strand and its end on the reverse; when that base lies in a UTR, an
@@ -410,12 +477,14 @@ pub(crate) fn perl_partial_codon(transcript: &Transcript, sv_start: u64, sv_end:
         Strand::Forward => sv_start,
         Strand::Reverse => sv_end,
     };
-    match crate::mapper::map_genomic_to_transcript(five_prime_base, transcript, 0, 0) {
-        Some(crate::mapper::TranscriptPosition::Coding { cds_pos, .. }) => {
-            crate::consequences::is_in_incomplete_terminal_codon(transcript, cds_pos)
-        }
-        _ => false,
-    }
+    let translation_start =
+        match crate::mapper::map_genomic_to_transcript(five_prime_base, transcript, 0, 0) {
+            Some(crate::mapper::TranscriptPosition::Coding { protein_pos, .. }) => {
+                Some(protein_pos)
+            }
+            _ => None,
+        };
+    crate::mapper::partial_codon(transcript, translation_start)
 }
 
 /// Perl's `coding` pre-predicate for a structural span (`_bvfo_preds`,
@@ -492,7 +561,7 @@ pub(crate) fn overlaps_three_prime_utr(
 /// (coding_sequence_variant, intron_variant, UTR).
 fn calculate_small_bnd_single_breakend(
     variant: &InputVariant,
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
@@ -517,8 +586,8 @@ fn calculate_small_bnd_single_breakend(
         // span with both endpoints outside the transcript fails and Ensembl emits
         // the context term alone. An allele of a record that names no mate is built
         // without a breakend (`StructuralVariationOverlap.pm:64-77`), and ensembl-vep's
-        // `OutputFactory.pm:2029` reads `$vfoa->{breakend}->{string}` before the terms
-        // are computed at `:2034`, autovivifying an empty breakend whose chromosome
+        // `OutputFactory.pm:2029` at release/116.2 reads `$vfoa->{breakend}->{string}` before
+        // the terms are computed at `:2034`, autovivifying an empty breakend whose chromosome
         // matches no feature's, so the arm fails and Ensembl VEP 116.2 under
         // `--no_stats` writes the region terms alone (with statistics on,
         // `Stats.pm:241` computes the terms before that read, `within_feature` falls
@@ -585,8 +654,17 @@ fn calculate_small_bnd_single_breakend(
             && !tc.consequences.contains(&Consequence::MatureMirnaVariant)
             && truncation_arm_passes
         {
+            // The default term stands only on a row with no other.
+            tc.consequences
+                .retain(|c| *c != Consequence::IntergenicVariant);
             tc.consequences.push(Consequence::FeatureTruncation);
             tc.consequences.sort_by_key(|c| c.rank());
+        }
+        // A row the edits above leave without a term carries Ensembl VEP's default,
+        // `$cons = [$DEFAULT_OVERLAP_CONSEQUENCE] unless @$cons`
+        // (`BaseVariationFeatureOverlapAllele.pm:285`).
+        if tc.consequences.is_empty() {
+            tc.consequences.push(Consequence::IntergenicVariant);
         }
         // Every edit above changes the term list; VEP's IMPACT is the most severe
         // impact of the terms a row finally carries, so it is derived once here.
@@ -609,14 +687,73 @@ pub(crate) fn most_severe_impact(consequences: &[Consequence]) -> Impact {
         .unwrap_or(Impact::MODIFIER)
 }
 
+/// Ensembl VEP's `deletion` predicate (`Utils/VariationEffect.pm:192-216`): a
+/// sequence variant whose alternate allele is empty or shorter than a non-empty
+/// reference allele, or a structural variant of a deletion class: a `deletion`,
+/// a mobile-element deletion, or a copy-number record carrying no record term
+/// whose allele is `<CN0>` (ensembl-vep's `Parser.pm:705` reads a lone `<CN0>` as
+/// a deletion). A copy-number record with a record term is
+/// `copy_number_variation` whatever its alleles (`<CN0>` beside `<CN2>`), neither
+/// a deletion nor a gain, since `class_SO_term` names the record and the cache
+/// run has no supporting variants to read (`Utils/VariationEffect.pm:180-190`).
+pub fn perl_deletion_class(variant: &InputVariant) -> bool {
+    if variant.is_structural {
+        return match variant.variant_class {
+            VariantClass::StructuralDeletion | VariantClass::MobileElementDeletion => true,
+            VariantClass::CopyNumberVariation => cnv::is_copy_number_loss(variant),
+            _ => false,
+        };
+    }
+    let reference = perl_allele(&variant.ref_allele);
+    let alternate = perl_allele(variant.alt_allele());
+    !reference.is_empty() && alternate.len() < reference.len()
+}
+
+/// Ensembl VEP's `copy_number_gain` predicate (`Utils/VariationEffect.pm:246-309`):
+/// a `duplication`, a `tandem_duplication` or a `tandem_repeat` record, a
+/// copy-number record carrying no record term whose allele is `<CN2>`
+/// (ensembl-vep's `Parser.pm:706`), or a sequence variant whose alternate allele
+/// is its reference allele repeated two or more times (`tandem_repeat`,
+/// `Utils/VariationEffect.pm:282-298`). An insertion is not a gain
+/// (`Utils/VariationEffect.pm:218-244` is a predicate of its own).
+pub fn perl_gain_class(variant: &InputVariant) -> bool {
+    if variant.is_structural {
+        return match variant.variant_class {
+            VariantClass::Duplication
+            | VariantClass::TandemDuplication
+            | VariantClass::TandemRepeat => true,
+            VariantClass::CopyNumberVariation => cnv::is_copy_number_gain(variant),
+            _ => false,
+        };
+    }
+    let reference = perl_allele(&variant.ref_allele);
+    let alternate = perl_allele(variant.alt_allele());
+    !reference.is_empty()
+        && alternate.len() > reference.len()
+        && alternate.len().is_multiple_of(reference.len())
+        && alternate
+            .chunks(reference.len())
+            .all(|copy| copy == reference)
+}
+
+/// An allele as `_get_alleles` hands it to the predicates
+/// (`Utils/VariationEffect.pm:845-846`): `-` is the empty allele.
+fn perl_allele(allele: &[u8]) -> &[u8] {
+    if allele == b"-" {
+        b""
+    } else {
+        allele
+    }
+}
+
 /// Calculate consequences for a structural variant against a transcript.
 ///
-/// Returns `None` if the SV doesn't overlap the transcript region at all
-/// (or the SV type is unsupported: stubs return `None` to prevent garbage
-/// output).
+/// Returns `None` when the variant does not overlap the transcript region, for a
+/// reference-confidence block (annotated against no feature) and for a
+/// non-structural variant class.
 pub fn calculate_sv_consequences(
     variant: &InputVariant,
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
@@ -768,6 +905,22 @@ mod tests {
         Attribute, ExonCoordMapper, MapperPair, TranscriptMapper, TranscriptVEFC,
     };
     use vep_core::variant::InputVariant;
+
+    /// [`super::calculate_sv_consequences`] on a transcript the test owns: the row shares a copy of
+    /// it, as the index shares its handle.
+    fn calculate_sv_consequences(
+        variant: &InputVariant,
+        transcript: &Transcript,
+        upstream_distance: u64,
+        downstream_distance: u64,
+    ) -> Option<TranscriptConsequence> {
+        super::calculate_sv_consequences(
+            variant,
+            &Arc::new(transcript.clone()),
+            upstream_distance,
+            downstream_distance,
+        )
+    }
 
     /// Helper: build a minimal structural variant for testing dispatch.
     fn make_sv(variant_class: VariantClass, sv_end: Option<u64>) -> InputVariant {
@@ -1094,7 +1247,6 @@ mod tests {
         use vep_core::transcript::Exon;
 
         let exons = vec![Exon {
-            stable_id: Some("ENSE_MIRNA_001".into()),
             start: 1000,
             end: 1100,
             rank: 1,
@@ -1111,6 +1263,7 @@ mod tests {
         }];
 
         let vefc = TranscriptVEFC {
+            spliced_seq: None,
             codon_table: 1,
             five_prime_utr: None,
             three_prime_utr: None,
@@ -1143,6 +1296,7 @@ mod tests {
             source: "Ensembl".into(),
             gene_symbol: Some("MIR21".into()),
             gene_symbol_source: Some("HGNC".into()),
+            gene_symbol_id: None,
             hgnc_id: None,
             gene_phenotype: None,
             canonical: false,
@@ -1158,6 +1312,7 @@ mod tests {
             uniparc: None,
             uniprot_isoform: None,
             exons,
+            exon_ids: None,
             introns: vec![],
             cdna_coding_start: None,
             cdna_coding_end: None,
@@ -1176,6 +1331,8 @@ mod tests {
                 value: "50-70".into(),
             }],
             vefc: Some(vefc),
+            source_cache: None,
+            bam_edit_status: None,
             derived: Default::default(),
             id_rank: 0,
         }
@@ -1237,8 +1394,8 @@ mod tests {
 
     /// A `<BND>` with a SVLEN span and no mate is one single breakend evaluated over
     /// its span with no `feature_truncation`: its allele is built without a breakend,
-    /// and the empty one ensembl-vep's `OutputFactory.pm:2029` autovivifies before the
-    /// terms are computed matches no feature's chromosome, so the predicate's live arm
+    /// and the empty one ensembl-vep's `OutputFactory.pm:2029` at release/116.2 autovivifies
+    /// before the terms are computed matches no feature's chromosome, so the predicate's live arm
     /// (`Utils/VariationEffect.pm:357-358`) fails.
     /// Ensembl VEP 116.2 writes `coding_sequence_variant,5_prime_UTR_variant` for a
     /// `<BND>` span opening in a 5' UTR and running into the CDS; the same span under
@@ -1601,13 +1758,13 @@ mod tests {
         assert_eq!(tc.impact, Impact::MODIFIER);
     }
 
-    /// The decisive discriminator: with the bracket mate at POS-1 and `transcript.start ==
-    /// POS`, the local POS is inside the transcript and the breakend is one base before it.
+    /// With the bracket mate at POS-1 and `transcript.start == POS`, the local POS is
+    /// inside the transcript and the breakend is one base before it.
     ///
-    /// A union predicate emits `feature_truncation` here; Ensembl VEP does not, which
-    /// is what proves the breakend is the bracket coordinate rather than the local
-    /// POS. gnomAD SV writes the bracket mate at POS-1, so the fixture has the shape of
-    /// real records rather than a contrived one.
+    /// A union of the local POS, the span end and the bracket coordinate would emit
+    /// `feature_truncation` here; Ensembl VEP does not, because the breakend is the
+    /// bracket coordinate, not the local POS. gnomAD SV writes the bracket mate at
+    /// POS-1.
     #[test]
     fn test_paired_bnd_mate_one_base_before_the_transcript_earns_no_truncation() {
         let tx = make_non_coding_transcript();
@@ -1623,8 +1780,8 @@ mod tests {
         );
     }
 
-    /// A paired BND still earns `feature_truncation` when the bracket coordinate IS inside
-    /// the transcript, so the narrowing above is not a blanket suppression.
+    /// A paired BND earns `feature_truncation` when the bracket coordinate is inside
+    /// the transcript.
     #[test]
     fn test_paired_bnd_mate_inside_the_transcript_still_earns_truncation() {
         let tx = make_non_coding_transcript();
@@ -1768,6 +1925,212 @@ mod tests {
         assert!(!overlaps_polypyrimidine_tract(&tx, 25_000_290, 25_001_999));
     }
 
+    /// The symbolic classes Ensembl VEP annotates, each with the term its direction
+    /// earns where `within_cdna` holds: a truncation for a deletion, an elongation for
+    /// a gain or an insertion, none for the others.
+    fn symbolic_classes() -> [(VariantClass, &'static [u8], Option<&'static str>); 12] {
+        [
+            (
+                VariantClass::StructuralDeletion,
+                b"<DEL>",
+                Some("feature_truncation"),
+            ),
+            (
+                VariantClass::MobileElementDeletion,
+                b"<DEL:ME>",
+                Some("feature_truncation"),
+            ),
+            (
+                VariantClass::StructuralDeletion,
+                b"<CN0>",
+                Some("feature_truncation"),
+            ),
+            (
+                VariantClass::Duplication,
+                b"<DUP>",
+                Some("feature_elongation"),
+            ),
+            (
+                VariantClass::TandemDuplication,
+                b"<DUP:TANDEM>",
+                Some("feature_elongation"),
+            ),
+            (
+                VariantClass::Duplication,
+                b"<CN2>",
+                Some("feature_elongation"),
+            ),
+            (
+                VariantClass::StructuralInsertion,
+                b"<INS>",
+                Some("feature_elongation"),
+            ),
+            (
+                VariantClass::MobileElementInsertion,
+                b"<INS:ME>",
+                Some("feature_elongation"),
+            ),
+            (
+                VariantClass::TandemRepeat,
+                b"<CNV:TR>",
+                Some("feature_elongation"),
+            ),
+            (VariantClass::CopyNumberVariation, b"<CNV>", None),
+            (VariantClass::Inversion, b"<INV>", None),
+            (VariantClass::Translocation, b"<BND>", None),
+        ]
+    }
+
+    /// The sorted term names of the symbolic record `alt` over `start..=end` on `tx`;
+    /// a `<BND>` is the mate-less single breakend the reader builds from one.
+    fn symbolic_span_terms(
+        tx: &Transcript,
+        class: VariantClass,
+        alt: &[u8],
+        start: u64,
+        end: u64,
+    ) -> Vec<String> {
+        let mut v = InputVariant::new("21".into(), start, end, b"N".to_vec(), alt.to_vec());
+        v.variant_class = class;
+        v.is_structural = true;
+        v.sv_end = Some(end);
+        v.is_single_breakend = class == VariantClass::Translocation;
+        let tc = calculate_sv_consequences(&v, tx, 5000, 5000).expect("inside the transcript");
+        let mut names: Vec<String> = tc.consequences.iter().map(|c| c.to_string()).collect();
+        names.sort();
+        names
+    }
+
+    /// `region` beside the class's direction term, sorted.
+    fn with_direction(direction: Option<&str>, region: &str) -> Vec<String> {
+        let mut names: Vec<String> = direction
+            .into_iter()
+            .chain([region])
+            .map(str::to_string)
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// A structural span wholly inside a frameshift intron, in every class. Ensembl VEP
+    /// 116.2 on a forward-strand coding transcript with introns of 7, 9 and 13 bases in
+    /// its 5' UTR, coding region and 3' UTR writes the region's term
+    /// (`5_prime_UTR_variant`, `coding_sequence_variant`, `3_prime_UTR_variant`) for
+    /// `<CNV>`, `<INV>` and `<BND>`, that term with `feature_truncation` for `<DEL>`,
+    /// `<DEL:ME>` and `<CN0>`, and with `feature_elongation` for `<DUP>`, `<DUP:TANDEM>`,
+    /// `<CN2>`, `<INS>`, `<INS:ME>` and `<CNV:TR>`, never `intron_variant`. On the
+    /// lncRNA ENST00000624847 (GRCh38 `21:6358575-6358576`) the region's term is
+    /// `non_coding_transcript_variant`.
+    #[test]
+    fn a_span_inside_a_frameshift_intron_takes_its_region_term_in_every_class() {
+        let tx = crate::sv::deletion::frameshift_intron_test_transcript();
+        let mut lncrna = tx.clone();
+        lncrna.biotype = "lncRNA".into();
+        lncrna.coding_region_start = None;
+        lncrna.coding_region_end = None;
+        lncrna.translation = None;
+        if let Some(mapper) = lncrna.vefc.as_mut().and_then(|v| v.mapper.as_mut()) {
+            mapper.cdna_coding_start = 0;
+            mapper.cdna_coding_end = 0;
+        }
+        for (class, alt, direction) in symbolic_classes() {
+            let name = String::from_utf8_lossy(alt);
+            for (start, end, region) in [
+                (25_000_021, 25_000_025, "5_prime_UTR_variant"),
+                (25_002_101, 25_002_109, "coding_sequence_variant"),
+                (25_002_103, 25_002_107, "coding_sequence_variant"),
+                (25_005_001, 25_005_013, "3_prime_UTR_variant"),
+            ] {
+                assert_eq!(
+                    symbolic_span_terms(&tx, class, alt, start, end),
+                    with_direction(direction, region),
+                    "{name} {start}-{end}"
+                );
+            }
+            assert_eq!(
+                symbolic_span_terms(&lncrna, class, alt, 25_002_101, 25_002_109),
+                with_direction(direction, "non_coding_transcript_variant"),
+                "{name} on the lncRNA"
+            );
+        }
+    }
+
+    /// A span over a frameshift intron and bases of an exon beside it, reaching no
+    /// ordinary intron, is not intronic: `_intron_effects` leaves the frameshift
+    /// intron before its `intronic` test (`BaseTranscriptVariationAllele.pm:138-141`).
+    /// Ensembl VEP 116.2 writes the exons' term with the class's direction term, and
+    /// no `intron_variant`, for a span from ten bases before a 9-base coding intron to
+    /// ten bases after it, from inside that intron into either exon, and across a
+    /// 7-base 5' UTR intron and a 13-base 3' UTR intron, in every class.
+    #[test]
+    fn a_span_across_a_frameshift_intron_and_its_exons_is_not_intronic() {
+        let tx = crate::sv::deletion::frameshift_intron_test_transcript();
+        for (class, alt, direction) in symbolic_classes() {
+            let name = String::from_utf8_lossy(alt);
+            for (start, end, region) in [
+                (25_000_011, 25_000_035, "5_prime_UTR_variant"),
+                (25_002_091, 25_002_119, "coding_sequence_variant"),
+                (25_002_105, 25_002_119, "coding_sequence_variant"),
+                (25_002_091, 25_002_105, "coding_sequence_variant"),
+                (25_004_991, 25_005_023, "3_prime_UTR_variant"),
+            ] {
+                assert_eq!(
+                    symbolic_span_terms(&tx, class, alt, start, end),
+                    with_direction(direction, region),
+                    "{name} {start}-{end}"
+                );
+            }
+            // The third base of the ordinary intron behind the exon is intronic.
+            assert!(
+                symbolic_span_terms(&tx, class, alt, 25_002_091, 25_002_302)
+                    .contains(&"intron_variant".to_string()),
+                "{name}"
+            );
+        }
+    }
+
+    /// The flank pair of a record without a span (`END` at `POS`, no `SVLEN`) inside a
+    /// frameshift intron of the coding region. Ensembl VEP 116.2 writes
+    /// `feature_elongation,coding_sequence_variant` for `<INS>`, `<INS:ME>` and `<DUP>`
+    /// and `coding_sequence_variant` for `<CNV>` and `<INV>` on the pair between the
+    /// third and fourth bases of a 9-base coding intron (`within_cds`,
+    /// `Utils/VariationEffect.pm:654-665`).
+    #[test]
+    fn a_flank_pair_inside_a_coding_frameshift_intron_is_coding() {
+        let tx = crate::sv::deletion::frameshift_intron_test_transcript();
+        let elongating = ["coding_sequence_variant", "feature_elongation"];
+        let cases: [(VariantClass, &[u8], &[&str]); 5] = [
+            (VariantClass::StructuralInsertion, b"<INS>", &elongating),
+            (
+                VariantClass::MobileElementInsertion,
+                b"<INS:ME>",
+                &elongating,
+            ),
+            (VariantClass::Duplication, b"<DUP>", &elongating),
+            (
+                VariantClass::CopyNumberVariation,
+                b"<CNV>",
+                &["coding_sequence_variant"],
+            ),
+            (
+                VariantClass::Inversion,
+                b"<INV>",
+                &["coding_sequence_variant"],
+            ),
+        ];
+        for (class, alt, expected) in cases {
+            let pos = 25_002_103;
+            let mut v = InputVariant::new("21".into(), pos + 1, pos, b"N".to_vec(), alt.to_vec());
+            v.variant_class = class;
+            v.is_structural = true;
+            v.sv_end = Some(pos);
+            let tc = calculate_sv_consequences(&v, &tx, 5000, 5000).expect("inside the transcript");
+            let mut names: Vec<String> = tc.consequences.iter().map(|c| c.to_string()).collect();
+            names.sort();
+            assert_eq!(names, expected, "{}", String::from_utf8_lossy(alt));
+        }
+    }
+
     /// `make_test_transcript()` with exon 3 split by a 9 bp intron
     /// (25_004_101-25_004_109), which Perl's `_has_frameshift_intron` reads as a
     /// frameshift intron and which stretches every exon by 12 in the exon test.
@@ -1775,7 +2138,6 @@ mod tests {
         let mut tx = crate::test_helpers::make_test_transcript();
         let last = tx.exons.pop().expect("three exons");
         tx.exons.push(vep_core::transcript::Exon {
-            stable_id: Some("ENSE00000000003".into()),
             start: 25_004_000,
             end: 25_004_100,
             rank: 3,
@@ -1783,7 +2145,6 @@ mod tests {
             end_phase: 0,
         });
         tx.exons.push(vep_core::transcript::Exon {
-            stable_id: Some("ENSE00000000004".into()),
             start: 25_004_110,
             end: last.end,
             rank: 4,
@@ -1862,6 +2223,119 @@ mod tests {
         assert!(!perl_coding_pre_predicate(&tx, 25_001_983, 25_001_986));
     }
 
+    /// Ensembl VEP's `partial_codon` on a span, read through the structural caller
+    /// (`perl_partial_codon`) and the projection
+    /// (`map_genomic_span_to_cds_projection`'s `has_partial_terminal_codon`).
+    fn partial_codon_both_ways(tx: &Transcript, start: u64, end: u64) -> (bool, bool) {
+        let projection = crate::mapper::map_genomic_span_to_cds_projection(start, end, tx)
+            .expect("a coding transcript with a mapper projects every span")
+            .has_partial_terminal_codon;
+        (perl_partial_codon(tx, start, end), projection)
+    }
+
+    /// `partial_codon` on a transcript whose cache record lacks `translateable_seq`:
+    /// Perl's `length` of the undefined `_translateable_seq` reads as 0, so for the
+    /// span opening on CDS 850 of the test transcript (`translation_start` 284,
+    /// codon start 850) `last_codon_length` is `0 - 849`, not above 0, and the
+    /// predicate is 0 on the structural and the projection path alike. With the
+    /// 850-base sequence present the same span reads `850 - 849 = 1`, partial.
+    #[test]
+    fn partial_codon_agrees_on_a_transcript_without_translateable_seq() {
+        let with_seq = crate::test_helpers::make_test_transcript();
+        assert_eq!(
+            partial_codon_both_ways(&with_seq, 25_004_299, 25_004_500),
+            (true, true)
+        );
+
+        let mut without_seq = crate::test_helpers::make_test_transcript();
+        without_seq.vefc.as_mut().unwrap().translateable_seq = None;
+        assert_eq!(
+            partial_codon_both_ways(&without_seq, 25_004_299, 25_004_500),
+            (false, false)
+        );
+        assert!(!crate::mapper::partial_codon(&without_seq, Some(284)));
+    }
+
+    /// A single-exon segment whose coding sequence opens at the transcript's first
+    /// base: `make_open_ended_segment` with its 5' UTR removed, the transcript
+    /// starting on CDS 1.
+    fn first_base_cds_segment(strand: Strand, cds: &str) -> Transcript {
+        let mut tx = crate::test_helpers::make_open_ended_segment(strand, cds);
+        let cds_len = cds.len() as u64;
+        let (start, end) = (
+            tx.coding_region_start.unwrap(),
+            tx.coding_region_end.unwrap(),
+        );
+        tx.start = start;
+        tx.end = end;
+        tx.exons[0].start = start;
+        tx.exons[0].end = end;
+        tx.cdna_coding_start = Some(1);
+        tx.cdna_coding_end = Some(cds_len);
+        let translation = tx.translation.as_mut().unwrap();
+        translation.start = 1;
+        translation.end = cds_len;
+        let vefc = tx.vefc.as_mut().unwrap();
+        vefc.sorted_exons[0].start = start;
+        vefc.sorted_exons[0].end = end;
+        let mapper = vefc.mapper.as_mut().unwrap();
+        mapper.cdna_coding_start = 1;
+        mapper.cdna_coding_end = cds_len;
+        let mut pairs = mapper.exon_coord_mapper.pairs.clone();
+        pairs[0].from_end = cds_len;
+        pairs[0].to_start = start;
+        pairs[0].to_end = end;
+        mapper.exon_coord_mapper = ExonCoordMapper::new(pairs);
+        tx
+    }
+
+    /// A span opening before a transcript whose coding sequence opens at its first
+    /// base. Perl's `genomic2pep` list opens with the gap `Mapper::map_coordinates`
+    /// emits for the bases before the first exon (reversed into first place on the
+    /// reverse strand), so `translation_start` is undefined and `partial_codon`
+    /// returns 0 before its arithmetic, on both paths; the same deletion opening on
+    /// the segment's last base reads the arithmetic: 13 coding bases, CDS 13 is
+    /// `translation_start` 5, codon start 13, `last_codon_length = 13 - 12 = 1`,
+    /// partial; opening one base earlier, CDS 12, `translation_start` 4, codon start
+    /// 10, `last_codon_length = 13 - 9 = 4`, not partial. The reverse-strand segment
+    /// has 11 coding bases: CDS 10 is `translation_start` 4, `11 - 9 = 2`, partial.
+    #[test]
+    fn partial_codon_agrees_when_the_span_opens_before_a_first_base_cds() {
+        let fwd = first_base_cds_segment(Strand::Forward, "ACTGGGGGATACG");
+        assert_eq!((fwd.start, fwd.end), (40_000_031, 40_000_043));
+        assert_eq!(
+            partial_codon_both_ways(&fwd, 40_000_020, 40_001_000),
+            (false, false)
+        );
+        assert_eq!(
+            partial_codon_both_ways(&fwd, 40_000_043, 40_001_000),
+            (true, true)
+        );
+        assert_eq!(
+            partial_codon_both_ways(&fwd, 40_000_042, 40_001_000),
+            (false, false)
+        );
+
+        let rev = first_base_cds_segment(Strand::Reverse, "CTAACTGGGGA");
+        assert_eq!((rev.start, rev.end), (40_000_001, 40_000_011));
+        assert_eq!(
+            partial_codon_both_ways(&rev, 39_999_000, 40_000_020),
+            (false, false)
+        );
+        assert_eq!(
+            partial_codon_both_ways(&rev, 39_999_000, 40_000_002),
+            (true, true)
+        );
+        assert_eq!(
+            partial_codon_both_ways(&rev, 39_999_000, 40_000_003),
+            (false, false)
+        );
+
+        assert!(!crate::mapper::partial_codon(&fwd, None));
+        assert!(crate::mapper::partial_codon(&fwd, Some(5)));
+        assert!(!crate::mapper::partial_codon(&fwd, Some(4)));
+    }
+
     // Non-coding exon variant tests for giant/small BND paths
     //
     // Test transcript (non-coding, same exon/intron layout as standard):
@@ -1880,7 +2354,6 @@ mod tests {
 
         let exons = vec![
             Exon {
-                stable_id: Some("ENSE_NC_001".into()),
                 start: 25_000_000,
                 end: 25_000_299,
                 rank: 1,
@@ -1888,7 +2361,6 @@ mod tests {
                 end_phase: -1,
             },
             Exon {
-                stable_id: Some("ENSE_NC_002".into()),
                 start: 25_002_000,
                 end: 25_002_299,
                 rank: 2,
@@ -1896,7 +2368,6 @@ mod tests {
                 end_phase: -1,
             },
             Exon {
-                stable_id: Some("ENSE_NC_003".into()),
                 start: 25_004_000,
                 end: 25_006_000,
                 rank: 3,
@@ -1943,6 +2414,7 @@ mod tests {
         ];
 
         let vefc = TranscriptVEFC {
+            spliced_seq: None,
             codon_table: 1,
             five_prime_utr: None,
             three_prime_utr: None,
@@ -1975,6 +2447,7 @@ mod tests {
             source: "Ensembl".into(),
             gene_symbol: Some("TESTNC1".into()),
             gene_symbol_source: Some("HGNC".into()),
+            gene_symbol_id: None,
             hgnc_id: None,
             gene_phenotype: None,
             canonical: false,
@@ -1990,6 +2463,7 @@ mod tests {
             uniparc: None,
             uniprot_isoform: None,
             exons: exons.clone(),
+            exon_ids: None,
             introns,
             cdna_coding_start: None,
             cdna_coding_end: None,
@@ -2005,6 +2479,8 @@ mod tests {
             gencode_primary: false,
             attributes: vec![],
             vefc: Some(vefc),
+            source_cache: None,
+            bam_edit_status: None,
             derived: Default::default(),
             id_rank: 0,
         }
@@ -2054,7 +2530,6 @@ mod tests {
 
         let exons = vec![
             Exon {
-                stable_id: Some("ENSE_NC_I1".into()),
                 start: 100,
                 end: 200,
                 rank: 1,
@@ -2062,7 +2537,6 @@ mod tests {
                 end_phase: -1,
             },
             Exon {
-                stable_id: Some("ENSE_NC_I2".into()),
                 start: 20_000_301,
                 end: 20_000_400,
                 rank: 2,
@@ -2076,6 +2550,7 @@ mod tests {
             rank: 1,
         }];
         let vefc = TranscriptVEFC {
+            spliced_seq: None,
             codon_table: 1,
             five_prime_utr: None,
             three_prime_utr: None,
@@ -2122,6 +2597,7 @@ mod tests {
             source: "Ensembl".into(),
             gene_symbol: Some("TESTNCI".into()),
             gene_symbol_source: None,
+            gene_symbol_id: None,
             hgnc_id: None,
             gene_phenotype: None,
             canonical: false,
@@ -2137,6 +2613,7 @@ mod tests {
             uniparc: None,
             uniprot_isoform: None,
             exons: exons.clone(),
+            exon_ids: None,
             introns,
             cdna_coding_start: None,
             cdna_coding_end: None,
@@ -2152,6 +2629,8 @@ mod tests {
             gencode_primary: false,
             attributes: vec![],
             vefc: Some(vefc),
+            source_cache: None,
+            bam_edit_status: None,
             derived: Default::default(),
             id_rank: 0,
         };
@@ -2497,7 +2976,6 @@ mod tests {
         };
 
         let exons = vec![Exon {
-            stable_id: Some("ENSE_MIR_1".into()),
             start: 25_000_000,
             end: 25_000_100,
             rank: 1,
@@ -2506,6 +2984,7 @@ mod tests {
         }];
 
         let vefc = TranscriptVEFC {
+            spliced_seq: None,
             codon_table: 1,
             five_prime_utr: None,
             three_prime_utr: None,
@@ -2544,6 +3023,7 @@ mod tests {
             source: "Ensembl".into(),
             gene_symbol: Some("MIRTEST".into()),
             gene_symbol_source: Some("HGNC".into()),
+            gene_symbol_id: None,
             hgnc_id: None,
             gene_phenotype: None,
             canonical: false,
@@ -2559,6 +3039,7 @@ mod tests {
             uniparc: None,
             uniprot_isoform: None,
             exons,
+            exon_ids: None,
             introns: vec![],
             cdna_coding_start: None,
             cdna_coding_end: None,
@@ -2577,8 +3058,147 @@ mod tests {
                 value: "50-70".into(),
             }],
             vefc: Some(vefc),
+            source_cache: None,
+            bam_edit_status: None,
             derived: Default::default(),
             id_rank: 0,
         }
+    }
+
+    /// Every structural class writes at least one term on every row, as Ensembl VEP's
+    /// `$cons = [$DEFAULT_OVERLAP_CONSEQUENCE] unless @$cons`
+    /// (`BaseVariationFeatureOverlapAllele.pm:285`) leaves no row without one. The
+    /// spans are every pair of bases within three of an exon end, on a transcript
+    /// with ordinary introns and on one with frameshift introns.
+    #[test]
+    fn no_structural_row_is_written_without_a_term() {
+        let classes: [(VariantClass, &[u8]); 13] = [
+            (VariantClass::StructuralDeletion, b"<DEL>"),
+            (VariantClass::MobileElementDeletion, b"<DEL:ME>"),
+            (VariantClass::Duplication, b"<DUP>"),
+            (VariantClass::TandemDuplication, b"<DUP:TANDEM>"),
+            (VariantClass::CopyNumberVariation, b"<CNV>"),
+            (VariantClass::CopyNumberVariation, b"<CN0>"),
+            (VariantClass::CopyNumberVariation, b"<CN2>"),
+            (VariantClass::Inversion, b"<INV>"),
+            (VariantClass::StructuralInsertion, b"<INS>"),
+            (VariantClass::MobileElementInsertion, b"<INS:ME>"),
+            (VariantClass::TandemRepeat, b"<CNV:TR>"),
+            (VariantClass::Translocation, b"<BND>"),
+            (VariantClass::ComplexStructural, b"<CPX>"),
+        ];
+        let transcripts = [
+            crate::test_helpers::make_test_transcript(),
+            crate::sv::deletion::frameshift_intron_test_transcript(),
+        ];
+        for tx in &transcripts {
+            let mut bases: Vec<u64> = tx
+                .exons
+                .iter()
+                .flat_map(|exon| [exon.start, exon.end])
+                .flat_map(|edge| edge - 3..=edge + 3)
+                .collect();
+            bases.sort_unstable();
+            bases.dedup();
+            for (class, alt) in classes {
+                for (i, &start) in bases.iter().enumerate() {
+                    for &end in &bases[i..] {
+                        let mut v =
+                            InputVariant::new("21".into(), start, end, b"N".to_vec(), alt.to_vec());
+                        v.variant_class = class;
+                        v.is_structural = true;
+                        v.sv_end = Some(end);
+                        if let Some(tc) = calculate_sv_consequences(&v, tx, 5000, 5000) {
+                            assert!(
+                                !tc.consequences.is_empty(),
+                                "{class:?} {} {start}-{end}",
+                                String::from_utf8_lossy(alt)
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A span on only the first or last two bases of an intron, which no predicate
+    /// claims. Ensembl VEP 116.2 writes `intergenic_variant` on the transcript row for
+    /// `<DEL>`, `<DEL:ME>`, `<CN0>`, `<DUP>`, `<DUP:TANDEM>`, `<CN2>`, `<CNV>`, `<INV>`,
+    /// `<INS>`, `<INS:ME>`, `<CNV:TR>` and `<BND>` over GRCh37 `21:38600108-38600109`
+    /// and `21:38600522-38600523` on ENST00000288304 (the ends of its 416-base
+    /// intron), `intron_variant` once the span reaches the third base, and
+    /// `non_coding_transcript_variant` for the same classes over GRCh38
+    /// `21:6354523-6354524` on the lncRNA ENST00000624847.
+    #[test]
+    fn a_span_on_the_splice_bases_of_an_intron_takes_the_default_term() {
+        // Intron 1 of the test transcript is 25_000_300-25_001_999.
+        let tx = crate::test_helpers::make_test_transcript();
+        let mut lncrna = tx.clone();
+        lncrna.biotype = "lncRNA".into();
+        lncrna.coding_region_start = None;
+        lncrna.coding_region_end = None;
+        lncrna.translation = None;
+        // `within_nmd_transcript` holds on the biotype for any span inside the
+        // transcript (`Utils/VariationEffect.pm:477-482`), so the row of a
+        // nonsense-mediated-decay transcript carries that term and no default.
+        let mut nmd = tx.clone();
+        nmd.biotype = "nonsense_mediated_decay".into();
+        for (class, alt, _direction) in symbolic_classes() {
+            let name = String::from_utf8_lossy(alt);
+            for (start, end) in [
+                (25_000_300, 25_000_301),
+                (25_000_300, 25_000_300),
+                (25_000_301, 25_000_301),
+                (25_001_998, 25_001_999),
+            ] {
+                assert_eq!(
+                    symbolic_span_terms(&tx, class, alt, start, end),
+                    ["intergenic_variant"],
+                    "{name} {start}-{end}"
+                );
+                assert_eq!(
+                    symbolic_span_terms(&nmd, class, alt, start, end),
+                    ["NMD_transcript_variant"],
+                    "{name} {start}-{end} on the nonsense-mediated-decay transcript"
+                );
+            }
+            for (start, end) in [(25_000_300, 25_000_301), (25_001_998, 25_001_999)] {
+                assert_eq!(
+                    symbolic_span_terms(&lncrna, class, alt, start, end),
+                    ["non_coding_transcript_variant"],
+                    "{name} {start}-{end} on the lncRNA"
+                );
+            }
+            assert_eq!(
+                symbolic_span_terms(&tx, class, alt, 25_000_301, 25_000_302),
+                ["intron_variant"],
+                "{name}"
+            );
+        }
+    }
+
+    /// A breakend span that earns `feature_truncation` carries it without the default
+    /// term, which stands only on a row with no other
+    /// (`BaseVariationFeatureOverlapAllele.pm:285`).
+    #[test]
+    fn a_truncating_breakend_span_on_the_splice_bases_carries_no_default_term() {
+        let tx = crate::test_helpers::make_test_transcript();
+        let mut v = InputVariant::new(
+            "21".into(),
+            25_000_300,
+            25_000_301,
+            b"N".to_vec(),
+            b"<BND>".to_vec(),
+        );
+        v.variant_class = VariantClass::Translocation;
+        v.is_structural = true;
+        v.sv_end = Some(25_000_301);
+        v.is_single_breakend = true;
+        v.mate_id = Some("mate".into());
+        let tc = calculate_sv_consequences(&v, &tx, 5000, 5000).expect("inside the transcript");
+        assert_eq!(
+            tc.consequences.to_vec(),
+            vec![Consequence::FeatureTruncation]
+        );
     }
 }

@@ -1,0 +1,37 @@
+entry = "filter_vep_consequence_field_pattern"
+page = "docs/divergences/filter-vep-consequence-field-pattern.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", INFO (\"Arbitrary keys are permitted\"); not seen in the measured datasets; classed by its most reachable shape, a key ending in the field's name; its other shape is an entry whose value is empty"
+notes = "The first shape of the entry: an empty CSQ entry before DP=4. filter_vep reads `;DP=4` as the one entry, so Allele is defined and the line passes; vep filter reads no entry and fails it. The second shape, a key ending in CSQ, is on the page."
+
+[input]
+format = "vcf"
+header = [
+  "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Depth\">",
+  "##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|SYMBOL|DISTANCE\">",
+]
+text = """
+21	100	r1	A	G	.	.	CSQ=;DP=4
+21	200	r2	C	T	.	.	DP=4;CSQ=
+21	300	r3	G	A	.	.	DP=4;CSQ=A|intron_variant|MODIFIER|S3|
+"""
+
+[run]
+tool = "filter"
+args = [
+  "-i", "{input}", "-o", "{out}", "--force_overwrite",
+  "--no_missing_consequence_warning", "--filter", "Allele exists",
+]
+
+[compare]
+kind = "lines"
+pattern = "^21\t"
+
+[expected]
+ensembl_vep = [
+  "21\t100\tr1\tA\tG\t.\t.\tCSQ=;DP=4",
+  "21\t300\tr3\tG\tA\t.\t.\tDP=4;CSQ=A|intron_variant|MODIFIER|S3|",
+]
+vep_rs = ["21\t300\tr3\tG\tA\t.\t.\tDP=4;CSQ=A|intron_variant|MODIFIER|S3|"]

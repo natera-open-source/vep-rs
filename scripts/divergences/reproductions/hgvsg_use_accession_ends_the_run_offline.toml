@@ -1,0 +1,43 @@
+entry = "hgvsg_use_accession_ends_the_run_offline"
+page = "docs/divergences/hgvsg-use-accession-offline.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification, section 1.4.1 \"Fixed fields\", CHROM (a String, no whitespace permitted); not seen in the measured datasets"
+notes = "The record `intron_snv_1` of the GRCh38-identifiers corpus under the name `Chr21`, a spelling both engines read as chromosome 21 and Ensembl's synonyms table does not hold. Under `--hgvsg --hgvsg_use_accession` an offline run of Ensembl VEP looks the accession up among the synonyms of the name as written (OutputFactory.pm:1368-1370), finds none and passes no name on (:1372); `hgvs_genomic` then asks the slice for its `RefSeq_genomic` synonyms (ensembl-variation VariationFeature.pm:1912-1914), which a slice without a database cannot give (the core API's Slice.pm:2985): the run dies with `Can't call method \"db\" on an undefined value`, exit status 255 under the runner's `--fork 1` and 25 without a fork, its header written and no row. vep-rs names the chromosome the cache reads the name as by its accession on each of the record's nine rows: the value Ensembl VEP writes for the record with a database connection, and offline for the names `21` and `chr21`."
+
+[input]
+format = "vcf"
+text = """
+Chr21	10538885	intron_snv_1	A	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-identifiers/json_cache"
+fasta = "tests/golden/116/GRCh38-identifiers/reference.fa.gz"
+chromosomes = ["21"]
+
+[run]
+flags = ["--hgvsg", "--hgvsg_use_accession"]
+
+[compare]
+kind = "rows"
+where = { record = "intron_snv_1" }
+columns = ["Location", "Feature", "HGVSg"]
+
+[expected]
+ensembl_vep_exit = 255
+ensembl_vep = []
+vep_rs = [
+  "Chr21:10538885 | ENST00000427445 | NC_000021.9:g.10538885A>C",
+  "Chr21:10538885 | ENST00000612746 | NC_000021.9:g.10538885A>C",
+  "Chr21:10538885 | ENST00000612957 | NC_000021.9:g.10538885A>C",
+  "Chr21:10538885 | ENST00000618007 | NC_000021.9:g.10538885A>C",
+  "Chr21:10538885 | ENST00000622113 | NC_000021.9:g.10538885A>C",
+  "Chr21:10538885 | ENST00001091160 | NC_000021.9:g.10538885A>C",
+  "Chr21:10538885 | ENST00001091161 | NC_000021.9:g.10538885A>C",
+  "Chr21:10538885 | ENST00001091162 | NC_000021.9:g.10538885A>C",
+  "Chr21:10538885 | ENST00001131865 | NC_000021.9:g.10538885A>C",
+]

@@ -301,9 +301,10 @@ fn from_hex(text: &str) -> Option<Digest> {
         return None;
     }
     let mut digest = [0u8; 32];
-    for (byte, pair) in digest.iter_mut().zip(bytes.chunks_exact(2)) {
-        let high = (pair[0] as char).to_digit(16)?;
-        let low = (pair[1] as char).to_digit(16)?;
+    let (pairs, _) = bytes.as_chunks::<2>();
+    for (byte, &[high, low]) in digest.iter_mut().zip(pairs) {
+        let high = (high as char).to_digit(16)?;
+        let low = (low as char).to_digit(16)?;
         *byte = (high as u8) << 4 | low as u8;
     }
     Some(digest)

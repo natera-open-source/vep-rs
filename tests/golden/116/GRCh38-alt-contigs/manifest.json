@@ -543,7 +543,8 @@
  },
  "variant_classes": {
   "deletion": 45,
-  "insertion": 68,
+  "insertion": 43,
+  "mnv_or_complex": 25,
   "snv": 17
  },
  "records": [
@@ -1996,6 +1997,34 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "HG1012_PATCH:132564-132566",
+   "allele": "-",
+   "feature": "ENST00000707211",
+   "feature_type": "Transcript",
+   "record_indices": [
+    23
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_without_stop_codon_test"
+  },
+  {
+   "location": "HG1012_PATCH:132564-132566",
+   "allele": "-",
+   "feature": "ENST00000707212",
+   "feature_type": "Transcript",
+   "record_indices": [
+    23
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,coding_sequence_variant"
+   ],
+   "expected_divergence": "stop_retained_without_stop_codon_test"
+  },
+  {
    "location": "HG1012_PATCH:309624-309626",
    "allele": "-",
    "feature": "ENST00000710274",
@@ -2026,7 +2055,8 @@
  ],
  "vep_rs_only_tuples": [],
  "divergence_summary": {
-  "start_cooccurrence_swap": 38
+  "start_cooccurrence_swap": 38,
+  "stop_retained_without_stop_codon_test": 2
  },
  "vep_rs_only_summary": {}
 }

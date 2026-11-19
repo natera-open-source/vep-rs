@@ -1,0 +1,35 @@
+entry = "non_numeric_pos_numified"
+page = "docs/divergences/defect-n.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "malformed"
+input_class_basis = "POS is \"The reference position, with the 1st base having position 1\", \"(Integer, Required)\" (VCF 4.2 specification, section 1.4.1 \"Fixed fields\", POS): the record's POS is the missing value, an empty column, text that is not an integer, or a negative number"
+notes = "A `<DEL>` whose POS is `.`: the structural path's `$start++` numifies the text to 1, so Ensembl VEP annotates a deletion from base 1 to the END (3,254 transcript rows under --max_sv_size -1, one shown); vep-rs refuses the line and writes no row."
+
+[input]
+format = "vcf"
+header = [
+  "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">",
+  "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the variant\">",
+]
+text = """
+21	.	pos_dot_del	N	<DEL>	.	.	SVTYPE=DEL;END=30425949
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-release116/json_cache"
+
+[run]
+flags = ["--allele_number", "--max_sv_size", "-1"]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = "pos_dot_del", feature = "ENST00000262354" }
+columns = ["Location", "Allele", "Feature", "Consequence", "OverlapPC"]
+
+[expected]
+ensembl_vep = ["21:1-30425949 | deletion | ENST00000262354 | transcript_ablation | 100.00"]
+vep_rs = []

@@ -5,6 +5,13 @@
 
 use std::collections::BTreeMap;
 
+/// The regulatory shard shape this build reads: per regulatory feature the
+/// stable id, span, feature type, database id and activity codes; per motif
+/// feature the stable id, span, strand, database id, score, stranded sequence
+/// and the stable id of its binding matrix; the matrices once in
+/// `regulatory/binding_matrices.json`.
+pub const REGULATORY_SCHEMA: u32 = 1;
+
 /// Metadata from a VEP cache info.txt file.
 ///
 /// Each VEP cache directory contains an `info.txt` file describing the cache
@@ -29,8 +36,21 @@ pub struct CacheInfo {
     pub polyphen: Option<String>,
     /// Whether regulatory features are included.
     pub regulatory: bool,
-    /// Available cell types for regulatory features.
+    /// The epigenomes of the regulatory build, as the converter lists them: the
+    /// sorted union of every regulatory feature's activity-map keys (epigenome
+    /// short names with spaces as `_`, `Database/RegFeat.pm:196-203` at
+    /// release/116.2). A regulatory feature's `activity` string holds one code
+    /// per name in this order. Ensembl VEP's own `cell_types` line is a
+    /// comma-joined string the names cannot be split back from (some contain
+    /// commas), so a cache converted without the list has none.
     pub cell_types: Vec<String>,
+    /// The shape of the regulatory shards and of
+    /// `regulatory/binding_matrices.json`, written by the converter beside
+    /// `regulatory`; the current shape is [`REGULATORY_SCHEMA`], and a cache
+    /// whose regulatory tree declares none holds an unversioned shape. An
+    /// absent key stays absent when the object is written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub regulatory_schema: Option<u32>,
     /// Column names for the variation cache TSV files.
     pub variation_cols: Vec<String>,
     /// Serializer type: "sereal" or None for Storable.
@@ -39,12 +59,25 @@ pub struct CacheInfo {
     pub var_type: Option<String>,
     /// Build identifier.
     pub build: Option<String>,
+    /// The alignment file the transcript models were edited against, the `bam`
+    /// line of a RefSeq or merged cache's `info.txt` (`Dumper/Otherfeatures.pm:80`
+    /// at release/116.2); a cache with the key switches `--use_transcript_ref`
+    /// on (`CacheDir.pm:412-416`). An absent key stays absent when the object
+    /// is written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bam: Option<String>,
+    /// The transcript set the cache holds, `ensembl`, `refseq` or `merged`, from
+    /// the species directory the cache was converted from: a key of this cache
+    /// layout with no counterpart in Ensembl VEP's `info.txt`, `None` when the
+    /// cache's metadata lacks the key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_type: Option<String>,
     /// Source database versions (e.g., "ClinVar" -> "202306"), in the byte
     /// order the output headers print them.
     pub source_versions: BTreeMap<String, String>,
     /// The cache's chromosome directories in the order the converter and the
     /// builder list them: autosomes by number, X, Y, MT, then every other
-    /// contig by name. Empty when the cache's metadata predates the key.
+    /// contig by name. Empty when the cache's metadata lacks the key.
     pub contig_order: Vec<String>,
 }
 
@@ -152,6 +185,98 @@ mod tests {
         assert!(!CacheInfo::default().variation_is_tabix());
     }
 
+    /// Two keys of an Ensembl VEP cache's `info.txt`, carried into a converted
+    /// cache's `info.json`, change nothing here: `cache_region_size`, the span
+    /// of one Storable region file (`CacheDir.pm:149` reads it, default
+    /// `Config.pm:296`'s 1000000), where a JSON shard's span is its own; and
+    /// `build`, which `CacheDir.pm:454-483` stores and no module reads. The
+    /// object parses to the same metadata with and without `cache_region_size`,
+    /// and `build` is kept as the metadata it is.
+    #[test]
+    fn region_size_and_build_keys_are_accepted() {
+        let with: CacheInfo = serde_json::from_str(
+            r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":116,"cache_region_size":1000000,"build":"all"}"#,
+        )
+        .unwrap();
+        let without: CacheInfo = serde_json::from_str(
+            r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":116,"build":"all"}"#,
+        )
+        .unwrap();
+        assert_eq!(format!("{with:?}"), format!("{without:?}"));
+        assert_eq!(with.build.as_deref(), Some("all"));
+        assert_eq!(with.cache_version, Some(116));
+        assert!(!serde_json::to_string(&with)
+            .unwrap()
+            .contains("cache_region_size"));
+    }
+
+    /// The `bam` line of a RefSeq cache's `info.txt` and the converter's
+    /// `source_type` key are read and written as the strings they are; a cache
+    /// without either key (every Ensembl cache, every converted cache whose
+    /// metadata lacks the key) parses to `None` and writes neither key back.
+    #[test]
+    fn bam_line_round_trips_through_info_json() {
+        let edited: CacheInfo = serde_json::from_str(
+            r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":84,
+                "bam":"interim_GRCh38.p10_knownrefseq_alignments_2017-01-13.bam","source_type":"refseq"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            edited.bam.as_deref(),
+            Some("interim_GRCh38.p10_knownrefseq_alignments_2017-01-13.bam")
+        );
+        assert_eq!(edited.source_type.as_deref(), Some("refseq"));
+        let written = serde_json::to_string(&edited).unwrap();
+        let again: CacheInfo = serde_json::from_str(&written).unwrap();
+        assert_eq!(again.bam, edited.bam);
+        assert_eq!(again.source_type, edited.source_type);
+
+        let plain: CacheInfo = serde_json::from_str(
+            r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":116}"#,
+        )
+        .unwrap();
+        assert!(plain.bam.is_none());
+        assert!(plain.source_type.is_none());
+        let written = serde_json::to_string(&plain).unwrap();
+        assert!(!written.contains("\"bam\""), "{written}");
+        assert!(!written.contains("source_type"), "{written}");
+    }
+
+    /// `cell_types` is a JSON array of the epigenome names, so a name holding a
+    /// comma (77 of the 112 GRCh38 names) survives a write and a read intact and
+    /// in place, where Ensembl VEP's comma-joined `cell_types` line cannot be
+    /// split back into them (CacheDir.pm:174); an `info.json` without the key
+    /// reads as an empty list.
+    #[test]
+    fn cell_types_round_trip() {
+        let names = [
+            "A549_(m,_58_y)",
+            "GM12878_(f)",
+            "common_myeloid_progenitor,_CD34-positive_(27-36_y)",
+            "astrocyte",
+        ];
+        let info = CacheInfo {
+            regulatory: true,
+            regulatory_schema: Some(REGULATORY_SCHEMA),
+            cell_types: names.map(str::to_string).to_vec(),
+            ..Default::default()
+        };
+        let written = serde_json::to_string(&info).unwrap();
+        assert!(
+            written.contains(
+                r#""cell_types":["A549_(m,_58_y)","GM12878_(f)","common_myeloid_progenitor,_CD34-positive_(27-36_y)","astrocyte"]"#
+            ),
+            "{written}"
+        );
+        let again: CacheInfo = serde_json::from_str(&written).unwrap();
+        assert_eq!(again.cell_types, names);
+        assert_eq!(again.cell_types.join(",").split(',').count(), 6);
+
+        let without: CacheInfo =
+            serde_json::from_str(r#"{"species":"homo_sapiens","regulatory":true}"#).unwrap();
+        assert!(without.cell_types.is_empty());
+    }
+
     #[test]
     fn test_cache_info_default() {
         let info = CacheInfo::default();
@@ -162,10 +287,13 @@ mod tests {
         assert!(info.polyphen.is_none());
         assert!(!info.regulatory);
         assert!(info.cell_types.is_empty());
+        assert!(info.regulatory_schema.is_none());
         assert!(info.variation_cols.is_empty());
         assert!(info.serialiser_type.is_none());
         assert!(info.var_type.is_none());
         assert!(info.build.is_none());
+        assert!(info.bam.is_none());
+        assert!(info.source_type.is_none());
         assert!(info.source_versions.is_empty());
         assert!(info.contig_order.is_empty());
     }
@@ -183,6 +311,7 @@ mod tests {
             polyphen: Some("b".to_string()),
             regulatory: true,
             cell_types: vec!["A549".to_string(), "DND-41".to_string()],
+            regulatory_schema: Some(REGULATORY_SCHEMA),
             variation_cols: vec![
                 "variation_name".to_string(),
                 "failed".to_string(),
@@ -191,6 +320,8 @@ mod tests {
             serialiser_type: Some("sereal".to_string()),
             var_type: Some("tabix".to_string()),
             build: Some("all".to_string()),
+            bam: None,
+            source_type: Some("ensembl".to_string()),
             source_versions,
             contig_order: vec!["1".to_string(), "X".to_string(), "MT".to_string()],
         };
@@ -199,6 +330,7 @@ mod tests {
         assert_eq!(info.cache_version, Some(115));
         assert!(info.regulatory);
         assert_eq!(info.cell_types.len(), 2);
+        assert_eq!(info.regulatory_schema, Some(1));
         assert_eq!(
             info.source_versions.get("ensembl-variation"),
             Some(&"115.0".to_string())

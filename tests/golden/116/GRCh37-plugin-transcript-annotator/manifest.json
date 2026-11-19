@@ -1,0 +1,147 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh37",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "included_records": {
+  "ta": [
+   "rs1158883572",
+   "rs1337170643",
+   "rs146351448",
+   "rs373447233",
+   "rs539744325",
+   "rs759450394"
+  ]
+ },
+ "max_span": 1000000,
+ "flags": [
+  "--plugin",
+  "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz"
+ ],
+ "covers": [
+  "TranscriptAnnotator"
+ ],
+ "suites": {
+  "ta": {
+   "reference": "reference.txt",
+   "input": "candidates.vcf",
+   "rows": 35,
+   "combinations": 7
+  }
+ },
+ "combinations": {
+  "NMD_transcript_variant,frameshift_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "frameshift_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 2
+  },
+  "intron_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 3
+  },
+  "missense_variant": {
+   "observed_rows": 16,
+   "exemplar_records": 5
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 4
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 3
+  }
+ },
+ "variant_classes": {
+  "deletion": 3,
+  "insertion": 5,
+  "snv": 27
+ },
+ "records": [
+  {
+   "suite": "ta",
+   "vcf": "21\t30248729\trs759450394\tA\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t30248750\trs1337170643\tG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t30250578\trs1158883572\tCA\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,frameshift_variant",
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t30400257\trs373447233\tG\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t30400274\trs539744325\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t30400274\trs539744325\tG\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ta",
+   "vcf": "21\t30419039\trs146351448\tA\tAT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "transcript_annotator_SIFT_score",
+  "transcript_annotator_SIFT_pred",
+  "transcript_annotator_Comment"
+ ],
+ "field_divergences": [],
+ "field_divergence_summary": {}
+}

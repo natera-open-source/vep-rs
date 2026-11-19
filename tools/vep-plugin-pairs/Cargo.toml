@@ -1,0 +1,23 @@
+[package]
+name = "vep-plugin-pairs"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+description = "Reads, sorts and pairs the plugin values of two VEP outputs across every core for scripts/concordance/score_plugin_tuples.py, which settles what is left"
+publish = false
+
+[dependencies]
+flate2 = "1"
+memchr = "2"
+sha2 = "0.11"
+
+# Its own Cargo root: the repository workspace's commands do not reach this package, and
+# a cargo command for it names this manifest.
+[workspace]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

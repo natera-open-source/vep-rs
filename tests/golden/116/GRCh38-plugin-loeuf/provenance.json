@@ -1,0 +1,64 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "variants.vcf: hand-placed records named by their design, nine on chromosome 21: an intergenic substitution; an exonic substitution in APP; a substitution upstream of BACH1's canonical transcript and inside its longer transcripts; an exonic substitution in BACH1; a 260-base deletion covering the single-exon transcript of KRTAP20-4 whole and a substitution inside that exon; a substitution 2,000 bases upstream of SOD1 and one in each of its second exon and an intron. Reference alleles read from the GRCh38 primary assembly. APP, BACH1 and SOD1 have several transcripts with distinct LOEUF values, BACH1 and KRTAP20-4 transcripts with the value NA, so the gene minimum, the per-transcript value as written and the exclusion of upstream and downstream rows are each exercised.",
+ "sha256": {
+  "default.txt": "f8f4d25e80e539e6e4c2aea2d90354a152ad503b9821fa9c9466c494313196f3",
+  "tab.txt": "0f8fab9e003e56827cc33f623d90e37834776095a59233099ac262dea839d76a",
+  "vcf.vcf": "2258d7e735f50b135cc520a28f1ca703a05c8f141b5a2d7e0e60f134ca2bfa53",
+  "json.jsonl": "3930e2866ff05573c2d969e898711805f735bbd9407938c450a9716925f136d6"
+ },
+ "variants_vcf_sha256": "5c5d63178da6e47c325f7d6eb72dcf5d2347be48763d6b50a3b96b74d0b2979d",
+ "flag_sets": {
+  "match-by-gene": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin LOEUF,file={corpus}/data/loeuf_dataset_grch38.tsv.gz,match_by=gene [--tab|--vcf|--json]",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/data",
+    "--plugin",
+    "LOEUF,file={corpus}/data/loeuf_dataset_grch38.tsv.gz,match_by=gene"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_match-by-gene",
+   "sha256": {
+    "default.txt": "9daf8d226d55bcac595adce9f48ff67ecd4804cd3ec6d36c19f53f1bc8b12fca",
+    "tab.txt": "d3ed8de58443d5196a9f4ab3c0725b5caf6fa503a3edb91a2d4cdff7108b3d49",
+    "vcf.vcf": "2fc981825ffc49dbab9488b754efc3f5438a89c696b70e9deee7e5be20355fd7",
+    "json.jsonl": "2a84ccbce0dcb7d9a1a27224e398edf75b4f59743023b9c804d3b36912822a54"
+   }
+  },
+  "match-by-transcript": {
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --no_stats --quiet --force_overwrite --dir_plugins {corpus}/data --plugin LOEUF,file={corpus}/data/loeuf_dataset_grch38.tsv.gz,match_by=transcript [--tab|--vcf|--json]",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/data",
+    "--plugin",
+    "LOEUF,file={corpus}/data/loeuf_dataset_grch38.tsv.gz,match_by=transcript"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected_match-by-transcript",
+   "sha256": {
+    "default.txt": "173c76fcad13aecfe0fb2de5d755445e7bdb9c57e2287662b0816ec188cb08de",
+    "tab.txt": "145949de2d8aa979fa6fe9618b5ed4ad99c99829723a4baa70adccdde92307a4",
+    "vcf.vcf": "689914de0d6ab88768cc258f6efc9afc233da6c366bd5d7bbde20d8e76ce8878",
+    "json.jsonl": "ba19e232c8b09e6c38dab68d7a70e7656fee7558519763f4cfd41e9f4cb27f1d"
+   }
+  }
+ },
+ "data": {
+  "description": "data/: the slice of the LOEUF table the flag sets read, identical on both sides: vep-rs through the corpus directory, Ensembl VEP through its read-only mount",
+  "source": "gnomAD v4.1.1 constraint metrics as Ensembl publishes them with gene coordinates appended (loeuf_dataset_grch38.tsv.gz, https://ftp.ensembl.org/pub/current/variation/LOEUF/), bgzip-compressed and tabix-indexed on columns 114, 115 and 116 as LOEUF.pm documents; gene_id in column 2, transcript in column 3, lof.oe_ci.upper in column 94",
+  "licence": "gnomAD data are released under CC0 1.0",
+  "slice": "every row of the table whose span the tabix index returns for a corpus record (the contig the records name), extended to every chromosome 21 row of those genes (gene_id column 2), in the table's own order under the table's header line; bgzip, then tabix -s 114 -b 115 -e 116",
+  "sha256": {
+   "data/loeuf_dataset_grch38.tsv.gz": "12fd40b92c7b7f5147e8b454584429525e8bc9cc26ee55be111e719b64268e72",
+   "data/loeuf_dataset_grch38.tsv.gz.tbi": "1cf33ba5c28b666a088bbdc3bf30ebf9fa209110b20b14c32749f63605e19730"
+  }
+ },
+ "generator": "manifest: scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite plugin-loeuf=<reference>=<candidates> --k 3 --seed 1 --include <each record's ID> --covers LOEUF --matrix tests/parity/matrix.tsv, then flag-set for each flag_sets entry; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 over the chromosome 21 slice of the vep-rs JSON conversion of the Ensembl VEP 116 GRCh38 cache; expected outputs: scripts/concordance/generate_reference_output.sh --corpus for the default run and, per flag set, for a copy of the corpus carrying the set's flags as its own, whose outputs and record are the set's"
+}

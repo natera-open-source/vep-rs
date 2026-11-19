@@ -1,0 +1,41 @@
+entry = "dosage_sensitivity_regulatory_row_warnings"
+page = "docs/plugins/flat-file.md#2-dosagesensitivity-a-warning-per-row-kind-on-regulatory-and-motif-rows"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 5,810 of 5,810 regulatory features · 0 flag sets, 4 corpora"
+notes = "The first records of the regulatory corpus, which overlap regulatory features and motifs, against the committed DosageSensitivity table; both engines write the rows without a field."
+
+[input]
+format = "vcf"
+text = """
+21	5014321	del_covers_rf	GTGGGCCTGTGGGGGGCGCTTACC	G	.	.	.
+21	5055683	longer_not_repeat	TGCCCCCAGGGAGG	TGCCCCCAGGGAGGAAA	.	.	.
+21	5090720	fwd_mnv_inside	GG	AA	.	.	.
+21	5090723	rev_mnv_start	CA	TT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-regulatory/json_cache"
+fasta = "tests/golden/116/GRCh38-regulatory/reference.fa.gz"
+
+[run]
+flags = [
+  "--regulatory",
+  "--plugin", "DosageSensitivity,file={repo}/tests/golden/116/GRCh38-plugin-dosage-sensitivity/data/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz",
+]
+
+[compare]
+kind = "warnings"
+pattern = "Plugin 'DosageSensitivity' went wrong"
+# The first line of Ensembl VEP's warnings file carries a running count, `WARNING: <n> : `, that varies from run to run.
+mask = ["^WARNING: \\d+ : "]
+
+[expected]
+ensembl_vep = [
+  "<masked>WARNING: Plugin 'DosageSensitivity' went wrong: Can't locate object method \"transcript\" via package \"Bio::EnsEMBL::Variation::RegulatoryFeatureVariationAllele\" at <path> line 169, <__ANONIO__> line 6.",
+  "WARNING: Plugin 'DosageSensitivity' went wrong: Can't locate object method \"transcript\" via package \"Bio::EnsEMBL::Variation::MotifFeatureVariationAllele\" at <path> line 169, <__ANONIO__> line 6.",
+]
+vep_rs = []

@@ -1,0 +1,31 @@
+entry = "stop_codon_overlap_insertion_range"
+page = "docs/divergences/stop-codon-overlap-insertion-range.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "1 · 63,698 per million · no flag needed"
+notes = "Two insertions of four bases between a stop codon's first and second base, one on each strand, on GRCh38. ClinVar 1025066 inserts them between 9:12709180 and 9:12709181 on four forward-strand transcripts of TYRP1 whose stop codon is 9:12709180-12709182: CDS 742-744 of ENST00000381136 and CDS 1612-1614 of ENST00000388918, ENST00001078217 and ENST00001138527. The record stop_ins4_twostops_rev, a record of the corpus tests/golden/116/GRCh38-release116, inserts them between 21:30282169 and 21:30282170 on the reverse-strand ENST00000340345 of KRTAP24-1, whose stop codon is 21:30282170-30282168, CDS 763-765. Each insertion leaves every coding base before the stop codon as the reference has it and a stop codon at the old stop position. Ensembl VEP moves an insertion's start by the inserted length before it tests the overlap with the stop codon, forward on the forward strand and back on the reverse (Utils/VariationEffect.pm:1408-1415). The forward-strand start moves from 12709181 to 12709185, past the codon's last base, the overlap fails and the four rows carry coding_sequence_variant. The reverse-strand start moves from 30282170 to 30282166, the overlap holds and the row carries stop_retained_variant. vep-rs reads both insertions on the coding sequence and writes stop_retained_variant on all five rows."
+
+[input]
+format = "vcf"
+text = """
+9	12709180	1025066	T	TAACA	.	.	.
+21	30282169	stop_ins4_twostops_rev	C	CTATT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38/json_cache"
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = ["1025066", "stop_ins4_twostops_rev"], feature = ["ENST00000340345", "ENST00000381136", "ENST00000388918", "ENST00001078217", "ENST00001138527"] }
+columns = ["Uploaded_variation", "Location", "Feature", "Consequence", "CDS_position", "IMPACT", "STRAND"]
+
+[expected]
+ensembl_vep = ["1025066 | 9:12709180-12709181 | ENST00000381136 | inframe_insertion,coding_sequence_variant | 742-743 | MODERATE | 1", "1025066 | 9:12709180-12709181 | ENST00000388918 | inframe_insertion,coding_sequence_variant | 1612-1613 | MODERATE | 1", "1025066 | 9:12709180-12709181 | ENST00001078217 | inframe_insertion,coding_sequence_variant | 1612-1613 | MODERATE | 1", "1025066 | 9:12709180-12709181 | ENST00001138527 | inframe_insertion,coding_sequence_variant | 1612-1613 | MODERATE | 1", "stop_ins4_twostops_rev | 21:30282169-30282170 | ENST00000340345 | inframe_insertion,stop_retained_variant | 763-764 | MODERATE | -1"]
+vep_rs = ["1025066 | 9:12709180-12709181 | ENST00000381136 | inframe_insertion,stop_retained_variant | 742-743 | MODERATE | 1", "1025066 | 9:12709180-12709181 | ENST00000388918 | inframe_insertion,stop_retained_variant | 1612-1613 | MODERATE | 1", "1025066 | 9:12709180-12709181 | ENST00001078217 | inframe_insertion,stop_retained_variant | 1612-1613 | MODERATE | 1", "1025066 | 9:12709180-12709181 | ENST00001138527 | inframe_insertion,stop_retained_variant | 1612-1613 | MODERATE | 1", "stop_ins4_twostops_rev | 21:30282169-30282170 | ENST00000340345 | inframe_insertion,stop_retained_variant | 763-764 | MODERATE | -1"]

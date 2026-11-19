@@ -1,0 +1,2 @@
+WARNING: Using regulatory features from --regulatory_gff; ignoring the regulatory data in this cache
+WARNING: --cell_type is ignored for regulatory features from --regulatory_gff; a GFF carries no epigenome activity data

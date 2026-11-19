@@ -5,11 +5,13 @@
 //!
 //! Reads VCF variants, loads transcripts from a converted JSON cache,
 //! computes consequence annotations using the vep-effects engine,
-//! and writes annotated output. The stages run as the three-thread pipeline
-//! in the `pipeline` module; this module owns the setup and `annotate_batch`.
+//! and writes annotated output. The stages run as the staged pipeline in the
+//! `pipeline` module; this module owns the setup and `annotate_batch`.
 //!
 //! Annotation of each batch is parallelised across the resolved `--fork` count
-//! (default: every logical CPU up to 32; `--fork 1` runs serially) using rayon's `par_iter_mut`.
+//! (default: every logical CPU up to 32, fewer on an inflate-bound indexed
+//! input, where the decompression threads keep their CPUs; `--fork 1` runs
+//! serially) using rayon's `par_iter_mut`.
 //!
 //! Perl citations name modules of ensembl-vep release/116 (`Bio/EnsEMBL/VEP/...`).
 
@@ -19,7 +21,7 @@ use std::io::{self, BufRead, BufReader, BufWriter, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use noodles::bgzf;
@@ -28,12 +30,13 @@ use rayon::ThreadPool;
 use tracing::{debug, info, warn};
 
 use crate::annotator::{
-    build_thread_pool, hgvs_options, hgvsg_options, spdi_options, LoadedPlugins, PredictionConfig,
-    HGVS_NEEDS_FASTA,
+    build_thread_pool, context_sequence_rows, hgvs_options, hgvsg_options, loftee_context_rows,
+    spdi_options, LoadedPlugins, PredictionConfig, HGVS_NEEDS_FASTA,
 };
 use crate::cache_resolve::{manifest_error, ResolvedCache};
 use crate::config::{
     reported_parallelism, resolve_decompression_threads, CliError, Config, DecompressionThreads,
+    Fork,
 };
 use crate::filter_set::FilterSet;
 use crate::frequency_filter::{check_frequency_filter, FrequencyFilter};
@@ -44,25 +47,33 @@ use crate::output_compress::OutputCompression;
 use crate::pick::FilterConfig;
 use crate::pipeline;
 use crate::row_filter::RowFilters;
+use crate::stats;
 use crate::sv_source::{self, SvSource};
 use crate::transcript_index::{LazyTranscriptIndexes, TranscriptIndex, TranscriptSet};
 use crate::transcript_lookup::TranscriptLookup;
 use crate::variation_matcher::{self, ColocationRules};
 use crate::variation_name_index;
 use crate::variation_source::{ReadFailure, VariationSource};
+use vep_builtins::custom::{self, CustomRunOptions, CustomSources, CustomSpec};
 use vep_builtins::BuiltinRegistry;
 use vep_core::cache_info::CacheInfo;
 use vep_core::cache_manifest::CacheManifest;
-use vep_core::consequence::{Consequence, Impact};
-use vep_core::sv_routing::{perl_true, split_plugin_arg};
+use vep_core::consequence::{Consequence, FeatureType, Impact, RowKind};
+use vep_core::sv_routing::perl_true;
 use vep_core::synonyms::ChromosomeSynonyms;
 use vep_core::variant::{InputVariant, VariantClass};
 use vep_io::input::detect::{self, InputFormat};
 use vep_io::input::id::IdParser;
 use vep_io::input::{Delimiter, ParserContext, ReferenceSequence};
-use vep_io::output::fields::{ClinSigAllele, ExtraFieldsPlan, FieldOptions, PluginHeader};
+use vep_io::output::fields::{
+    ClinSigAllele, CustomSourceInfo, ExtraFieldsPlan, FieldOptions, PluginHeader,
+};
 use vep_io::output::json::JsonOutputFormatter;
-use vep_io::output::parquet::ParquetOutputFormatter;
+#[cfg(feature = "parquet")]
+use vep_io::output::parquet::{
+    InputOrder, ParquetDirectoryWriter, ParquetOutputFormatter, Partition, PublishError,
+    UnpublishedOutput, UNCHECKED_ORDER_WARNING,
+};
 use vep_io::output::tab::TabOutputFormatter;
 use vep_io::output::vcf_output::VcfOutputFormatter;
 use vep_io::OutputFormatter;
@@ -97,11 +108,17 @@ const GZIP_TRAILER_BYTES: usize = 8;
 const BGZF_MAX_ISIZE: u32 = 65536;
 
 /// The input as [`Runner::open_input`] leaves it: the source the reader stage
-/// consumes and whether the input is a BGZF file, whose `.tbi` index may name its
-/// contigs in file order.
+/// consumes and whether the input is a BGZF file, whose `.tbi` or `.csi` index
+/// may name its contigs in file order.
 struct OpenedInput {
     source: PendingInput,
     bgzf_file: bool,
+    /// The threads the block reader inflates a BGZF input on; 0 for any other
+    /// input, and for a BGZF input read on the reader's own thread.
+    inflaters: usize,
+    /// The input's shape, read once here for the knobs that resolve from it
+    /// (`Unknown` when none asks).
+    shape: InputShape,
     /// The column delimiter the input is read with: the detected one under
     /// `--format guess`, else `--delimiter` (Parser.pm:135, 387-415).
     delimiter: Delimiter,
@@ -112,6 +129,10 @@ struct OpenedInput {
     /// Parser/HGVS.pm:237, Parser/SPDI.pm:193, Parser/ID.pm:189), so no name is
     /// built from the alleles.
     parser_names_records: bool,
+    /// The format's records carry no position of their own to sort by, so
+    /// Ensembl VEP never checks their order (`%UNSORTABLE`, Config.pm:640-645),
+    /// and neither does the Parquet writer.
+    unsortable: bool,
 }
 
 /// A source the pipeline reads, or an identifier list still to be resolved,
@@ -183,7 +204,7 @@ impl ReferenceSequence for FastaReference {
 /// the text of the test that comes first there (`:132`); `--input_data` and
 /// `STDIN` name no file to check.
 fn check_input_file_exists(config: &Config) -> Result<(), CliError> {
-    if config.input_data.is_some() || config.input_file == "STDIN" {
+    if config.input_data.is_some() || config.reads_stdin() {
         return Ok(());
     }
     if !crate::argv::truthy(&config.input_file) {
@@ -196,6 +217,16 @@ fn check_input_file_exists(config: &Config) -> Result<(), CliError> {
         "input",
         format!("File \"{}\" does not exist", config.input_file),
     ))
+}
+
+/// Ends the run on the warnings sink's failure, if a warning so far could not
+/// be written to its file: the `output` refusal, which a run with no batch to
+/// end on returns at once.
+fn check_warnings_file_written() -> Result<(), CliError> {
+    match crate::warnings::global().failure() {
+        Some(failure) => Err(failure),
+        None => Ok(()),
+    }
 }
 
 /// Reads up to `n` bytes from `reader` and returns them together with a reader
@@ -499,6 +530,51 @@ fn surface_reader_refusal(error: anyhow::Error) -> anyhow::Error {
     }
 }
 
+/// The refusal of an output that exists and may not be replaced, with Ensembl
+/// VEP's text (BaseRunner.pm:203-204), on the name as spelled.
+fn existing_output(spelled: &str) -> CliError {
+    CliError::new(
+        "output",
+        format!(
+            "Output file {spelled} already exists. Specify a different output file with --output_file or overwrite existing file with --force_overwrite"
+        ),
+    )
+}
+
+/// The refusal of an output that cannot be created, with Ensembl VEP's text
+/// (BaseRunner.pm:226); the Parquet directory fails the same way.
+fn unwritable_output(path: &str) -> CliError {
+    CliError::new("output", format!("Could not write to output file {path}"))
+}
+
+/// `error` with the temporary directory a failed Parquet run could not remove
+/// named after it, on the run's one error line.
+#[cfg(feature = "parquet")]
+fn with_directory_left(error: anyhow::Error, temporary: &Path) -> anyhow::Error {
+    let left = format!(
+        "the temporary directory {} could not be removed",
+        temporary.display()
+    );
+    match error.downcast_ref::<CliError>() {
+        Some(refusal) => {
+            CliError::new(refusal.component, format!("{}; {left}", refusal.message)).into()
+        }
+        None => anyhow::anyhow!("{error:#}; {left}"),
+    }
+}
+
+/// The error of a Parquet run whose finished output did not replace what is
+/// at `output`: the existing-output and unwritable-output refusals with their
+/// own texts, anything else as the `parquet` component states it.
+#[cfg(feature = "parquet")]
+fn publication_error(error: PublishError, output: &str) -> CliError {
+    match error {
+        PublishError::Exists => existing_output(output),
+        PublishError::Io(_) => unwritable_output(output),
+        refusal => CliError::new("parquet", refusal.to_string()),
+    }
+}
+
 /// A gunzip over every gzip member of a stream, as `gzip -dc` reads one, the
 /// program Ensembl VEP decompresses its input through (Utils.pm:436-443): the
 /// stream ends at the first bytes after a complete member that are not another
@@ -710,22 +786,63 @@ fn decompressed<R: BufRead + Send + 'static>(
 /// The shape of the run's input: `--input_data` and standard input have none,
 /// so they read as `Unknown` without opening a file.
 fn input_shape(config: &Config) -> InputShape {
-    if config.input_data.is_some() {
+    if config.input_data.is_some() || config.reads_stdin() {
         return InputShape::Unknown;
     }
     InputShape::read(&config.input_file)
 }
 
+/// The input's shape when a knob resolves from it: `--decompression_threads
+/// auto` and `--fork 0` are the two values whose counts depend on it, and a run
+/// with neither reads no window.
+pub(crate) fn input_shape_if_asked(config: &Config) -> InputShape {
+    if config.decompression_threads == DecompressionThreads::Auto || config.fork == Fork::Auto {
+        input_shape(config)
+    } else {
+        InputShape::Unknown
+    }
+}
+
+/// The BGZF decompression worker count for `config`'s input of `shape`, which
+/// the block reader takes when the input turns out to be BGZF; under
+/// `--decompression_threads auto` the count it resolves is logged at the debug
+/// level with the shape it was read from.
+pub(crate) fn decompression_workers(config: &Config, shape: &InputShape) -> usize {
+    let value = config.decompression_threads;
+    let workers = resolve_decompression_threads(value, shape);
+    if value == DecompressionThreads::Auto {
+        debug!(
+            "--decompression_threads auto resolved {workers} workers from an input of {} shape",
+            shape.name()
+        );
+    }
+    workers
+}
+
+/// The threads a BGZF input is inflated on beside the reader: the block reader
+/// inflates on its own threads only with more than one worker.
+fn inflaters_for(bgzf: bool, workers: usize) -> usize {
+    if bgzf && workers > 1 {
+        workers
+    } else {
+        0
+    }
+}
+
 /// Writes the resolved runtime knobs and the input's shape as `<name>\t<value>`
-/// lines: the thread counts resolved, the pipeline and writer knobs as the
-/// configuration holds them, then the input shape with its two figures (`-`
-/// when the shape is unknown) and the host's parallelism (`-` when the host
-/// reports none). Reads the input's header blocks and index alone, never the
-/// cache, so `--resolved_config` answers before the cache is resolved; a named
-/// input file that is not there is refused as the run refuses it, before any
-/// line prints. `pipeline_mode` prints as asked: a run with plugins or a
-/// known-variant source open is batched whatever it says
-/// (`pipeline::Coordinator::streaming`).
+/// lines: the thread counts resolved (`fork` and `decompression_threads` from
+/// the input's shape as the run resolves them, `compression_threads` by the
+/// host's rule; `parse_threads` as given, `0` the built-in width), the
+/// pipeline, writer, reader-core and prewarm knobs as the configuration holds
+/// them, then the input shape with its two figures (`-` when the shape is
+/// unknown), the host's parallelism and its physical cores (`-` for whichever
+/// the host does not report). Reads the input's header blocks and index alone,
+/// never the cache, so `--resolved_config` answers before the cache is
+/// resolved; a named input file that is not there is refused as the run
+/// refuses it, before any line prints.
+/// `pipeline_mode` prints as asked: a run with plugins, `--custom` sources, a
+/// known-variant source open or the `--check_frequency` filter is batched
+/// whatever it says (`pipeline::Coordinator::streaming`).
 pub fn write_resolved_config(config: &Config, out: &mut dyn Write) -> anyhow::Result<()> {
     check_input_file_exists(config)?;
     let shape = input_shape(config);
@@ -740,12 +857,21 @@ pub fn write_resolved_config(config: &Config, out: &mut dyn Write) -> anyhow::Re
         ),
         InputShape::Unknown => ("-".to_string(), "-".to_string()),
     };
+    let workers = resolve_decompression_threads(config.decompression_threads, &shape);
+    // An indexed shape is a BGZF file, so its inflaters are the run's.
+    let indexed = matches!(shape, InputShape::Indexed { .. });
+    let inflaters = inflaters_for(indexed, workers);
     let lines = [
-        ("fork", config.fork.to_string()),
+        ("fork", config.fork.resolve(&shape, inflaters).to_string()),
         ("buffer_size", config.buffer_size.to_string()),
+        ("decompression_threads", workers.to_string()),
         (
-            "decompression_threads",
-            resolve_decompression_threads(config.decompression_threads, &shape).to_string(),
+            "compression_threads",
+            config.compression_threads.to_string(),
+        ),
+        (
+            "parse_threads",
+            config.parse_threads.unwrap_or(0).to_string(),
         ),
         ("pipeline_mode", config.pipeline_mode.name().to_string()),
         ("pipeline_depth", config.pipeline_depth.to_string()),
@@ -755,12 +881,18 @@ pub fn write_resolved_config(config: &Config, out: &mut dyn Write) -> anyhow::Re
         ),
         ("writer_strategy", config.writer_strategy.name().to_string()),
         ("output_buffer_size", config.output_buffer_size.to_string()),
+        ("reader_core", config.reader_core.to_string()),
+        ("prewarm_ahead", config.prewarm_ahead.to_string()),
         ("input_shape", shape.name().to_string()),
         ("inflated_bytes_per_record", inflated_bytes_per_record),
         ("records_estimate", records_estimate),
         (
             "available_parallelism",
             reported_parallelism().map_or("-".to_string(), |n| n.to_string()),
+        ),
+        (
+            "physical_cores",
+            crate::input_shape::physical_cores().map_or("-".to_string(), |n| n.to_string()),
         ),
     ];
     for (name, value) in lines {
@@ -770,12 +902,22 @@ pub fn write_resolved_config(config: &Config, out: &mut dyn Write) -> anyhow::Re
     Ok(())
 }
 
+/// Seconds since the Unix epoch, the clock the statistics report's time rows
+/// read (`Stats.pm` `start_time`, `end_time`, `run_time`).
+fn unix_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
 /// Atomic counters for pipeline statistics.
 pub(crate) struct PipelineStats {
     variants_processed: AtomicU64,
     consequences_calculated: AtomicU64,
-    /// Input records `--check_frequency` dropped whole, Ensembl VEP's
-    /// `filtered_variants` counter (`BaseCacheVariation.pm:362-373`).
+    /// The features `--check_frequency` dropped whole, input records and
+    /// `--minimal` split features alike, Ensembl VEP's `filtered_variants`
+    /// counter (`BaseCacheVariation.pm:362-373`).
     records_filtered: AtomicU64,
 }
 
@@ -796,7 +938,7 @@ impl PipelineStats {
             .fetch_add(consequences, Ordering::Relaxed);
     }
 
-    /// Adds the records one batch's frequency filter dropped.
+    /// Adds the features one batch's frequency filter dropped.
     pub(crate) fn record_filtered(&self, records: u64) {
         self.records_filtered.fetch_add(records, Ordering::Relaxed);
     }
@@ -935,6 +1077,44 @@ pub struct Runner {
     command_line: String,
 }
 
+/// What a finished run does with what it loaded: the transcript indexes, the
+/// open sources, the reference and the worker pool.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Teardown {
+    /// Frees them before the run returns, as a caller that keeps running expects.
+    Release,
+    /// Leaves them to the process exit, which reclaims the heap in one step
+    /// where freeing a loaded chromosome releases it one allocation at a time
+    /// on the thread the caller is waiting on; for a process whose life ends
+    /// with the run. The plugin instances alone are destroyed, as the plugin
+    /// ABI promises them at the end of every run.
+    LeaveToExit,
+}
+
+/// What a run holds when its last output byte is written, kept together so a
+/// [`Teardown`] decides their fate at once.
+#[allow(dead_code)]
+struct LoadedRun {
+    resources: AnnotationResources,
+    reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
+    pool: Arc<ThreadPool>,
+}
+
+impl LoadedRun {
+    /// Leaves everything to the process exit except the plugin instances, which
+    /// get the destroy call the plugin ABI promises when the run ends: a shared
+    /// library flushes a file of its own in `vep_plugin_destroy`, and the exit
+    /// that follows runs no destructor.
+    fn leave_to_exit(mut self) {
+        let plugins = std::mem::replace(
+            &mut self.resources.dylib_plugins,
+            Arc::new(PluginRegistry::new()),
+        );
+        drop(plugins);
+        std::mem::forget(self);
+    }
+}
+
 /// What the FASTA checks of `post_setup_checks` decide for a run.
 #[derive(Debug)]
 pub(crate) struct FastaChecks {
@@ -943,6 +1123,33 @@ pub(crate) struct FastaChecks {
     pub(crate) hgvs: bool,
     /// The `INFO:` lines the checks print.
     pub(crate) notices: Vec<&'static str>,
+}
+
+impl FastaChecks {
+    /// The checks so far refused under the `fasta` component, the notices
+    /// already settled going with the refusal.
+    fn refused(self, message: &'static str) -> FastaRefusal {
+        FastaRefusal {
+            notices: self.notices,
+            error: CliError::new("fasta", message),
+        }
+    }
+}
+
+/// A refusal of the FASTA checks with the `INFO:` lines settled before it,
+/// which the caller prints before the error: Ensembl VEP prints the
+/// `--everything` notice as it reaches it (Runner.pm:752, BaseVEP.pm:785) and
+/// throws after (:759-762).
+#[derive(Debug)]
+pub(crate) struct FastaRefusal {
+    pub(crate) notices: Vec<&'static str>,
+    pub(crate) error: CliError,
+}
+
+impl std::fmt::Display for FastaRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.error)
+    }
 }
 
 /// The FASTA checks of `post_setup_checks` (Runner.pm:742-798), run once the
@@ -954,11 +1161,12 @@ pub(crate) struct FastaChecks {
 /// non-coding transcript's cDNA from the FASTA; `--shift_3prime 1` without one
 /// is refused as well, since the shift reads the reference; `--shift_hgvs 0`
 /// reports that it set `shift_3prime` to 0 (:792-795). The caller prints the
-/// notices unless `--quiet`, as `status_msg` does (BaseVEP.pm:782).
+/// notices unless `--quiet`, as `status_msg` does (BaseVEP.pm:782), those of a
+/// refusal before its error.
 pub(crate) fn fasta_setup_checks(
     config: &Config,
     fasta_found: bool,
-) -> Result<FastaChecks, CliError> {
+) -> Result<FastaChecks, FastaRefusal> {
     let mut checks = FastaChecks {
         hgvs: config.hgvs,
         notices: Vec::new(),
@@ -971,29 +1179,25 @@ pub(crate) fn fasta_setup_checks(
             checks.hgvs = false;
         }
         if checks.hgvs || config.hgvsg {
-            return Err(CliError::new("fasta", HGVS_NEEDS_FASTA));
+            return Err(checks.refused(HGVS_NEEDS_FASTA));
         }
         if config.check_ref {
-            return Err(CliError::new(
-                "fasta",
+            return Err(checks.refused(
                 "Cannot check reference sequences (--check_ref) without a FASTA file (see --fasta)",
             ));
         }
         if config.lookup_ref {
-            return Err(CliError::new(
-                "fasta",
+            return Err(checks.refused(
                 "Cannot look up reference sequences (--lookup_ref) without a FASTA file (see --fasta)",
             ));
         }
         if config.use_transcript_ref {
-            return Err(CliError::new(
-                "fasta",
+            return Err(checks.refused(
                 "Cannot use transcript reference sequences (--use_transcript_ref) without a FASTA file (see --fasta); you may wish to use --use_given_ref",
             ));
         }
         if config.shift_3prime {
-            return Err(CliError::new(
-                "fasta",
+            return Err(checks.refused(
                 "Cannot shift variants (--shift_3prime 1) without a FASTA file (see --fasta)",
             ));
         }
@@ -1126,7 +1330,9 @@ const BARE_FLAG_VALUE: &str = "1";
 /// The value Getopt::Long stores for an option `@VEP_PARAMS` types `=i`
 /// (`buffer_size`, `fork`, `max_sv_size` among them): the integer its text reads
 /// as, `0+$arg` once the underscores are dropped, so `01`, `+1` and `0_1` are all
-/// `1`. A `=f` or `=s` value, and a text that is not an integer, stays as written.
+/// `1`, one line feed closing the text passed over as Getopt::Long's pattern
+/// passes it. A `=f` or `=s` value, and a text that is not an integer, stays as
+/// written.
 fn perl_stored_value(option: &str, value: &str) -> String {
     let typed_integer = crate::argv::VEP_PARAMS.iter().any(|spec| {
         spec.strip_suffix("=i")
@@ -1135,8 +1341,10 @@ fn perl_stored_value(option: &str, value: &str) -> String {
     if !typed_integer {
         return value.to_string();
     }
-    match value.replace('_', "").parse::<i128>() {
+    let digits = value.strip_suffix('\n').unwrap_or(value).replace('_', "");
+    match digits.parse::<i128>() {
         Ok(number) => number.to_string(),
+        Err(_) if crate::argv::getopt_integer(value).is_some() => digits,
         Err(_) => value.to_string(),
     }
 }
@@ -1311,12 +1519,15 @@ pub(crate) fn mark_oversize_sv(variant: &mut InputVariant, max_sv_size: Option<u
 /// transcript, and then every allele gets one `intergenic_variant` row
 /// (`StructuralVariationFeature::get_IntergenicStructuralVariation`, and
 /// `StructuralVariationOverlap::new`, which admits every allele of an
-/// `IntergenicStructuralVariation`). An allele whose own breakend reached nothing
-/// while a mate's did gets no row, which is why the verdict is the record's and
-/// not the allele's. With `loaded` given, a record on a chromosome it does not
-/// hold gets no verdict (the library path, which has no skip step and leaves such
-/// a record to its caller); the binary's records reach here only when the skip
-/// rules kept them, so it passes `None`.
+/// `IntergenicStructuralVariation`), the alleles with regulatory or motif rows
+/// beside those rows and the others as their one row. An allele whose own
+/// breakend reached no transcript while a mate's did gets no row, and one whose
+/// own breakend met regulatory features alone keeps those rows without an
+/// intergenic row, which is why the verdict is the record's and not the
+/// allele's. With `loaded` given, a record on a chromosome it does not hold gets
+/// no verdict (the library path, which has no skip step and leaves such a record
+/// to its caller); the binary's records reach here only when the skip rules kept
+/// them, so it passes `None`.
 ///
 /// The known structural variants of `--check_svs` are the record's as well
 /// (`$vf->{overlapping_svs}`, `OutputFactory.pm:962-964`): every allele's rows
@@ -1338,16 +1549,11 @@ pub(crate) fn apply_record_rules(
     loaded: Option<&LazyTranscriptIndexes>,
 ) {
     for alleles in batch.chunk_by_mut(InputVariant::same_record) {
-        let intergenic_breakend_record = alleles.iter().all(|v| {
-            v.variant_class == VariantClass::Translocation
-                && v.transcript_consequences.is_empty()
-                && v.most_severe_consequence.is_none()
-                && loaded.is_none_or(|t| t.contains_key(&v.chr))
-        });
-        if intergenic_breakend_record {
-            for v in alleles.iter_mut() {
-                v.most_severe_consequence = Some(Consequence::IntergenicVariant);
-            }
+        let breakend_record = alleles
+            .iter()
+            .all(|v| v.variant_class == VariantClass::Translocation);
+        if breakend_record {
+            settle_breakend_record(alleles, loaded);
         }
         let svs_differ = alleles.iter().any(|v| v.mate_pos.is_some())
             && alleles
@@ -1422,12 +1628,64 @@ pub(crate) fn apply_record_rules(
     }
 }
 
+/// The breakend arm of [`apply_record_rules`]: the record-level intergenic
+/// verdict its contract describes, over the alleles of one breakend record.
+fn settle_breakend_record(alleles: &mut [InputVariant], loaded: Option<&LazyTranscriptIndexes>) {
+    let reaches_transcript = alleles.iter().any(|v| {
+        v.transcript_consequences
+            .iter()
+            .any(|tc| tc.feature_type == FeatureType::Transcript)
+    });
+    if reaches_transcript {
+        // No `IntergenicStructuralVariation` once a position of the record
+        // reaches a transcript (StructuralVariationFeature.pm:679), so an
+        // allele whose own position met regulatory features alone prints
+        // those rows without a companion row.
+        for v in alleles.iter_mut() {
+            v.intergenic_overlap = false;
+        }
+        return;
+    }
+    let intergenic_record = alleles.iter().all(|v| {
+        (v.most_severe_consequence.is_none() || v.intergenic_overlap)
+            && loaded.is_none_or(|t| t.contains_key(&v.chr))
+    });
+    if !intergenic_record {
+        return;
+    }
+    for v in alleles
+        .iter_mut()
+        .filter(|v| v.transcript_consequences.is_empty())
+    {
+        v.most_severe_consequence = Some(Consequence::IntergenicVariant);
+        v.display_consequence = Some(Consequence::IntergenicVariant);
+    }
+}
+
+/// Prints each notice to stderr unless `--quiet`, as `status_msg` does
+/// (BaseVEP.pm:782).
+fn print_notices(quiet: bool, notices: &[&str]) {
+    if quiet {
+        return;
+    }
+    for notice in notices {
+        crate::stderr::write(format_args!("{notice}\n"));
+    }
+}
+
 impl Runner {
-    /// Resolves the cache the configuration names (`AnnotationSourceAdaptor.pm:120-132`
-    /// builds it before the parser), so a run with no cache fails here, before the
-    /// input or the output is opened.
-    pub fn new(config: Config) -> anyhow::Result<Self> {
-        let cache = crate::cache_resolve::resolve(&config)?;
+    /// Prints the configuration's notice, then resolves the cache the
+    /// configuration names (`AnnotationSourceAdaptor.pm:120-132` builds it
+    /// before the parser), so a run with no cache fails here, before the input
+    /// or the output is opened. Ensembl VEP prints that notice as `init` begins
+    /// (Runner.pm:117-120), before the annotation sources are built (:128) and
+    /// a missing directory is refused (CacheDir.pm:109); `--show_cache_info`
+    /// runs no `init` (vep:37-43), so it prints none.
+    pub fn new(mut config: Config) -> anyhow::Result<Self> {
+        if !config.show_cache_info {
+            print_notices(config.quiet, &config.notices);
+        }
+        let cache = crate::cache_resolve::resolve(&mut config)?;
         let command_line = vep_command_line(config.command_line.iter().cloned());
         Ok(Self {
             config,
@@ -1436,10 +1694,12 @@ impl Runner {
         })
     }
 
-    /// Writes the cache's source versions as `<key>\t<value>` lines, sorted by key
-    /// (vep:39-43 prints the same entries in hash order).
+    /// Writes the version data as `<key>\t<value>` lines, sorted by key: the
+    /// cache's source versions plus the entry of every other annotation source
+    /// ([`Self::header_info`]), the union vep:39-43 prints in hash order
+    /// (BaseRunner.pm:415-417).
     fn write_cache_info(&self, out: &mut dyn Write) -> anyhow::Result<()> {
-        for (key, value) in &self.cache.info.source_versions {
+        for (key, value) in &self.header_info().source_versions {
             writeln!(out, "{key}\t{value}")?;
         }
         out.flush()?;
@@ -1449,20 +1709,17 @@ impl Runner {
     /// Prints each notice to stderr unless `--quiet`, as `status_msg` does
     /// (BaseVEP.pm:782).
     fn print_notices(&self, notices: &[&str]) {
-        if self.config.quiet {
-            return;
-        }
-        for notice in notices {
-            eprintln!("{notice}");
-        }
+        print_notices(self.config.quiet, notices);
     }
 
     /// Which optional output fields the configuration switches on, shared by
     /// every output format; `run` replaces `hgvs` with the value
     /// [`fasta_setup_checks`] settled once the FASTA is known, `sift` and
     /// `polyphen` with the values [`prediction_checks`] settled against the
-    /// cache, and `regulatory` with the value a loaded plugin may switch on
-    /// ([`crate::annotator::regulatory_enabled`]).
+    /// cache, `regulatory` with the value a loaded plugin may switch on
+    /// ([`crate::annotator::regulatory_enabled`]), and `custom_sources` with
+    /// what the open `--custom` sources print in the headers
+    /// ([`custom_source_infos`]).
     fn field_options(&self) -> FieldOptions {
         let c = &self.config;
         FieldOptions {
@@ -1472,10 +1729,19 @@ impl Runner {
             // `@FLAG_FIELDS` lists PICK under the three flagging variants alone
             // (Constants.pm:75-77); the removing variants add no column.
             include_pick: c.flag_pick || c.flag_pick_allele || c.flag_pick_allele_gene,
-            individual: c.individual.is_some(),
-            individual_zyg: c.individual_zyg.is_some(),
+            // `flag_fields` keeps a list flag's group only when the list holds a
+            // name (OutputFactory.pm:2523-2525), and `,` or `""` splits to none.
+            individual: c.individual.as_ref().is_some_and(|names| !names.is_empty()),
+            individual_zyg: c
+                .individual_zyg
+                .as_ref()
+                .is_some_and(|names| !names.is_empty()),
             process_ref_homs: c.process_ref_homs,
+            refseq: c.refseq,
+            merged: c.merged,
             use_transcript_ref: c.use_transcript_ref,
+            bam_edited: c.bam_edited,
+            custom_sources: Vec::new(),
             variant_class: c.variant_class,
             minimal: c.minimal,
             clinvar_somatic_classification: c.clinvar_somatic_classification,
@@ -1520,6 +1786,7 @@ impl Runner {
             shift_genomic: c.shift_genomic,
             var_synonyms: c.var_synonyms,
             regulatory: c.regulatory,
+            cell_type: c.cell_type.is_some(),
             transcript_version: c.transcript_version,
             gene_version: c.gene_version,
             ambiguity: c.ambiguity,
@@ -1532,12 +1799,18 @@ impl Runner {
             } else {
                 ClinSigAllele::WholeVariant
             },
+            plugin_row_kinds: Arc::default(),
+            plugin_fields: Arc::default(),
+            unflagged_plugin_fields: Arc::default(),
         }
     }
 
     /// The run's identity for the Parquet footer: version, assembly, cache and
-    /// the command line as the headers print it.
-    fn parquet_kv_metadata(&self) -> Vec<(String, String)> {
+    /// the command line as the headers print it, the coordinate system, the
+    /// chromosome order `contig_index` ranks, the row layout and `run_id`, the
+    /// run's identifier; the writer appends the `sort` key on close.
+    #[cfg(feature = "parquet")]
+    fn parquet_kv_metadata(&self, contig_order: &[String], run_id: &str) -> Vec<(String, String)> {
         let mut kv = vec![
             (
                 "vep_rs_version".to_string(),
@@ -1553,10 +1826,47 @@ impl Runner {
         if let Some(asm) = self.assembly_name() {
             kv.push(("assembly".to_string(), asm));
         }
-        for (k, v) in &self.cache.info.source_versions {
+        for (k, v) in &self.header_info().source_versions {
             kv.push((format!("source_{k}"), v.clone()));
         }
+        kv.push((
+            "coordinate_system".to_string(),
+            "1-based inclusive".to_string(),
+        ));
+        kv.push(("contig_order".to_string(), contig_order.join(",")));
+        kv.push(("layout".to_string(), "flat".to_string()));
+        kv.push(("run_id".to_string(), run_id.to_string()));
         kv
+    }
+
+    /// The chromosome list the Parquet `contig_index` ranks: the cache's
+    /// `contig_order`, then the cache's other chromosomes in the order the
+    /// cache lists its own (autosomes by number, X, Y, MT, the rest by name), so
+    /// a cache whose metadata lacks the key ranks as one that carries it, then
+    /// the reference FASTA's other sequences in its index's order, so a
+    /// record `--dont_skip` keeps on a contig the cache lacks has a rank of its
+    /// own when the reference names the contig.
+    #[cfg(feature = "parquet")]
+    fn parquet_contig_order(
+        &self,
+        transcripts: &LazyTranscriptIndexes,
+        fasta: Option<&vep_fasta::IndexedFasta>,
+    ) -> Vec<String> {
+        use std::collections::HashSet;
+        let mut cache_chromosomes: Vec<&str> = transcripts.chromosomes().collect();
+        cache_chromosomes.sort_by_key(|&chr| crate::variation_source::karyotype_rank(chr));
+        let fasta_names = fasta.into_iter().flat_map(|fasta| fasta.record_names());
+        let mut listed: HashSet<&str> = HashSet::new();
+        self.cache
+            .info
+            .contig_order
+            .iter()
+            .map(String::as_str)
+            .chain(cache_chromosomes)
+            .chain(fasta_names)
+            .filter(|chr| listed.insert(chr))
+            .map(str::to_string)
+            .collect()
     }
 
     /// The cache directory as the output headers print it: the resolved path, or
@@ -1570,6 +1880,26 @@ impl Runner {
         }
     }
 
+    /// The cache's metadata as the output headers and the statistics report
+    /// print it: its source versions, plus `regulatory_gff` naming the first
+    /// file of `--regulatory_gff`, the GFF source's own header entry
+    /// (`RegFeat.pm:674-677`), which `BaseRunner.pm:415-417` merges first
+    /// source first.
+    fn header_info(&self) -> CacheInfo {
+        let mut info = self.cache.info.clone();
+        if let Some((_, file)) = self
+            .config
+            .regulatory_gff
+            .as_ref()
+            .and_then(|spec| spec.sources().next())
+        {
+            info.source_versions
+                .entry("regulatory_gff".to_string())
+                .or_insert_with(|| file.to_string());
+        }
+        info
+    }
+
     /// The assembly VEP names in JSON output and the Parquet footer: the resolved
     /// cache's.
     fn assembly_name(&self) -> Option<String> {
@@ -1578,7 +1908,8 @@ impl Runner {
 
     /// The cache's transcript indexes, one lazy slot per chromosome, each
     /// restricted to the run's [`TranscriptSet`] as it loads, before the index
-    /// is built over it.
+    /// is built over it, and carrying the exons' ids when a `--plugin` argument
+    /// names a plugin that prints them ([`crate::annotator::exon_ids_wanted`]).
     fn transcript_indexes(
         &self,
         upstream_distance: u64,
@@ -1590,12 +1921,68 @@ impl Runner {
             downstream_distance,
             Arc::clone(&self.cache.manifest),
         )?;
-        Ok(indexes.with_transcript_set(TranscriptSet::from_config(&self.config)))
+        Ok(indexes
+            .with_transcript_set(TranscriptSet::from_config(&self.config))
+            .with_exon_ids(crate::annotator::exon_ids_wanted(&self.config.plugin)))
     }
 
-    /// Execute the full VEP pipeline.
+    /// Execute the full VEP pipeline, releasing everything the run loaded
+    /// before returning ([`Teardown::Release`]).
     pub fn run(&self) -> anyhow::Result<()> {
+        self.run_with(Teardown::Release)
+    }
+
+    /// Execute the full VEP pipeline, then end as `teardown` says. Every output
+    /// of the run is written and closed before this returns, whichever way.
+    pub fn run_with(&self, teardown: Teardown) -> anyhow::Result<()> {
+        let loaded = self.run_to_completion().inspect_err(|_| {
+            crate::warnings::global().write_plugin_failures();
+        })?;
+        match teardown {
+            Teardown::Release => drop(loaded),
+            Teardown::LeaveToExit => {
+                if let Some(loaded) = loaded {
+                    loaded.leave_to_exit();
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The pipeline up to its last output byte, handing back what it loaded;
+    /// `None` when the run printed the cache information and loaded nothing. A
+    /// Parquet run that ends with an error removes the directory it wrote
+    /// once its writer is closed, and names the directory in the error when
+    /// it cannot.
+    fn run_to_completion(&self) -> anyhow::Result<Option<LoadedRun>> {
+        #[cfg(feature = "parquet")]
+        {
+            let mut unpublished = None;
+            let result = self.run_stages(&mut unpublished);
+            match (result, unpublished) {
+                (Err(error), Some(output)) => {
+                    let temporary = output.path().to_path_buf();
+                    Err(match output.discard() {
+                        Ok(()) => error,
+                        Err(_) => with_directory_left(error, &temporary),
+                    })
+                }
+                (result, _) => result,
+            }
+        }
+        #[cfg(not(feature = "parquet"))]
+        self.run_stages()
+    }
+
+    /// The stages of [`Self::run_to_completion`]. `unpublished` takes the
+    /// Parquet output the run writes beside its path, so the caller removes
+    /// what a failed run wrote.
+    fn run_stages(
+        &self,
+        #[cfg(feature = "parquet")] unpublished: &mut Option<UnpublishedOutput>,
+    ) -> anyhow::Result<Option<LoadedRun>> {
         let start = Instant::now();
+        let start_secs = unix_seconds();
 
         // Ensembl VEP compiles the filter while it builds the annotation sources
         // the cache info is read from (BaseRunner.pm:415, AnnotationSource.pm:87-89),
@@ -1611,58 +1998,137 @@ impl Runner {
             // source checks the gnomAD columns (CacheDir.pm:188-197), and only
             // then is a named file that is not there refused with Ensembl VEP's
             // text (Parser.pm:239); the input is otherwise not read.
+            self.print_notices(&self.cache.notices);
             let predictions = prediction_checks(&self.config, &self.cache.info)?;
             self.print_notices(&predictions.notices);
             check_gnomad_columns(&self.config, &self.cache.info)?;
             check_frequency_filter(&self.config, &self.cache.info)?;
+            // The regulatory GFF sources are built with the cache's
+            // (AnnotationSourceAdaptor.pm:102): a file that is not there is
+            // refused (:264-267) and each file's index is opened for its
+            // chromosome names (BaseRunner.pm:452-453, File.pm:371) before the
+            // print.
+            if let Some(spec) = &self.config.regulatory_gff {
+                crate::regulatory::RegulatorySource::open_gff(
+                    spec,
+                    self.config.extended_promoters,
+                    self.config.cell_type.is_some(),
+                    &self.cache,
+                )?;
+            }
+            // The custom sources are built with the cache's
+            // (AnnotationSourceAdaptor.pm:103) and each file's index is opened
+            // for its chromosome names (BaseRunner.pm:453, File.pm:371) before
+            // the print. The FASTA is reached only through a `###CHR###` file's
+            // chromosome list (AnnotationSourceAdaptor.pm:440, BaseVEP.pm:568)
+            // and stays closed otherwise.
+            let custom_specs = parse_custom_specs(&self.config)?;
+            let reference_fasta = if custom_specs.iter().any(CustomSpec::has_chr_placeholder) {
+                open_fasta(&self.config, &self.cache)?
+            } else {
+                None
+            };
+            // A warning whose file could not be written ends the run where
+            // Ensembl VEP dies on the warning itself (BaseVEP.pm:894): any
+            // warning so far before a custom file is opened, a source's own
+            // once it is.
+            check_warnings_file_written()?;
+            open_custom_sources(
+                custom_specs,
+                reference_fasta.as_deref(),
+                &self.cache.synonyms,
+                custom_run_options(&self.config),
+            )?;
+            check_warnings_file_written()?;
             check_input_file_exists(&self.config)?;
-            return self.write_cache_info(&mut io::stdout().lock());
+            self.write_cache_info(&mut io::stdout().lock())?;
+            return Ok(None);
         }
 
-        // Runner.pm:117-120, :128, :133-138 and :200-202: init() prints the
-        // configuration's notice, builds the annotation sources (the tool check's
-        // lines print there, CacheDir.pm:141-150, then the cache's columns are
+        // Runner.pm:128, :133-138 and :200-202: after the configuration's notice
+        // (`new`), init() builds the annotation sources (the tool check's lines
+        // print there, CacheDir.pm:141-150, then the cache's columns are
         // checked, :188-197), opens the FASTA, then the input through the
         // parser, then runs post_setup_checks, whose lines print there; the
         // output opens after.
-        self.print_notices(&self.config.notices);
+        self.print_notices(&self.cache.notices);
         let predictions = prediction_checks(&self.config, &self.cache.info)?;
         self.print_notices(&predictions.notices);
         check_gnomad_columns(&self.config, &self.cache.info)?;
         check_frequency_filter(&self.config, &self.cache.info)?;
+        let custom_specs = parse_custom_specs(&self.config)?;
         let reference_fasta = open_fasta(&self.config, &self.cache)?;
         let fasta_found = reference_fasta.is_some();
+        let custom_sources = open_custom_sources(
+            custom_specs,
+            reference_fasta.as_deref(),
+            &self.cache.synonyms,
+            custom_run_options(&self.config),
+        )?;
         // Indexed lazily per chromosome: the key set comes from a `read_dir`
         // walk, so the Perl-parity presence predicates are complete immediately,
         // while a chromosome's JSON parses only when a variant queries it, or
         // when an HGVS transcript notation looks a transcript up by name.
-        let transcripts =
-            Arc::new(self.transcript_indexes(self.config.distance.0, self.config.distance.1)?);
+        let transcripts = Arc::new(
+            self.transcript_indexes(self.config.distance.0, self.config.distance.1)?
+                .with_reference(reference_fasta.clone()),
+        );
         let OpenedInput {
             source: pending,
             bgzf_file,
+            inflaters,
+            shape,
             delimiter,
             reads_reference,
             parser_names_records,
+            unsortable,
         } = self
             .open_input(reference_fasta.as_ref(), &transcripts)
             .map_err(surface_reader_refusal)?;
-        let checks = fasta_setup_checks(&self.config, fasta_found)?;
+        #[cfg(not(feature = "parquet"))]
+        let _ = unsortable;
+        let checks = match fasta_setup_checks(&self.config, fasta_found) {
+            Ok(checks) => checks,
+            Err(refusal) => {
+                self.print_notices(&refusal.notices);
+                return Err(refusal.error.into());
+            }
+        };
         self.print_notices(&checks.notices);
 
+        // The statistics reports are checked first (Runner.pm:144-148 opens
+        // their handles in `init`, text before HTML, before `run` opens the
+        // output at :202), so with both files present the refusal names the
+        // report; every file is created once every check passes, so a refused
+        // output leaves no empty report behind.
+        let stats_files = stats::report_files(&self.config);
+        for (_, path) in &stats_files {
+            stats::refuse_existing(path, self.config.force_overwrite)?;
+        }
         // BaseRunner.pm:203-204, with Ensembl VEP's text, on the name as spelled:
         // the check comes before the `STDOUT` comparison (:213, :222), so a file
         // named `STDOUT` refuses `-o STDOUT` and is left untouched under
         // --force_overwrite, which writes to standard output.
         let spelled = &self.config.output_file_as_spelled;
         if Path::new(spelled).exists() && !self.config.force_overwrite {
-            return Err(CliError::new(
-                "output",
-                format!(
-                    "Output file {spelled} already exists. Specify a different output file with --output_file or overwrite existing file with --force_overwrite"
-                ),
-            )
-            .into());
+            return Err(existing_output(spelled).into());
+        }
+        // The Parquet output is a directory the run writes beside the output
+        // path and renames to it at the end, so nothing is removed here: what
+        // --force_overwrite will replace is checked, and anything vep-rs did
+        // not write refuses the run.
+        #[cfg(feature = "parquet")]
+        let parquet_run_id = run_id();
+        #[cfg(feature = "parquet")]
+        if self.config.output_format == "parquet" {
+            *unpublished =
+                UnpublishedOutput::beside(Path::new(&self.config.output_file), &parquet_run_id);
+        }
+        #[cfg(feature = "parquet")]
+        if let Some(output) = unpublished.as_ref() {
+            output
+                .check_destination()
+                .map_err(|refusal| CliError::new("parquet", refusal.to_string()))?;
         }
         let sink = crate::warnings::global();
         if let Some(path) = &self.config.skipped_variants_file {
@@ -1679,21 +2145,22 @@ impl Runner {
 
         // A scoped pool, not the global one, so embedding callers can own their
         // own pool without contention.
-        let num_threads = self.config.fork.max(1);
+        let num_threads = self.config.fork.resolve(&shape, inflaters).max(1);
         let pool = build_thread_pool(num_threads)?;
         if num_threads > 1 {
             info!("Using {} threads for annotation", num_threads);
         }
-
-        let needs_loftee_context = self
-            .config
-            .plugin
-            .iter()
-            .any(|arg| split_plugin_arg(arg).0.eq_ignore_ascii_case("LoFTEE"));
+        if self.config.fork == Fork::Auto {
+            debug!(
+                "--fork 0 resolved {num_threads} annotators beside {inflaters} inflaters from an input of {} shape",
+                shape.name()
+            );
+        }
 
         // Sequence-aware plugins (LoFTEE) share the FASTA Arc, so the FASTA is
         // not opened twice.
-        let plugin_fasta = reference_fasta.clone();
+        let LoadedPlugins { builtin, dylib } =
+            self.load_plugins(reference_fasta.clone(), checks.hgvs)?;
 
         let effects_config = Arc::new(vep_effects::EffectsConfig {
             upstream_distance: self.config.distance.0,
@@ -1701,7 +2168,8 @@ impl Runner {
             reference_fasta: reference_fasta.clone(),
             enable_indel_3prime_shift: self.config.shift_3prime,
             hgvs: hgvs_options(&self.config),
-            populate_loftee_context: needs_loftee_context,
+            loftee_context: loftee_context_rows(&builtin),
+            context_sequences: context_sequence_rows(&builtin),
             compute_hgvs: checks.hgvs,
             compute_exon_intron_numbers: needs_exon_intron_numbers(&self.config),
             protein_version: self.config.protein_version,
@@ -1712,7 +2180,6 @@ impl Runner {
             process_ref_homs: self.config.process_ref_homs,
         });
 
-        let LoadedPlugins { builtin, dylib } = self.load_plugins(plugin_fasta)?;
         let builtin_plugins = Arc::new(builtin);
         let dylib_plugins = Arc::new(dylib);
         let regulatory = crate::annotator::regulatory_enabled(&self.config, &dylib_plugins);
@@ -1730,67 +2197,142 @@ impl Runner {
 
         let variation_source = open_variation_source(&self.config, &self.cache)?;
         let sv_source = open_sv_source(&self.config)?;
-
-        // Parquet: a TSV intermediate at `<output_file>.tsv.tmp`, converted by a
-        // DuckDB subprocess after the write loop.
-        let parquet_intermediate_path: Option<String> =
-            if self.config.output_format == "parquet" && self.config.output_file != "STDOUT" {
-                // A run that cannot be finalized must fail before annotating.
-                check_duckdb()?;
-                Some(format!("{}.tsv.tmp", self.config.output_file))
-            } else {
-                None
-            };
-
-        // BaseRunner.pm:226, with Ensembl VEP's text; the Parquet intermediate
-        // sits beside the output file and fails the same way. An empty output
-        // name is refused before the intermediate is created: its `.tsv.tmp`
-        // alone would be a file in the working directory.
-        let unwritable =
-            |path: &str| CliError::new("output", format!("Could not write to output file {path}"));
-        if parquet_intermediate_path.is_some() && self.config.output_file.is_empty() {
-            return Err(unwritable("").into());
+        // Every annotation source is built in `init` (Runner.pm:128,
+        // AnnotationSourceAdaptor.pm:97-105), so a `--regulatory_gff` file that
+        // is not there (AnnotationSourceAdaptor.pm:266) or a `--cell_type` the
+        // cache lacks (AnnotationType/RegFeat.pm:87-93, from
+        // Cache/RegFeat.pm:117) ends the run before the statistics report
+        // (Runner.pm:144-148) or the output (Runner.pm:202) exists.
+        let regulatory_source =
+            crate::regulatory::RegulatorySource::open_for(&self.config, &self.cache, regulatory)?;
+        let cell_types = crate::regulatory::CellTypes::resolve(
+            self.config.cell_type.as_deref(),
+            regulatory_source.as_deref(),
+        )?;
+        // Created empty before the first variant (BaseRunner.pm:280), so a path
+        // that cannot be written fails the run here.
+        for (_, path) in &stats_files {
+            stats::create_stats_file(path)?;
         }
-        // The plain output opens through Perl's two-argument `open` (:226), for
-        // which `>-` is standard output; the compressed output's shell
-        // redirection (:217) and the Parquet intermediate write a file named `-`.
+
+        let output_format = self.config.output_format.as_str();
+        let parquet_output = output_format == "parquet";
+        // Built-in plugins first, then the dylibs, each group in load order with
+        // every plugin's keys sorted (OutputFactory.pm `get_plugin_headers`).
+        let mut plugin_headers = builtin_plugins.all_header_info();
+        plugin_headers.extend(dylib_plugins.all_header_info());
+        let plugin_fields = vep_io::output::fields::plugin_field_names(&plugin_headers);
+        let mut options = self.field_options();
+        options.regulatory = regulatory;
+        options.hgvs = checks.hgvs;
+        options.sift = predictions.sift.is_some();
+        options.polyphen = predictions.polyphen.is_some();
+        let runs_on_every_kind =
+            |kinds: &[RowKind]| RowKind::ALL.iter().all(|kind| kinds.contains(kind));
+        options.plugin_row_kinds = Arc::new(
+            builtin_plugins
+                .field_row_kinds()
+                .into_iter()
+                .chain(dylib_plugins.field_row_kinds())
+                .filter(|(_, kinds)| !runs_on_every_kind(kinds))
+                .collect(),
+        );
+        options.custom_sources =
+            custom_source_infos(custom_sources.as_deref(), custom_run_options(&self.config));
+        let extra_plan = ExtraFieldsPlan::new(options.clone());
+
+        // The plain output opens through Perl's two-argument `open`
+        // (BaseRunner.pm:226), for which `>-` is standard output; the
+        // compressed output's shell redirection (:217) writes a file named
+        // `-`, the Parquet writer a directory.
         let dash_is_stdout = self.config.output_file == "-"
             && self.config.compress_output.is_none()
-            && parquet_intermediate_path.is_none();
+            && !parquet_output;
         let output_is_stdout = self.config.output_file == "STDOUT" || dash_is_stdout;
-        let output: Box<dyn Write + Send> = if output_is_stdout {
-            Box::new(io::stdout())
-        } else {
-            let path = parquet_intermediate_path
-                .as_deref()
-                .unwrap_or(&self.config.output_file);
-            Box::new(File::create(path).map_err(|_| unwritable(path))?)
-        };
-        // The option rules refuse the flag with Parquet, so a compressed writer is
-        // never the DuckDB intermediate.
-        let (output, compressed_output) = match self.config.compress_output.as_deref() {
-            Some(value) => {
-                let compression = OutputCompression::parse(value).ok_or_else(|| {
-                    CliError::new(
-                        "output",
-                        format!("\"{value}\" is not a valid value for --compress_output"),
-                    )
-                })?;
-                // The encoder emits each block as it closes it, so the file sees
-                // the plain output's write sizes through a buffer of its own
-                // beneath the encoder; the writer strategy's buffer sits above it.
-                let buffered: Box<dyn Write + Send> =
-                    Box::new(BufWriter::with_capacity(OUTPUT_BUFFER_BYTES, output));
-                let (compressed, handle) = compression.open(buffered);
-                (compressed, Some(handle))
+        let mut compressed_output = None;
+        #[cfg(feature = "parquet")]
+        let mut parquet_formatter: Option<Arc<ParquetOutputFormatter>> = None;
+        let mut writer = if parquet_output {
+            #[cfg(not(feature = "parquet"))]
+            return Err(CliError::new(
+                "output",
+                "this build has no Parquet writer: --output_format parquet is not available",
+            )
+            .into());
+            #[cfg(feature = "parquet")]
+            {
+                let contig_order =
+                    self.parquet_contig_order(&transcripts, reference_fasta.as_deref());
+                let kv_metadata = self.parquet_kv_metadata(&contig_order, &parquet_run_id);
+                let formatter = Arc::new(ParquetOutputFormatter::new(
+                    options.clone(),
+                    plugin_fields.clone(),
+                    contig_order,
+                ));
+                let order = if self.config.no_check_variants_order || unsortable {
+                    warn!("{}", UNCHECKED_ORDER_WARNING);
+                    InputOrder::Unchecked
+                } else {
+                    InputOrder::Checked {
+                        unlisted_rank: formatter.unlisted_rank(),
+                    }
+                };
+                let partition = self
+                    .config
+                    .parquet_partition
+                    .is_some()
+                    .then_some(Partition::Chrom);
+                let path = &self.config.output_file;
+                // A path with no final name has no directory to write beside.
+                let output = unpublished
+                    .as_mut()
+                    .ok_or_else(|| unwritable_output(path))?;
+                output.create().map_err(|_| unwritable_output(path))?;
+                let directory = ParquetDirectoryWriter::create(
+                    output.path(),
+                    Arc::clone(formatter.schema()),
+                    kv_metadata,
+                    order,
+                    partition,
+                )
+                .map_err(|_| unwritable_output(path))?;
+                parquet_formatter = Some(formatter);
+                pipeline::OutputSink::Parquet(Box::new(directory))
             }
-            None => (output, None),
+        } else {
+            let output: Box<dyn Write + Send> = if output_is_stdout {
+                Box::new(io::stdout())
+            } else {
+                let path = &self.config.output_file;
+                Box::new(File::create(path).map_err(|_| unwritable_output(path))?)
+            };
+            let output = match self.config.compress_output.as_deref() {
+                Some(value) => {
+                    let compression = OutputCompression::parse(value).ok_or_else(|| {
+                        CliError::new(
+                            "output",
+                            format!("\"{value}\" is not a valid value for --compress_output"),
+                        )
+                    })?;
+                    // The encoder emits each block as it closes it, so the file
+                    // sees the plain output's write sizes through a buffer of its
+                    // own beneath the encoder; the writer strategy's buffer sits
+                    // above it.
+                    let buffered: Box<dyn Write + Send> =
+                        Box::new(BufWriter::with_capacity(OUTPUT_BUFFER_BYTES, output));
+                    let (compressed, handle) =
+                        compression.open(buffered, self.config.compression_threads);
+                    compressed_output = Some(handle);
+                    compressed
+                }
+                None => output,
+            };
+            pipeline::OutputSink::new(
+                self.config.writer_strategy,
+                self.config.output_buffer_size,
+                output,
+            )
         };
-        let mut writer = pipeline::OutputSink::new(
-            self.config.writer_strategy,
-            self.config.output_buffer_size,
-            output,
-        );
 
         // Ensembl VEP's identifier parser first asks its database when the
         // input buffer pulls from it, after the plugins are loaded and the
@@ -1832,19 +2374,10 @@ impl Runner {
         };
         let filters_active = filter_config.any_active();
 
-        let output_format = self.config.output_format.as_str();
         let mut vcf_formatter: Option<VcfOutputFormatter> = None;
         let mut json_formatter: Option<JsonOutputFormatter> = None;
-        let mut parquet_formatter: Option<ParquetOutputFormatter> = None;
         let mut tab_formatter: Option<TabOutputFormatter> = None;
-        let plugin_headers = builtin_plugins.all_header_info();
-        let plugin_fields = vep_io::output::fields::plugin_field_names(&plugin_headers);
-        let mut options = self.field_options();
-        options.regulatory = regulatory;
-        options.hgvs = checks.hgvs;
-        options.sift = predictions.sift.is_some();
-        options.polyphen = predictions.polyphen.is_some();
-        let extra_plan = ExtraFieldsPlan::new(options.clone());
+        let header_info = self.header_info();
 
         match output_format {
             "vcf" => {
@@ -1862,7 +2395,7 @@ impl Runner {
                     }))
                     .with_run_info(
                         &self.header_cache_dir(),
-                        Some(&self.cache.info),
+                        Some(&header_info),
                         &self.command_line,
                     ),
                 );
@@ -1880,7 +2413,7 @@ impl Runner {
                     &plugin_headers,
                     self.config.fields.as_deref(),
                     &self.header_cache_dir(),
-                    Some(&self.cache.info),
+                    Some(&header_info),
                     &self.command_line,
                 );
                 tab_formatter = Some(TabOutputFormatter::new(
@@ -1891,24 +2424,14 @@ impl Runner {
                     self.config.no_headers,
                 ));
             }
-            "parquet" => {
-                parquet_formatter = Some(ParquetOutputFormatter::new(options, plugin_fields));
-            }
             _ => {
                 // The default format has no formatter: `render::render_default_record`
-                // writes its rows from `extra_plan`.
+                // writes its rows from `extra_plan`; the Parquet format's
+                // formatter is built with its directory writer above.
             }
         }
 
-        // The Parquet TSV intermediate is read by DuckDB with `header=true`, so
-        // its header row is mandatory regardless of `--no_headers`, a
-        // VEP-default-tab flag.
-        if output_format == "parquet" {
-            if let Some(ref mut fmt) = parquet_formatter {
-                fmt.write_header(&mut writer)
-                    .context("Failed to write output")?;
-            }
-        } else if !self.config.no_headers {
+        if !self.config.no_headers {
             match output_format {
                 "vcf" => {
                     // The header block is written once the input's own header
@@ -1916,6 +2439,9 @@ impl Runner {
                 }
                 "json" => {
                     // JSON has no header
+                }
+                "parquet" => {
+                    // The Parquet output has no header lines.
                 }
                 "tab" => {
                     if let Some(ref mut fmt) = tab_formatter {
@@ -1931,21 +2457,35 @@ impl Runner {
         }
 
         let stats = PipelineStats::new();
+        // The run statistics are kept unless `--no_stats` (Stats.pm:230, :277);
+        // `--quiet` silences the lines on standard error and nothing else, so
+        // the counters behind the summary line and the report run for either.
+        let accumulators =
+            (!self.config.no_stats).then(|| stats::RunAccumulators::new(num_threads));
 
         let batch_size = self.config.buffer_size;
         let use_parallel = num_threads > 1;
-        let stats_enabled = !self.config.quiet;
+        let stats_enabled = !(self.config.quiet && self.config.no_stats);
+        // `--quiet` silences every line on standard error (BaseVEP.pm:782);
+        // `--no_progress` the progress line alone.
+        let progress = !self.config.quiet && !self.config.no_progress;
         let capture_raw_input = needs_raw_input_capture(&self.config);
 
-        let frequency_filter = if variation_source.is_some() {
-            FrequencyFilter::from_config(&self.config).map(Arc::new)
-        } else {
-            None
-        };
+        // Ensembl VEP builds its variation source, and the filter with it, from
+        // the cache's declared columns (CacheDir.pm:179) and reads no known
+        // variant where a variation file is absent (VariationTabix.pm:156 and 270), so
+        // the filter runs with or without the files.
+        let frequency_filter =
+            if self.config.check_existing && self.cache.info.variation_columns().is_some() {
+                FrequencyFilter::from_config(&self.config).map(Arc::new)
+            } else {
+                None
+            };
         let annotation_resources = AnnotationResources {
             transcripts,
             variation_source,
-            regulatory_source: crate::regulatory::RegulatorySource::open(&self.cache, regulatory)?,
+            regulatory_source,
+            cell_types,
             sv_source,
             colocation: ColocationRules::from_config(&self.config),
             effects_config,
@@ -1960,6 +2500,8 @@ impl Runner {
             synonyms: Arc::clone(&self.cache.synonyms),
             nearest: self.config.nearest,
             frequency_filter,
+            warn_assembly_mismatch: !self.config.use_given_ref,
+            custom_sources,
         };
 
         // A non-VCF input has no header lines of its own, so the VCF output's
@@ -1989,8 +2531,10 @@ impl Runner {
             .chr
             .as_deref()
             .map(crate::validate::ChromosomeList::new);
+        let source_chromosomes = annotation_resources.source_chromosomes();
         let checks = crate::validate::ReferenceChecks {
             chr: admitted_chromosomes.as_ref(),
+            source_chromosomes: &source_chromosomes,
             check_ref: self.config.check_ref,
             lookup_ref: self.config.lookup_ref || reads_reference,
             fasta: reference_fasta.as_deref(),
@@ -2023,7 +2567,13 @@ impl Runner {
             regulatory: annotation_resources.regulatory_source.as_deref(),
             synonyms: &self.cache.synonyms,
             prewarm_order: &prewarm_order,
+            prewarm_ahead: self.config.prewarm_ahead,
             checks: &checks,
+            reader_core: pipeline::ReaderCorePolicy {
+                value: self.config.reader_core,
+                annotators: pool.current_num_threads(),
+                inflaters,
+            },
         };
         let write_ctx = pipeline::WriteContext {
             filter_config: &filter_config,
@@ -2031,7 +2581,8 @@ impl Runner {
             output_format,
             vcf_formatter: vcf_formatter.as_ref(),
             json_formatter: json_formatter.as_ref(),
-            parquet_formatter: parquet_formatter.as_ref(),
+            #[cfg(feature = "parquet")]
+            parquet_formatter,
             tab_formatter: tab_formatter.as_ref(),
             extra_plan: &extra_plan,
         };
@@ -2041,6 +2592,7 @@ impl Runner {
             resources: &annotation_resources,
             stats: &stats,
             stats_enabled,
+            run_stats: accumulators.as_ref(),
             write_ctx: &write_ctx,
             capture_raw_input,
             delimiter: &delimiter,
@@ -2048,7 +2600,7 @@ impl Runner {
             dont_skip: self.config.dont_skip,
             max_sv_size: self.config.max_sv_size,
             minimal: self.config.minimal,
-            progress: !self.config.quiet,
+            progress,
             checks: &checks,
             mode: self.config.pipeline_mode,
             depth: self.config.pipeline_depth,
@@ -2056,8 +2608,9 @@ impl Runner {
         };
 
         // The writer thread flushes and closes the output before this returns.
-        let variant_count = pipeline::run(input, &reader_cfg, &coordinator, writer)
+        let outcome = pipeline::run(input, &reader_cfg, &coordinator, writer)
             .map_err(surface_reader_refusal)?;
+        let variant_count = outcome.variants;
         if let Some(handle) = compressed_output {
             handle.finish().map_err(|e| {
                 CliError::new(
@@ -2070,12 +2623,65 @@ impl Runner {
             })?;
         }
 
-        // Runner.pm:176-182: the skipped-variants file is written and the warnings
-        // file closed once the output is complete.
+        // Every chromosome the run touched is loaded by now, so a GENCODE set no
+        // loaded record carried is known (one chromosome alone would not say).
+        if let Some(warning) = annotation_resources.transcripts.gencode_set_warning() {
+            sink.warn(&warning);
+        }
+
+        // Runner.pm:175-182: the statistics report is written, then the
+        // skipped-variants file, then the warnings file is closed, once the
+        // output is complete.
+        if let Some(accumulators) = accumulators {
+            let mut run_stats = accumulators.into_run_stats();
+            run_stats.set_lines_read(outcome.lines_read);
+            run_stats.set_filtered(stats.records_filtered.load(Ordering::Relaxed));
+            run_stats.resolve_transcripts(&annotation_resources.transcripts);
+            if !stats_files.is_empty() {
+                let ctx = stats::ReportContext {
+                    vep_version: format!("{}.{}", vep_core::VEP_VERSION, vep_core::VEP_SUB_VERSION),
+                    api_version: vep_core::VEP_VERSION.to_string(),
+                    annotation_sources: annotation_source_entries(
+                        &self.header_cache_dir(),
+                        annotation_resources.custom_sources.as_deref(),
+                    ),
+                    species: self.config.species.clone(),
+                    command_line: self.command_line.clone(),
+                    start_secs,
+                    end_secs: unix_seconds(),
+                    input: match &self.config.input_data {
+                        Some(data) => ("Input data", data.clone()),
+                        None => ("Input file", self.config.input_file.clone()),
+                    },
+                    output_file: self.config.output_file_as_spelled.clone(),
+                    version_data: header_info.source_versions.clone(),
+                    regulatory,
+                    sift: annotation_resources.prediction_config.sift.clone(),
+                    polyphen: annotation_resources.prediction_config.polyphen.clone(),
+                    vocabulary: extra_plan.options.terms,
+                    chr_lengths: reference_fasta
+                        .as_ref()
+                        .map(|fasta| {
+                            fasta
+                                .records()
+                                .into_iter()
+                                .map(|(name, len)| (name.to_string(), len))
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                };
+                let report = stats::Report::new(&run_stats, &ctx);
+                for (format, path) in &stats_files {
+                    stats::write_stats_file(path, &report.render(*format))?;
+                }
+            }
+        }
         sink.finish(&self.config.input_file)?;
 
-        if !self.config.quiet && variant_count >= 10000 {
-            eprint!("\r");
+        // The summary line overwrites the progress line from its start, so a
+        // run past the first progress threshold returns the carriage first.
+        if progress && variant_count >= 10000 {
+            crate::stderr::write(format_args!("\r"));
         }
 
         // A block the .gzi misdescribed answered its reads as "no reference",
@@ -2087,34 +2693,21 @@ impl Runner {
             return Err(CliError::new("fasta", error.to_string()).into());
         }
 
-        if let Some(intermediate) = parquet_intermediate_path {
-            finalize_parquet_output(
-                &intermediate,
-                &self.config.output_file,
-                &self.config.parquet_shape,
-                parquet_formatter
-                    .as_ref()
-                    .map(|f| f.header_columns())
-                    .unwrap_or_default(),
-                &self.parquet_kv_metadata(),
-                self.config.parquet_row_group_size,
-            )?;
-            if !self.config.keep_intermediate {
-                std::fs::remove_file(&intermediate).with_context(|| {
-                    format!(
-                        "Failed to remove Parquet intermediate '{}' after DuckDB success",
-                        intermediate
-                    )
-                })?;
-            }
+        // The run's last step that can fail, so a Parquet output reaches its
+        // path only from a run that exits 0.
+        #[cfg(feature = "parquet")]
+        if let Some(output) = unpublished.as_mut() {
+            output
+                .publish(self.config.force_overwrite)
+                .map_err(|error| publication_error(error, &self.config.output_file))?;
         }
 
         let elapsed = start.elapsed();
         if !self.config.quiet {
             let conseqs = stats.consequences_calculated.load(Ordering::Relaxed);
             let filtered = stats.records_filtered.load(Ordering::Relaxed);
-            eprintln!(
-                "Processed {} variant{} ({} consequence{}{}) in {:.1}s{}",
+            crate::stderr::write(format_args!(
+                "Processed {} variant{} ({} consequence{}{}) in {:.1}s{}\n",
                 variant_count,
                 if variant_count == 1 { "" } else { "s" },
                 conseqs,
@@ -2130,10 +2723,14 @@ impl Runner {
                 } else {
                     String::new()
                 },
-            );
+            ));
         }
 
-        Ok(())
+        Ok(Some(LoadedRun {
+            resources: annotation_resources,
+            reference_fasta,
+            pool,
+        }))
     }
 
     /// Load the `--plugin` CLI arguments: each as a built-in when one claims the
@@ -2149,32 +2746,16 @@ impl Runner {
     fn load_plugins(
         &self,
         reference_fasta: Option<Arc<vep_fasta::IndexedFasta>>,
+        hgvs: bool,
     ) -> anyhow::Result<LoadedPlugins> {
         crate::annotator::load_plugins(
             &self.config.plugin,
             &self.config.dir_plugins,
             self.config.safe,
             reference_fasta,
-            crate::annotator::resolve_assembly(self.cache.assembly.as_deref()),
+            self.cache.assembly.as_deref(),
+            crate::annotator::run_context(&self.config, hgvs),
         )
-    }
-
-    /// The BGZF decompression worker count for the input, which the block reader
-    /// takes when the input turns out to be BGZF. The input's shape is read only
-    /// under `auto`, the one value whose count depends on it, and the count it
-    /// resolves is logged at the debug level with the shape it read.
-    fn decompression_worker_count(&self) -> usize {
-        let value = self.config.decompression_threads;
-        if value != DecompressionThreads::Auto {
-            return resolve_decompression_threads(value, &InputShape::Unknown);
-        }
-        let shape = input_shape(&self.config);
-        let workers = resolve_decompression_threads(value, &shape);
-        debug!(
-            "--decompression_threads auto resolved {workers} workers from an input of {} shape",
-            shape.name()
-        );
-        workers
     }
 
     /// Opens the input as Ensembl VEP's parser does (Parser.pm:122-160, 227-249):
@@ -2218,29 +2799,35 @@ impl Runner {
         let named_format = InputFormat::from_flag(&config.format);
         check_input_file_exists(config)?;
 
-        let (mut reader, bgzf_file): (Box<dyn BufRead + Send>, bool) = match &config.input_data {
-            Some(data) => (Box::new(Cursor::new(data.clone().into_bytes())), false),
-            None if config.input_file == "STDIN" => {
-                if named_format.is_none() {
-                    return Err(input_error(
-                        "Cannot detect format from STDIN - specify format with --format [format]",
-                    ));
-                }
-                let stdin = BufReader::with_capacity(INPUT_BUFFER_BYTES, io::stdin());
-                let (reader, _) =
-                    decompressed(stdin, self.decompression_worker_count(), &config.input_file)
+        let shape = input_shape_if_asked(config);
+        let (mut reader, bgzf_file, inflaters): (Box<dyn BufRead + Send>, bool, usize) =
+            match &config.input_data {
+                Some(data) => (Box::new(Cursor::new(data.clone().into_bytes())), false, 0),
+                None if config.reads_stdin() => {
+                    if named_format.is_none() {
+                        return Err(input_error(
+                            "Cannot detect format from STDIN - specify format with --format [format]",
+                        ));
+                    }
+                    let stdin = BufReader::with_capacity(INPUT_BUFFER_BYTES, io::stdin());
+                    let workers = decompression_workers(config, &shape);
+                    let (reader, bgzf) = decompressed(stdin, workers, &config.input_file)
                         .with_context(read_failed)?;
-                (reader, false)
-            }
-            None => {
-                let file = File::open(&config.input_file).with_context(|| {
-                    format!("Failed to open input file '{}'", config.input_file)
-                })?;
-                let file = BufReader::with_capacity(INPUT_BUFFER_BYTES, file);
-                decompressed(file, self.decompression_worker_count(), &config.input_file)
-                    .with_context(read_failed)?
-            }
-        };
+                    // A stream has no index beside it, so it is not a BGZF file to
+                    // the contig order, however it is inflated.
+                    (reader, false, inflaters_for(bgzf, workers))
+                }
+                None => {
+                    let file = File::open(&config.input_file).with_context(|| {
+                        format!("Failed to open input file '{}'", config.input_file)
+                    })?;
+                    let file = BufReader::with_capacity(INPUT_BUFFER_BYTES, file);
+                    let workers = decompression_workers(config, &shape);
+                    let (reader, bgzf) = decompressed(file, workers, &config.input_file)
+                        .with_context(read_failed)?;
+                    (reader, bgzf, inflaters_for(bgzf, workers))
+                }
+            };
 
         let (head, replayed) = peek_bytes(reader, BCF_MAGIC.len()).with_context(read_failed)?;
         reader = replayed;
@@ -2370,15 +2957,19 @@ impl Runner {
             }
             InputFormat::Caid => return Err(input_error("Cannot use CAid format in offline mode")),
         };
+        let names_its_records = matches!(
+            format,
+            InputFormat::Region | InputFormat::Hgvs | InputFormat::Spdi | InputFormat::Id
+        );
         Ok(OpenedInput {
             source,
             bgzf_file,
+            inflaters,
+            shape,
             delimiter,
             reads_reference: format == InputFormat::Region,
-            parser_names_records: matches!(
-                format,
-                InputFormat::Region | InputFormat::Hgvs | InputFormat::Spdi | InputFormat::Id
-            ),
+            parser_names_records: names_its_records,
+            unsortable: names_its_records,
         })
     }
 
@@ -2459,7 +3050,7 @@ impl Runner {
             options,
             plugin_headers,
             &self.header_cache_dir(),
-            Some(&self.cache.info),
+            Some(&self.header_info()),
             &self.command_line,
         ) {
             writeln!(writer, "{}", line)?;
@@ -2468,259 +3059,19 @@ impl Runner {
     }
 }
 
-/// The oldest DuckDB release whose `COPY ... (FORMAT PARQUET)` accepts every
-/// option the Parquet writer uses (`PARQUET_VERSION`, `WRITE_BLOOM_FILTER`,
-/// `BLOOM_FILTER_FALSE_POSITIVE_RATIO`, `DICTIONARY_SIZE_LIMIT`,
-/// `DICTIONARY_COMPRESSION_RATIO_THRESHOLD`, `WRITE_PARTITION_COLUMNS`,
-/// `KV_METADATA`): `WRITE_BLOOM_FILTER` is an unrecognised option before 1.3.2,
-/// and a 1.2 CLI exits 0 after the failed statement, so an older release would
-/// report a run that wrote no Parquet as a success.
-const MIN_DUCKDB_VERSION: (u32, u32, u32) = (1, 3, 2);
-
-/// Parses `duckdb --version` output such as `v1.5.5 (Variegata) d8cdaa33fd`.
-fn parse_duckdb_version(text: &str) -> Option<(u32, u32, u32)> {
-    let token = text.split_whitespace().next()?.trim_start_matches('v');
-    let mut parts = token.split('.').map(|p| p.parse::<u32>().ok());
-    Some((
-        parts.next()??,
-        parts.next()??,
-        parts.next().flatten().unwrap_or(0),
-    ))
-}
-
-/// Whether a DuckDB release is new enough for the Parquet writer: not below
-/// [`MIN_DUCKDB_VERSION`], the patch compared too.
-fn duckdb_is_new_enough(version: (u32, u32, u32)) -> bool {
-    version >= MIN_DUCKDB_VERSION
-}
-
-/// Checks that a `duckdb` CLI new enough for the Parquet writer is on PATH.
-fn check_duckdb() -> anyhow::Result<()> {
-    let output = std::process::Command::new("duckdb")
-        .arg("--version")
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "--output_format=parquet requires the `duckdb` CLI on PATH. \
-                 Install via `brew install duckdb` (macOS) or the release binary \
-                 at https://duckdb.org/docs/installation/"
-            )
-        })?;
-    let text = String::from_utf8_lossy(&output.stdout);
-    match parse_duckdb_version(&text) {
-        Some(version) if duckdb_is_new_enough(version) => Ok(()),
-        Some((major, minor, patch)) => anyhow::bail!(
-            "--output_format=parquet needs duckdb {}.{}.{} or newer; found {}.{}.{}",
-            MIN_DUCKDB_VERSION.0,
-            MIN_DUCKDB_VERSION.1,
-            MIN_DUCKDB_VERSION.2,
-            major,
-            minor,
-            patch
-        ),
-        None => anyhow::bail!("could not parse `duckdb --version` output: {}", text.trim()),
-    }
-}
-
-/// DuckDB writes row groups in whole vectors of this many rows, so a requested
-/// row group size is rounded up to a multiple of it. The dictionary size limit
-/// must equal the rounded size: a column with a distinct value per row in a
-/// full row group otherwise exceeds the limit and loses its dictionary and,
-/// with it, its Bloom filter.
-const DUCKDB_VECTOR_SIZE: u64 = 2_048;
-
-/// Rows per Parquet row group as DuckDB will write them.
-fn parquet_row_group_rows(requested: u64) -> u64 {
-    requested.max(1).div_ceil(DUCKDB_VECTOR_SIZE) * DUCKDB_VECTOR_SIZE
-}
-
-/// Key columns that lead the flat schema and key the nested shape's groups.
-const PARQUET_KEY_COLUMNS: [&str; 5] = ["chrom", "pos", "end", "ref", "alt"];
-
-/// The integer type of a numeric column of the intermediate; `None` for a
-/// column stored as text.
-fn parquet_integer_type(name: &str) -> Option<&'static str> {
-    match name {
-        "pos" | "end" => Some("BIGINT"),
-        "DISTANCE" => Some("INTEGER"),
-        "STRAND" => Some("TINYINT"),
-        _ => None,
-    }
-}
-
-/// One intermediate column as the Parquet schema stores it: a numeric column
-/// cast to its integer type, with an empty cell and a token that is not a
-/// number both NULL; a text column as read.
-///
-/// The cast takes `NULLIF(column, '')`, never the bare column. DuckDB 2.0.0
-/// and later push a top-level cast of a plain `read_csv` column into the
-/// reader, whose conversion is strict even for `TRY_CAST`, so a malformed
-/// token would abort the COPY instead of reading as NULL; a cast of an
-/// expression stays in the query.
-fn parquet_value_sql(name: &str) -> String {
-    let ident = sql_ident(name);
-    match parquet_integer_type(name) {
-        Some(ty) => format!("TRY_CAST(NULLIF({ident}, '') AS {ty})"),
-        None => ident,
-    }
-}
-
-/// [`parquet_value_sql`] under the column's own name.
-fn parquet_column_sql(name: &str) -> String {
-    match parquet_integer_type(name) {
-        Some(_) => format!("{} AS {}", parquet_value_sql(name), sql_ident(name)),
-        None => sql_ident(name),
-    }
-}
-
-/// Columns of the nested shape that describe the input record rather than one
-/// consequence; they stay scalar and join the grouping key. `IND` and `ZYG` name
-/// the individual whose copy of the record the row belongs to (`--individual`),
-/// so one record's copies stay as many rows.
-const PARQUET_PER_VARIANT_COLUMNS: [&str; 6] = [
-    "Uploaded_variation",
-    "Location",
-    "Allele",
-    "Existing_variation",
-    "IND",
-    "ZYG",
-];
-
-/// Subprocesses the `duckdb` CLI to turn the TSV intermediate into a
-/// Hive-partitioned Parquet directory (`<out>/chrom=<c>/*.parquet`).
-///
-/// Schema: the five key columns then exactly the `--tab` columns
-/// (`ParquetOutputFormatter`); `pos`/`end` are BIGINT, `DISTANCE` INTEGER,
-/// `STRAND` TINYINT (a cell that is not a number is NULL), everything else
-/// VARCHAR with `-` stored as NULL. The nested shape groups rows by
-/// (chrom, pos, ref, alt) and stores the per-consequence columns as LIST, in
-/// the row order of the flat shape.
-///
-/// Writer options favour the reader: Parquet v2 pages, ZSTD level 9, row groups
-/// of `row_group_size` rows (rounded up to whole DuckDB vectors) sorted by
-/// (chrom, pos, ref, alt) so the `pos` statistics are tight, a dictionary on
-/// every column (the size limit equals the row group and the
-/// compression-ratio threshold is off) because
-/// DuckDB writes a Bloom filter only for dictionary-encoded columns, Bloom
-/// filters at a 0.1% false-positive rate, the partition column kept inside the
-/// files, and the run's identity in the footer's key-value metadata. LIST
-/// columns cannot carry Bloom filters; the scalar key columns still do.
-fn finalize_parquet_output(
-    tsv_path: &str,
-    out_path: &str,
-    shape: &str,
-    header_columns: Vec<&str>,
-    kv_metadata: &[(String, String)],
-    row_group_size: u64,
-) -> anyhow::Result<()> {
-    use std::process::Command;
-
-    let tab_columns: Vec<&str> = header_columns
-        .iter()
-        .skip(PARQUET_KEY_COLUMNS.len())
-        .copied()
-        .collect();
-
-    // `all_varchar` reads every cell as text: DuckDB's type sniffing would
-    // otherwise type `cDNA_position` as BIGINT from early rows and fail on the
-    // first `204-205`. The numeric columns take their types from the casts of
-    // the SELECT (`parquet_value_sql`). The intermediate carries no quoting.
-    let source = format!(
-        "read_csv('{}', delim='\\t', header=true, all_varchar=true, quote='', escape='')",
-        escape_sql_string(tsv_path)
-    );
-    let select_sql = match shape {
-        "flat" => {
-            let cols = header_columns
-                .iter()
-                .map(|c| parquet_column_sql(c))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("SELECT {cols} FROM {source} ORDER BY chrom, pos, ref, alt")
-        }
-        _ => {
-            // Groups are keyed by the variant key and the per-variant columns,
-            // so two input records at one site stay two rows.
-            let mut cols: Vec<String> = PARQUET_KEY_COLUMNS
-                .iter()
-                .map(|c| parquet_column_sql(c))
-                .collect();
-            let mut group_by: Vec<String> = PARQUET_KEY_COLUMNS
-                .iter()
-                .map(|c| parquet_value_sql(c))
-                .collect();
-            for c in &tab_columns {
-                if PARQUET_PER_VARIANT_COLUMNS.contains(c) {
-                    cols.push(sql_ident(c));
-                    group_by.push(sql_ident(c));
-                } else {
-                    // `list` keeps the flat row order because the source is
-                    // ordered before grouping.
-                    cols.push(format!(
-                        "list({} ORDER BY row_order) AS {}",
-                        parquet_value_sql(c),
-                        sql_ident(c)
-                    ));
-                }
-            }
-            format!(
-                "SELECT {} FROM (SELECT *, row_number() OVER () AS row_order FROM {source}) \
-                 GROUP BY {} ORDER BY chrom, pos, ref, alt",
-                cols.join(", "),
-                group_by.join(", ")
-            )
-        }
-    };
-
-    let kv = kv_metadata
-        .iter()
-        .map(|(k, v)| format!("'{}': '{}'", escape_sql_string(k), escape_sql_string(v)))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let sql = format!(
-        "COPY ({select_sql}) TO '{}' (FORMAT PARQUET, PARQUET_VERSION V2, COMPRESSION 'zstd', \
-         COMPRESSION_LEVEL 9, ROW_GROUP_SIZE {rg}, DICTIONARY_SIZE_LIMIT {rg}, \
-         DICTIONARY_COMPRESSION_RATIO_THRESHOLD -1, WRITE_BLOOM_FILTER true, \
-         BLOOM_FILTER_FALSE_POSITIVE_RATIO 0.001, PARTITION_BY (chrom), \
-         WRITE_PARTITION_COLUMNS true, KV_METADATA {{{kv}}}, OVERWRITE_OR_IGNORE true);",
-        escape_sql_string(out_path),
-        rg = parquet_row_group_rows(row_group_size),
-    );
-
-    info!(
-        "Parquet finalize: duckdb from '{}' -> '{}' (shape={})",
-        tsv_path, out_path, shape,
-    );
-
-    let output = Command::new("duckdb")
-        .arg("-c")
-        .arg(&sql)
-        .output()
-        .context("Failed to spawn `duckdb` for Parquet finalize")?;
-    if !output.status.success() {
-        anyhow::bail!(
-            "duckdb COPY to Parquet failed (exit {}): stderr=\n{}\nsql=\n{}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr),
-            sql,
-        );
-    }
-    Ok(())
-}
-
-/// Escape a string for embedding in a single-quoted SQL literal.
-/// Replaces `'` with `''` (standard SQL escape).
-fn escape_sql_string(s: &str) -> String {
-    s.replace('\'', "''")
-}
-
-/// Quote a column identifier for DuckDB (double-quotes, standard SQL).
-/// VEP CSQ field names like "cDNA_position" need quoting because SQL
-/// identifiers are typically lowercased/case-insensitive otherwise.
-fn sql_ident(name: &str) -> String {
-    format!("\"{}\"", name.replace('"', "\"\""))
+/// An identifier unique to this run for the Parquet footer and the name of
+/// the run's temporary directory: the nanoseconds since the epoch, the process id
+/// and a random word, in hex.
+#[cfg(feature = "parquet")]
+fn run_id() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let pid = std::process::id();
+    let random = std::hash::RandomState::new().build_hasher().finish();
+    format!("{nanos:x}-{pid:x}-{random:016x}")
 }
 
 /// The variation source a run reads its co-located variants from: `None`
@@ -2771,6 +3122,145 @@ pub(crate) fn open_sv_source(config: &Config) -> anyhow::Result<Option<Arc<SvSou
     Ok(Some(Arc::new(source)))
 }
 
+/// The `--custom` specifications, parsed where Ensembl VEP builds its custom
+/// annotation sources, after the cache's and before the FASTA and the input
+/// (`AnnotationSourceAdaptor.pm:94-106`, `Runner.pm:128-136`), so a malformed
+/// string ends the run with Ensembl VEP's text before anything is opened. A
+/// `###CHR###` file stays as written until [`open_custom_sources`].
+pub(crate) fn parse_custom_specs(config: &Config) -> Result<Vec<CustomSpec>, CliError> {
+    custom::parse_all(&config.custom).map_err(|error| CliError::new("custom", error.to_string()))
+}
+
+/// The chromosomes a `###CHR###` file stands for: each of the FASTA's sequence
+/// names, sorted by byte as Ensembl VEP sorts the keys of `chr_lengths`
+/// (`BaseVEP.pm:568-573`, `AnnotationSourceAdaptor.pm:440`), or `1` to `22`,
+/// `X`, `Y` and `MT` without a FASTA or with one whose index names no
+/// sequence (`:440` tests `keys %{chr_lengths} > 0`).
+pub(crate) fn chr_placeholder_chromosomes(fasta: Option<&vep_fasta::IndexedFasta>) -> Vec<String> {
+    let names: Vec<String> = fasta
+        .map(|fasta| {
+            fasta
+                .sequence_names()
+                .into_iter()
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default();
+    if names.is_empty() {
+        return custom::default_chromosomes();
+    }
+    names
+}
+
+/// The run-wide flags the custom sources read.
+pub(crate) fn custom_run_options(config: &Config) -> CustomRunOptions {
+    CustomRunOptions {
+        multi_allelic: config.custom_multi_allelic,
+        suppress_filter: config.custom_suppress_filter,
+    }
+}
+
+/// The `--custom` sources, opened; `None` without a specification. A
+/// `###CHR###` file is expanded over [`chr_placeholder_chromosomes`]. Every
+/// file is opened here, before the input is read, where Ensembl VEP opens
+/// each for its chromosome names while the input parser is built
+/// (`Runner.pm:827`, `BaseRunner.pm:453`, `File.pm:371`), before the output
+/// opens. `synonyms` is the cache's chromosome synonym table, which each
+/// source maps input names through, and `options` the run-wide flags a
+/// source reads.
+pub(crate) fn open_custom_sources(
+    specs: Vec<CustomSpec>,
+    fasta: Option<&vep_fasta::IndexedFasta>,
+    synonyms: &Arc<ChromosomeSynonyms>,
+    options: CustomRunOptions,
+) -> Result<Option<Arc<CustomSources>>, CliError> {
+    if specs.is_empty() {
+        return Ok(None);
+    }
+    let chromosomes = chr_placeholder_chromosomes(fasta);
+    let specs = custom::expand_all(specs, &chromosomes)
+        .map_err(|error| CliError::new("custom", error.to_string()))?;
+    let sources = CustomSources::open(specs, Arc::clone(synonyms), options)
+        .map_err(|error| CliError::new("custom", error.to_string()))?;
+    for source in sources.iter() {
+        let spec = source.spec();
+        info!(
+            "Custom annotation source {}: {} ({}, {})",
+            spec.short_name,
+            spec.file,
+            spec.format.as_str(),
+            spec.match_type.as_str()
+        );
+    }
+    Ok(Some(Arc::new(sources)))
+}
+
+/// What the output headers print for each `--custom` source, in order
+/// (`header_info->{custom_info}`, `File.pm:170-174`): the file, the key, the
+/// fields (a `gencode_promoter` GFF's three fixed ones, which its
+/// specification carries), the statistics, the overlap share's direction and a
+/// VCF source's `##INFO` descriptions; a VCF source with `fields` carries
+/// `FILTER` on its records unless `--custom_suppress_filter` leaves it out
+/// (`File/VCF.pm:219-223`). Empty without a source.
+pub(crate) fn custom_source_infos(
+    sources: Option<&CustomSources>,
+    options: CustomRunOptions,
+) -> Vec<CustomSourceInfo> {
+    let Some(sources) = sources else {
+        return Vec::new();
+    };
+    sources
+        .iter()
+        .map(|source| {
+            let spec = source.spec();
+            let fields: Vec<String> = spec.fields.clone().unwrap_or_default();
+            let filter_field = spec.format == custom::CustomFormat::Vcf
+                && !fields.is_empty()
+                && (!options.suppress_filter || fields.iter().any(|field| field == "FILTER"));
+            CustomSourceInfo {
+                file: spec.file.clone(),
+                short_name: spec.short_name.clone(),
+                fields,
+                filter_field,
+                summary_stats: spec
+                    .summary_stats
+                    .iter()
+                    .flatten()
+                    .map(|stat| stat.as_str().to_string())
+                    .collect(),
+                reciprocal: spec.reciprocal,
+                field_descriptions: source.field_descriptions().cloned().unwrap_or_default(),
+            }
+        })
+        .collect()
+}
+
+/// The entries of the statistics report's `Annotation sources` row
+/// (`generate_run_stats`, Stats.pm:666-677): the cache directory as the
+/// `## Using cache in` header prints it, then `Custom: <file> (<type>)` for
+/// each `--custom` source in order, the file as the source was given and the
+/// type `overlap`, `within`, `surrounding` or `exact` (:673-675, one entry per
+/// `custom_info` hashref, `File.pm:170`); a `###CHR###` file is one entry per
+/// file it stood for (`AnnotationSourceAdaptor.pm:438-449`). The database
+/// entry of `:670-672` never prints, since every run is offline.
+pub(crate) fn annotation_source_entries(
+    cache_dir: &str,
+    sources: Option<&CustomSources>,
+) -> Vec<String> {
+    let mut entries = vec![format!("Cache: <kbd>{cache_dir}</kbd>")];
+    if let Some(sources) = sources {
+        for source in sources.iter() {
+            let spec = source.spec();
+            entries.push(format!(
+                "Custom: {} ({})",
+                spec.file,
+                spec.match_type.as_str()
+            ));
+        }
+    }
+    entries
+}
+
 /// Ensembl VEP's refusal of `--af_gnomad` on a cache whose declared variation
 /// columns lack `gnomADe` (CacheDir.pm:179-197): checked for that spelling
 /// alone, under `--check_existing`, on a cache that declares columns, and not
@@ -2797,6 +3287,9 @@ pub(crate) struct AnnotationResources {
     transcripts: Arc<LazyTranscriptIndexes>,
     variation_source: Option<Arc<VariationSource>>,
     regulatory_source: Option<Arc<crate::regulatory::RegulatorySource>>,
+    /// The epigenomes `--cell_type` named, resolved against the regulatory
+    /// source's list; `None` without the flag or without a source.
+    cell_types: Option<Arc<crate::regulatory::CellTypes>>,
     /// The known structural variants of `--check_svs`, `None` without the flag.
     sv_source: Option<Arc<SvSource>>,
     /// Which known variants of a window co-locate with an input variant.
@@ -2813,12 +3306,19 @@ pub(crate) struct AnnotationResources {
     synonyms: Arc<ChromosomeSynonyms>,
     /// The identifier `--nearest` reports; `None` without the flag.
     nearest: Option<NearestType>,
-    /// The `--check_frequency` filter, `None` without the flag or without a
-    /// variation source. When set, the pipeline's filter stage co-locates every
-    /// variant before annotation and [`annotate_one`] co-locates none. The
-    /// stage runs on the batched coordinator alone, which every run with a
-    /// variation source open takes ([`Self::known_variant_source_active`]).
+    /// The `--check_frequency` filter, `None` without the flag or on a cache
+    /// that declares no variation columns. When set, the pipeline's filter
+    /// stage co-locates every variant before annotation and [`annotate_one`]
+    /// co-locates none. The stage runs on the batched coordinator alone, which
+    /// every run with the filter takes.
     frequency_filter: Option<Arc<FrequencyFilter>>,
+    /// Whether a row Ensembl VEP reads as an invalid variant on an edited
+    /// RefSeq transcript warns (`Transcript-assembly mismatch`,
+    /// OutputFactory.pm:1717-1718): every run but one under `--use_given_ref`.
+    warn_assembly_mismatch: bool,
+    /// The `--custom` sources, `None` without a specification; they annotate
+    /// each batch after the plugins ([`annotate_batch`]).
+    custom_sources: Option<Arc<CustomSources>>,
 }
 
 /// The compiled `--transcript_filter`, `None` without the flag. A filter
@@ -2849,17 +3349,35 @@ impl AnnotationResources {
         &self.synonyms
     }
 
+    /// The chromosomes the run's annotation sources beside the cache list
+    /// ([`pipeline::source_chromosomes`]).
+    pub(crate) fn source_chromosomes(&self) -> BTreeSet<String> {
+        pipeline::source_chromosomes(
+            self.custom_sources.as_deref(),
+            self.regulatory_source.as_deref(),
+        )
+    }
+
     /// Whether any plugin runs on a batch; plugins see a whole batch at once.
     pub(crate) fn plugins_active(&self) -> bool {
         !self.builtin_plugins.is_empty() || self.dylib_plugins.plugin_count() > 0
     }
 
-    /// The `--check_frequency` filter and the variation source it reads, when
-    /// the run filters.
-    pub(crate) fn frequency_filter(&self) -> Option<(&FrequencyFilter, &VariationSource)> {
+    /// Whether any `--custom` source annotates a batch; like a plugin, a
+    /// source sees a whole batch at once.
+    pub(crate) fn custom_sources_active(&self) -> bool {
+        self.custom_sources
+            .as_ref()
+            .is_some_and(|sources| !sources.is_empty())
+    }
+
+    /// The `--check_frequency` filter, when the run filters, and the variation
+    /// source it reads; a cache that declares variation columns and holds no
+    /// variation file has no source, and no record of the run a known variant.
+    pub(crate) fn frequency_filter(&self) -> Option<(&FrequencyFilter, Option<&VariationSource>)> {
         Some((
             self.frequency_filter.as_deref()?,
-            self.variation_source.as_deref()?,
+            self.variation_source.as_deref(),
         ))
     }
 
@@ -2924,7 +3442,32 @@ pub(crate) fn structural_variant_bounds(variant: &InputVariant) -> (u64, u64) {
 }
 
 /// Materializes every chromosome a batch touches, then reads ahead the batch's
-/// variation records on the pool.
+/// variation records and known structural variants on the pool, each read-ahead
+/// installed as the one the lookups answer from: [`prewarm_chromosomes`], then
+/// [`fetch_known_variants`] and [`install_prefetch`]. The pipeline runs the two
+/// steps on different threads; the tests that annotate a batch outside it take
+/// them together here. Test-only, outside `mod tests` because
+/// [`warm_and_annotate_batch`] calls it.
+#[cfg(test)]
+pub(crate) fn prewarm_batch(
+    batch: &[InputVariant],
+    resources: &AnnotationResources,
+    pool: &ThreadPool,
+) -> anyhow::Result<()> {
+    prewarm_chromosomes(batch, resources)?;
+    if resources.known_variant_source_active() {
+        let (variation, svs) = pool.install(|| fetch_known_variants(batch, resources, true));
+        let mut prefetch = BatchPrefetch {
+            variation: variation?,
+            svs: svs?,
+            ..BatchPrefetch::default()
+        };
+        install_prefetch(resources, &mut prefetch);
+    }
+    Ok(())
+}
+
+/// Materializes every chromosome a batch touches, serially and outside the pool.
 ///
 /// Three reasons the transcript loads must not happen inside a parallel closure:
 ///  1. `load_transcripts_for_chr` parses its shards with rayon. Calling it
@@ -2940,28 +3483,124 @@ pub(crate) fn structural_variant_bounds(variant: &InputVariant) -> (u64, u64) {
 ///
 /// Pre-warming serially here means each chromosome is parsed exactly once,
 /// outside the pool, and every `get` in the annotation closure is a pure lookup.
-pub(crate) fn prewarm_batch(
+pub(crate) fn prewarm_chromosomes(
+    batch: &[InputVariant],
+    resources: &AnnotationResources,
+) -> anyhow::Result<()> {
+    for variant in batch {
+        pipeline::prewarm_variant_chromosomes(
+            &resources.transcripts,
+            resources.regulatory_source.as_deref(),
+            variant,
+        )?;
+    }
+    Ok(())
+}
+
+/// What was read ahead for one batch before its annotation: the variation
+/// windows and the `--check_svs` spans, held until [`install_prefetch`] makes
+/// them the ones the lookups answer from, and the plugin and `--custom` source
+/// prefetches, which [`annotate_batch`] applies. Fetched by the pipeline's
+/// prefetch stage while the coordinator annotates the batch before, so a
+/// source's read-ahead for a batch never displaces the one its lookups read.
+#[derive(Default)]
+pub(crate) struct BatchPrefetch {
+    variation: Option<crate::variation_source::Prefetch>,
+    svs: Option<sv_source::Prefetch>,
+    plugins: Option<vep_builtins::PluginPrefetch>,
+    custom: Option<custom::CustomPrefetch>,
+}
+
+/// Reads ahead a batch's sources in parallel on `pool`, the pool `--fork`
+/// sized and never rayon's global one, under one `join` tree: the variation
+/// windows (when `variation` asks; the `--check_frequency` stage reads its own
+/// windows before the batch is filtered and the plugins and sources read the
+/// filtered batch), the `--check_svs` spans, the plugins whose prefetch reads
+/// no consequence row and the `--custom` sources. A variation or structural-
+/// variant read failure is the batch's error, under its component; a plugin's
+/// or a source's travels in its slot to the annotate phase, which reports it
+/// as it would have reading the batch itself.
+pub(crate) fn fetch_batch(
     batch: &[InputVariant],
     resources: &AnnotationResources,
     pool: &ThreadPool,
-) -> anyhow::Result<()> {
-    for variant in batch {
-        resources.prewarm_chromosome(&variant.chr)?;
-        if let Some(mate_chr) = variant.mate_chr.as_deref() {
-            resources.transcripts.prewarm(mate_chr)?;
-        }
+    variation: bool,
+) -> anyhow::Result<BatchPrefetch> {
+    let registry = (!resources.builtin_plugins.is_empty()).then_some(&resources.builtin_plugins);
+    let sources = resources
+        .custom_sources
+        .as_deref()
+        .filter(|sources| !sources.is_empty());
+    let ((windows, spans), (plugin_prefetch, custom_prefetch)) = pool.install(|| {
+        rayon::join(
+            || fetch_known_variants(batch, resources, variation),
+            || {
+                rayon::join(
+                    || registry.map(|registry| registry.prefetch_ahead(batch)),
+                    || sources.map(|sources| sources.prefetch(batch)),
+                )
+            },
+        )
+    });
+    Ok(BatchPrefetch {
+        variation: windows?,
+        svs: spans?,
+        plugins: plugin_prefetch,
+        custom: custom_prefetch,
+    })
+}
+
+/// The variation windows (when `variation` asks) and the `--check_svs` spans of
+/// a batch, read side by side on the current rayon pool, each under its error
+/// component.
+fn fetch_known_variants(
+    batch: &[InputVariant],
+    resources: &AnnotationResources,
+    variation: bool,
+) -> (
+    anyhow::Result<Option<crate::variation_source::Prefetch>>,
+    anyhow::Result<Option<sv_source::Prefetch>>,
+) {
+    let variation_source = if variation {
+        resources.variation_source.as_deref()
+    } else {
+        None
+    };
+    rayon::join(
+        || {
+            variation_source
+                .map(|source| {
+                    source
+                        .fetch(batch.iter().map(|v| (v.chr.as_str(), v.start, v.end)))
+                        .map_err(|error| CliError::new("cache", format!("{error:#}")).into())
+                })
+                .transpose()
+        },
+        || {
+            resources
+                .sv_source
+                .as_deref()
+                .map(|source| {
+                    source
+                        .fetch(sv_source::batch_spans(batch))
+                        .map_err(|error| CliError::new("check_svs", format!("{error:#}")).into())
+                })
+                .transpose()
+        },
+    )
+}
+
+/// Makes a batch's variation windows and `--check_svs` spans the ones the
+/// lookups answer from, releasing the previous batch's; called on the thread
+/// that annotates the batch, once that batch's lookups are the next to run.
+pub(crate) fn install_prefetch(resources: &AnnotationResources, prefetch: &mut BatchPrefetch) {
+    if let (Some(source), Some(windows)) = (&resources.variation_source, prefetch.variation.take())
+    {
+        source.install(windows);
     }
-    if let Some(source) = &resources.variation_source {
-        // The prefetch queries its windows in parallel on the pool `--fork`
-        // sized, never on rayon's global one.
-        pool.install(|| source.prefetch(batch.iter().map(|v| (v.chr.as_str(), v.start, v.end))))
-            .map_err(|error| CliError::new("cache", format!("{error:#}")))?;
+    if let (Some(source), Some(spans)) = (&resources.sv_source, prefetch.svs.take()) {
+        source.install(spans);
     }
-    if let Some(source) = &resources.sv_source {
-        pool.install(|| source.prefetch(sv_source::batch_spans(batch)))
-            .map_err(|error| CliError::new("check_svs", format!("{error:#}")))?;
-    }
-    Ok(())
 }
 
 /// Ends the run on a read failure a batch's lookups recorded, under the
@@ -2971,6 +3610,31 @@ pub(crate) fn check_variation_reads(failure: &ReadFailure) -> anyhow::Result<()>
     match failure.take_with_component() {
         Some((component, message)) => Err(CliError::new(component, message).into()),
         None => Ok(()),
+    }
+}
+
+/// The warnings the records of a slice draw once they are annotated and
+/// filtered (`Unable to assign consequence type`, `Transcript-assembly mismatch
+/// in <Uploaded_variation>`), each with the index in the slice of the record's
+/// first variant. Ensembl VEP writes them while it renders the buffer, record by
+/// record in buffer order (OutputFactory.pm:300-303), so the pass that filters
+/// a slice collects them and reports them in record order once it is done,
+/// whatever order its threads finished in.
+#[derive(Debug, Default)]
+pub(crate) struct RecordWarnings {
+    drawn: Vec<(usize, String)>,
+}
+
+impl RecordWarnings {
+    /// Records `text`, drawn by the variant at `index`.
+    pub(crate) fn push(&mut self, index: usize, text: String) {
+        self.drawn.push((index, text));
+    }
+
+    /// The texts in record order; a record's own in the order it drew them.
+    pub(crate) fn into_texts(mut self) -> Vec<String> {
+        self.drawn.sort_by_key(|(index, _)| *index);
+        self.drawn.into_iter().map(|(_, text)| text).collect()
     }
 }
 
@@ -3025,7 +3689,11 @@ pub(crate) fn annotate_one(
         transcript_filter,
     );
     if let Some(source) = &resources.regulatory_source {
-        source.annotate_variant(variant, &resources.effects_config);
+        source.annotate_variant(
+            variant,
+            &resources.effects_config,
+            resources.cell_types.as_deref(),
+        );
     }
     let csq_count =
         variant.transcript_consequences.len() as u64 + u64::from(variant.intergenic_overlap);
@@ -3041,11 +3709,11 @@ pub(crate) fn annotate_one(
         sv_source::annotate_overlapping_svs(variant, source, failure);
     }
 
-    // A record on a chromosome the cache lacks reaches annotation only under
-    // `--dont_skip` (the skip rules drop it otherwise, with Ensembl VEP's
-    // warning), and a kept record with no feature is intergenic as Ensembl VEP
-    // writes it. A breakend's intergenic verdict is its record's:
-    // `apply_record_rules`.
+    // A record on a chromosome the cache lacks reaches annotation under
+    // `--dont_skip` or when another annotation source lists the chromosome (the
+    // skip rules drop it otherwise, with Ensembl VEP's warning), and a kept
+    // record with no feature is intergenic as Ensembl VEP writes it. A
+    // breakend's intergenic verdict is its record's: `apply_record_rules`.
     let is_bnd = variant.variant_class == VariantClass::Translocation;
     if variant.transcript_consequences.is_empty()
         && variant.most_severe_consequence.is_none()
@@ -3054,8 +3722,58 @@ pub(crate) fn annotate_one(
         variant.most_severe_consequence = Some(Consequence::IntergenicVariant);
         variant.intergenic_shift = intergenic_shift(variant, &resources.effects_config);
     }
+    // The verdict before the pick family, the row filters and the plugins
+    // narrow it: Ensembl VEP's `display_consequence` reads every overlap of the
+    // variation feature (BaseVariationFeature.pm:151-170), logged once per
+    // feature (Stats.pm:241).
+    variant.display_consequence = variant.most_severe_consequence;
 
     csq_count
+}
+
+/// Draws Ensembl VEP's `Transcript-assembly mismatch in <Uploaded_variation>`
+/// for the records of `slice`, laid out in record order, from the rows left on
+/// them once the record step has run, each text handed to `warn` with the index
+/// of the record's first variant. Ensembl VEP draws the warning inside the
+/// output hash of each row it prints (OutputFactory.pm:1717-1718 at
+/// release/116.2), after the row filters and the pick family have dropped
+/// theirs (`:477-514`, then `:389-404`) and never under `--summary` or
+/// `--most_severe`, which build no row hash (`:387`): a record whose marked rows
+/// the record step dropped draws nothing, and a record with a printed marked
+/// row draws once, as its repeated text is dropped there (BaseVEP.pm:809-813)
+/// and by the sink here. Nothing is drawn under `--use_given_ref` (`:1717`).
+pub(crate) fn warn_transcript_assembly_mismatches(
+    slice: &[InputVariant],
+    resources: &AnnotationResources,
+    warn: &mut dyn FnMut(usize, String),
+) {
+    if !resources.warn_assembly_mismatch {
+        return;
+    }
+    let mut first = 0usize;
+    for record in slice.chunk_by(InputVariant::same_record) {
+        if let Some(text) = record.iter().find_map(transcript_assembly_mismatch_warning) {
+            warn(first, text);
+        }
+        first += record.len();
+    }
+}
+
+/// The `Transcript-assembly mismatch in <Uploaded_variation>` text of a variant
+/// with a row [`vep_effects::transcript_assembly_mismatch`] marked: an alternate
+/// allele equal to the bases of an edited RefSeq transcript's first `_rna_edit`
+/// on the codon path. `None` for a variant with no marked row.
+pub(crate) fn transcript_assembly_mismatch_warning(variant: &InputVariant) -> Option<String> {
+    variant
+        .transcript_consequences
+        .iter()
+        .any(|tc| tc.transcript_assembly_mismatch)
+        .then(|| {
+            format!(
+                "Transcript-assembly mismatch in {}",
+                variant.uploaded_variation()
+            )
+        })
 }
 
 /// The bases an intergenic insertion or deletion moves under `--shift_3prime 1`:
@@ -3085,8 +3803,15 @@ pub(crate) fn intergenic_shift(
 /// across the rayon thread pool. The shared data (transcripts, variation_source,
 /// effects_config) is behind `Arc` and only read, so no locking is needed.
 ///
-/// After consequence assignment, built-in plugins are invoked via `run_batch`
-/// to annotate the entire buffer in one pass (enabling batched tabix queries).
+/// The batch arrives warmed and read ahead: its chromosomes materialized
+/// ([`prewarm_chromosomes`]), its variation windows and `--check_svs` spans
+/// installed ([`install_prefetch`]) and the plugin and `--custom` prefetches
+/// the stage could run in `prefetch` ([`fetch_batch`]). A chromosome never
+/// warmed annotates every variant on it as intergenic, so a new caller must
+/// warm its batch first.
+///
+/// After consequence assignment, built-in plugins annotate the entire buffer
+/// in one pass (enabling batched tabix queries), then the `--custom` sources.
 pub(crate) fn annotate_batch(
     batch: &mut Vec<InputVariant>,
     resources: &AnnotationResources,
@@ -3094,18 +3819,15 @@ pub(crate) fn annotate_batch(
     use_parallel: bool,
     stats: &PipelineStats,
     stats_enabled: bool,
+    prefetch: BatchPrefetch,
 ) -> anyhow::Result<()> {
     let batch_len = batch.len();
     let annotation_phase_start = Instant::now();
-
-    // Under `--check_frequency` the batch arrives pre-warmed: the pipeline's
-    // filter stage needs the chromosomes and variation windows before
-    // annotation and warms every batch itself, and `annotate_one` reads no
-    // variation window. A chromosome never warmed annotates every variant on
-    // it as intergenic, so a new caller under the filter must warm its batch.
-    if resources.frequency_filter.is_none() {
-        prewarm_batch(batch, resources, pool)?;
-    }
+    let BatchPrefetch {
+        plugins: plugin_prefetch,
+        custom: custom_prefetch,
+        ..
+    } = prefetch;
 
     let failure = ReadFailure::default();
     let annotate_one =
@@ -3158,12 +3880,16 @@ pub(crate) fn annotate_batch(
     );
 
     // Plugins run after consequence assignment so they see transcript
-    // consequences and gene symbols; one batch call enables batched tabix queries.
+    // consequences and gene symbols; one batch call enables batched tabix
+    // queries, and the ones not read ahead run on the run's own pool.
     if !resources.builtin_plugins.is_empty() {
         let plugin_phase_start = Instant::now();
-        if let Err(e) = resources.builtin_plugins.run_batch(batch) {
-            tracing::warn!("plugin execution error: {}", e);
-        }
+        let registry = &resources.builtin_plugins;
+        let outcome = pool.install(|| match plugin_prefetch {
+            Some(prefetch) => registry.annotate_batch(batch, prefetch),
+            None => registry.run_batch(batch),
+        });
+        crate::annotator::report_plugin_failures(outcome);
         let plugin_elapsed = plugin_phase_start.elapsed();
         debug!(
             batch_size = batch_len,
@@ -3173,7 +3899,39 @@ pub(crate) fn annotate_batch(
     }
     crate::dylib_plugins::run(&resources.dylib_plugins, batch)?;
 
+    // The custom sources read their files in parallel on the run's own pool,
+    // one batch's windows at a time, unless the batch was read ahead; a read
+    // failure ends the run under the `custom` component before the batch is
+    // rendered.
+    if let Some(sources) = &resources.custom_sources {
+        let custom_phase_start = Instant::now();
+        pool.install(|| match custom_prefetch {
+            Some(prefetch) => sources.annotate(batch, prefetch),
+            None => sources.run_batch(batch),
+        })
+        .map_err(|error| CliError::new("custom", error.to_string()))?;
+        debug!(
+            batch_size = batch_len,
+            custom_ms = custom_phase_start.elapsed().as_millis() as u64,
+            "batch custom annotation phase complete"
+        );
+    }
+
     Ok(())
+}
+
+/// The sequences a plugin translates from, for a row the sequence gate names:
+/// the cache's 3' UTR, else the one read from the reference FASTA through the
+/// exon model, as Ensembl VEP's `three_prime_utr` reads it offline.
+fn transcript_sequences(
+    transcript: &vep_core::transcript::Transcript,
+    config: &vep_effects::EffectsConfig,
+) -> Option<Box<vep_core::consequence::TranscriptSequences>> {
+    let utr = vep_effects::coding::compute_three_prime_utr_sequence(
+        transcript,
+        config.reference_fasta.as_deref(),
+    );
+    vep_core::consequence::TranscriptSequences::from_transcript(transcript, utr).map(Box::new)
 }
 
 /// Capacity a variant's `transcript_consequences` takes at its first row: a
@@ -3206,7 +3964,7 @@ pub(crate) fn annotate_variant(
     // For structural variants, use sv_end to query the full SV span so all
     // overlapping transcripts are found (not just those at the 1bp anchor).
     transcripts.for_each_overlapping(variant_start, variant_end, |transcript| {
-        if transcript_filter.is_some_and(|filter| !filter.evaluate(transcript)) {
+        if transcript_filter.is_some_and(|filter| !filter.evaluate(transcript.as_ref())) {
             return;
         }
         if let Some(mut tc) = vep_effects::calculate_consequences(variant, transcript, config) {
@@ -3215,10 +3973,14 @@ pub(crate) fn annotate_variant(
             }
             // LoFTEE's structural context is captured here because `transcript` is
             // out of scope in the plugin phase; gated so other runs pay nothing.
-            if config.populate_loftee_context {
+            if config.loftee_context.wants(&tc.consequences) {
                 tc.loftee_ctx = Some(Box::new(
                     vep_core::consequence::LofteeContext::from_transcript(transcript),
                 ));
+                tc.exon_ids = transcript.exon_ids.clone();
+            }
+            if config.context_sequences.wants(&tc.consequences) {
+                tc.transcript_sequences = transcript_sequences(transcript, config);
             }
             // Reserved at the first row rather than before the search, so a
             // variant overlapping nothing never allocates.
@@ -3323,11 +4085,12 @@ fn lookup_predictions(
     };
 
     if let Some(mode) = &prediction_config.sift {
-        tc.sift = predictions
+        let prediction = predictions
             .sift
             .as_ref()
-            .and_then(|matrix| matrix.lookup(position, alt_aa, AnalysisType::Sift))
-            .map(|prediction| format_prediction(&prediction, mode));
+            .and_then(|matrix| matrix.lookup(position, alt_aa, AnalysisType::Sift));
+        tc.sift_term = prediction.as_ref().map(|prediction| prediction.term);
+        tc.sift = prediction.map(|prediction| format_prediction(&prediction, mode));
     }
     if let Some(mode) = &prediction_config.polyphen {
         let (matrix, analysis) = if prediction_config.humdiv {
@@ -3335,10 +4098,11 @@ fn lookup_predictions(
         } else {
             (&predictions.polyphen_humvar, AnalysisType::PolyPhenHumVar)
         };
-        tc.polyphen = matrix
+        let prediction = matrix
             .as_ref()
-            .and_then(|matrix| matrix.lookup(position, alt_aa, analysis))
-            .map(|prediction| format_prediction(&prediction, mode));
+            .and_then(|matrix| matrix.lookup(position, alt_aa, analysis));
+        tc.polyphen_term = prediction.as_ref().map(|prediction| prediction.term);
+        tc.polyphen = prediction.map(|prediction| format_prediction(&prediction, mode));
     }
 }
 
@@ -3384,7 +4148,7 @@ pub(crate) fn append_bnd_mate_consequences(
     let mut mate_consequences = Vec::new();
     let paired: &InputVariant = variant;
     chr_transcripts.for_each_overlapping(mate_pos, mate_pos, |transcript| {
-        if transcript_filter.is_some_and(|filter| !filter.evaluate(transcript)) {
+        if transcript_filter.is_some_and(|filter| !filter.evaluate(transcript.as_ref())) {
             return;
         }
         if let Some(tc) =
@@ -3399,7 +4163,7 @@ pub(crate) fn append_bnd_mate_consequences(
         let already_has = variant
             .transcript_consequences
             .iter()
-            .any(|existing| existing.transcript_id == tc.transcript_id);
+            .any(|existing| existing.transcript_id() == tc.transcript_id());
         if !already_has {
             variant.transcript_consequences.push(tc);
             appended += 1;
@@ -3425,6 +4189,32 @@ pub(crate) fn append_bnd_mate_consequences(
     }
 }
 
+/// [`prewarm_batch`] then [`annotate_batch`] with nothing read ahead: the
+/// warm-up the pipeline's prefetch stage runs and the annotation its
+/// coordinator runs, in one call for the tests that annotate a batch outside
+/// the pipeline. Test-only, outside `mod tests` because
+/// [`annotate_batch_for_test`] and [`default_rows_for_test`] call it.
+#[cfg(test)]
+pub(crate) fn warm_and_annotate_batch(
+    batch: &mut Vec<InputVariant>,
+    resources: &AnnotationResources,
+    pool: &ThreadPool,
+    use_parallel: bool,
+    stats: &PipelineStats,
+    stats_enabled: bool,
+) -> anyhow::Result<()> {
+    prewarm_batch(batch, resources, pool)?;
+    annotate_batch(
+        batch,
+        resources,
+        pool,
+        use_parallel,
+        stats,
+        stats_enabled,
+        BatchPrefetch::default(),
+    )
+}
+
 /// Annotate one VCF line through the CLI path and return per-variant
 /// `transcript_id:so_terms` strings, sorted.
 ///
@@ -3441,6 +4231,7 @@ pub(crate) fn annotate_batch_for_test(
         transcripts,
         variation_source: None,
         regulatory_source: None,
+        cell_types: None,
         sv_source: None,
         colocation: ColocationRules::default(),
         effects_config: Arc::new(vep_effects::EffectsConfig {
@@ -3455,11 +4246,13 @@ pub(crate) fn annotate_batch_for_test(
         synonyms: Arc::default(),
         nearest: None,
         frequency_filter: None,
+        warn_assembly_mismatch: true,
+        custom_sources: None,
     };
     let stats = PipelineStats::new();
     let pool = build_thread_pool(1).unwrap();
     let mut batch = crate::vcf_parser::parse_vcf_line(vcf_line, true).expect("parse test VCF line");
-    annotate_batch(&mut batch, &resources, &pool, false, &stats, false).expect("annotate");
+    warm_and_annotate_batch(&mut batch, &resources, &pool, false, &stats, false).expect("annotate");
     batch
         .iter()
         .map(|v| {
@@ -3469,7 +4262,7 @@ pub(crate) fn annotate_batch_for_test(
                 .map(|tc| {
                     format!(
                         "{}:{}",
-                        tc.transcript_id,
+                        tc.transcript_id(),
                         tc.consequences
                             .iter()
                             .map(|c| c.so_term())
@@ -3499,6 +4292,7 @@ pub(crate) fn default_rows_for_test(
         transcripts,
         variation_source,
         regulatory_source: None,
+        cell_types: None,
         sv_source: None,
         colocation: ColocationRules::default(),
         effects_config: Arc::new(vep_effects::EffectsConfig {
@@ -3513,11 +4307,13 @@ pub(crate) fn default_rows_for_test(
         synonyms: Arc::default(),
         nearest: None,
         frequency_filter: None,
+        warn_assembly_mismatch: true,
+        custom_sources: None,
     };
     let stats = PipelineStats::new();
     let pool = build_thread_pool(1).unwrap();
     let mut batch = crate::vcf_parser::parse_vcf_line(vcf_line, true).expect("parse test VCF line");
-    annotate_batch(&mut batch, &resources, &pool, false, &stats, false).expect("annotate");
+    warm_and_annotate_batch(&mut batch, &resources, &pool, false, &stats, false).expect("annotate");
     let alleles: Vec<&InputVariant> = batch.iter().collect();
     let plan = ExtraFieldsPlan::new(options);
     let mut out = Vec::new();
@@ -3533,6 +4329,7 @@ pub(crate) fn resources_over(transcripts: Arc<LazyTranscriptIndexes>) -> Annotat
         transcripts,
         variation_source: None,
         regulatory_source: None,
+        cell_types: None,
         sv_source: None,
         colocation: ColocationRules::default(),
         effects_config: Arc::new(vep_effects::EffectsConfig {
@@ -3547,7 +4344,55 @@ pub(crate) fn resources_over(transcripts: Arc<LazyTranscriptIndexes>) -> Annotat
         synonyms: Arc::default(),
         nearest: None,
         frequency_filter: None,
+        warn_assembly_mismatch: true,
+        custom_sources: None,
     }
+}
+
+/// Edits the transcript a test row reads, in place: the row's own copy where
+/// the transcript is shared, an empty transcript where the row has none.
+#[cfg(test)]
+pub(crate) fn edit_transcript(
+    tc: &mut vep_core::consequence::TranscriptConsequence,
+    edit: impl FnOnce(&mut vep_core::transcript::Transcript),
+) {
+    let transcript = tc
+        .transcript
+        .get_or_insert_with(|| Arc::new(vep_core::transcript::Transcript::default()));
+    edit(Arc::make_mut(transcript));
+}
+
+/// Gives a test transcript one exon of `cdna` bases from position 1 and, under
+/// `Some(cds)`, a translation whose cached translateable sequence is `cds`
+/// bases long, so its spliced and CDS lengths read as the test wants them.
+#[cfg(test)]
+pub(crate) fn set_lengths(
+    transcript: &mut vep_core::transcript::Transcript,
+    cds: Option<u32>,
+    cdna: u32,
+) {
+    use vep_core::transcript::{Exon, TranscriptVEFC, Translation};
+    transcript.exons = vec![Exon {
+        start: 1,
+        end: u64::from(cdna),
+        rank: 1,
+        phase: -1,
+        end_phase: -1,
+    }];
+    transcript.translation = cds.map(|cds| Translation {
+        stable_id: String::new(),
+        version: None,
+        db_id: None,
+        start: 1,
+        end: u64::from(cds),
+        start_exon_index: 0,
+        end_exon_index: 0,
+        seq: None,
+    });
+    transcript.vefc = cds.map(|cds| TranscriptVEFC {
+        translateable_seq: Some("A".repeat(cds as usize)),
+        ..Default::default()
+    });
 }
 
 /// Two-exon test transcript on `chr` at `start` (1 kb span), shared by the runner
@@ -3563,7 +4408,6 @@ pub(crate) fn make_runner_test_transcript(
     use vep_core::transcript::{Exon, Intron, Transcript};
     let exons = vec![
         Exon {
-            stable_id: None,
             start,
             end: start + 199,
             rank: 1,
@@ -3571,7 +4415,6 @@ pub(crate) fn make_runner_test_transcript(
             end_phase: -1,
         },
         Exon {
-            stable_id: None,
             start: start + 800,
             end: start + 999,
             rank: 2,
@@ -3599,6 +4442,7 @@ pub(crate) fn make_runner_test_transcript(
         source: "Ensembl".into(),
         gene_symbol: Some(stable_id.into()),
         gene_symbol_source: Some("TEST".into()),
+        gene_symbol_id: None,
         hgnc_id: None,
         gene_phenotype: None,
         canonical: true,
@@ -3614,6 +4458,7 @@ pub(crate) fn make_runner_test_transcript(
         uniparc: None,
         uniprot_isoform: None,
         exons,
+        exon_ids: None,
         introns,
         cdna_coding_start: None,
         cdna_coding_end: None,
@@ -3629,6 +4474,8 @@ pub(crate) fn make_runner_test_transcript(
         gencode_primary: false,
         attributes: vec![],
         vefc: None,
+        source_cache: None,
+        bam_edit_status: None,
         derived: Default::default(),
         id_rank: 0,
     }
@@ -3639,6 +4486,167 @@ mod tests {
     use super::*;
     use crate::vcf_parser::parse_vcf_line;
     use std::collections::HashMap;
+    use vep_core::transcript::Transcript;
+    use vep_core::variation::CachedVariation;
+
+    /// The sources read ahead together under one `join` ([`fetch_batch`]) and
+    /// installed answer every lookup of the batch as the sources read one
+    /// after the other do ([`VariationSource::prefetch`], [`SvSource::prefetch`]):
+    /// the variation records and the known structural variants of every
+    /// variant of a batch over the co-located and structural-variant corpora.
+    /// A fetch without the variation windows (the `--check_frequency` stage
+    /// reads its own) leaves the windows installed before in place.
+    #[test]
+    fn joined_prefetch_equals_sequential_prefetch() {
+        let golden = format!("{}/../../tests/golden/116", env!("CARGO_MANIFEST_DIR"));
+        let cache = format!("{golden}/GRCh38-colocated/json_cache");
+        let variation = Arc::new(
+            VariationSource::open_json_cache(&cache, false)
+                .unwrap()
+                .unwrap(),
+        );
+        let svs = Arc::new(
+            SvSource::open(Path::new(&format!(
+                "{golden}/GRCh38-checksvs/structural_variants.vcf.gz"
+            )))
+            .unwrap(),
+        );
+        let transcripts = Arc::new(LazyTranscriptIndexes::new(&cache, 5_000, 5_000).unwrap());
+        let mut resources = resources_over(transcripts);
+        resources.variation_source = Some(Arc::clone(&variation));
+        resources.sv_source = Some(Arc::clone(&svs));
+        let pool = build_thread_pool(2).unwrap();
+
+        let mut batch: Vec<InputVariant> = Vec::new();
+        for line in [
+            "21\t5029945\t.\tGG\tG\t.\t.\t.",
+            "21\t5030192\t.\tA\tG\t.\t.\t.",
+            "21\t5030482\t.\tGGGAGGGGTGG\tGG\t.\t.\t.",
+            "21\t5030602\t.\tA\tAA,G\t.\t.\t.",
+            "21\t5031926\t.\tT\tA\t.\t.\t.",
+            "21\t6000000\t.\tC\tT\t.\t.\t.",
+            "21\t44189749\t.\tA\tG\t.\t.\t.",
+        ] {
+            batch.extend(parse_vcf_line(line, false).unwrap());
+        }
+        let lookups = |batch: &[InputVariant]| -> Vec<(Vec<CachedVariation>, Vec<String>)> {
+            batch
+                .iter()
+                .map(|v| {
+                    (
+                        variation
+                            .records_overlapping(&v.chr, v.start, v.end)
+                            .unwrap(),
+                        svs.overlapping(&v.chr, v.start, v.end).unwrap(),
+                    )
+                })
+                .collect()
+        };
+
+        pool.install(|| {
+            variation
+                .prefetch(batch.iter().map(|v| (v.chr.as_str(), v.start, v.end)))
+                .unwrap();
+            svs.prefetch(sv_source::batch_spans(&batch)).unwrap();
+        });
+        let sequential = lookups(&batch);
+        assert!(sequential.iter().any(|(records, _)| !records.is_empty()));
+        assert!(sequential.iter().any(|(_, names)| !names.is_empty()));
+
+        // Another batch's windows stand installed while this one is read ahead.
+        let elsewhere = parse_vcf_line("21\t30000000\t.\tA\tG\t.\t.\t.", false).unwrap();
+        pool.install(|| {
+            variation
+                .prefetch(elsewhere.iter().map(|v| (v.chr.as_str(), v.start, v.end)))
+                .unwrap();
+            svs.prefetch(sv_source::batch_spans(&elsewhere)).unwrap();
+        });
+        let mut joined = fetch_batch(&batch, &resources, &pool, true).unwrap();
+        assert!(joined.variation.is_some() && joined.svs.is_some());
+        assert!(joined.plugins.is_none() && joined.custom.is_none());
+        install_prefetch(&resources, &mut joined);
+        assert!(joined.variation.is_none() && joined.svs.is_none());
+        assert_eq!(lookups(&batch), sequential);
+
+        let mut without_windows = fetch_batch(&batch, &resources, &pool, false).unwrap();
+        assert!(without_windows.variation.is_none() && without_windows.svs.is_some());
+        install_prefetch(&resources, &mut without_windows);
+        assert_eq!(lookups(&batch), sequential);
+    }
+
+    /// A `###CHR###` file stands for the FASTA's records in byte order, the
+    /// FASTA's own spellings (`BaseVEP.pm:568-573` reads the sequence ids,
+    /// `AnnotationSourceAdaptor.pm:440` sorts them), and for `1` to `22`, `X`,
+    /// `Y` and `MT` in that order without a FASTA, or with one whose index
+    /// names no sequence (`:440` takes the default list for an empty
+    /// `chr_lengths`). A `--custom` line without a specification opens nothing.
+    #[test]
+    fn chr_placeholder_chromosomes_follow_the_fasta_then_the_default_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let fasta = dir.path().join("ref.fa");
+        std::fs::write(&fasta, ">chr2\nACGT\n>chr10\nACGT\n>chrM\nACGT\n").unwrap();
+        std::fs::write(
+            dir.path().join("ref.fa.fai"),
+            "chr2\t4\t6\t4\t5\nchr10\t4\t18\t4\t5\nchrM\t4\t29\t4\t5\n",
+        )
+        .unwrap();
+        let fasta = vep_fasta::IndexedFasta::from_path_mmap(&fasta).unwrap();
+        assert_eq!(
+            chr_placeholder_chromosomes(Some(&fasta)),
+            ["chr10", "chr2", "chrM"]
+        );
+        let default = chr_placeholder_chromosomes(None);
+        assert_eq!(default.len(), 25);
+        assert_eq!(default[0], "1");
+        assert_eq!(default[21..], ["22", "X", "Y", "MT"]);
+        let no_sequence = dir.path().join("unindexed.fa");
+        std::fs::write(&no_sequence, ">chr2\nACGT\n").unwrap();
+        std::fs::write(dir.path().join("unindexed.fa.fai"), "").unwrap();
+        let no_sequence = vep_fasta::IndexedFasta::from_path_mmap(&no_sequence).unwrap();
+        assert_eq!(chr_placeholder_chromosomes(Some(&no_sequence)), default);
+        assert!(open_custom_sources(
+            Vec::new(),
+            Some(&fasta),
+            &Arc::default(),
+            CustomRunOptions::default()
+        )
+        .unwrap()
+        .is_none());
+    }
+
+    /// Ensembl VEP 116.2 lists the statistics report's `Annotation sources` as
+    /// the cache, then `Custom: <file> (<type>)` per `--custom` source in the
+    /// order given, the file as given and the `type` as given or `overlap`
+    /// (Stats.pm:666-675, `File.pm:159` and `:170`); a run without a source
+    /// lists the cache alone.
+    #[test]
+    fn annotation_sources_list_the_cache_then_each_custom_source() {
+        let custom_dir = format!(
+            "{}/../../tests/golden/116/GRCh38-custom/custom",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let specs = vec![
+            custom::parse_custom(&format!(
+                "file={custom_dir}/sites.vcf.gz,short_name=sites,format=vcf,type=exact,fields=AF"
+            ))
+            .unwrap(),
+            custom::parse_custom(&format!("{custom_dir}/regions.bed.gz,regions,bed")).unwrap(),
+        ];
+        let sources =
+            CustomSources::open(specs, Arc::default(), CustomRunOptions::default()).unwrap();
+        assert_eq!(
+            annotation_source_entries("/cache/116_GRCh38", Some(&sources)),
+            [
+                "Cache: <kbd>/cache/116_GRCh38</kbd>".to_string(),
+                format!("Custom: {custom_dir}/sites.vcf.gz (exact)"),
+                format!("Custom: {custom_dir}/regions.bed.gz (overlap)"),
+            ]
+        );
+        assert_eq!(
+            annotation_source_entries("[PATH]/json_cache", None),
+            ["Cache: <kbd>[PATH]/json_cache</kbd>"]
+        );
+    }
 
     /// The length a plain FASTA must reach is the byte past the last base its
     /// index places: `offset + (length - 1) / line_bases * line_width +
@@ -3674,133 +4682,6 @@ mod tests {
             "21\t18446744073709551615\t4\t60\t61\n",
         ] {
             assert_eq!(fai_end(huge.as_bytes()), None, "{huge:?}");
-        }
-    }
-
-    #[test]
-    fn parquet_row_groups_are_whole_duckdb_vectors() {
-        assert_eq!(parquet_row_group_rows(122_880), 122_880);
-        assert_eq!(parquet_row_group_rows(5_000), 6_144);
-        assert_eq!(parquet_row_group_rows(1), 2_048);
-        assert_eq!(parquet_row_group_rows(0), 2_048);
-    }
-
-    /// The DuckDB floor is 1.3.2, the first release whose Parquet COPY knows
-    /// `WRITE_BLOOM_FILTER`, and the patch counts: 1.3.1 is refused, 1.3.2 and
-    /// every later release accepted; a version line without a patch reads as
-    /// patch 0.
-    #[test]
-    fn duckdb_floor_compares_the_patch() {
-        assert_eq!(MIN_DUCKDB_VERSION, (1, 3, 2));
-        for (text, accepted) in [
-            ("v1.2.2 (Histrionicus) 7c039464e4", false),
-            ("v1.3.1 (Ossivalis) 2063dda3e6", false),
-            ("v1.3.2 (Ossivalis) 0b83e5d2f6", true),
-            ("v1.4.0 (Andium) b8a06e4a22", true),
-            ("v2.0.0 (Variegata) d8cdaa33fd", true),
-            ("v1.3", false),
-            ("v2.0", true),
-        ] {
-            let version = parse_duckdb_version(text).unwrap();
-            assert_eq!(duckdb_is_new_enough(version), accepted, "{text}");
-        }
-        assert_eq!(parse_duckdb_version("v1.3"), Some((1, 3, 0)));
-        assert_eq!(parse_duckdb_version("duckdb"), None);
-    }
-
-    /// The writer's contract for its four numeric columns: a token that is not
-    /// a number is stored as NULL and the COPY completes, in both shapes. The
-    /// intermediate never writes such a token, so the fixture carries one in
-    /// each column (`pos`, `end`, `DISTANCE`, `STRAND`) beside a well-formed
-    /// row, and the read-back is checked through the installed DuckDB CLI.
-    #[test]
-    fn parquet_writer_stores_a_malformed_numeric_token_as_null() {
-        let duckdb_installed = std::process::Command::new("duckdb")
-            .arg("--version")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false);
-        if !duckdb_installed {
-            eprintln!("skipping: duckdb CLI not installed");
-            return;
-        }
-        let header = [
-            "chrom",
-            "pos",
-            "end",
-            "ref",
-            "alt",
-            "Uploaded_variation",
-            "Location",
-            "Allele",
-            "Feature",
-            "DISTANCE",
-            "STRAND",
-            "cDNA_position",
-        ];
-        let rows = [
-            "21\t100\t100\tA\tG\trs1\t21:100\tG\tENST1\t5\t1\t12",
-            "21\tx\t-\tA\tG\trs2\t21:x\tG\tENST2\tn/a\tplus\t204-205",
-        ];
-        let dir = tempfile::tempdir().unwrap();
-        let intermediate = dir.path().join("out.tsv.tmp");
-        std::fs::write(
-            &intermediate,
-            format!("{}\n{}\n", header.join("\t"), rows.join("\n")),
-        )
-        .unwrap();
-        let read_back = |sql: &str| {
-            let out = std::process::Command::new("duckdb")
-                .args(["-csv", "-noheader", "-nullvalue", "NULL", "-c", sql])
-                .output()
-                .unwrap();
-            assert!(
-                out.status.success(),
-                "duckdb failed:\n{}\nsql: {sql}",
-                String::from_utf8_lossy(&out.stderr)
-            );
-            String::from_utf8(out.stdout).unwrap().trim().to_string()
-        };
-        for (shape, expected_schema, expected_values) in [
-            (
-                "flat",
-                "DISTANCE,INTEGER\nSTRAND,TINYINT\nend,BIGINT\npos,BIGINT",
-                "rs1,100,100,5,1\nrs2,NULL,NULL,NULL,NULL",
-            ),
-            (
-                "nested",
-                "DISTANCE,INTEGER[]\nSTRAND,TINYINT[]\nend,BIGINT\npos,BIGINT",
-                "rs1,100,100,[5],[1]\nrs2,NULL,NULL,[NULL],[NULL]",
-            ),
-        ] {
-            let out_dir = dir.path().join(format!("{shape}.parquet"));
-            finalize_parquet_output(
-                intermediate.to_str().unwrap(),
-                out_dir.to_str().unwrap(),
-                shape,
-                header.to_vec(),
-                &[("vep_rs_version".to_string(), "test".to_string())],
-                2_048,
-            )
-            .unwrap();
-            let glob = format!("{}/**/*.parquet", out_dir.display());
-            assert_eq!(
-                read_back(&format!(
-                    "SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM \
-                     read_parquet('{glob}')) WHERE column_name IN ('pos', 'end', 'DISTANCE', 'STRAND') \
-                     ORDER BY column_name"
-                )),
-                expected_schema,
-                "{shape} schema"
-            );
-            assert_eq!(
-                read_back(&format!(
-                    "SELECT Uploaded_variation, pos, \"end\", DISTANCE, STRAND \
-                     FROM read_parquet('{glob}') ORDER BY Uploaded_variation"
-                )),
-                expected_values,
-                "{shape} values"
-            );
         }
     }
 
@@ -4350,6 +5231,11 @@ mod tests {
         assert_eq!(perl_stored_value("fork", "+4"), "4");
         assert_eq!(perl_stored_value("max_sv_size", "-1"), "-1");
         assert_eq!(perl_stored_value("max_sv_size", "1_000"), "1000");
+        assert_eq!(perl_stored_value("shift_3prime", "2\n"), "2");
+        assert_eq!(
+            perl_stored_value("shift_3prime", "9999999999999999999999999999999999999999\n"),
+            "9999999999999999999999999999999999999999"
+        );
         assert_eq!(perl_stored_value("buffer_size", "abc"), "abc");
         assert_eq!(perl_stored_value("freq_freq", "0.010"), "0.010");
         assert_eq!(perl_stored_value("distance", "05000"), "05000");
@@ -4418,6 +5304,51 @@ mod tests {
         let mut argv = vec!["--json_cache", cache.path().to_str().unwrap()];
         argv.extend_from_slice(flags);
         Runner::new(config_from(&argv)).unwrap()
+    }
+
+    /// Leaving the loaded run to the process exit writes the same rows as
+    /// releasing it: either teardown begins after the output is closed.
+    #[test]
+    fn leaving_the_run_to_the_exit_changes_no_output_row() {
+        let _in_turn = crate::warnings::sink_test_guard();
+        let cache = write_json_cache("teardown", &[("21", 1_000)]);
+        let dir = tempfile::tempdir().unwrap();
+        let input = dir.path().join("in.vcf");
+        std::fs::write(
+            &input,
+            "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\t1500\t.\tA\tG\t.\t.\t.\n",
+        )
+        .unwrap();
+        let rows_of = |teardown: Teardown, name: &str| {
+            let out = dir.path().join(name);
+            let runner = runner_over(
+                &cache,
+                &[
+                    "-i",
+                    input.to_str().unwrap(),
+                    "-o",
+                    out.to_str().unwrap(),
+                    "--fork",
+                    "1",
+                    "--no_stats",
+                    "--quiet",
+                    "--force_overwrite",
+                ],
+            );
+            runner.run_with(teardown).unwrap();
+            let text = std::fs::read_to_string(out).unwrap();
+            text.lines()
+                .filter(|line| !line.starts_with("##"))
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        };
+        let released = rows_of(Teardown::Release, "released.txt");
+        let left = rows_of(Teardown::LeaveToExit, "left.txt");
+        assert!(
+            released.iter().any(|row| row.starts_with("21_1500")),
+            "{released:?}"
+        );
+        assert_eq!(left, released);
     }
 
     /// A one-shard chromosome 21 cache holding three transcripts: one in the
@@ -4509,6 +5440,33 @@ mod tests {
         assert!(flag_fields(&both.field_options()).contains(&"ENSP"));
     }
 
+    /// `flag_fields` keeps a list flag's field group only when its list holds a
+    /// name (OutputFactory.pm:2523-2525, `scalar @{$_->[1]}`), and `Config.pm:760`
+    /// splits `,` and `""` to no name, so `--individual ,` declares neither IND nor
+    /// ZYG and `--individual_zyg ""` declares no ZYG, in every header; a list with a
+    /// name declares them.
+    #[test]
+    fn an_empty_individual_list_declares_no_ind_or_zyg_column() {
+        use vep_io::output::fields::flag_fields;
+        let cache = write_json_cache("empty_individuals", &[("21", 1_000)]);
+        for flags in [&["--individual", ","][..], &["--individual", ""][..]] {
+            let runner = runner_over(&cache, flags);
+            assert_eq!(runner.config.individual.as_deref(), Some(&[][..]));
+            let fields = flag_fields(&runner.field_options());
+            assert!(
+                !fields.contains(&"IND") && !fields.contains(&"ZYG"),
+                "{flags:?}: {fields:?}"
+            );
+        }
+        let zyg = runner_over(&cache, &["--individual_zyg", ""]);
+        assert!(!flag_fields(&zyg.field_options()).contains(&"ZYG"));
+        let named = runner_over(&cache, &["--individual", "S1,"]);
+        let fields = flag_fields(&named.field_options());
+        assert!(fields.contains(&"IND") && fields.contains(&"ZYG"));
+        let zyg_named = runner_over(&cache, &["--individual_zyg", "S1"]);
+        assert!(flag_fields(&zyg_named.field_options()).contains(&"ZYG"));
+    }
+
     /// `post_setup_checks` (Runner.pm:757-759): an explicit `--hgvs` or `--hgvsg`
     /// with no FASTA named or found is refused with Ensembl VEP's text;
     /// `--shift_3prime 1` without one is refused in the same shape; a FASTA
@@ -4576,6 +5534,54 @@ mod tests {
             .is_empty());
     }
 
+    /// A BAM-edited cache switches `--use_transcript_ref` on as the cache resolves
+    /// (`CacheDir.pm:412-416`, before `post_setup_checks` runs, Runner.pm:128
+    /// against :138), so a run on one without a FASTA is refused with the
+    /// `Runner.pm:762` text as a run given the flag is, its column set carries
+    /// `GIVEN_REF`, `USED_REF` and `BAM_EDIT`, and the notice is the resolved
+    /// cache's; `--use_given_ref` keeps the cache from switching it on, so the
+    /// same run passes the checks with none of the three columns.
+    #[test]
+    fn bam_edited_cache_without_fasta_exits_with_vep_message() {
+        use vep_io::output::fields::flag_fields;
+        let cache = write_json_cache("bam_edited", &[("21", 1_000)]);
+        std::fs::write(
+            cache.path().join("info.json"),
+            r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":84,
+                "bam":"interim_GRCh38.p10_knownrefseq_alignments_2017-01-13.bam","source_type":"refseq",
+                "source_versions":{"dbSNP":"146","assembly":"GRCh38.p5"}}"#,
+        )
+        .unwrap();
+        let runner = runner_over(&cache, &["--refseq"]);
+        assert!(runner.config.use_transcript_ref);
+        assert!(runner.config.bam_edited);
+        assert_eq!(
+            runner.cache.notices,
+            ["INFO: BAM-edited cache detected, enabling --use_transcript_ref; use --use_given_ref to override this"]
+        );
+        let error = fasta_setup_checks(&runner.config, false)
+            .expect_err("a BAM-edited cache without a FASTA passed the checks");
+        assert_eq!(
+            error.to_string(),
+            "ERROR: [fasta] Cannot use transcript reference sequences (--use_transcript_ref) without a FASTA file (see --fasta); you may wish to use --use_given_ref"
+        );
+        let fields = flag_fields(&runner.field_options());
+        for column in ["GIVEN_REF", "USED_REF", "BAM_EDIT"] {
+            assert!(fields.contains(&column), "{column} in {fields:?}");
+        }
+        assert!(fasta_setup_checks(&runner.config, true).is_ok());
+
+        let given = runner_over(&cache, &["--refseq", "--use_given_ref"]);
+        assert!(!given.config.use_transcript_ref);
+        assert!(!given.config.bam_edited);
+        assert!(given.cache.notices.is_empty());
+        assert!(fasta_setup_checks(&given.config, false).is_ok());
+        let fields = flag_fields(&given.field_options());
+        for column in ["GIVEN_REF", "USED_REF", "BAM_EDIT"] {
+            assert!(!fields.contains(&column), "{column} in {fields:?}");
+        }
+    }
+
     /// `post_setup_checks` (Runner.pm:745-754): the `--hgvs` that `--everything`
     /// switched on is dropped with an `INFO:` line when no FASTA is found, and the
     /// run goes on without HGVS; `--shift_hgvs 0` adds its own line (:792-795).
@@ -4601,9 +5607,66 @@ mod tests {
         assert!(!config.shift_3prime);
     }
 
+    /// Ensembl VEP 116.2 prints the `--everything` notice as it reaches it
+    /// (Runner.pm:752, BaseVEP.pm:785) and throws after it for `--hgvsg`,
+    /// `--check_ref`, `--lookup_ref` and `--use_transcript_ref` without a FASTA
+    /// (:759-762), so each refusal carries that notice for the caller to print
+    /// before the error, the `--shift_3prime 1` refusal of this implementation
+    /// with them, and nothing after the throw: the `--shift_hgvs 0` line (:793)
+    /// is not reached. A refusal `--everything` did not precede carries no
+    /// notice.
+    #[test]
+    fn a_fasta_refusal_carries_the_everything_notice_settled_before_it() {
+        const NOTICE: &str = "INFO: Disabling --hgvs; using --offline and no FASTA file found";
+        for (flags, message_prefix) in [
+            (
+                &["--hgvsg"][..],
+                "Cannot generate HGVS coordinates (--hgvs and --hgvsg)",
+            ),
+            (
+                &["--check_ref"][..],
+                "Cannot check reference sequences (--check_ref)",
+            ),
+            (
+                &["--lookup_ref"][..],
+                "Cannot look up reference sequences (--lookup_ref)",
+            ),
+            (
+                &["--use_transcript_ref"][..],
+                "Cannot use transcript reference sequences (--use_transcript_ref)",
+            ),
+            (
+                &["--shift_3prime", "1"][..],
+                "Cannot shift variants (--shift_3prime 1)",
+            ),
+        ] {
+            let mut argv = vec!["--everything"];
+            argv.extend_from_slice(flags);
+            let refusal = fasta_setup_checks(&config_from(&argv), false)
+                .expect_err("--everything with a flag needing a FASTA passed the checks");
+            assert_eq!(refusal.notices, [NOTICE], "{flags:?}");
+            assert_eq!(refusal.error.component, "fasta", "{flags:?}");
+            assert!(
+                refusal.error.message.starts_with(message_prefix),
+                "{flags:?}: {}",
+                refusal.error.message
+            );
+            assert_eq!(refusal.to_string(), refusal.error.to_string(), "{flags:?}");
+        }
+        let refusal = fasta_setup_checks(
+            &config_from(&["--everything", "--hgvsg", "--shift_hgvs", "0"]),
+            false,
+        )
+        .expect_err("--everything --hgvsg without a FASTA passed the checks");
+        assert_eq!(refusal.notices, [NOTICE]);
+        let refusal = fasta_setup_checks(&config_from(&["--hgvsg"]), false)
+            .expect_err("--hgvsg without a FASTA passed the checks");
+        assert!(refusal.notices.is_empty());
+    }
+
     /// The configuration's `--var_synonyms` notice (Runner.pm:117-120) is the
     /// configuration's to carry and `post_setup_checks`' lines the FASTA checks';
-    /// `run()` prints the first before the second. Beside `--check_existing` the
+    /// `new` prints the first, `run()` the second. Beside `--check_existing` the
     /// configuration owes none.
     #[test]
     fn var_synonyms_notice_is_the_configurations() {
@@ -4744,12 +5807,12 @@ mod tests {
             data[offset..offset + CELL_BYTES]
                 .copy_from_slice(&((category << 14) | score).to_le_bytes());
         }
-        vep_core::transcript::PredictionMatrix {
-            analysis: analysis.to_string(),
-            sub_analysis: None,
-            peptide_length: residues,
-            predictions_data: data,
-        }
+        vep_core::transcript::PredictionMatrix::from_inflated(
+            analysis.to_string(),
+            None,
+            residues,
+            data,
+        )
     }
 
     /// A coding transcript carrying the given matrices, and a consequence on it
@@ -4766,6 +5829,7 @@ mod tests {
             protein_function_predictions: Some(matrices),
             ..Default::default()
         });
+        let transcript = Arc::new(transcript);
         let mut tc = vep_core::consequence::TranscriptConsequence::for_transcript(&transcript);
         tc.amino_acids = Some(amino_acids.to_string());
         tc.protein_position = Some(position.to_string());
@@ -5088,6 +6152,69 @@ mod tests {
         );
     }
 
+    /// Under `--regulatory_gff` the lines carry `regulatory_gff\t<file>` beside
+    /// the cache's source versions, the first file of the flag: Ensembl VEP 116.2
+    /// prints the version data of every annotation source, first source first
+    /// (BaseRunner.pm:415-417), and a regulatory GFF source's is its file
+    /// (RegFeat.pm:674-677).
+    #[test]
+    fn show_cache_info_lists_the_regulatory_gff_file() {
+        let cache = write_json_cache("info-gff", &[("21", 1_000)]);
+        let runner = runner_over(
+            &cache,
+            &[
+                "--show_cache_info",
+                "--regulatory_gff",
+                "file=r.gff3.gz,emars=e.gff.gz,motifs=m.gff3.gz",
+            ],
+        );
+        let mut out = Vec::new();
+        runner.write_cache_info(&mut out).unwrap();
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "assembly\tGRCh38.p14\ndbSNP\t156\nregulatory_gff\tr.gff3.gz\n"
+        );
+    }
+
+    /// The `## regbuild version <v>` header line comes from the cache's
+    /// `source_versions`, the `source_regbuild` line of the Ensembl VEP cache's
+    /// `info.txt`: CacheDir.pm:468-469 reads every `source_<key>` into the
+    /// version data each cache source carries (CacheDir.pm:150),
+    /// BaseRunner.pm:415-417 merges them into the header and
+    /// OutputFactory/BaseTab.pm:130 prints one line per key, so it prints
+    /// whenever the cache names it, with `--regulatory` or without, and a cache
+    /// naming no regulatory build prints no such line.
+    #[test]
+    fn header_prints_regbuild_version_from_source_versions() {
+        let regbuild_lines = |cache: &tempfile::TempDir, flags: &[&str]| -> Vec<String> {
+            let runner = runner_over(cache, flags);
+            let mut out = Vec::new();
+            runner
+                .write_header(&mut out, &runner.field_options(), &[])
+                .unwrap();
+            String::from_utf8(out)
+                .unwrap()
+                .lines()
+                .filter(|line| line.starts_with("## regbuild version"))
+                .map(str::to_string)
+                .collect()
+        };
+        let cache = write_json_cache("regbuild", &[("21", 1_000)]);
+        std::fs::write(
+            cache.path().join("info.json"),
+            r#"{"species":"homo_sapiens","assembly":"GRCh38","cache_version":116,
+                "source_versions":{"dbSNP":"156","assembly":"GRCh38.p14","regbuild":"1.0"}}"#,
+        )
+        .unwrap();
+        assert_eq!(regbuild_lines(&cache, &[]), ["## regbuild version 1.0"]);
+        assert_eq!(
+            regbuild_lines(&cache, &["--regulatory"]),
+            ["## regbuild version 1.0"]
+        );
+        let without = write_json_cache("no_regbuild", &[("21", 1_000)]);
+        assert!(regbuild_lines(&without, &[]).is_empty());
+    }
+
     /// Config.pm `mask_data_paths`: a trailing slash keeps its place after the
     /// leaf, a root-level path has no leading run to mask, and the `[^,=]+` run
     /// stops at `=` as at `,`, so a `--custom` or `--plugin` value keeps every
@@ -5105,8 +6232,8 @@ mod tests {
         );
         assert_eq!(collapse_paths("snv=/a/b.tsv.gz"), "snv=[PATH]/b.tsv.gz");
         assert_eq!(
-            collapse_paths("CADD,snv=/data/cadd/whole_genome_SNVs.tsv.gz,indels=/data/cadd/gnomad.genomes.r4.0.indel.tsv.gz"),
-            "CADD,snv=[PATH]/whole_genome_SNVs.tsv.gz,indels=[PATH]/gnomad.genomes.r4.0.indel.tsv.gz"
+            collapse_paths("CADD,snv=/data/cadd/synthetic_snv_score.tsv.gz,indels=/data/cadd/synthetic_indel_scores_file.tsv.gz"),
+            "CADD,snv=[PATH]/synthetic_snv_score.tsv.gz,indels=[PATH]/synthetic_indel_scores_file.tsv.gz"
         );
         assert_eq!(collapse_paths("key=/x"), "key=/x");
         assert_eq!(collapse_paths("key=/a/b/"), "key=[PATH]/b/");
@@ -5147,9 +6274,18 @@ mod tests {
         assert!(tab_header(&options, &[], None, &dir, None, "vep")
             .contains(&"## Using cache in [PATH]/116_GRCh38".to_string()));
         assert!(vcf_vep_meta_line(&dir, None).contains(" cache=\"[PATH]/116_GRCh38\""));
-        assert!(masked
-            .parquet_kv_metadata()
-            .contains(&("cache".to_string(), "[PATH]/116_GRCh38".to_string())));
+        #[cfg(feature = "parquet")]
+        {
+            let kv = masked.parquet_kv_metadata(&["21".to_string()], &run_id());
+            assert!(kv.contains(&("cache".to_string(), "[PATH]/116_GRCh38".to_string())));
+            assert!(kv.contains(&("contig_order".to_string(), "21".to_string())));
+            assert!(kv.contains(&("layout".to_string(), "flat".to_string())));
+            assert!(kv.contains(&(
+                "coordinate_system".to_string(),
+                "1-based inclusive".to_string()
+            )));
+            assert!(kv.iter().any(|(k, v)| k == "run_id" && !v.is_empty()));
+        }
         // The layout resolution names the same leaf, so the header reads the same.
         let resolved = Runner::new(config_from(&[
             "--dir_cache",
@@ -5225,6 +6361,238 @@ mod tests {
         }
     }
 
+    /// A one-exon coding RefSeq model at 1000-1299 whose alignment inserted
+    /// `GGG` after unedited cDNA 4 (`_rna_edit` `5 4 GGG`): the mapper folds the
+    /// edit (cDNA 1-4 and 8-303), the whole 303-base cDNA is coding and the
+    /// cached coding sequence carries the three bases.
+    fn edited_coding_model() -> vep_core::transcript::Transcript {
+        use vep_core::transcript::{
+            Attribute, ExonCoordMapper, MapperPair, TranscriptMapper, TranscriptVEFC, Translation,
+        };
+        let mut tx = make_runner_test_transcript("NM_000001.1", "GENE1", "21", 1_000);
+        tx.exons.truncate(1);
+        tx.exons[0].end = 1_299;
+        tx.exons[0].phase = 0;
+        tx.exons[0].end_phase = 0;
+        tx.introns.clear();
+        tx.end = 1_299;
+        tx.biotype = "protein_coding".into();
+        tx.protein_id = Some("NP_000001.1".into());
+        tx.cdna_coding_start = Some(1);
+        tx.cdna_coding_end = Some(303);
+        tx.coding_region_start = Some(1_000);
+        tx.coding_region_end = Some(1_299);
+        tx.translation_start = Some(1_000);
+        tx.translation_end = Some(1_299);
+        tx.translation = Some(Translation {
+            stable_id: "NP_000001.1".into(),
+            version: None,
+            db_id: None,
+            start: 1,
+            end: 300,
+            start_exon_index: 0,
+            end_exon_index: 0,
+            seq: None,
+        });
+        tx.attributes.push(Attribute {
+            code: "_rna_edit".into(),
+            value: "5 4 GGG".to_string(),
+        });
+        let pair = |from_start, from_end, to_start, to_end| MapperPair {
+            from_start,
+            from_end,
+            to_start,
+            to_end,
+            ori: 1,
+        };
+        tx.vefc = Some(TranscriptVEFC {
+            codon_table: 1,
+            translateable_seq: Some(format!("ATGCGGG{}", &"GCT".repeat(99)[..296])),
+            sorted_exons: tx.exons.clone(),
+            mapper: Some(TranscriptMapper {
+                start_phase: 0,
+                cdna_coding_start: 1,
+                cdna_coding_end: 303,
+                exon_coord_mapper: ExonCoordMapper::new(vec![
+                    pair(1, 4, 1_000, 1_003),
+                    pair(8, 303, 1_004, 1_299),
+                ]),
+            }),
+            ..Default::default()
+        });
+        tx
+    }
+
+    /// What [`warn_transcript_assembly_mismatches`] draws for `batch` under
+    /// `resources`: each text with the index of its record's first variant.
+    fn assembly_mismatches_drawn(
+        batch: &[InputVariant],
+        resources: &AnnotationResources,
+    ) -> Vec<(usize, String)> {
+        let mut drawn = Vec::new();
+        warn_transcript_assembly_mismatches(batch, resources, &mut |index, text| {
+            drawn.push((index, text))
+        });
+        drawn
+    }
+
+    /// Ensembl VEP's `Transcript-assembly mismatch in <Uploaded_variation>`
+    /// (OutputFactory.pm:1717-1718): a row whose alternate allele equals the
+    /// bases of an edited transcript's first `_rna_edit` on the codon path is
+    /// marked (`invalid_alleles`, TranscriptVariationAllele.pm:826-837), a row
+    /// whose allele differs from the edit's bases is not, and the annotation
+    /// writes nothing itself: the text is drawn from the marked rows left on
+    /// each record, once per record and in record order, by
+    /// [`warn_transcript_assembly_mismatches`], which draws nothing under
+    /// `--use_given_ref` (`:1717`).
+    #[test]
+    fn transcript_assembly_mismatch_warning_follows_the_first_rna_edit() {
+        let mut by_chr = HashMap::new();
+        by_chr.insert(
+            "21".to_string(),
+            TranscriptIndex::new(vec![edited_coding_model()], 5_000, 5_000),
+        );
+        let mut resources = resources_over(Arc::new(LazyTranscriptIndexes::from_indexes(by_chr)));
+        let failure = ReadFailure::default();
+        let marked = |variant: &InputVariant| {
+            variant
+                .transcript_consequences
+                .iter()
+                .any(|tc| tc.transcript_assembly_mismatch)
+        };
+
+        let mut batch = parse_vcf_line("21\t1009\trs1\tT\tTGGG\t.\t.\t.", true).expect("parse");
+        batch.extend(parse_vcf_line("21\t1009\trs2\tT\tTGGC\t.\t.\t.", true).expect("parse"));
+        batch.extend(parse_vcf_line("21\t1009\trs3\tT\tTGGG\t.\t.\t.", true).expect("parse"));
+        for variant in batch.iter_mut() {
+            annotate_one(variant, &resources, &failure);
+        }
+        assert!(marked(&batch[0]));
+        assert!(!marked(&batch[1]));
+        assert!(marked(&batch[2]));
+
+        // The text names the record as the output does.
+        assert_eq!(
+            transcript_assembly_mismatch_warning(&batch[0]).as_deref(),
+            Some("Transcript-assembly mismatch in rs1")
+        );
+        assert_eq!(transcript_assembly_mismatch_warning(&batch[1]), None);
+
+        assert_eq!(
+            assembly_mismatches_drawn(&batch, &resources),
+            [
+                (0, "Transcript-assembly mismatch in rs1".to_string()),
+                (2, "Transcript-assembly mismatch in rs3".to_string()),
+            ]
+        );
+
+        // `--use_given_ref`: the rows stay marked, nothing is drawn.
+        resources.warn_assembly_mismatch = !config_from(&["--use_given_ref"]).use_given_ref;
+        assert!(!resources.warn_assembly_mismatch);
+        let drawn = assembly_mismatches_drawn(&batch, &resources);
+        assert!(drawn.is_empty(), "{drawn:?}");
+    }
+
+    /// The warning is drawn from the rows the record step leaves, as Ensembl
+    /// VEP draws it inside the output hash of each row it prints
+    /// (OutputFactory.pm:1717-1718), after the row filters and the pick family
+    /// have dropped theirs (`:477-514`) and never under `--summary` or
+    /// `--most_severe` (`:387`). An edited coding model and a canonical unedited
+    /// model share the locus: `--pick` keeps the canonical model and the record
+    /// draws nothing, `--flag_pick` keeps every row and it draws once,
+    /// `--most_severe` keeps no row and it draws nothing, and `--coding_only`
+    /// keeps the marked coding row alone and it draws once.
+    #[test]
+    fn transcript_assembly_mismatch_is_drawn_from_the_rows_the_record_step_leaves() {
+        let mut edited = edited_coding_model();
+        edited.canonical = false;
+        let canonical = mapped_runner_test_transcript("NM_000002.1", "GENE1", 1_000);
+        let mut by_chr = HashMap::new();
+        by_chr.insert(
+            "21".to_string(),
+            TranscriptIndex::new(vec![edited, canonical], 5_000, 5_000),
+        );
+        let resources = resources_over(Arc::new(LazyTranscriptIndexes::from_indexes(by_chr)));
+        let failure = ReadFailure::default();
+        let annotated = || {
+            let mut batch = parse_vcf_line("21\t1009\trs1\tT\tTGGG\t.\t.\t.", true).expect("parse");
+            batch.extend(parse_vcf_line("21\t1009\trs2\tT\tTGGG\t.\t.\t.", true).expect("parse"));
+            for variant in batch.iter_mut() {
+                annotate_one(variant, &resources, &failure);
+            }
+            apply_record_rules(&mut batch, None);
+            batch
+        };
+        let models = |variant: &InputVariant| -> Vec<String> {
+            variant
+                .transcript_consequences
+                .iter()
+                .map(|tc| tc.transcript_id().to_string())
+                .collect()
+        };
+        let config = |set: fn(&mut FilterConfig)| {
+            let mut config = FilterConfig::default();
+            set(&mut config);
+            config
+        };
+        let both = [
+            (0, "Transcript-assembly mismatch in rs1".to_string()),
+            (1, "Transcript-assembly mismatch in rs2".to_string()),
+        ];
+
+        // No record step: both rows are printed, each record draws once.
+        let batch = annotated();
+        assert_eq!(models(&batch[0]), ["NM_000001.1", "NM_000002.1"]);
+        assert_eq!(assembly_mismatches_drawn(&batch, &resources), both);
+
+        let mut batch = annotated();
+        crate::pick::apply_to_batch(&mut batch, &config(|c| c.pick = true));
+        assert_eq!(models(&batch[0]), ["NM_000002.1"]);
+        assert_eq!(models(&batch[1]), ["NM_000002.1"]);
+        let drawn = assembly_mismatches_drawn(&batch, &resources);
+        assert!(drawn.is_empty(), "{drawn:?}");
+
+        let mut batch = annotated();
+        crate::pick::apply_to_batch(&mut batch, &config(|c| c.flag_pick = true));
+        assert_eq!(models(&batch[0]), ["NM_000001.1", "NM_000002.1"]);
+        assert_eq!(assembly_mismatches_drawn(&batch, &resources), both);
+
+        let mut batch = annotated();
+        crate::pick::apply_to_batch(&mut batch, &config(|c| c.most_severe = true));
+        assert!(batch.iter().all(|v| v.transcript_consequences.is_empty()));
+        let drawn = assembly_mismatches_drawn(&batch, &resources);
+        assert!(drawn.is_empty(), "{drawn:?}");
+
+        let mut batch = annotated();
+        crate::pick::apply_to_batch(&mut batch, &config(|c| c.row_filters.coding_only = true));
+        assert_eq!(models(&batch[0]), ["NM_000001.1"]);
+        assert_eq!(assembly_mismatches_drawn(&batch, &resources), both);
+    }
+
+    /// The warnings a slice's records draw are reported in record order
+    /// whatever order the pass drew them in, as Ensembl VEP writes them while
+    /// it renders the buffer record by record (OutputFactory.pm:300-303); a
+    /// record's own keep the order it drew them in.
+    #[test]
+    fn record_warnings_come_out_in_record_order() {
+        let mut warnings = RecordWarnings::default();
+        warnings.push(2, "third record".to_string());
+        warnings.push(0, "first record, first".to_string());
+        warnings.push(1, "second record".to_string());
+        warnings.push(0, "first record, second".to_string());
+        warnings.push(1, "second record, later".to_string());
+        assert_eq!(
+            warnings.into_texts(),
+            [
+                "first record, first",
+                "first record, second",
+                "second record",
+                "second record, later",
+                "third record",
+            ]
+        );
+    }
+
     /// NEAREST is set on every record of the buffer (AnnotationType/Transcript.pm:170-174),
     /// a record whose only ALT is `*` included: it is annotated against nothing, yet
     /// Ensembl VEP writes its `nearest` beside the other record keys.
@@ -5256,8 +6624,9 @@ mod tests {
         assert_eq!(plain[0].nearest, None);
     }
 
-    /// A malformed shard must abort `annotate_batch` with an error, even under
-    /// parallel annotation.
+    /// A malformed shard must abort the batch's warm-up (`prewarm_chromosomes`,
+    /// which `warm_and_annotate_batch` runs before `annotate_batch`) with an
+    /// error, even under parallel annotation.
     ///
     /// This is the pre-warm loop's own test. Every other
     /// `annotate_batch` test builds its index with `from_indexes`, which pre-fills
@@ -5297,7 +6666,7 @@ mod tests {
         let mut batch =
             parse_vcf_line("21\t1300\trs1\tA\tG\t.\t.\t.", true).expect("parse test variant");
 
-        let err = annotate_batch(&mut batch, &resources, &pool, true, &stats, false)
+        let err = warm_and_annotate_batch(&mut batch, &resources, &pool, true, &stats, false)
             .expect_err("a truncated shard must abort the batch, not annotate as intergenic");
         let msg = format!("{err:#}");
         assert!(
@@ -5347,7 +6716,7 @@ mod tests {
         let mut batch =
             parse_vcf_line("21\t1300\trs1\tA\tG\t.\t.\t.", true).expect("parse test variant");
 
-        let err = annotate_batch(&mut batch, &resources, &pool, true, &stats, false)
+        let err = warm_and_annotate_batch(&mut batch, &resources, &pool, true, &stats, false)
             .expect_err("the pre-warm reads the corrupt region and ends the run");
         let line = CliError::from_run(&err);
         assert!(
@@ -5379,10 +6748,11 @@ mod tests {
         );
     }
 
-    /// Under `--check_frequency` the pipeline's filter stage pre-warms the batch
-    /// and co-locates it before annotation, so `annotate_batch` reads no
-    /// variation window of its own: with the filter set it annotates the batch
-    /// and never opens the corrupt region that ends the run above.
+    /// Under `--check_frequency` the pipeline's prefetch stage reads the batch's
+    /// variation windows and co-locates it before annotation, so `annotate_batch`
+    /// reads no variation window of its own: with the filter set it annotates a
+    /// batch handed over with nothing read ahead and never opens the corrupt
+    /// region that ends the run above.
     #[test]
     fn annotate_batch_reads_no_variation_window_under_the_frequency_filter() {
         let dir = write_json_cache("filtered_variation", &[("21", 1_000)]);
@@ -5422,8 +6792,16 @@ mod tests {
         let mut batch =
             parse_vcf_line("21\t1300\trs1\tA\tG\t.\t.\t.", true).expect("parse test variant");
 
-        annotate_batch(&mut batch, &resources, &pool, false, &stats, true)
-            .expect("no variation window is read");
+        annotate_batch(
+            &mut batch,
+            &resources,
+            &pool,
+            false,
+            &stats,
+            true,
+            BatchPrefetch::default(),
+        )
+        .expect("no variation window is read");
         assert!(batch[0].most_severe_consequence.is_some());
         assert!(batch[0].colocated_variants.is_empty());
         assert_eq!(stats.variants_processed.load(Ordering::Relaxed), 1);
@@ -5452,14 +6830,15 @@ mod tests {
             let stats = PipelineStats::new();
             let pool = build_thread_pool(1).unwrap();
             let mut batch = parse_vcf_line(bnd_line, true).expect("parse BND");
-            annotate_batch(&mut batch, &resources, &pool, false, &stats, false).expect("annotate");
+            warm_and_annotate_batch(&mut batch, &resources, &pool, false, &stats, false)
+                .expect("annotate");
             batch
                 .iter()
                 .map(|v| {
                     let mut ids: Vec<String> = v
                         .transcript_consequences
                         .iter()
-                        .map(|tc| tc.transcript_id.to_string())
+                        .map(|tc| tc.transcript_id().to_string())
                         .collect();
                     ids.sort();
                     ids
@@ -5575,7 +6954,7 @@ mod tests {
             for line in lines {
                 batch.extend(parse_vcf_line(line, true).expect("parse test variant"));
             }
-            annotate_batch(&mut batch, &resources, &pool, threads > 1, &stats, false)
+            warm_and_annotate_batch(&mut batch, &resources, &pool, threads > 1, &stats, false)
                 .expect("annotate");
             batch
                 .iter()
@@ -5585,7 +6964,7 @@ mod tests {
                             v.chr.to_string(),
                             v.start,
                             v.allele_string.clone(),
-                            tc.transcript_id.to_string(),
+                            tc.transcript_id().to_string(),
                             tc.consequences
                                 .iter()
                                 .map(|c| c.so_term())
@@ -5672,7 +7051,7 @@ mod tests {
         let ids: Vec<&str> = variant
             .transcript_consequences
             .iter()
-            .map(|tc| &*tc.transcript_id)
+            .map(|tc| tc.transcript_id())
             .collect();
         assert!(ids.contains(&"ENSTLOCAL"));
         assert!(ids.contains(&"ENSTMATE"));
@@ -5719,7 +7098,7 @@ mod tests {
 
         assert_eq!(variant.transcript_consequences.len(), 1);
         assert_eq!(
-            &*variant.transcript_consequences[0].transcript_id,
+            variant.transcript_consequences[0].transcript_id(),
             "ENSTLOCAL"
         );
     }
@@ -5766,7 +7145,7 @@ mod tests {
 
         assert_eq!(variant.transcript_consequences.len(), 1);
         assert_eq!(
-            &*variant.transcript_consequences[0].transcript_id,
+            variant.transcript_consequences[0].transcript_id(),
             "ENSTLOCAL"
         );
     }
@@ -5796,6 +7175,7 @@ mod tests {
             transcripts,
             variation_source: None,
             regulatory_source: None,
+            cell_types: None,
             sv_source: None,
             colocation: ColocationRules::default(),
             effects_config,
@@ -5806,6 +7186,8 @@ mod tests {
             synonyms: Arc::default(),
             nearest: None,
             frequency_filter: None,
+            warn_assembly_mismatch: true,
+            custom_sources: None,
         };
         let stats = PipelineStats::new();
 
@@ -5815,7 +7197,7 @@ mod tests {
         )
         .unwrap();
         let pool = build_thread_pool(1).unwrap();
-        annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
+        warm_and_annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
 
         let paired = batch.iter().find(|v| !v.is_single_breakend).unwrap();
         let single = batch.iter().find(|v| v.is_single_breakend).unwrap();
@@ -5823,12 +7205,12 @@ mod tests {
         let paired_ids: Vec<&str> = paired
             .transcript_consequences
             .iter()
-            .map(|tc| &*tc.transcript_id)
+            .map(|tc| tc.transcript_id())
             .collect();
         let single_ids: Vec<&str> = single
             .transcript_consequences
             .iter()
-            .map(|tc| &*tc.transcript_id)
+            .map(|tc| tc.transcript_id())
             .collect();
 
         assert!(!paired_ids.contains(&"ENSTLOCAL"));
@@ -5854,6 +7236,7 @@ mod tests {
             transcripts,
             variation_source: None,
             regulatory_source: None,
+            cell_types: None,
             sv_source: None,
             colocation: ColocationRules::default(),
             effects_config,
@@ -5864,6 +7247,8 @@ mod tests {
             synonyms: Arc::default(),
             nearest: None,
             frequency_filter: None,
+            warn_assembly_mismatch: true,
+            custom_sources: None,
         };
         let stats = PipelineStats::new();
 
@@ -5873,7 +7258,7 @@ mod tests {
         )
         .unwrap();
         let pool = build_thread_pool(1).unwrap();
-        annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
+        warm_and_annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
 
         let paired = batch.iter().find(|v| !v.is_single_breakend).unwrap();
         let single = batch.iter().find(|v| v.is_single_breakend).unwrap();
@@ -5881,11 +7266,11 @@ mod tests {
         assert_eq!(paired.transcript_consequences.len(), 1);
         assert_eq!(single.transcript_consequences.len(), 1);
         assert_eq!(
-            &*paired.transcript_consequences[0].transcript_id,
+            paired.transcript_consequences[0].transcript_id(),
             "ENSTLOCAL"
         );
         assert_eq!(
-            &*single.transcript_consequences[0].transcript_id,
+            single.transcript_consequences[0].transcript_id(),
             "ENSTLOCAL"
         );
     }
@@ -5912,6 +7297,7 @@ mod tests {
                 transcripts: Arc::new(LazyTranscriptIndexes::from_indexes(by_chr)),
                 variation_source: None,
                 regulatory_source: None,
+                cell_types: None,
                 sv_source: None,
                 colocation: ColocationRules::default(),
                 effects_config: Arc::new(vep_effects::EffectsConfig::default()),
@@ -5922,6 +7308,8 @@ mod tests {
                 synonyms: Arc::default(),
                 nearest: None,
                 frequency_filter: None,
+                warn_assembly_mismatch: true,
+                custom_sources: None,
             };
             let stats = PipelineStats::new();
             let mut batch = Vec::new();
@@ -5936,7 +7324,7 @@ mod tests {
                 .unwrap(),
             );
             let pool = build_thread_pool(1).unwrap();
-            annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
+            warm_and_annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
             batch
                 .iter()
                 .filter(|v| v.id.as_deref() == Some("big_bnd"))
@@ -5944,7 +7332,7 @@ mod tests {
                     let mut ids: Vec<String> = v
                         .transcript_consequences
                         .iter()
-                        .map(|tc| tc.transcript_id.to_string())
+                        .map(|tc| tc.transcript_id().to_string())
                         .collect();
                     ids.sort();
                     ids.dedup();
@@ -6047,14 +7435,14 @@ mod tests {
             let mut batch = parse_vcf_line("21\t1500\tsnv\tA\tG\t.\t.\t.", true).unwrap();
             let pool = build_thread_pool(1).unwrap();
             let stats = PipelineStats::new();
-            annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
+            warm_and_annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
             batch.remove(0)
         };
         let features = |variant: &InputVariant| -> Vec<String> {
             variant
                 .transcript_consequences
                 .iter()
-                .map(|tc| tc.transcript_id.to_string())
+                .map(|tc| tc.transcript_id().to_string())
                 .collect()
         };
 
@@ -6081,9 +7469,9 @@ mod tests {
     }
 
     /// A `<NON_REF>` record spanning a transcript yields no transcript row and one
-    /// `intergenic_variant` row over the block, rendered exactly as VEP renders the
-    /// record when its batch loads no cache region for it (`vep_skip`): the span
-    /// from POS+1 to END, the allele as written, no feature, `IMPACT=MODIFIER`.
+    /// `intergenic_variant` row over the block, where Ensembl VEP 116 drops the record
+    /// and writes no row unless `--dont_skip` keeps it (`docs/divergences/defect-c.md`):
+    /// the span from POS+1 to END, the allele as written, no feature, `IMPACT=MODIFIER`.
     #[test]
     fn test_annotate_batch_reference_block_over_transcript_is_one_intergenic_row() {
         let resources = resources_over(one_transcript_on_21("ENSTBLOCK", 1_000));
@@ -6091,7 +7479,7 @@ mod tests {
         let mut batch =
             parse_vcf_line("21\t1100\tblock\tA\t<NON_REF>\t.\t.\tEND=1900", true).unwrap();
         let pool = build_thread_pool(1).unwrap();
-        annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
+        warm_and_annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
 
         assert_eq!(batch.len(), 1);
         let block = &batch[0];
@@ -6177,7 +7565,7 @@ mod tests {
         let features: Vec<&str> = variant
             .transcript_consequences
             .iter()
-            .map(|tc| tc.transcript_id.as_ref())
+            .map(|tc| tc.transcript_id())
             .collect();
         assert!(
             features.contains(&"ENST_INSIDE"),
@@ -6203,7 +7591,7 @@ mod tests {
         let stats = PipelineStats::new();
         let mut batch = parse_vcf_line(line, true).unwrap();
         let pool = build_thread_pool(1).unwrap();
-        annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
+        warm_and_annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
         batch
     }
 
@@ -6252,10 +7640,7 @@ mod tests {
         assert_eq!(own.most_severe_consequence, None);
         let mate = &batch[1];
         assert_eq!(mate.transcript_consequences.len(), 1);
-        assert_eq!(
-            mate.transcript_consequences[0].transcript_id.as_ref(),
-            "ENSTMATE"
-        );
+        assert_eq!(mate.transcript_consequences[0].transcript_id(), "ENSTMATE");
         let rows = default_rows(&batch);
         assert_eq!(rows.lines().count(), 1);
         assert!(rows.starts_with("bnd_a\t21:101\tN[21:1000500[\tENSGTEST\tENSTMATE\tTranscript\t"));
@@ -6328,7 +7713,7 @@ mod tests {
             }
         }
         let pool = build_thread_pool(1).unwrap();
-        annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
+        warm_and_annotate_batch(&mut batch, &resources, &pool, false, &stats, false).unwrap();
         let verdicts: Vec<Option<Consequence>> =
             batch.iter().map(|v| v.most_severe_consequence).collect();
         assert_eq!(
@@ -6339,6 +7724,70 @@ mod tests {
                 Some(Consequence::FeatureTruncation),
                 None,
             ]
+        );
+    }
+
+    /// A breakend record whose own position lies in a regulatory feature and
+    /// whose mate reaches nothing is still intergenic: the regulatory row is no
+    /// transcript overlap, so the own allele keeps its regulatory row and its
+    /// intergenic companion row and the bracket allele gets its one
+    /// `intergenic_variant` row, as `IntergenicStructuralVariation` admits every
+    /// allele of the record. Once either position reaches a transcript the
+    /// record has no `IntergenicStructuralVariation`
+    /// (`StructuralVariationFeature.pm:679`), so the own allele's regulatory row
+    /// prints alone and its companion row goes.
+    #[test]
+    fn breakend_record_stays_intergenic_beside_a_regulatory_row() {
+        use vep_core::consequence::TranscriptConsequence;
+        let mut batch = Vec::new();
+        for mut v in parse_vcf_line(
+            "21\t100\tbnd_a\tN\tN[21:900500[\t.\t.\tSVTYPE=BND;MATEID=bnd_b",
+            true,
+        )
+        .unwrap()
+        {
+            v.input_record = 1;
+            batch.push(v);
+        }
+        assert_eq!(batch.len(), 2);
+        batch[0]
+            .transcript_consequences
+            .push(TranscriptConsequence {
+                feature_id: Some("ENSR1".into()),
+                feature_type: FeatureType::RegulatoryFeature,
+                consequences: smallvec::smallvec![Consequence::RegulatoryRegionVariant],
+                ..Default::default()
+            });
+        batch[0].intergenic_overlap = true;
+        batch[0].most_severe_consequence = Some(Consequence::RegulatoryRegionVariant);
+        apply_record_rules(&mut batch, None);
+        assert_eq!(
+            batch[0].most_severe_consequence,
+            Some(Consequence::RegulatoryRegionVariant)
+        );
+        assert!(batch[0].intergenic_overlap);
+        assert_eq!(
+            batch[1].most_severe_consequence,
+            Some(Consequence::IntergenicVariant)
+        );
+        // A transcript row on either allele makes the record genic.
+        batch[1]
+            .transcript_consequences
+            .push(TranscriptConsequence {
+                transcript: Some(Arc::new(Transcript {
+                    stable_id: "ENST1".into(),
+                    ..Transcript::default()
+                })),
+                consequences: smallvec::smallvec![Consequence::IntronVariant],
+                ..Default::default()
+            });
+        batch[1].most_severe_consequence = None;
+        apply_record_rules(&mut batch, None);
+        assert_eq!(batch[1].most_severe_consequence, None);
+        assert!(!batch[0].intergenic_overlap);
+        assert_eq!(
+            batch[0].most_severe_consequence,
+            Some(Consequence::RegulatoryRegionVariant)
         );
     }
 
@@ -6602,7 +8051,10 @@ mod tests {
         batch[0]
             .transcript_consequences
             .push(TranscriptConsequence {
-                transcript_id: "ENST1".into(),
+                transcript: Some(Arc::new(Transcript {
+                    stable_id: "ENST1".into(),
+                    ..Transcript::default()
+                })),
                 ..Default::default()
             });
         apply_record_rules(&mut batch, None);
@@ -6651,7 +8103,7 @@ mod tests {
         };
         let row =
             |id: &str, feature_type: FeatureType, consequence: Consequence| TranscriptConsequence {
-                transcript_id: id.into(),
+                feature_id: Some(id.into()),
                 feature_type,
                 consequences: std::iter::once(consequence).collect(),
                 ..Default::default()

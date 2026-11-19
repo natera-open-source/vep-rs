@@ -1,0 +1,39 @@
+entry = "edited_model_no_change_hgvsc"
+page = "docs/divergences/edited-model-no-change-hgvsc.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 19 of 77,601 cache transcripts · 1 flag set, 4 corpora"
+notes = "Two substitutions at the base NR_048535.1's alignment edited (`2023 2023 T`, so the model reads A on the forward strand where the genome reads C). The alternate equal to the edited base gets an HGVSc naming the base changed to itself from Ensembl VEP (hgvs_variant_notation compares it with the genome's base, TranscriptVariationAllele.pm:1508-1514 then respells both alleles from the model) and none from vep-rs; the alternate that differs gets the same notation from both. The BAM-edited cache turns the transcript's reference on, so USED_REF is the edited base on both rows."
+
+[input]
+format = "vcf"
+text = """
+21	42849245	edit_base	C	A	.	.	.
+21	42849245	other_alt	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "refseq"
+json_cache = "tests/golden/116/GRCh38-refseq/cache_root/homo_sapiens_refseq/116_GRCh38"
+fasta = "tests/golden/116/GRCh38-refseq/reference.fa.gz"
+
+[run]
+flags = ["--refseq", "--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = ["edit_base", "other_alt"], feature = "NR_048535.1" }
+columns = ["Allele", "cDNA_position", "GIVEN_REF", "USED_REF", "BAM_EDIT", "HGVSc"]
+
+[expected]
+ensembl_vep = [
+  "A | 2023 | C | A | OK | NR_048535.1:n.2023T>T",
+  "T | 2023 | C | A | OK | NR_048535.1:n.2023T>A",
+]
+vep_rs = [
+  "A | 2023 | C | A | OK | -",
+  "T | 2023 | C | A | OK | NR_048535.1:n.2023T>A",
+]

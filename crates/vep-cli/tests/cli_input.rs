@@ -373,6 +373,39 @@ fn input_data_string_is_annotated() {
     }
 }
 
+/// `vep --id rs781261918`, the idiom of `variant_recoder --id` (Config.pm:79
+/// declares `input_data|id`): the one-word string is read as an identifier
+/// list (`--format guess` detects the identifier format from the first line,
+/// Parser.pm) and resolved against the cache's variation files, so its rows
+/// are the rows the same identifier yields from a file under `--format id`.
+#[test]
+fn id_alias_with_an_identifier_string_detects_the_id_format() {
+    let dir = tempfile::tempdir().unwrap();
+    let id_cache = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/116/GRCh38-input-id/json_cache");
+    let id_cache = id_cache.to_str().unwrap();
+    let list = write(dir.path(), "ids.txt", b"rs781261918\n");
+    let run = |input: &[&str]| {
+        let out = output_path(dir.path());
+        let output = common::isolated_vep_anywhere()
+            .args(input)
+            .args(["-o", out.to_str().unwrap(), "--json_cache", id_cache])
+            .args(["--force_overwrite", "--no_stats", "--quiet"])
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{input:?}: {}", stderr(&output));
+        rows(&out)
+    };
+    let from_file = run(&["-i", list.to_str().unwrap(), "--format", "id"]);
+    assert!(from_file.len() > 1, "{from_file:?}");
+    assert!(
+        from_file.iter().all(|row| row.starts_with("rs781261918\t")),
+        "{from_file:?}"
+    );
+    assert_eq!(run(&["--id", "rs781261918"]), from_file);
+}
+
 /// The command-line header is `full_command` over the resolved flags
 /// (Config.pm:730-749): a flag of the `--config` file and one of a `VEP_*`
 /// variable print beside the command line's own, each under its long name,

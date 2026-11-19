@@ -16,11 +16,13 @@
 #   trace_perl_variant.sh --variant 21:26960070:G:A --assembly GRCh37
 #   trace_perl_variant.sh --vcf-line "21\t26960070\t.\tG\tA\t.\t.\t." --assembly GRCh37
 #   trace_perl_variant.sh --vcf-file "${VEP_VCF_DIR}/test.vcf" --variant-index 42 --assembly GRCh37
+#   trace_perl_variant.sh --variant IV:1000:A:G --species saccharomyces_cerevisiae --assembly R64-1-1
 
 set -euo pipefail
 
 # --- Defaults ---
 ASSEMBLY=""
+SPECIES="homo_sapiens"
 CACHE_DIR="${VEP_PERL_CACHE_DIR:-./.vep/cache}"
 REFERENCE_DIR="${VEP_PERL_REF_DIR:-./.vep/perl_reference}"
 WORK_DIR="${VEP_WORK_DIR:-./.vep/work}/perl_debug"
@@ -38,9 +40,9 @@ usage() {
 Run Perl VEP on a single variant with predicate-level trace output.
 
 Usage:
-  trace_perl_variant.sh --variant CHR:POS:REF:ALT --assembly GRCh37|GRCh38 [options]
-  trace_perl_variant.sh --vcf-line "CHR\tPOS\t.\tREF\tALT\t.\t.\t." --assembly GRCh37|GRCh38
-  trace_perl_variant.sh --vcf-file FILE --variant-index N --assembly GRCh37|GRCh38
+  trace_perl_variant.sh --variant CHR:POS:REF:ALT --assembly ASSEMBLY [options]
+  trace_perl_variant.sh --vcf-line "CHR\tPOS\t.\tREF\tALT\t.\t.\t." --assembly ASSEMBLY
+  trace_perl_variant.sh --vcf-file FILE --variant-index N --assembly ASSEMBLY
 
 Required (one of):
   --variant CHR:POS:REF:ALT       Variant in colon-separated format
@@ -48,10 +50,13 @@ Required (one of):
   --vcf-file FILE --variant-index N  Extract line N (0-based) from a VCF file
 
 Required:
-  --assembly GRCh37|GRCh38        Genome assembly
+  --assembly ASSEMBLY             Genome assembly, the cache slice's name after the version
+                                  (GRCh37, GRCh38, R64-1-1, ...)
 
 Optional:
-  --cache-dir DIR         Perl VEP cache root, the directory above homo_sapiens/, mounted as
+  --species NAME          Ensembl species, the cache slice's directory and VEP's --species
+                          (default: homo_sapiens)
+  --cache-dir DIR         Ensembl VEP cache root, the directory above <species>/, mounted as
                           --dir_cache (default: ${VEP_PERL_CACHE_DIR:-./.vep/cache})
   --reference-dir DIR     Unpatched Perl module directory (default: ${VEP_PERL_REF_DIR:-./.vep/perl_reference})
   --work-dir DIR          Working directory for temp files (default: ${VEP_WORK_DIR:-./.vep/work}/perl_debug)
@@ -85,6 +90,10 @@ while [[ $# -gt 0 ]]; do
 		ASSEMBLY="$2"
 		shift 2
 		;;
+	--species)
+		SPECIES="$2"
+		shift 2
+		;;
 	--cache-dir)
 		CACHE_DIR="$2"
 		shift 2
@@ -115,11 +124,16 @@ done
 
 # --- Validate arguments ---
 if [[ -z "${ASSEMBLY}" ]]; then
-	echo "ERROR: --assembly is required (GRCh37 or GRCh38)" >&2
+	echo "ERROR: --assembly is required (the cache slice's assembly, GRCh37, GRCh38, R64-1-1, ...)" >&2
 	exit 1
 fi
-if [[ "${ASSEMBLY}" != "GRCh37" && "${ASSEMBLY}" != "GRCh38" ]]; then
-	echo "ERROR: --assembly must be GRCh37 or GRCh38, got: ${ASSEMBLY}" >&2
+# The two are directory names under the cache root (CacheDir.pm:306-329 at release/116.2).
+if [[ ! "${ASSEMBLY}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+	echo "ERROR: --assembly must be an assembly name, got: ${ASSEMBLY}" >&2
+	exit 1
+fi
+if [[ ! "${SPECIES}" =~ ^[a-z][a-z0-9_]*$ ]]; then
+	echo "ERROR: --species must be an Ensembl species name (lower-case letters, digits and underscores), got: ${SPECIES}" >&2
 	exit 1
 fi
 
@@ -242,7 +256,7 @@ elif [[ -n "${VCF_FILE}" ]]; then
 fi
 
 echo "=== Perl VEP Predicate Trace ===" >&2
-echo "Variant: ${VARIANT_DESC} (${ASSEMBLY})" >&2
+echo "Variant: ${VARIANT_DESC} (${SPECIES} ${ASSEMBLY})" >&2
 echo "" >&2
 
 # --- Step 2: Patch Perl modules with TRACE warn() statements ---
@@ -591,7 +605,7 @@ docker run --rm \
 	-i /work/tmp/single_variant.vcf \
 	-o /work/tmp/output.txt \
 	--offline --dir_cache /opt/vep/.vep --cache_version 116 \
-	--assembly "${ASSEMBLY}" \
+	--species "${SPECIES}" --assembly "${ASSEMBLY}" \
 	--fork 1 --buffer_size 1 --force --no_stats \
 	2>"${STDERR_LOG}" || {
 	echo "ERROR: Perl VEP Docker run failed. Stderr:" >&2
@@ -599,12 +613,12 @@ docker run --rm \
 	exit 1
 }
 
-TRACE_COUNT="$(grep -c '^TRACE ' "${STDERR_LOG}" 2>/dev/null || echo 0)"
+TRACE_COUNT="$(grep -c '^TRACE ' "${STDERR_LOG}" 2>/dev/null)" || TRACE_COUNT=0
 echo "Captured ${TRACE_COUNT} TRACE lines." >&2
 echo "" >&2
 
 # --- Step 4: Parse and format trace output ---
-python3 - "${STDERR_LOG}" "${VEP_OUTPUT}" "${VARIANT_DESC}" "${ASSEMBLY}" <<'PYEOF'
+python3 - "${STDERR_LOG}" "${VEP_OUTPUT}" "${VARIANT_DESC}" "${ASSEMBLY}" "${SPECIES}" <<'PYEOF'
 """Parse Perl VEP TRACE output and VEP result into a structured report."""
 import sys
 import re
@@ -614,6 +628,7 @@ stderr_log = sys.argv[1]
 vep_output = sys.argv[2]
 variant_desc = sys.argv[3]
 assembly = sys.argv[4]
+species = sys.argv[5]
 
 # --- Parse TRACE lines from stderr ---
 # Format: TRACE [TAG] sub_name => value
@@ -682,7 +697,7 @@ for line in vep_lines:
 
 # --- Build the report ---
 print(f"=== Perl VEP Predicate Trace ===")
-print(f"Variant: {variant_desc} ({assembly})")
+print(f"Variant: {variant_desc} ({species} {assembly})")
 print()
 
 # --- VE predicate summary ---

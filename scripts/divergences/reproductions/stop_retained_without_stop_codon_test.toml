@@ -1,0 +1,30 @@
+entry = "stop_retained_without_stop_codon_test"
+page = "docs/divergences/stop-retained-without-stop-codon-test.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "1 · 137,713 per million · no flag needed"
+notes = "A deletion of six bases, 6:57193930-57193935, on ENST00000987744, a reverse-strand transcript of RAB23 whose stop codon is c.403-405 at 57193930-57193928. The span takes the last base of the intron before the exon that holds the stop codon, that exon's first four bases, c.399-402, and the stop codon's first base, c.403. Its first base on the transcript is an intron base, so the row's cDNA position is ?-1043 and its CDS position ?-403. Ensembl VEP's stop codon test returns before it edits anything for want of the cDNA start (VariationEffect.pm:1508), its caller reads the 0 as a stop codon kept (:1318), and the row carries stop_retained_variant. vep-rs writes the term only where the test is made and finds a stop codon behind unchanged residues; it writes coding_sequence_variant on this row. Every other column of the row is equal in the two engines."
+
+[input]
+format = "vcf"
+text = """
+6	57193929	1498654	TAAAAAC	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38/json_cache"
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = "1498654", feature = "ENST00000987744" }
+columns = ["Location", "Feature", "Consequence", "cDNA_position", "CDS_position", "Protein_position", "IMPACT"]
+
+[expected]
+ensembl_vep = ["6:57193930-57193935 | ENST00000987744 | splice_acceptor_variant,stop_retained_variant,NMD_transcript_variant | ?-1043 | ?-403 | ?-135 | HIGH"]
+vep_rs = ["6:57193930-57193935 | ENST00000987744 | splice_acceptor_variant,coding_sequence_variant,NMD_transcript_variant | ?-1043 | ?-403 | ?-135 | HIGH"]

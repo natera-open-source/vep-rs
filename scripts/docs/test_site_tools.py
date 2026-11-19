@@ -1,12 +1,14 @@
 """Tests for the site tooling in this directory, on fixtures the tests write: the mdBook preprocessor driven
-through its stdin protocol, the page metrics and their gate, the post-build finish with its two checks, the
-benchmark chart renderer, and the screenshot script's pure helpers. No test runs mdbook or a browser."""
+through its stdin protocol, the page metrics and their gate, the post-build finish with its three checks, the
+benchmark chart renderer, the home page's writer, and the screenshot script's pure helpers. No test runs mdbook or a
+browser."""
 
 from __future__ import annotations
 
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -18,9 +20,12 @@ ROOT = HERE.parent.parent
 sys.path.insert(0, str(HERE))
 import mdbook_repo_links as links
 import render_benchmark_chart as chart
+import render_home_page as home
+import render_release_figure as figure
 import site_metrics as metrics
 import site_postbuild as postbuild
 import site_screenshots as shots
+import test_render_release_figure as figure_records
 
 REPO_URL = "https://github.com/natera-open-source/vep-rs"
 EDIT_URL = f"{REPO_URL}/edit/main/"
@@ -307,6 +312,46 @@ def test_link_targets_are_rewritten_for_the_site(monkeypatch, capsys, tmp_path, 
     assert pages[GUIDE_PAGE] == f"See [it]({expected}).\n"
 
 
+@pytest.mark.parametrize(
+    ("target", "expected"),
+    [
+        ("../assets/figure.png", "../assets/figure.png"),
+        ("figure.png", "figure.png"),
+        ("../assets/figure.png#top", "../assets/figure.png#top"),
+        ("../../manuscript/figure.png", f"{REPO_URL}/blob/main/manuscript/figure.png"),
+        ("https://example.org/figure.png", "https://example.org/figure.png"),
+    ],
+    ids=["book-file", "beside-the-chapter", "book-file-fragment", "outside-the-book", "absolute-url"],
+)
+def test_image_under_the_book_source_stays_relative_to_its_chapter(monkeypatch, capsys, tmp_path, target, expected):
+    pages = preprocess(monkeypatch, capsys, repository(tmp_path), site_book(f"![Figure]({target})\n"))
+    assert pages[GUIDE_PAGE] == f"![Figure]({expected})\n"
+
+
+def test_link_to_a_book_file_that_is_no_chapter_opens_its_github_view_beside_an_image_of_it(monkeypatch, capsys, tmp_path):
+    page = 'See [the figure](../assets/figure.png) and ![Figure](../assets/figure.png "A title").\n'
+    pages = preprocess(monkeypatch, capsys, repository(tmp_path), site_book(page))
+    assert pages[GUIDE_PAGE] == (
+        f'See [the figure]({REPO_URL}/blob/main/docs/assets/figure.png) and ![Figure](../assets/figure.png "A title").\n'
+    )
+
+
+def test_image_of_a_readme_section_points_at_the_site_copy_from_every_page_that_shows_it(monkeypatch, capsys, tmp_path):
+    readme = (
+        "# Project\n\n## Results\n\n![The figure](docs/assets/figure.png)\n\n"
+        "A [linked ![badge](docs/assets/badge.svg)](docs/assets/figure.png) image.\n"
+    )
+    book = [chapter("index.md", STUB), chapter(GUIDE_PAGE, "<!-- readme-section: Results -->\n")]
+    pages = preprocess(monkeypatch, capsys, repository(tmp_path, readme), book)
+    view = f"{REPO_URL}/blob/main/docs/assets/figure.png"
+    assert pages[GUIDE_PAGE] == (
+        f"## Results\n\n![The figure](../assets/figure.png)\n\nA [linked ![badge](../assets/badge.svg)]({view}) image.\n"
+    )
+    assert pages["index.md"] == (
+        f"# Project\n\n## Results\n\n![The figure](assets/figure.png)\n\nA [linked ![badge](assets/badge.svg)]({view}) image.\n"
+    )
+
+
 def test_readme_link_points_at_the_home_page_when_the_readme_is_home(monkeypatch, capsys, tmp_path):
     pages = preprocess(monkeypatch, capsys, repository(tmp_path), site_book("See [it](../../README.md).\n"),
                        env={"VEP_RS_DOCS_README_HOME": "1"})
@@ -423,17 +468,42 @@ def test_without_the_gate_flag_a_violation_leaves_the_exit_status_zero(tmp_path)
     assert out.stdout.endswith("Gate: FAIL (4 violations on 1 of 1 pages)\n")
 
 
+def test_the_index_of_intended_divergences_has_a_ceiling_of_its_own(tmp_path):
+    """Every page is held to `WORD_CAP` prose words but the index of intended divergences, whose ceiling `WORD_CAPS` gives."""
+    assert metrics.WORD_CAP == 4000
+    assert metrics.WORD_CAPS == {"docs/intended-divergences.md": 4500}
+
+    def page(words):
+        """A page of `words` prose words: paragraphs of four 25-word sentences, then the rest as one sentence."""
+        sentence = " ".join(["word"] * 24) + " word."
+        paragraphs = [" ".join([sentence] * 4)] * (words // 100)
+        if words % 100:
+            paragraphs.append(" ".join(["word"] * (words % 100 - 1) + ["word."]))
+        return "# Page\n\n" + "\n\n".join(paragraphs) + "\n"
+
+    docs = docs_tree(tmp_path, {"intended-divergences.md": page(4500), "other.md": page(4000)})
+    out = measure_site(docs, "--gate")
+    assert out.returncode == 0, out.stdout
+    assert "| intended-divergences.md | 4,500 |" in out.stdout and "| other.md | 4,000 |" in out.stdout
+    (docs / "intended-divergences.md").write_text(page(4501), encoding="utf-8")
+    (docs / "other.md").write_text(page(4001), encoding="utf-8")
+    out = measure_site(docs, "--gate")
+    assert out.returncode == 1
+    assert "- intended-divergences.md: 4501 prose words, over 4500\n" in out.stdout
+    assert "- other.md: 4001 prose words, over 4000\n" in out.stdout
+
+
 VERSIONS = {
     "release": RELEASE,
     "channels": [{"name": RELEASE, "path": "/vep-rs/"}, {"name": "main", "path": "/vep-rs/main/"}],
 }
 
 
-def page_html(title, body):
+def page_html(title, body, book=f"vep-rs {RELEASE}"):
     return (
         "<!DOCTYPE html>\n<html>\n<head>\n"
-        f"<title>{title} - vep-rs {RELEASE}</title>\n</head>\n<body>\n"
-        f'<h1 class="menu-title">vep-rs {RELEASE}</h1>\n{body}\n</body>\n</html>\n'
+        f"<title>{title} - {book}</title>\n</head>\n<body>\n"
+        f'<h1 class="menu-title">{book}</h1>\n{body}\n</body>\n</html>\n'
     )
 
 
@@ -444,16 +514,23 @@ def redirect_html(destination):
     )
 
 
-def built_site(tmp_path, chart_release=RELEASE, redirect="guide/setup.html#step-2"):
-    """A built site of two reader pages, two redirect stubs, the two pages mdBook generates for printing and
-    not-found, and the benchmark chart; beside it the source tree whose README names the release."""
+HOME_PROSE = "The home page of the fixture site opens with a paragraph long enough to stand as its description."
+SETUP_PROSE = "The setup page of the fixture site opens with a paragraph of its own, as long as a description must be."
+OTHER_PROSE = "A third page of the fixture site opens with a paragraph that no other page of the site begins with."
+
+
+def built_site(tmp_path, chart_release=RELEASE, redirect="guide/setup.html#step-2", book=f"vep-rs {RELEASE}"):
+    """A built site of two reader pages, each with a title and an opening paragraph of its own, two redirect
+    stubs, the two pages mdBook generates for printing and not-found, and the benchmark chart; beside it the
+    source tree whose README names the release."""
     site = tmp_path / "book"
     (site / "guide").mkdir(parents=True)
     (site / "assets").mkdir()
-    edit = f'<a href="{EDIT_URL}docs/index.md">Edit</a>\n<h1 id="overview">Overview</h1>'
-    (site / "index.html").write_text(page_html("vep-rs", edit), encoding="utf-8")
+    edit = f'<a href="{EDIT_URL}docs/index.md">Edit</a>\n<h1 id="overview">Overview</h1>\n<p>{HOME_PROSE}</p>'
+    (site / "index.html").write_text(page_html("vep-rs", edit, book), encoding="utf-8")
     (site / "guide" / "setup.html").write_text(
-        page_html("Setup", '<h1 id="setup">Setup</h1>\n<h2 id="step-2">Step 2</h2>'), encoding="utf-8"
+        page_html("Setup", f'<h1 id="setup">Setup</h1>\n<p>{SETUP_PROSE}</p>\n<h2 id="step-2">Step 2</h2>', book),
+        encoding="utf-8",
     )
     (site / "old.html").write_text(redirect_html(redirect), encoding="utf-8")
     moved = redirect_html("guide/setup.html").replace(
@@ -511,8 +588,9 @@ def test_menu_title_is_demoted_and_a_title_repeating_the_book_name_collapses(mon
     assert postbuild.HOME_TAGLINE == "fast Ensembl VEP (Variant Effect Predictor) in Rust"
     assert f'<p class="menu-title">vep-rs {RELEASE}</p>' in index
     assert "<h1 class=" not in index
-    assert f"<title>vep-rs {RELEASE}: {postbuild.HOME_TAGLINE}</title>" in index
-    assert f"<title>Setup - vep-rs {RELEASE}</title>" in (site / "guide" / "setup.html").read_text(encoding="utf-8")
+    assert f"<title>vep-rs: {postbuild.HOME_TAGLINE}</title>" in index
+    assert "<title>Setup - vep-rs</title>" in (site / "guide" / "setup.html").read_text(encoding="utf-8")
+    assert "<title>Not found - vep-rs</title>" in (site / "404.html").read_text(encoding="utf-8")
 
 
 def test_preview_channel_marks_its_pages_and_writes_no_sitemap(monkeypatch, capsys, tmp_path):
@@ -548,13 +626,14 @@ PROSE = (
 )
 
 
-def described_page(title, body):
+def described_page(title, body, book=f"vep-rs {RELEASE}"):
     metas = "".join(
         f'<meta {attr} content="{BOOK_DESCRIPTION}">\n'
         for attr in ('name="description"', 'property="og:description"', 'name="twitter:description"')
     )
-    metas += '<meta property="og:title" content="vep-rs">\n'
-    return page_html(title, body).replace("</head>", metas + "</head>")
+    metas += f'<meta property="og:site_name" content="{book}">\n<meta property="og:title" content="vep-rs">\n'
+    metas += '<meta name="twitter:title" content="vep-rs">\n'
+    return page_html(title, body, book).replace("</head>", metas + "</head>")
 
 
 def test_each_page_gets_its_first_paragraph_of_prose_as_its_description(monkeypatch, capsys, tmp_path):
@@ -573,12 +652,16 @@ def test_each_page_gets_its_first_paragraph_of_prose_as_its_description(monkeypa
     assert expected.endswith("\u2026") and len(expected) <= postbuild.DESCRIPTION_MAX
     assert BOOK_DESCRIPTION not in index
     assert index.count(postbuild.html.escape(expected)) == 3
-    assert f'<meta property="og:title" content="vep-rs {RELEASE}: {postbuild.HOME_TAGLINE}">' in index
+    assert f'<meta property="og:title" content="vep-rs: {postbuild.HOME_TAGLINE}">' in index
+    assert f'<meta name="twitter:title" content="vep-rs: {postbuild.HOME_TAGLINE}">' in index
+    assert '<meta property="og:site_name" content="vep-rs">' in index
     record = json.loads(index.split('<script type="application/ld+json">')[1].split("</script>")[0])
     assert record["@type"] == "SoftwareApplication"
     assert record["softwareVersion"] == RELEASE.lstrip("v")
     assert record["description"] == expected
-    assert (site / "guide" / "setup.html").read_text(encoding="utf-8").count(BOOK_DESCRIPTION) == 3
+    setup = (site / "guide" / "setup.html").read_text(encoding="utf-8")
+    assert setup.count(BOOK_DESCRIPTION) == 3
+    assert '<meta property="og:site_name" content="vep-rs">' in setup
     code, out = finish(monkeypatch, capsys, site, "--source", str(source))
     assert code == 0, out
     assert (site / "index.html").read_text(encoding="utf-8") == index
@@ -586,12 +669,135 @@ def test_each_page_gets_its_first_paragraph_of_prose_as_its_description(monkeypa
 
 def test_preview_home_gets_the_tagline_but_no_json_ld(monkeypatch, capsys, tmp_path):
     site, source = built_site(tmp_path)
-    (site / "index.html").write_text(described_page("vep-rs", f"<main><p>{PROSE}</p></main>"), encoding="utf-8")
+    (site / "index.html").write_text(
+        described_page("vep-rs", f"<main><p>{PROSE}</p></main>", "vep-rs main"), encoding="utf-8"
+    )
     code, out = finish(monkeypatch, capsys, site, "--source", str(source), "--channel", "main", base=BASE + "main/")
     assert code == 0, out
     index = (site / "index.html").read_text(encoding="utf-8")
-    assert postbuild.HOME_TAGLINE in index
+    assert f"<title>vep-rs main: {postbuild.HOME_TAGLINE}</title>" in index
+    assert '<meta property="og:site_name" content="vep-rs main">' in index
     assert "application/ld+json" not in index
+
+
+def test_page_heads_line_counts_the_pages_a_reader_lands_on(monkeypatch, capsys, tmp_path):
+    site, source = built_site(tmp_path)
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    assert code == 0, out
+    assert "page heads: 2 pages, 0 titles shared, 0 descriptions shared, 0 on the book's description\n" in out
+    assert "WARNING" not in out
+
+
+def third_page_finding(monkeypatch, capsys, tmp_path, title, prose, counts, finding):
+    """Holds the post-build step, on each channel, to its finding over the fixture site plus `guide/other.html`:
+    a warning and exit status 0 on the release, a failure on the preview."""
+    for channel, name in ((None, "vep-rs"), ("main", "vep-rs main")):
+        book = name if channel else f"vep-rs {RELEASE}"
+        site, source = built_site(tmp_path / (channel or "release"), book=book)
+        (site / "guide" / "other.html").write_text(page_html(title, f"<p>{prose}</p>", book), encoding="utf-8")
+        extra = ("--channel", channel) if channel else ()
+        base = BASE + (f"{channel}/" if channel else "")
+        code, out = finish(monkeypatch, capsys, site, "--source", str(source), *extra, base=base)
+        assert f"page heads: 3 pages, {counts}\n" in out
+        assert f"{'ERROR' if channel else 'WARNING'}: [site_postbuild] {finding.format(name=name)}\n" in out
+        assert code == (1 if channel else 0)
+
+
+def test_a_title_two_pages_share_fails_the_preview_and_is_a_warning_on_the_release(monkeypatch, capsys, tmp_path):
+    third_page_finding(
+        monkeypatch, capsys, tmp_path, "Setup", OTHER_PROSE,
+        "1 titles shared, 0 descriptions shared, 0 on the book's description",
+        "title 'Setup - {name}' is on 2 pages: guide/other.html, guide/setup.html",
+    )
+
+
+def test_a_description_two_pages_share_fails_the_preview_and_is_a_warning_on_the_release(monkeypatch, capsys, tmp_path):
+    third_page_finding(
+        monkeypatch, capsys, tmp_path, "Other", SETUP_PROSE,
+        "0 titles shared, 1 descriptions shared, 0 on the book's description",
+        f"description {SETUP_PROSE!r} is on 2 pages: guide/other.html, guide/setup.html",
+    )
+
+
+def test_a_page_left_on_the_book_description_fails_the_preview_and_is_a_warning_on_the_release(
+    monkeypatch, capsys, tmp_path
+):
+    third_page_finding(
+        monkeypatch, capsys, tmp_path, "Other", "Too short to describe anything.",
+        "0 titles shared, 0 descriptions shared, 1 on the book's description",
+        "guide/other.html: no paragraph of 80 characters or more, so its description is the book's",
+    )
+
+
+def test_a_sitemap_that_does_not_list_as_many_pages_as_a_reader_lands_on_fails(monkeypatch, capsys, tmp_path):
+    site, source = built_site(tmp_path)
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    assert code == 0, out
+    reader_pages = {"index.html", "guide/setup.html"}
+    assert postbuild.check_page_heads(str(site), reader_pages, None) == []
+    sitemap = site / "sitemap.xml"
+    listed = sitemap.read_text(encoding="utf-8")
+    home = f"  <url><loc>{BASE}</loc></url>\n"
+    sitemap.write_text(listed.replace(home, ""), encoding="utf-8")
+    assert postbuild.check_page_heads(str(site), reader_pages, None) == ["sitemap.xml lists 1 pages, a reader lands on 2"]
+    sitemap.write_text(listed.replace(home, home + home), encoding="utf-8")
+    assert postbuild.check_page_heads(str(site), reader_pages, None) == ["sitemap.xml lists 3 pages, a reader lands on 2"]
+    sitemap.unlink()
+    assert postbuild.check_page_heads(str(site), reader_pages, None) == ["sitemap.xml lists 0 pages, a reader lands on 2"]
+    assert postbuild.check_page_heads(str(site), reader_pages, "main") == []
+
+
+FRAME = '<noscript>\n<iframe class="sidebar-iframe-outer" src="toc.html"></iframe>\n</noscript>'
+CHAPTERS = (
+    '<ol class="chapter"><li><a href="index.html" target="_parent">vep-rs</a></li>'
+    '<li><a href="guide/setup.html" target="_parent">Setup</a></li></ol>'
+)
+
+
+def test_home_page_lists_every_chapter_where_its_noscript_block_framed_the_list(monkeypatch, capsys, tmp_path):
+    site, source = built_site(tmp_path)
+    for page in (site / "index.html", site / "guide" / "setup.html"):
+        framed = page.read_text(encoding="utf-8").replace("<body>\n", f"<body>\n<nav>{FRAME}</nav>\n")
+        page.write_text(framed, encoding="utf-8")
+    (site / "toc.html").write_text(
+        f'<!DOCTYPE HTML>\n<html>\n<head></head>\n<body class="sidebar-iframe-inner">\n{CHAPTERS}\n</body>\n</html>\n',
+        encoding="utf-8",
+    )
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    assert code == 0, out
+    index = (site / "index.html").read_text(encoding="utf-8")
+    assert f'<nav><noscript>\n<div class="sidebar-scrollbox">{CHAPTERS}</div>\n</noscript></nav>' in index
+    assert "<iframe" not in index
+    assert f"<nav>{FRAME}</nav>" in (site / "guide" / "setup.html").read_text(encoding="utf-8")
+    assert "home page: 2 chapter links listed in its <noscript> block\n" in out
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    assert code == 0, out
+    assert (site / "index.html").read_text(encoding="utf-8") == index
+
+
+SUMMARY_CHAPTER = re.compile(r"\[(.+)\]\(([^()\s]+\.md)\)\s*$")
+
+
+def test_every_chapter_of_the_summary_has_a_title_of_its_own():
+    lines = (ROOT / "docs" / "SUMMARY.md").read_text(encoding="utf-8").splitlines()
+    names = [m[1] for m in map(SUMMARY_CHAPTER.search, lines) if m]
+    assert names
+    assert sorted({name for name in names if names.count(name) > 1}) == []
+
+
+def test_the_readme_opening_the_book_description_and_the_home_title_name_the_same_things():
+    paragraphs = (ROOT / "README.md").read_text(encoding="utf-8").split("\n\n")
+    opening = next(p for p in paragraphs if not p.startswith(("#", "[![")) and len(p) >= postbuild.DESCRIPTION_MIN)
+    book = re.search(r'^description = "(.*)"$', (ROOT / "book.toml").read_text(encoding="utf-8"), re.MULTILINE)
+    assert book, "book.toml has no description line"
+    texts = {
+        "the README's opening": opening[: postbuild.DESCRIPTION_MAX],
+        "book.toml's description": book[1],
+        "the home page's title": postbuild.HOME_TAGLINE,
+    }
+    for where, text in texts.items():
+        for name in ("Rust", "Ensembl", "Variant Effect Predictor"):
+            assert name in text, f"{where} does not name {name}: {text}"
 
 
 @pytest.mark.parametrize(
@@ -641,7 +847,7 @@ def test_readme_home_skips_the_chart_check_and_points_the_edit_link_at_the_readm
     site, source = built_site(tmp_path, chart_release="v1.2.2")
     code, out = finish(monkeypatch, capsys, site, "--source", str(source), readme_home="1")
     assert code == 0, out
-    assert "benchmark chart: not shown, the README is the home page; release check skipped\n" in out
+    assert "benchmark chart: the README is the home page; release check skipped\n" in out
     index = (site / "index.html").read_text(encoding="utf-8")
     assert f'<a href="{EDIT_URL}README.md">Edit</a>' in index
     assert "docs/index.md" not in index
@@ -892,3 +1098,661 @@ def test_summary_of_probe_files_prints_their_tables_without_playwright(monkeypat
     monkeypatch.setattr(sys, "argv", ["site_screenshots.py", "--summary", str(path)])
     shots.main()
     assert capsys.readouterr().out == f"## {path}\n\n{shots.summary_md(probe())}\n"
+
+
+HOME_README = f"# Project\n\n## Current release: {RELEASE}\n"
+PROVENANCE = "docs/concordance-provenance"
+POPULATION_RECORD = "first-population-v1.2.3.json"
+RELEASE_RECORD = "first-release-v1.2.3.json"
+PLUGIN_RECORD = "first-plugins-v1.2.3.json"
+HOME_IMAGE = "docs/assets/comparison.png"
+HOME_VALUES = "docs/assets/comparison.values.json"
+HOME_NOTE = "Measured on made-up machines."
+RELEASED_TOOL = ("vep-rs", "vep-rs", RELEASE)
+COMPARATOR_TOOL = ("fastvep", "fastVEP", "v9.8.7")
+REFERENCE_TOOL = ("ensembl-vep", "Ensembl VEP", "100.1")
+PANEL_A = "raw F1 per dataset"
+PANEL_B = "wall time per dataset and architecture"
+PANEL_C = "raw F1 per plugin"
+PANEL_D = "the plugins each tool reads"
+FOUR_PANELS = f"{PANEL_A}, {PANEL_B}, {PANEL_C} and {PANEL_D}"
+CHECK_REFUSAL = (
+    "ERROR: [render_home_page] docs/index.md line {} is not the line the records of v1.2.3 give; "
+    "scripts/docs/render_home_page.py writes the page"
+)
+
+
+def home_dataset(key="gnomad_v4.1_genomes", label="Cohort A v7, whole genome", variants=4321987, arm=(600, 20), x86=(900, 45)):
+    """A dataset of a population record, by default the one the page's first reason reads. `arm` and `x86` give
+    the wall-time sums of Ensembl VEP and of vep-rs on that architecture, or None where the record times neither."""
+    return {"dataset": key, "label": label, "variants": variants, "arm64": arm, "x86_64": x86}
+
+
+COHORT_B = home_dataset("cohort_b_genomes", "Cohort B, whole genome", 1234, arm=(500, 25), x86=(770, 35))
+HOME_DATASETS = (home_dataset(), COHORT_B)
+
+
+def home_population(datasets=HOME_DATASETS, release=RELEASE):
+    """A population record of the datasets, with one wall-time row per engine, dataset and architecture."""
+    def rows(engine):
+        return [
+            {"dataset": entry["dataset"], "arch": arch, "sum_of_cell_medians_sec": entry[arch][engine]}
+            for entry in datasets for arch in ("arm64", "x86_64") if entry[arch] is not None
+        ]
+
+    return {
+        "record": "population-measurements",
+        "release": release,
+        "datasets": [{key: entry[key] for key in ("dataset", "label", "variants")} for entry in datasets],
+        "wall_time": {"ensembl_vep": {"per_dataset": rows(0)}, "vep_rs": {"per_dataset": rows(1)}},
+    }
+
+
+def home_release(references=("100.1",), release=RELEASE):
+    """A release record with the two genome-wide ClinVar cells and one reference image per entry of
+    `references`, tagged `release_<entry>`."""
+    return {
+        "record": "release-addendum",
+        "release": release,
+        "perl_reference": {
+            f"family_{index}": {"image": f"registry.example/ensembl-vep:release_{reference}"}
+            for index, reference in enumerate(references, start=1)
+        },
+        "concordance": {"s01": {}, "s02": {}},
+    }
+
+
+def home_plugins(read, release=RELEASE):
+    """A plugin record whose support block of the released tool reads `read` plugins."""
+    return {
+        "record_type": "plugins",
+        "release": release,
+        "support": [{"engine": "vep-rs", "read": read}, {"engine": "fastvep", "read": 3}],
+    }
+
+
+def home_values(tools=(RELEASED_TOOL, COMPARATOR_TOOL, REFERENCE_TOOL), notes=(HOME_NOTE,), panels="abcd", image=HOME_IMAGE,
+                panel_notes=None):
+    """The values file of a release figure under every key the figure script writes: its tools as (id, name,
+    version), its notes, its panel ids and, for each panel id of `panel_notes`, that panel's note, beside the
+    caption and the alternative text of the README, which the page does not copy."""
+    panel_notes = panel_notes or {}
+    return {
+        "image": image,
+        "canvas": {"width_px": 100, "height_px": 125},
+        "alt_text": "The alternative text the README shows.",
+        "caption": "The caption the README shows.",
+        "notes": list(notes),
+        "sources": [],
+        "tools": [{"id": tool_id, "name": name, "version": version, "colour": "#000000"} for tool_id, name, version in tools],
+        "records": [],
+        "panels": [
+            {"id": panel, "title": f"Panel {panel}", "groups": []} | ({"note": panel_notes[panel]} if panel in panel_notes else {})
+            for panel in panels
+        ],
+    }
+
+
+def figure_tree(tmp_path):
+    """A made-up tree of one release whose records the figure script and the page's script both read, with the
+    figure's pair: the values file as the figure script's values layer writes it from those records, and made-up
+    image bytes beside it. Returns the tree and the values file's document."""
+    records = json.loads(json.dumps(figure_records.record_set()).replace('"pop_a"', '"gnomad_v4.1_genomes"'))
+    for record in records.values():
+        if record.get("record") == "population-measurements":
+            for entry in record["datasets"]:
+                entry["variants"] = 4321987
+    repo = tmp_path / "repo"
+    figure_records.write_records(repo / PROVENANCE, records)
+    (repo / "README.md").write_text(f"# Project\n\n## Current release: {figure_records.RELEASE}\n", encoding="utf-8")
+    figure.main(["--repo", str(repo), "--values-only"])
+    (repo / HOME_IMAGE).write_bytes(b"made-up image bytes")
+    return repo, json.loads((repo / HOME_VALUES).read_text(encoding="utf-8"))
+
+
+def home_tree(tmp_path, *, readme=HOME_README, datasets=HOME_DATASETS, references=("100.1",), plugins=None,
+              values=None, png=None, records=None):
+    """A made-up tree of the release `RELEASE` names: the README, a population record of `datasets` and a
+    release record of `references`; the plugin record when `plugins` gives the released tool's count; the
+    figure's values file when `values` gives it, with its image beside it unless `png` says otherwise.
+    `records` adds files to the provenance directory, and leaves out a file it gives as None."""
+    repo = tmp_path / "repo"
+    (repo / PROVENANCE).mkdir(parents=True)
+    (repo / "docs" / "assets").mkdir()
+    (repo / "README.md").write_text(readme, encoding="utf-8")
+    files = {POPULATION_RECORD: home_population(datasets), RELEASE_RECORD: home_release(references)}
+    if plugins is not None:
+        files[PLUGIN_RECORD] = home_plugins(plugins)
+    files.update(records or {})
+    for name, record in files.items():
+        if record is not None:
+            (repo / PROVENANCE / name).write_text(json.dumps(record), encoding="utf-8")
+    if values is not None:
+        (repo / HOME_VALUES).write_text(json.dumps(values), encoding="utf-8")
+    with_image = values is not None if png is None else png
+    if with_image:
+        (repo / HOME_IMAGE).write_bytes(b"made-up image bytes")
+    return repo
+
+
+def home_build(repo, template=None, registry=None):
+    """What the script builds for the tree, from the committed template and registry unless a test passes
+    its own."""
+    text = home.TEMPLATE.read_text(encoding="utf-8") if template is None else template
+    return home.build(repo, text, registry or home.REGISTRY)
+
+
+def home_page(repo, template=None, registry=None):
+    return home_build(repo, template, registry)[0]
+
+
+def home_reasons(page):
+    """The reasons of a page, one line each."""
+    return [line for line in page.splitlines() if line.startswith("- **")]
+
+
+def figure_paragraphs(alt, caption):
+    """The figure block as the paragraphs of a page: the image with its alternative text inside a link to the
+    site's own copy of it, then the caption."""
+    return [
+        '<figure class="home-figure">\n<a href="assets/comparison.png">',
+        f"![{alt}](assets/comparison.png)",
+        "</a>\n<figcaption>",
+        caption,
+        "</figcaption>\n</figure>",
+    ]
+
+
+def files_of(repo):
+    """Every file under the tree, with its bytes and the time of its last write."""
+    return {
+        path.relative_to(repo).as_posix(): (path.read_bytes(), path.stat().st_mtime_ns)
+        for path in repo.rglob("*") if path.is_file()
+    }
+
+
+def readme_row(readme, name):
+    """The second cell of the README table row whose first cell opens with `name` in bold, or None."""
+    found = re.search(rf"^\| \*\*{re.escape(name)}[^|\n]*\|([^|\n]*)\|", readme, re.MULTILINE)
+    return found.group(1) if found else None
+
+
+def test_the_committed_home_page_is_the_page_its_records_give(capsys):
+    assert (ROOT / "docs" / "index.md").read_bytes() == home_page(ROOT).encode("utf-8")
+    home.main(["--repo", str(ROOT), "--check"])
+    version = home.current_release(ROOT / "README.md")
+    assert capsys.readouterr().out == f"docs/index.md is the page the records of v{version} give\n"
+
+
+def test_the_committed_home_page_states_the_figures_of_the_readme_rows():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    page = (ROOT / "docs" / "index.md").read_text(encoding="utf-8")
+    speed, genome = readme_row(readme, "Speed vs Ensembl VEP"), readme_row(readme, "All of gnomAD v4.1")
+    if speed is None and genome is None:
+        pytest.skip("the README has neither the speed row nor the whole-genome row")
+    rows, stated = {}, {}
+    if speed is not None:
+        upper = re.findall(r" to (\d[\d,.]*)x per (?:population )?dataset", speed)
+        rows["speed number"] = [figure.replace(",", "") for figure in upper]
+        stated["speed number"] = [figure.replace(",", "") for figure in re.findall(r"(\d[\d,]*) times faster than Ensembl VEP", page)]
+    if genome is not None:
+        figures = r"(\d[\d,]*) variants\b.*?\b(\d[\d,]*) s on one ARM machine"
+        rows["first reason"] = re.findall(figures, genome)
+        stated["first reason"] = re.findall(figures, page)
+    assert all(rows.values())
+    assert stated == rows
+
+
+def test_check_passes_on_the_page_the_script_wrote_and_writes_nothing(capsys, tmp_path):
+    repo = home_tree(tmp_path, plugins=17, values=home_values())
+    home.main(["--repo", str(repo)])
+    written = files_of(repo)
+    assert "docs/index.md" in written
+    capsys.readouterr()
+    home.main(["--repo", str(repo), "--check"])
+    assert capsys.readouterr().out == "docs/index.md is the page the records of v1.2.3 give\n"
+    assert files_of(repo) == written
+
+
+def test_check_names_the_line_of_a_changed_digit_and_leaves_the_page_as_it_was(tmp_path):
+    repo = home_tree(tmp_path)
+    home.main(["--repo", str(repo)])
+    page = repo / "docs" / "index.md"
+    lines = page.read_text(encoding="utf-8").splitlines(keepends=True)
+    number = next(index for index, line in enumerate(lines, start=1) if "4,321,987 variants" in line)
+    lines[number - 1] = lines[number - 1].replace("4,321,987", "4,321,988")
+    changed = "".join(lines)
+    page.write_text(changed, encoding="utf-8")
+    with pytest.raises(SystemExit) as excinfo:
+        home.main(["--repo", str(repo), "--check"])
+    assert excinfo.value.code == CHECK_REFUSAL.format(number)
+    assert page.read_text(encoding="utf-8") == changed
+
+
+def test_check_names_the_last_line_of_a_page_without_it_or_without_its_newline(tmp_path):
+    repo = home_tree(tmp_path)
+    home.main(["--repo", str(repo)])
+    page = repo / "docs" / "index.md"
+    lines = page.read_text(encoding="utf-8").splitlines(keepends=True)
+    for held in ("".join(lines[:-1]), "".join(lines).removesuffix("\n")):
+        page.write_text(held, encoding="utf-8")
+        with pytest.raises(SystemExit) as excinfo:
+            home.main(["--repo", str(repo), "--check"])
+        assert excinfo.value.code == CHECK_REFUSAL.format(len(lines))
+        assert page.read_text(encoding="utf-8") == held
+
+
+def test_the_speed_number_is_the_largest_quotient_over_the_datasets_and_both_architectures(tmp_path):
+    repo = home_tree(tmp_path, datasets=(home_dataset(), {**COHORT_B, "x86_64": (2460, 60)}))
+    assert " runs up to 41 times faster than Ensembl VEP " in home_page(repo)
+    row = "wall_time.{}.per_dataset[dataset=cohort_b_genomes, arch=x86_64].sum_of_cell_medians_sec"
+    assert home_build(repo)[2]["speed-up"][2] == f"{row.format('ensembl_vep')} / {row.format('vep_rs')}"
+
+
+def test_a_half_rounds_up_in_the_speed_number_and_the_seconds_from_the_records_decimal_text(tmp_path):
+    # 1174.32 over 10.08 is 116.5 in decimal, and the quotient of the two doubles lies below it.
+    assert 1174.32 / 10.08 < 116.5
+    datasets = (home_dataset(arm=(1000, 12.5)), {**COHORT_B, "arm64": (1174.32, 10.08)})
+    page = home_page(home_tree(tmp_path, datasets=datasets))
+    assert " runs up to 117 times faster than Ensembl VEP " in page
+    assert home_reasons(page)[0].endswith(" annotates in 13 s on one ARM machine.")
+
+
+def test_the_variants_the_seconds_and_the_speed_number_carry_thousands_separators(tmp_path):
+    page = home_page(home_tree(tmp_path, datasets=(home_dataset(arm=(3086000, 1234.4)), COHORT_B)))
+    assert " runs up to 2,500 times faster than Ensembl VEP " in page
+    assert home_reasons(page)[0].endswith(", 4,321,987 variants, annotates in 1,234 s on one ARM machine.")
+
+
+def test_the_count_word_counts_the_population_datasets_and_the_two_clinvar_cells(tmp_path):
+    third = home_dataset("cohort_c_genomes", "Cohort C, whole genome", 56, arm=(300, 30), x86=(400, 40))
+    page = home_page(home_tree(tmp_path, datasets=(*HOME_DATASETS, third)))
+    assert home_reasons(page)[1].endswith(", on five whole-genome datasets.")
+
+
+def test_the_label_loses_its_whole_genome_ending(tmp_path):
+    page = home_page(home_tree(tmp_path))
+    assert home_reasons(page)[0].endswith(" All of Cohort A v7, 4,321,987 variants, annotates in 20 s on one ARM machine.")
+    assert ", whole genome" not in page
+
+
+def test_the_reference_release_is_the_image_tag_without_its_prefix(tmp_path):
+    page = home_page(home_tree(tmp_path, references=("100.1", "100.1")))
+    assert home_reasons(page)[1].endswith(" Release 100.1, on four whole-genome datasets.")
+    assert "release_" not in page
+
+
+@pytest.mark.parametrize(
+    ("values", "alt", "caption"),
+    [
+        (
+            {},
+            f"{HOME_NOTE} Four panels comparing vep-rs v1.2.3 and fastVEP v9.8.7 against Ensembl VEP 100.1: {FOUR_PANELS}.",
+            f"{HOME_NOTE} vep-rs v1.2.3 against Ensembl VEP 100.1, with fastVEP v9.8.7 as comparator.",
+        ),
+        (
+            {"tools": (RELEASED_TOOL, REFERENCE_TOOL)},
+            f"{HOME_NOTE} Four panels comparing vep-rs v1.2.3 against Ensembl VEP 100.1: {FOUR_PANELS}.",
+            f"{HOME_NOTE} vep-rs v1.2.3 against Ensembl VEP 100.1.",
+        ),
+        (
+            {"notes": ()},
+            f"Four panels comparing vep-rs v1.2.3 and fastVEP v9.8.7 against Ensembl VEP 100.1: {FOUR_PANELS}.",
+            "vep-rs v1.2.3 against Ensembl VEP 100.1, with fastVEP v9.8.7 as comparator.",
+        ),
+        (
+            {"notes": ("First.", "Second.")},
+            f"First. Second. Four panels comparing vep-rs v1.2.3 and fastVEP v9.8.7 against Ensembl VEP 100.1: {FOUR_PANELS}.",
+            "First. Second. vep-rs v1.2.3 against Ensembl VEP 100.1, with fastVEP v9.8.7 as comparator.",
+        ),
+        (
+            {"panel_notes": {"d": "Under the last panel.", "b": "Under the second panel."}},
+            (
+                f"{HOME_NOTE} Under the second panel. Under the last panel. Four panels comparing vep-rs v1.2.3 and "
+                f"fastVEP v9.8.7 against Ensembl VEP 100.1: {FOUR_PANELS}."
+            ),
+            (
+                f"{HOME_NOTE} Under the second panel. Under the last panel. vep-rs v1.2.3 against Ensembl VEP 100.1, "
+                "with fastVEP v9.8.7 as comparator."
+            ),
+        ),
+        (
+            {"panels": "b"},
+            f"{HOME_NOTE} One panel comparing vep-rs v1.2.3 and fastVEP v9.8.7 against Ensembl VEP 100.1: {PANEL_B}.",
+            f"{HOME_NOTE} vep-rs v1.2.3 against Ensembl VEP 100.1, with fastVEP v9.8.7 as comparator.",
+        ),
+        (
+            {"panels": "da"},
+            f"{HOME_NOTE} Two panels comparing vep-rs v1.2.3 and fastVEP v9.8.7 against Ensembl VEP 100.1: {PANEL_D} and {PANEL_A}.",
+            f"{HOME_NOTE} vep-rs v1.2.3 against Ensembl VEP 100.1, with fastVEP v9.8.7 as comparator.",
+        ),
+        (
+            {"notes": ("On *one* machine [made up].",), "tools": (RELEASED_TOOL, ("fastvep", "fast_VEP*", "v9.8.7"), REFERENCE_TOOL)},
+            (
+                "On \\*one\\* machine \\[made up\\]. Four panels comparing vep-rs v1.2.3 and fast\\_VEP\\* v9.8.7 against "
+                f"Ensembl VEP 100.1: {FOUR_PANELS}."
+            ),
+            "On \\*one\\* machine \\[made up\\]. vep-rs v1.2.3 against Ensembl VEP 100.1, with fast\\_VEP\\* v9.8.7 as comparator.",
+        ),
+    ],
+    ids=[
+        "one-comparator", "no-comparator", "no-notes", "two-notes", "panel-notes-after-the-notes", "one-panel",
+        "panels-in-the-file-order", "markup-escaped",
+    ],
+)
+def test_the_figure_block_is_composed_from_the_values_file(tmp_path, values, alt, caption):
+    page = home_page(home_tree(tmp_path, values=home_values(**values)))
+    assert page.split("\n\n")[3:9] == [*figure_paragraphs(alt, caption), "## Why vep-rs"]
+
+
+def test_the_page_is_built_from_the_values_file_the_figure_script_writes(tmp_path):
+    repo, document = figure_tree(tmp_path)
+    made_up = home_values(panel_notes={"d": "A note."})
+    assert set(made_up) == set(document)
+    assert [set(tool) for tool in made_up["tools"]] == [set(tool) for tool in document["tools"]]
+    assert [set(panel) for panel in made_up["panels"]] == [set(panel) for panel in document["panels"]]
+    released, comparator, reference = (f"{tool['name']} {tool['version']}" for tool in document["tools"])
+    note = next(panel["note"] for panel in document["panels"] if panel["id"] == "d")
+    lead = f"{released} against {reference}, with {comparator} as comparator."
+    alt = f"{note} Four panels comparing {released} and {comparator} against {reference}: {FOUR_PANELS}."
+    assert home_page(repo).split("\n\n")[3:9] == [*figure_paragraphs(alt, f"{note} {lead}"), "## Why vep-rs"]
+    # The page's own sentences on the figure open the sentences the figure script writes for the README.
+    assert document["notes"] == []
+    assert document["caption"].startswith(f"**{lead}** ")
+    assert document["alt_text"].startswith(f"Four panels comparing {released} and {comparator} against {reference}. ")
+    for panel_id, clause in zip("abcd", (PANEL_A, PANEL_B, PANEL_C, PANEL_D)):
+        assert f" ({panel_id}) {clause[0].upper()}{clause[1:]}" in document["caption"]
+
+
+def test_two_comparators_are_named_together_in_the_figure_block(tmp_path):
+    registry = tmp_path / "comparators.tsv"
+    registry.write_text(
+        "id\trole\trecord_keys\nvep-rs\treleased\tvep_rs\nfastvep\tcomparator\tfastvep\n"
+        "othervep\tcomparator\tothervep\nensembl-vep\treference\tensembl_vep\n",
+        encoding="utf-8",
+    )
+    tools = (RELEASED_TOOL, COMPARATOR_TOOL, ("othervep", "otherVEP", "v4.5.6"), REFERENCE_TOOL)
+    page = home_page(home_tree(tmp_path, values=home_values(tools=tools)), registry=registry)
+    assert page.split("\n\n")[3:9] == [
+        *figure_paragraphs(
+            (
+                f"{HOME_NOTE} Four panels comparing vep-rs v1.2.3, fastVEP v9.8.7 and otherVEP v4.5.6 against "
+                f"Ensembl VEP 100.1: {FOUR_PANELS}."
+            ),
+            f"{HOME_NOTE} vep-rs v1.2.3 against Ensembl VEP 100.1, with fastVEP v9.8.7 and otherVEP v4.5.6 as comparators.",
+        ),
+        "## Why vep-rs",
+    ]
+
+
+def test_a_tree_without_the_figure_pair_has_no_figure_block(tmp_path):
+    page = home_page(home_tree(tmp_path))
+    assert "<figure" not in page
+    assert "comparison.png" not in page
+    title, opening, second, following = page.split("\n\n")[:4]
+    assert title == "# vep-rs"
+    assert " runs up to 30 times faster than Ensembl VEP " in opening
+    assert second.startswith("It does the work of Ensembl VEP, ")
+    assert following == "## Why vep-rs"
+
+
+def test_the_paragraph_under_the_opening_says_what_the_tool_is_and_links_the_install_lines(tmp_path):
+    page = home_page(home_tree(tmp_path, plugins=17, values=home_values()))
+    second = page.split("\n\n")[2]
+    assert second.startswith("It does the work of Ensembl VEP, the Variant Effect Predictor: for each variant of a VCF file ")
+    assert "[Install](#install)" in second
+    assert "\n## Install\n" in page
+    assert page.count("Variant Effect Predictor") == 1
+    assert page.count("VCF") == 1
+
+
+@pytest.mark.parametrize(
+    ("tree", "message"),
+    [
+        (
+            {"png": True},
+            f"the tree holds {HOME_IMAGE} without {HOME_VALUES}; the page shows the figure from both",
+        ),
+        (
+            {"values": home_values(), "png": False},
+            f"the tree holds {HOME_VALUES} without {HOME_IMAGE}; the page shows the figure from both",
+        ),
+        (
+            {"values": home_values(tools=(("vep-rs", "vep-rs", "v1.2.2"), COMPARATOR_TOOL, REFERENCE_TOOL))},
+            f"{HOME_VALUES} draws vep-rs v1.2.2; the README names v1.2.3",
+        ),
+        (
+            {"values": home_values(image="docs/assets/other.png")},
+            f"{HOME_VALUES} names the image 'docs/assets/other.png'; the page shows {HOME_IMAGE}",
+        ),
+        (
+            {"values": home_values(panels="ae")},
+            f"{HOME_VALUES} holds the panel e, and home_page.template.md has no '<<panel e>>' clause",
+        ),
+        (
+            {"values": home_values(tools=(RELEASED_TOOL, ("othervep", "otherVEP", "v4.5.6"), REFERENCE_TOOL))},
+            f"{HOME_VALUES} tools[1] names othervep, which comparators.tsv does not list",
+        ),
+        (
+            {"records": {"second-population-v1.2.3.json": home_population()}},
+            (
+                f"2 files of {PROVENANCE} are the population record (record: population-measurements) of v1.2.3: "
+                "first-population-v1.2.3.json, second-population-v1.2.3.json"
+            ),
+        ),
+        (
+            {"records": {RELEASE_RECORD: None}},
+            f"no file of {PROVENANCE} is the release record (record: release-addendum) of v1.2.3",
+        ),
+        (
+            {"plugins": 17, "records": {"second-plugins-v1.2.3.json": home_plugins(18)}},
+            (
+                f"2 files of {PROVENANCE} are the plugin record (record_type: plugins) of v1.2.3: "
+                "first-plugins-v1.2.3.json, second-plugins-v1.2.3.json"
+            ),
+        ),
+        ({"readme": "# Project\n"}, "README.md has 0 '## Current release: vX.Y.Z' headings; one is read"),
+        (
+            {"readme": HOME_README + "\n## Current release: v1.2.2\n"},
+            "README.md has 2 '## Current release: vX.Y.Z' headings; one is read",
+        ),
+        (
+            {"datasets": (COHORT_B,)},
+            f"{PROVENANCE}/{POPULATION_RECORD} datasets holds no gnomad_v4.1_genomes",
+        ),
+        (
+            {"datasets": (home_dataset(), {**COHORT_B, "x86_64": None})},
+            f"{PROVENANCE}/{POPULATION_RECORD} wall_time.vep_rs.per_dataset has no row of cohort_b_genomes on x86_64",
+        ),
+        (
+            {"references": ("100.1", "100.2")},
+            f"{PROVENANCE}/{RELEASE_RECORD} perl_reference names the releases 100.1 and 100.2; the page names one",
+        ),
+    ],
+    ids=[
+        "image-without-values", "values-without-image", "figure-of-another-release", "another-image-path",
+        "panel-without-a-clause", "tool-outside-the-registry", "two-population-records", "no-release-record",
+        "two-plugin-records", "no-heading", "two-headings", "no-gnomad-dataset", "dataset-untimed-on-x86",
+        "two-reference-releases",
+    ],
+)
+def test_a_tree_the_page_cannot_be_written_from_is_refused_in_one_line(tmp_path, tree, message):
+    with pytest.raises(SystemExit) as excinfo:
+        home_page(home_tree(tmp_path, **tree))
+    assert excinfo.value.code == f"ERROR: [render_home_page] {message}"
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        (
+            "Reads <<plugins-read>> plugins<<if plugins>> of the support table<<end plugins>>.\n",
+            "home_page.template.md holds the place '<<plugins-read>>' outside its part, and this tree gives it no value",
+        ),
+        (
+            "Up to <<no-such-place>> times.\n",
+            "home_page.template.md holds the mark '<<no-such-place>>', which the script does not fill",
+        ),
+        (
+            "Up to <<speed-up>> times<<if no-such-part>> or more<<end no-such-part>>.\n",
+            "home_page.template.md names the part '<<if no-such-part>>', which the script does not know",
+        ),
+    ],
+    ids=["place-outside-its-part", "unknown-place", "unknown-part"],
+)
+def test_a_template_mark_the_tree_gives_no_value_is_refused_in_one_line(tmp_path, text, message):
+    with pytest.raises(SystemExit) as excinfo:
+        home_page(home_tree(tmp_path), template=f"<<page>>\n{text}")
+    assert excinfo.value.code == f"ERROR: [render_home_page] {message}"
+
+
+def test_a_template_of_another_text_is_filled_and_the_site_tokens_pass_through(tmp_path):
+    template = "<<page>>\nUp to <<speed-up>> times<<if plugins>> with plugins<<end plugins>> at {{vep-rs-ref}}.\n"
+    assert home_page(home_tree(tmp_path), template=template) == "Up to 30 times at {{vep-rs-ref}}.\n"
+
+
+def test_the_plugins_clause_states_the_plugins_the_released_tool_reads(tmp_path):
+    page = home_page(home_tree(tmp_path, plugins=17))
+    assert home_reasons(page)[1].endswith(", on four whole-genome datasets and [17 plugins](plugins.md#support-table).")
+
+
+def test_a_tree_without_a_plugin_record_of_the_release_has_no_plugins_clause(tmp_path):
+    without = home_page(home_tree(tmp_path / "without"))
+    assert home_reasons(without)[1].endswith(", on four whole-genome datasets.")
+    assert "plugins.md" not in without
+    other = home_tree(tmp_path / "other", records={"first-plugins-v1.2.2.json": home_plugins(9, release="v1.2.2")})
+    assert home_page(other) == without
+
+
+def test_values_prints_each_filled_place_with_its_file_and_key_and_writes_nothing(capsys, tmp_path):
+    repo = home_tree(tmp_path, plugins=17, values=home_values())
+    before = files_of(repo)
+    home.main(["--repo", str(repo), "--values"])
+    rows = [line.split("\t") for line in capsys.readouterr().out.splitlines()]
+    population, release, plugins = (f"{PROVENANCE}/{name}" for name in (POPULATION_RECORD, RELEASE_RECORD, PLUGIN_RECORD))
+    values = HOME_VALUES
+    seconds = "wall_time.{}.per_dataset[dataset=gnomad_v4.1_genomes, arch=arm64].sum_of_cell_medians_sec"
+    roles = "tools, by the role of each id in comparators.tsv"
+    assert rows[0] == ["place", "value", "file", "key", "rule"]
+    assert all(len(row) == 5 for row in rows)
+    assert {row[0]: row[1:4] for row in rows[1:]} == {
+        "if plugins": ["holds", "", ""],
+        "if figure": ["holds", "", ""],
+        "if one-comparator": ["holds", "", ""],
+        "if several-comparators": ["left out", "", ""],
+        "speed-up": ["30", population, f"{seconds.format('ensembl_vep')} / {seconds.format('vep_rs')}"],
+        "gnomad-label": ["Cohort A v7", population, "datasets[dataset=gnomad_v4.1_genomes].label"],
+        "gnomad-variants": ["4,321,987", population, "datasets[dataset=gnomad_v4.1_genomes].variants"],
+        "gnomad-arm-seconds": ["20", population, seconds.format("vep_rs")],
+        "reference-release": ["100.1", release, "perl_reference.*.image"],
+        "whole-genome-datasets": ["four", release, "concordance.s01, s02"],
+        "plugins-read": ["17", plugins, "support[engine=vep-rs].read"],
+        "figure-notes": [f"{HOME_NOTE} ", values, "notes, panels[].note"],
+        "released": ["vep-rs v1.2.3", values, roles],
+        "reference": ["Ensembl VEP 100.1", values, roles],
+        "comparators": ["fastVEP v9.8.7", values, roles],
+        "compared": ["vep-rs v1.2.3 and fastVEP v9.8.7", values, roles],
+        "panel-count": ["Four panels", values, "panels"],
+        "panels": [FOUR_PANELS, values, "panels[].id"],
+    }
+    assert files_of(repo) == before
+
+
+def test_values_prints_no_row_for_a_place_the_tree_leaves_out(capsys, tmp_path):
+    home.main(["--repo", str(home_tree(tmp_path)), "--values"])
+    assert [line.split("\t")[0] for line in capsys.readouterr().out.splitlines()[1:]] == [
+        "if plugins", "if figure", "if one-comparator", "if several-comparators",
+        "speed-up", "gnomad-label", "gnomad-variants", "gnomad-arm-seconds", "reference-release", "whole-genome-datasets",
+    ]
+
+
+def test_two_runs_on_one_tree_write_the_same_bytes(tmp_path):
+    repo = home_tree(tmp_path, plugins=17, values=home_values())
+    page = repo / "docs" / "index.md"
+    written = []
+    for seed in ("1", "2"):
+        subprocess.run(
+            [sys.executable, str(HERE / "render_home_page.py"), "--repo", str(repo)],
+            env={**os.environ, "PYTHONHASHSEED": seed},
+            check=True,
+            capture_output=True,
+        )
+        written.append(page.read_bytes())
+        page.unlink()
+    assert written[0] == written[1] == home_page(repo).encode("utf-8")
+
+
+def test_check_refuses_a_page_with_other_line_endings(tmp_path):
+    repo = home_tree(tmp_path)
+    home.main(["--repo", str(repo)])
+    page = repo / "docs" / "index.md"
+    page.write_bytes(page.read_bytes().replace(b"\n", b"\r\n"))
+    with pytest.raises(SystemExit) as excinfo:
+        home.main(["--repo", str(repo), "--check"])
+    assert excinfo.value.code == CHECK_REFUSAL.format(1)
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        (
+            "<<if figure>>Shows <<no-such-place>>.<<end figure>>\n",
+            "holds the mark '<<no-such-place>>', which the script does not fill",
+        ),
+        ("Up to <<speed-up>> times<<if plugins>> or more.\n", "holds '<<if plugins>>' without its pair"),
+    ],
+    ids=["unknown-place-in-a-part-left-out", "part-without-its-end"],
+)
+def test_a_template_mark_is_read_wherever_it_stands(tmp_path, text, message):
+    with pytest.raises(SystemExit) as excinfo:
+        home_page(home_tree(tmp_path), template=f"<<page>>\n{text}")
+    assert excinfo.value.code == f"ERROR: [render_home_page] home_page.template.md {message}"
+
+
+def test_a_note_that_is_not_one_line_is_refused(tmp_path):
+    repo = home_tree(tmp_path, values=home_values(notes=("Two\nlines.",)))
+    with pytest.raises(SystemExit) as excinfo:
+        home_page(repo)
+    assert excinfo.value.code == f"ERROR: [render_home_page] {HOME_VALUES} notes is not a list of lines"
+
+
+@pytest.mark.parametrize("note", ["Two\nlines.", 7], ids=["two-lines", "a-number"])
+def test_a_panel_note_that_is_not_one_line_is_refused(tmp_path, note):
+    repo = home_tree(tmp_path, values=home_values(panel_notes={"c": note}))
+    with pytest.raises(SystemExit) as excinfo:
+        home_page(repo)
+    assert excinfo.value.code == f"ERROR: [render_home_page] {HOME_VALUES} panels[2] note is not a line"
+
+
+def redirect_filter():
+    """The redirect filter of `build_release_site.sh`: the program the script feeds its third Python run."""
+    script = (HERE / "build_release_site.sh").read_text(encoding="utf-8")
+    body = script[script.index("\n", script.index('"$docs_ref" "$site_url" <<\'EOF\'')) + 1:]
+    return body[:body.index("\nEOF\n") + 1]
+
+
+def test_a_redirect_to_an_anchor_the_built_page_lacks_is_sent_to_the_page(tmp_path):
+    docs, site = tmp_path / "docs", tmp_path / "site"
+    (docs / SUB).mkdir(parents=True)
+    (site / SUB).mkdir(parents=True)
+    for page in ("index", f"{SUB}/setup"):
+        (docs / f"{page}.md").write_text("# Page\n", encoding="utf-8")
+    (site / "index.html").write_text('<h1 id="page">Page</h1>', encoding="utf-8")
+    (site / SUB / "setup.html").write_text('<h2 id="step-1">Step 1</h2>', encoding="utf-8")
+    toml = tmp_path / "book.toml"
+    table = (
+        "[output.html.redirect]\n"
+        f'"/index.html#first" = "{SUB}/setup.html#step-1"\n'
+        f'"/index.html#second" = "{SUB}/setup.html#step-2"\n'
+    )
+    toml.write_text(table, encoding="utf-8")
+    done = subprocess.run(
+        [sys.executable, "-", str(toml), str(docs), str(site), RELEASE, "/vep-rs/"],
+        input=redirect_filter(), capture_output=True, text=True, check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    assert done.stdout == (
+        f"redirect sent to the page, anchor not on the {RELEASE} page: /index.html#second -> {SUB}/setup.html#step-2\n"
+        "redirects kept: 2, dropped: 0, sent to the page: 1\n"
+    )
+    assert toml.read_text(encoding="utf-8") == table.replace("setup.html#step-2", "setup.html")

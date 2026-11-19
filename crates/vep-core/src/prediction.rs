@@ -83,7 +83,7 @@ pub enum PredictionTerm {
 
 impl PredictionTerm {
     /// The SIFT term for a category index, `None` past the four.
-    fn sift(index: usize) -> Option<Self> {
+    pub fn sift(index: usize) -> Option<Self> {
         [
             Self::Tolerated,
             Self::Deleterious,
@@ -95,7 +95,7 @@ impl PredictionTerm {
     }
 
     /// The PolyPhen term for a category index, `None` past the four.
-    fn polyphen(index: usize) -> Option<Self> {
+    pub fn polyphen(index: usize) -> Option<Self> {
         [
             Self::ProbablyDamaging,
             Self::PossiblyDamaging,
@@ -120,6 +120,35 @@ impl PredictionTerm {
             Self::PossiblyDamaging => "possibly_damaging",
             Self::Benign => "benign",
             Self::Unknown => "unknown",
+        }
+    }
+
+    /// The term as the database words it, before [`Self::label`] replaces its
+    /// spaces (`ProteinFunctionPredictionMatrix.pm` `$PREDICTION_TO_VAL`): the
+    /// spelling the run statistics count under a score-only `--sift s` or
+    /// `--polyphen s`, where `OutputFactory.pm` `add_sift_polyphen` logs the
+    /// term without rewriting it.
+    pub fn spaced_label(self) -> &'static str {
+        match self {
+            Self::Tolerated => "tolerated",
+            Self::Deleterious => "deleterious",
+            Self::ToleratedLowConfidence => "tolerated - low confidence",
+            Self::DeleteriousLowConfidence => "deleterious - low confidence",
+            Self::ProbablyDamaging => "probably damaging",
+            Self::PossiblyDamaging => "possibly damaging",
+            Self::Benign => "benign",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    /// The term's position among its tool's four categories, the index
+    /// [`Self::sift`] or [`Self::polyphen`] gives it.
+    pub fn tool_index(self) -> usize {
+        match self {
+            Self::Tolerated | Self::ProbablyDamaging => 0,
+            Self::Deleterious | Self::PossiblyDamaging => 1,
+            Self::ToleratedLowConfidence | Self::Benign => 2,
+            Self::DeleteriousLowConfidence | Self::Unknown => 3,
         }
     }
 }

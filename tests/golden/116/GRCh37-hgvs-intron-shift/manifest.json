@@ -1,0 +1,97 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh37",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "max_span": 1000000,
+ "flags": [
+  "--hgvs"
+ ],
+ "fasta": "../GRCh37-hgvs/reference.fa.gz",
+ "covers": [
+  "hgvs",
+  "hgvs-offset-field"
+ ],
+ "suites": {
+  "shift": {
+   "reference": "expected.default.out",
+   "input": "design-variants.vcf",
+   "rows": 30,
+   "combinations": 5
+  }
+ },
+ "combinations": {
+  "downstream_gene_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 3
+  },
+  "frameshift_variant,splice_region_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 15,
+   "exemplar_records": 3
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 3
+  },
+  "splice_acceptor_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  }
+ },
+ "variant_classes": {
+  "deletion": 20,
+  "insertion": 10
+ },
+ "records": [
+  {
+   "suite": "shift",
+   "vcf": "21\t47613087\texon_first_base_del\tAC\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "frameshift_variant,splice_region_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "shift",
+   "vcf": "21\t47613088\tintron_del_shifted_into_cds\tCC\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "shift",
+   "vcf": "21\t47613089\tintron_ins_shifted_into_cds\tC\tCC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant",
+    "splice_acceptor_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {},
+ "fields_compared": [
+  "HGVSc",
+  "HGVSp",
+  "HGVS_OFFSET"
+ ],
+ "field_divergences": [],
+ "field_divergence_summary": {}
+}

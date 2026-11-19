@@ -120,6 +120,7 @@ impl<R: BufRead> EnsemblParser<R> {
         };
         for variant in &mut variants {
             variant.strand = strand;
+            variant.input_position = start;
             variant.raw_input = Some(raw_input.clone());
             variant.input_line_name = Some(line_name.clone());
         }

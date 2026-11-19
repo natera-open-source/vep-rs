@@ -1,0 +1,33 @@
+entry = "region_minimal_uploaded_allele"
+page = "docs/divergences/region-input.md#uploaded_allele-of-a-region-record---minimal-trims"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the region input format (Ensembl VEP documentation, \"Data formats\", REST-style regions) and the --minimal and --uploaded_allele options; not seen in the measured datasets"
+notes = "The region record `NNN/NA`: --minimal trims it to `NN/A`, whose alleles still differ in length, so Ensembl VEP minimises it a second time and takes the trimmed string as the uploaded one; vep-rs keeps the string as parsed. The first of the page's notations (region before Ensembl-format, HGVS, SPDI and identifier)."
+
+[input]
+format = "region"
+text = """
+21:14221105-14221107/NA
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-input-region/json_cache"
+fasta = "tests/golden/116/GRCh38-identifiers/reference.fa.gz"
+chromosomes = ["21"]
+
+[run]
+flags = ["--minimal", "--uploaded_allele"]
+format = "default"
+
+[compare]
+kind = "field"
+field = "UPLOADED_ALLELE"
+where = { record = "21:14221105-14221107/NA", feature = "ENST00000400577" }
+
+[expected]
+ensembl_vep = ["NN/A"]
+vep_rs = ["NNN/NA"]

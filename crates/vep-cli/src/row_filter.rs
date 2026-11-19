@@ -241,7 +241,7 @@ pub fn affects_cds(
     if has_cds_coordinate || has_coding_term {
         return true;
     }
-    let translated = tc.cds_length.is_some();
+    let translated = tc.cds_length().is_some();
     let covers_feature = tc.feature_end > 0
         && tc.feature_start <= tc.feature_end
         && variant_start <= tc.feature_start
@@ -253,7 +253,9 @@ pub fn affects_cds(
 mod tests {
     use super::*;
     use smallvec::smallvec;
+    use std::sync::Arc;
     use vep_core::consequence::{ConsequenceList, Impact, OwnSpanPositions};
+    use vep_core::transcript::Transcript;
     use vep_io::output::fields::{self, FieldOptions};
     use vep_io::output::json::JsonOutputFormatter;
     use vep_io::output::vcf_output::VcfOutputFormatter;
@@ -267,14 +269,17 @@ mod tests {
         cds_position: Option<&str>,
         cds_length: Option<u32>,
     ) -> TranscriptConsequence {
+        let mut transcript = Transcript {
+            stable_id: id.into(),
+            gene_stable_id: "ENSG1".into(),
+            ..Transcript::default()
+        };
+        crate::runner::set_lengths(&mut transcript, cds_length, 900);
         TranscriptConsequence {
-            transcript_id: id.into(),
-            gene_id: "ENSG1".into(),
+            transcript: Some(Arc::new(transcript)),
             consequences,
             impact: Impact::MODIFIER,
             cds_position: cds_position.map(str::to_string),
-            cds_length,
-            cdna_length: 900,
             feature_start: 1000,
             feature_end: 5000,
             ..Default::default()
@@ -300,7 +305,7 @@ mod tests {
             .map(|(v, tc)| {
                 (
                     v.allele_index,
-                    tc.map_or("-".to_string(), |t| t.transcript_id.to_string()),
+                    tc.map_or("-".to_string(), |t| t.transcript_id().to_string()),
                 )
             })
             .collect()

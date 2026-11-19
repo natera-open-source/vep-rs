@@ -1,0 +1,32 @@
+entry = "refseq_edited_model_hgvsc_offset"
+page = "docs/divergences/refseq-edited-model-hgvsc.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 124 of 77,601 cache transcripts · 1 flag set, 4 corpora"
+notes = "A 31-base deletion over a COL18A1 donor site, shifted seven bases, on NM_030582.4, whose alignment deleted nine bases upstream; the intronic distance is counted from the unedited exon end."
+
+[input]
+format = "vcf"
+text = """
+21	45505272	rs2037126010	AGGCAGAGTAAGTCAGTGGGGAGTGGGCCCCG	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "refseq"
+json_cache = "tests/golden/116/GRCh38-refseq/cache_root/homo_sapiens_refseq/116_GRCh38"
+fasta = "tests/golden/116/GRCh38-refseq/reference.fa.gz"
+
+[run]
+flags = ["--refseq", "--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = "rs2037126010", feature = "NM_030582.4" }
+columns = ["cDNA_position", "REFSEQ_OFFSET", "BAM_EDIT", "HGVSc", "HGVS_OFFSET"]
+
+[expected]
+ensembl_vep = ["3548-? | -9 | OK | NM_030582.4:c.3546_3553+23del | 7"]
+vep_rs = ["3548-? | -9 | OK | NM_030582.4:c.3544+2_3544+32del | 7"]

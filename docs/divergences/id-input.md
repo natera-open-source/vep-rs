@@ -1,6 +1,6 @@
 # Identifier input resolved from the cache's variation files
 
-A difference in which identifiers resolve, on an input format no measured dataset uses; nothing is set aside.
+A difference in which identifiers resolve, on an input format no measured dataset uses; nothing is set aside. Ensembl VEP reads an identifier list (`--format id`) only with a database connection; vep-rs resolves it from the cache's variation files, where a structural variant name, a synonym or a subsnp identifier takes the `No variant found` warning.
 
 Ensembl VEP reads an identifier list (`--format id`) only with a database connection (`Parser/ID.pm` line 100, `Cannot use ID format in offline mode`). For each name it asks the variation database, failed variants included (lines 159-162, `fetch_by_name`, whose comparison is case-insensitive and falls back to the variant synonyms and, for `ss` names, the subsnp identifiers), then the structural variation database (lines 168-173). It makes one variation feature per genomic mapping of the variant it finds, on whatever sequence region the mapping lies, renamed to the identifier as written (lines 185-191).
 
@@ -21,3 +21,7 @@ Each resolved feature then goes through the record checks every format's records
 The empty-line warnings and the skip warnings carry Ensembl VEP's own line numbers: the list's lines are counted with empty lines and names the cache lacks, and every mapping of a name falls under the name's line (`Parser/ID.pm` line 148).
 
 The variant class of a resolved name (`--variant_class`, the JSON `variant_class`) is read from a different place. Ensembl VEP prints the class its database stores for the variation feature (`VariationFeature.pm` line 1117, `class_SO_term` computes one only when none is stored), which the import derived from the allele string as stored. So a feature stored un-minimised (`TTTTT/TTTTTT`) is an `indel` although the feature Ensembl VEP annotates is its minimised `-/T`. The variation files carry no class, so vep-rs derives it from the stored allele string before minimisation, by the same derivation; the two differ only for a feature whose stored class is not that derivation.
+
+The VCF line of a resolved COSMIC or HGMD identifier comes from a different place too. Its stored alleles are the word `COSMIC_MUTATION` or `HGMD_MUTATION`, so under `--vcf` vep-rs builds the line of such an allele string. POS moves one base back, REF is the base before the position (from `--fasta`, else `N`) and ALT is the word in angle brackets: `21 10521607 COSV107315996 N <COSMIC_MUTATION>`.
+
+Ensembl VEP, which reads the format with a database alone, keys that line on the class its database stores for the variant (`VariationFeature.pm` lines 2355-2371). An `indel` gives the same line. An SNV gives `N` as the alternate at the position, a deletion the anchor base alone as the alternate, an insertion `<INS>`; any other class gives no columns at all, so the record prints seven `.` columns before the annotation.

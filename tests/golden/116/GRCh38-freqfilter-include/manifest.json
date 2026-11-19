@@ -272,7 +272,1145 @@
     "freq_freq",
     "freq_gt_lt",
     "freq_filter"
-   ]
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000334352",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000399973",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000399975",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000399976",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000474835",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant,non_coding_transcript_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000608809",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "upstream_gene_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885881",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885882",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885883",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885884",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885885",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885886",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885887",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885888",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885889",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885890",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885891",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885892",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885893",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000885894",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000928000",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000928001",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000928002",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000928003",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000928004",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000928005",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000952481",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000952482",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000952483",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000952484",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000952485",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000952486",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000952487",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000952488",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000952489",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00000952490",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "5_prime_UTR_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00001002023",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00001002024",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00001002025",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00001002026",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "upstream_gene_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00001033917",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00001033918",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00001067786",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00001067787",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00001067788",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "NMD_transcript_variant,intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00001113008",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:29025626",
+     "allele": "G",
+     "feature": "ENST00001131839",
+     "feature_type": "Transcript",
+     "record_indices": [
+      3
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000400304",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000400305",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000400308",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000400309",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000400310",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000400314",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000449640",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000468429",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "non_coding_transcript_exon_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000475402",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "upstream_gene_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000626237",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "upstream_gene_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000681687",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000909830",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000909831",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000909832",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000909833",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000909834",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000922168",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000922169",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000965783",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000965784",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "intron_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000965785",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000965786",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00000991458",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024327",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024328",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024329",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024330",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024331",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024332",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024333",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024334",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024335",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024336",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024337",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024338",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024339",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001024341",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001064418",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001064419",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    },
+    {
+     "location": "21:45914006",
+     "allele": "C",
+     "feature": "ENST00001131515",
+     "feature_type": "Transcript",
+     "record_indices": [
+      16
+     ],
+     "vep_rs_consequence_sets": [
+      "missense_variant"
+     ],
+     "expected_divergence": "frequency_filter_zero_value"
+    }
+   ],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {
+    "frequency_filter_zero_value": 87
+   }
   }
  ],
  "divergences": [],

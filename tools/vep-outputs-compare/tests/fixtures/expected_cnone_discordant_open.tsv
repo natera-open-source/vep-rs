@@ -1,0 +1,13 @@
+file_name	source	location	allele	feature	feature_type	consequence_set
+sample_a.txt	missing_in_rust	21:30000	T	TRANS001	Transcript	intron_variant
+sample_a.txt	missing_in_rust	21:50000	A	TRANS004	Transcript	synonymous_variant
+sample_a.txt	missing_in_rust	KI270728.1:100	A	TRANS009	Transcript	intron_variant
+sample_a.txt	extra_in_rust	21:100000	T	TRANS009	Transcript	downstream_gene_variant
+sample_a.txt	extra_in_rust	21:30000	T	TRANS001	Transcript	intron_variant,splice_polypyrimidine_tract_variant
+sample_b.txt	missing_in_rust	22:1000	A	TRANS010	Transcript	coding_transcript_variant
+sample_b.txt	missing_in_rust	22:2000	C	TRANS010	Transcript	frameshift_variant,stop_gained
+sample_b.txt	missing_in_rust	22:3000	T	TRANS010	Transcript	intron_variant,splice_region_variant
+sample_b.txt	extra_in_rust	22:1000	A	TRANS010	Transcript	NMD_transcript_variant
+sample_b.txt	extra_in_rust	22:1000000-20000000	deletion	TRANS013	Transcript	transcript_ablation
+sample_b.txt	extra_in_rust	22:2000	C	TRANS010	Transcript	frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained
+sample_b.txt	extra_in_rust	22:3000	T	TRANS010	Transcript	intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant

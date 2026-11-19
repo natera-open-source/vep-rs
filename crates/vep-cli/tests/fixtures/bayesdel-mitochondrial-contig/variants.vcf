@@ -1,0 +1,4 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+MT	3555	scored	T	A	.	.	.
+MT	3574	no_row	C	T	.	.	.

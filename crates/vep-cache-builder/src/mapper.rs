@@ -160,6 +160,7 @@ mod tests {
             phase,
             protein_id: None,
             protein_version: None,
+            line: 1,
         }
     }
 

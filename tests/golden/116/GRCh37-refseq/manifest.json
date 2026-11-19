@@ -1,0 +1,617 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh37",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 1,
+ "max_span": 1000000,
+ "cache_cost_flank": 5000,
+ "flags": [
+  "--grch37",
+  "--refseq"
+ ],
+ "fasta": "reference.fa.gz",
+ "covers": [
+  "refseq",
+  "cache-refseq-merged-tarballs",
+  "info-bam",
+  "bam-edit-status-rna-edit",
+  "use_transcript_ref",
+  "given-ref-used-ref-columns"
+ ],
+ "suites": {
+  "gnomad_v2.1.1_chr21": {
+   "reference": "gnomad_v2.1.1_chr21.reference.txt",
+   "input": "gnomad_v2.1.1_chr21.candidates.vcf",
+   "rows": 41396,
+   "combinations": 28
+  },
+  "1kg_integrated_chr21": {
+   "reference": "1kg_integrated_chr21.reference.txt",
+   "input": "1kg_integrated_chr21.candidates.vcf",
+   "rows": 75631,
+   "combinations": 29
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 6762,
+   "exemplar_records": 4
+  },
+  "5_prime_UTR_variant": {
+   "observed_rows": 444,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,splice_region_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 7712,
+   "exemplar_records": 2
+  },
+  "frameshift_variant": {
+   "observed_rows": 21,
+   "exemplar_records": 1
+  },
+  "inframe_deletion": {
+   "observed_rows": 39,
+   "exemplar_records": 2
+  },
+  "inframe_insertion": {
+   "observed_rows": 26,
+   "exemplar_records": 1
+  },
+  "intergenic_variant": {
+   "observed_rows": 17762,
+   "exemplar_records": 9
+  },
+  "intron_variant": {
+   "observed_rows": 57836,
+   "exemplar_records": 3
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 15831,
+   "exemplar_records": 5
+  },
+  "intron_variant,non_coding_transcript_variant,splice_donor_region_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 4,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "intron_variant,non_coding_transcript_variant,splice_region_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_donor_5th_base_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_donor_region_variant": {
+   "observed_rows": 12,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_polypyrimidine_tract_variant": {
+   "observed_rows": 94,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant": {
+   "observed_rows": 55,
+   "exemplar_records": 1
+  },
+  "intron_variant,splice_region_variant": {
+   "observed_rows": 19,
+   "exemplar_records": 1
+  },
+  "missense_variant": {
+   "observed_rows": 1728,
+   "exemplar_records": 1
+  },
+  "missense_variant,splice_region_variant": {
+   "observed_rows": 29,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 1934,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant,splice_region_variant": {
+   "observed_rows": 19,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_variant,splice_acceptor_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_variant,splice_donor_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 1
+  },
+  "protein_altering_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "splice_donor_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "splice_region_variant,stop_gained": {
+   "observed_rows": 3,
+   "exemplar_records": 1
+  },
+  "splice_region_variant,synonymous_variant": {
+   "observed_rows": 43,
+   "exemplar_records": 1
+  },
+  "start_lost": {
+   "observed_rows": 8,
+   "exemplar_records": 1
+  },
+  "stop_gained": {
+   "observed_rows": 47,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 1128,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 5440,
+   "exemplar_records": 1
+  }
+ },
+ "variant_classes": {
+  "deletion": 7,
+  "insertion": 6,
+  "mnv_or_complex": 4,
+  "snv": 29,
+  "symbolic_Alu_insertion": 1,
+  "symbolic_LINE1_insertion": 1,
+  "symbolic_SVA_insertion": 1,
+  "symbolic_copy_number_variation": 1,
+  "symbolic_duplication": 2
+ },
+ "family_columns": [
+  "REFSEQ_MATCH=",
+  "BAM_EDIT=",
+  "REFSEQ_OFFSET",
+  "GIVEN_REF/USED_REF"
+ ],
+ "family_strata": {
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=-;deletion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=-;insertion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=-;mnv_or_complex": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=-;snv": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=-;symbolic_Alu_insertion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=-;symbolic_LINE1_insertion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=-;symbolic_SVA_insertion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=-;symbolic_copy_number_variation": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=-;symbolic_duplication": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=differ;deletion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=same;deletion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=same;insertion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=same;mnv_or_complex": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=-;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=same;snv": 20,
+  "REFSEQ_MATCH=-;BAM_EDIT=OK;REFSEQ_OFFSET+;GIVEN_REF/USED_REF=-;insertion": 2,
+  "REFSEQ_MATCH=-;BAM_EDIT=OK;REFSEQ_OFFSET+;GIVEN_REF/USED_REF=differ;deletion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=OK;REFSEQ_OFFSET+;GIVEN_REF/USED_REF=same;deletion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=OK;REFSEQ_OFFSET+;GIVEN_REF/USED_REF=same;mnv_or_complex": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=OK;REFSEQ_OFFSET+;GIVEN_REF/USED_REF=same;snv": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=OK;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=-;insertion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=OK;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=-;symbolic_duplication": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=OK;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=differ;deletion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=OK;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=same;deletion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=OK;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=same;insertion": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=OK;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=same;mnv_or_complex": 1,
+  "REFSEQ_MATCH=-;BAM_EDIT=OK;REFSEQ_OFFSET-;GIVEN_REF/USED_REF=same;snv": 7
+ },
+ "records": [
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t14433210\t.\tA\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_donor_region_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t15460673\t.\tTTAA\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t15467902\t.\tG\t<CN2>\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t15746372\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t15942342\t.\tA\t<CN2>\t.\t.\t.",
+   "combinations": [
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t15954458\t.\tC\tT\t.\t.\t.",
+   "combinations": [
+    "splice_region_variant,stop_gained"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t16248561\trs1039168992\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t17518661\t.\tA\tAG\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t19766908\trs1381414376\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,splice_donor_5th_base_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t20605541\t.\tG\tGT,GTT\t.\t.\t.",
+   "combinations": [],
+   "strata": [
+    "multi_allelic_indel"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t21508430\t.\tT\t<INS:ME:ALU>\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t22437876\t.\tT\tC,G\t.\t.\t.",
+   "combinations": [],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t24883395\t.\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t25380438\t.\tA\tAT\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t26177912\t.\tT\t<INS:ME:LINE1>\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t26796962\t.\tC\tG\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_variant,splice_acceptor_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t30380626\t.\tC\tT\t.\t.\t.",
+   "combinations": [
+    "splice_region_variant,synonymous_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t32452000\t.\tC\t<INS:ME:SVA>\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t33603622\t.\tT\t<CN0>,<CN2>\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t33709712\trs1254497640\tC\tT\t.\t.\t.",
+   "combinations": [
+    "splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t34540826\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t34681699\t.\tG\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t35468028\trs766375586\tCCTTGTT\tC\t.\t.\t.",
+   "combinations": [
+    "inframe_deletion"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t35470041\trs1007925714\tAG\tA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t35791731\t.\tC\tG\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t35995885\t.\tAT\tA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t37408552\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t37771805\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,splice_polypyrimidine_tract_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t38016566\t.\tA\tTT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t38139512\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t38596826\trs1282668069\tGTCTC\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t38639535\trs1232890876\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,splice_donor_region_variant"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t38639593\trs1422602029\tC\tT\t.\t.\t.",
+   "combinations": [
+    "start_lost"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t38896575\t.\tTA\tTAA,T\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t39345715\t.\tT\tC,TAC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t39494763\trs910039234\tG\tA\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_variant,splice_donor_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t39960821\t.\tTA\tAA,T\t.\t.\t.",
+   "combinations": [
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t40349379\t.\tA\tG\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t40554992\trs1465178390\tG\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t43166934\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t43896001\t.\tA\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t44323720\t.\tC\tT\t.\t.\t.",
+   "combinations": [
+    "stop_gained"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t44345584\t.\tC\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t44370567\trs1217076968\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t44560938\t.\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant,splice_polypyrimidine_tract_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t45061972\t.\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t45441950\t.\tA\tAT,G\t.\t.\t.",
+   "combinations": [],
+   "strata": [
+    "multi_allelic_indel_trimmable"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t45901196\trs1305754101\tC\tA\t.\t.\t.",
+   "combinations": [
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t45941455\t.\tCG\tCGG,TG,C\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t46020741\trs782599977\tC\tCAGG\t.\t.\t.",
+   "combinations": [
+    "protein_altering_variant"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t46020987\t.\tTGCCAGCAGGCCTGCTGTGTGCCCATCTGCTGCAAGCCTGTCTGCTCTGGGATTTCCTCTTCGTGCTGCCAGCAGTCTAGCTGTGTGAGCTGTGTGTCCAGCCCCTGCTGCCAGGCGGTCTGTGAGCCCAGCCCCTGCCAATCAGGCTGCATCAGCTCCTGCACGCCCTCGTGCTGCCAGCAGTCTAGCTGCCAGCCGGCTTGCTGCACCTCCTCCCCC\tT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t46021521\trs782070127\tT\tTGCGCCCCCACCTCCTCCTGCC\t.\t.\t.",
+   "combinations": [
+    "inframe_insertion"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t46275127\trs769596172\tT\tC\t.\t.\t.",
+   "combinations": [
+    "missense_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "1kg_integrated_chr21",
+   "vcf": "21\t46758927\t.\tAT\tATT,A\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "gnomad_v2.1.1_chr21",
+   "vcf": "21\t46888308\trs1191732671\tCTCT\tC\t.\t.\t.",
+   "combinations": [
+    "inframe_deletion"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 1,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "cache_layout": "ensembl",
+ "reference_warnings": [
+  "Transcript-assembly mismatch in rs1191732671"
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

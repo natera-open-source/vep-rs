@@ -1,0 +1,38 @@
+entry = "non_integer_end_annotated"
+page = "docs/divergences/defect-k.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the VCF 4.2 specification in one shape, an END written with leading zeros or a plus sign, which the entry's page calls the same shape without the arithmetic (Ensembl VEP's Location carries the text, both comparators read it as its number, and the page sets such rows outside the comparator class): the text declares END Type=Integer (section 3 \"INFO keys used for structural variants\") and states no rule of spelling for an Integer; not seen in the measured datasets; classed by that shape: an END, SVLEN or POS text that is a fraction, an exponent or NaN breaks the Integer type (section 3 and section 1.4.1 \"Fixed fields\", POS \"(Integer, Required)\")"
+notes = "The first mechanism of the page, a fractional INFO/END: Ensembl VEP annotates the record with the text in its Location and a fractional DISTANCE; vep-rs refuses the END and writes no row."
+
+[input]
+format = "vcf"
+header = [
+  "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">",
+  "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the variant\">",
+]
+text = """
+21	30425650	del_end_float	N	<DEL>	.	.	SVTYPE=DEL;END=30425949.5
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-release116/json_cache"
+
+[run]
+flags = ["--allele_number"]
+format = "default"
+
+[compare]
+kind = "rows"
+where = { record = "del_end_float" }
+columns = ["Location", "Allele", "Feature", "Consequence", "DISTANCE"]
+
+[expected]
+ensembl_vep = [
+  "21:30425651-30425949.5 | deletion | ENST00000334068 | upstream_gene_variant | 4270.5",
+  "21:30425651-30425949.5 | deletion | ENST00000390690 | feature_truncation,coding_sequence_variant,5_prime_UTR_variant | -",
+]
+vep_rs = []

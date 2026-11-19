@@ -11,7 +11,11 @@
   "default.txt": "e775e665d7d62c829f543696d80e247c0b5192ab408ab1bc13e730c989914127",
   "tab.txt": "d85b10841a0e0283c14177c27f0ff8f4052a9f475ac2b9a988c432442737d10a",
   "vcf.vcf": "3317b9ea493b689ced758f5772e85d8f802cd8251c8e363b07d8cfd76da41504",
-  "json.jsonl": "7a97343e9940c72a01739fb8bf6b9e545bb4a7fe670b3f5f5455fa2e52dbac7e"
+  "json.jsonl": "7a97343e9940c72a01739fb8bf6b9e545bb4a7fe670b3f5f5455fa2e52dbac7e",
+  "default.summary.log": "7e72f9a15a51e2a0e9cf6b21adb4019e9834c9f0ec41f901c88089e6fd363335",
+  "tab.summary.log": "e7301694ff635c0d850d5e4617ed22ae1caf2feed8ef620c07322d30e279d968",
+  "vcf.summary.log": "f5881d759fee1e223060dc140b2d2eadbaece62a8fb23da2117533d7c93dbfa2",
+  "json.summary.log": "3a58da7f7f9348b03ed9be4a5d8fefb02298773f1daa54c9c6bb6cc1e85dfa82"
  },
  "variants_vcf_sha256": "c15831fc540b0190e0c5ea9c2213f4218003a206778001333c15d396021f23f8",
  "generator": "scripts/golden/build_golden_corpus.py select; scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 --variations <cache> --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'; scripts/concordance/generate_reference_output.sh --corpus; the flag sets' outputs from the vep command recorded under each flag_sets entry, one container run per format; scripts/golden/build_golden_corpus.py flag-set; scripts/golden/build_golden_corpus.py classify",
@@ -72,5 +76,9 @@
     "json.jsonl": "ce41a53c2327bc756d9051d1a196ac1a3f6c9deaa24e39a2f6ab68b25c8fc836"
    }
   }
+ },
+ "summary_log": {
+  "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite [--tab|--vcf|--json]",
+  "annotation_rows": "equal to the expected outputs' rows; the two runs differ only in the header lines that name a time, the cache path or the command line"
  }
 }

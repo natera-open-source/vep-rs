@@ -1,0 +1,40 @@
+entry = "spliceai_reverse_strand_indel"
+page = "docs/plugins/spliceai.md#reverse-strand-indels"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under Ensembl VEP's default input format (Ensembl VEP documentation, \"Data formats\", \"Default Ensembl VEP input\": strand is + or -, and the section's own deletion example is on the reverse strand); not seen in the measured datasets"
+notes = "The strand -1 insertion of G between 21338600 and 21338601 is the forward-strand insertion of C, the indel fixture's `21 21338600 A AC` row; its forward-strand twin `-/C` on strand 1 scores that row in both engines."
+
+[input]
+format = "ensembl"
+text = """
+21	21338601	21338600	-/G	-	rev_ins
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-spliceai/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-spliceai/reference.fa.gz"
+
+[run]
+flags = [
+  "--plugin",
+  "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz",
+]
+
+[compare]
+kind = "field"
+field = "SpliceAI_pred"
+with_key = true
+where = { record = "rev_ins" }
+
+[expected]
+ensembl_vep = ["ENST00000284894=-", "ENST00000400546=-", "ENST00000461281=-", "ENST00001131746=-"]
+vep_rs = [
+  "ENST00000284894=NCAM2|0.91|0.48|0.98|0.40|48|-1|11|17",
+  "ENST00000400546=NCAM2|0.91|0.48|0.98|0.40|48|-1|11|17",
+  "ENST00000461281=NCAM2|0.91|0.48|0.98|0.40|48|-1|11|17",
+  "ENST00001131746=NCAM2|0.91|0.48|0.98|0.40|48|-1|11|17",
+]

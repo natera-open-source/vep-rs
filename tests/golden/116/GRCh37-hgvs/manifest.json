@@ -32,7 +32,11 @@
   "engine_identity_lines",
   "cache-fasta-auto-detection",
   "fasta",
-  "fasta_dir"
+  "fasta_dir",
+  "fasta-download-and-indexing"
+ ],
+ "masks": [
+  "hgvs_added_bases_written_outside_the_transcript"
  ],
  "runs": [
   {
@@ -3536,6 +3540,28 @@
  ],
  "uncovered_combinations": [],
  "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "hgvsg",
+   "flags": [
+    "--hgvs",
+    "--hgvsg"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_hgvsg",
+   "covers": [
+    "hgvsg",
+    "hgvsg_shift_full_flank_116"
+   ]
+  }
+ ],
  "divergences": [
   {
    "location": "21:18981461-18981462",
@@ -3580,6 +3606,76 @@
    "expected_divergence": "start_cooccurrence_swap"
   },
   {
+   "location": "21:34726388-34728062",
+   "allele": "-",
+   "feature": "ENST00000270139",
+   "feature_type": "Transcript",
+   "record_indices": [
+    63
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "21:34726388-34728062",
+   "allele": "-",
+   "feature": "ENST00000416947",
+   "feature_type": "Transcript",
+   "record_indices": [
+    63
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "21:34726388-34728062",
+   "allele": "-",
+   "feature": "ENST00000442357",
+   "feature_type": "Transcript",
+   "record_indices": [
+    63
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "21:34727852-34729676",
+   "allele": "-",
+   "feature": "ENST00000416947",
+   "feature_type": "Transcript",
+   "record_indices": [
+    65
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
+   "location": "21:34727852-34729676",
+   "allele": "-",
+   "feature": "ENST00000442357",
+   "feature_type": "Transcript",
+   "record_indices": [
+    65
+   ],
+   "vep_consequence_set": "3_prime_UTR_variant,stop_retained_variant",
+   "vep_rs_consequence_sets": [
+    "3_prime_UTR_variant,stop_lost"
+   ],
+   "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+  },
+  {
    "location": "21:36265246",
    "allele": "-",
    "feature": "ENST00000486278",
@@ -3596,35 +3692,571 @@
  ],
  "vep_rs_only_tuples": [],
  "divergence_summary": {
-  "start_cooccurrence_swap": 4
+  "start_cooccurrence_swap": 4,
+  "stop_codon_removed_without_stop_codon_test": 5
  },
  "vep_rs_only_summary": {},
  "fields_compared": [
   "HGVSc",
-  "HGVSp"
+  "HGVSp",
+  "HGVS_OFFSET"
  ],
- "field_divergences": [],
- "field_divergence_summary": {},
- "flag_sets": [
+ "field_divergences": [
   {
-   "name": "hgvsg",
-   "flags": [
-    "--hgvs",
-    "--hgvsg"
+   "location": "21:27850391-27850392",
+   "allele": "AC",
+   "feature": "ENST00000400043",
+   "feature_type": "Transcript",
+   "record_indices": [
+    27
    ],
-   "input": "variants.vcf",
-   "stdin": false,
-   "formats": [
-    "default",
-    "tab",
-    "vcf",
-    "json"
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP00000382918.3:p.Ter133delinsCysTer",
+   "vep_rs": "ENSP00000382918.3:p.Ter133CysextTer7",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:34775737-34775738",
+   "allele": "GCCCTGCGC",
+   "feature": "ENST00000381995",
+   "feature_type": "Transcript",
+   "record_indices": [
+    66,
+    67
    ],
-   "expected_dir": "expected_hgvsg",
-   "covers": [
-    "hgvsg",
-    "hgvsg_shift_full_flank_116"
-   ]
+   "consequence_set": "upstream_gene_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST00000381995.1:c.-103_-95dup",
+   "expected_divergence": "hgvs_added_bases_written_outside_the_transcript"
+  },
+  {
+   "location": "21:34775737-34775738",
+   "allele": "GCCCTGCGC",
+   "feature": "ENST00000381995",
+   "feature_type": "Transcript",
+   "record_indices": [
+    66,
+    67
+   ],
+   "consequence_set": "upstream_gene_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "18",
+   "expected_divergence": "hgvs_added_bases_written_outside_the_transcript"
+  },
+  {
+   "location": "21:34775737-34775738",
+   "allele": "GCCCTGCGC",
+   "feature": "ENST00000545369",
+   "feature_type": "Transcript",
+   "record_indices": [
+    66,
+    67
+   ],
+   "consequence_set": "upstream_gene_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST00000545369.2:c.-103_-95dup",
+   "expected_divergence": "hgvs_added_bases_written_outside_the_transcript"
+  },
+  {
+   "location": "21:34775737-34775738",
+   "allele": "GCCCTGCGC",
+   "feature": "ENST00000545369",
+   "feature_type": "Transcript",
+   "record_indices": [
+    66,
+    67
+   ],
+   "consequence_set": "upstream_gene_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "18",
+   "expected_divergence": "hgvs_added_bases_written_outside_the_transcript"
+  },
+  {
+   "location": "21:34955948",
+   "allele": "-",
+   "feature": "ENST00000457359",
+   "feature_type": "Transcript",
+   "record_indices": [
+    112
+   ],
+   "consequence_set": "NMD_transcript_variant,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP00000415191.1:p.Ter211%3D",
+   "vep_rs": "ENSP00000415191.1:p.Ter211AsnextTer296",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:34974571",
+   "allele": "A",
+   "feature": "ENST00000437996",
+   "feature_type": "Transcript",
+   "record_indices": [
+    123
+   ],
+   "consequence_set": "NMD_transcript_variant,coding_sequence_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000406423.1:p.Ter1%3D",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_stop_named_on_incomplete_coding_sequence"
+  },
+  {
+   "location": "21:35014773-35014774",
+   "allele": "GGGAGCGA",
+   "feature": "ENST00000381285",
+   "feature_type": "Transcript",
+   "record_indices": [
+    126,
+    127,
+    128,
+    129
+   ],
+   "consequence_set": "upstream_gene_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST00000381285.4:c.-265_-258dup",
+   "expected_divergence": "hgvs_added_bases_written_outside_the_transcript"
+  },
+  {
+   "location": "21:35014773-35014774",
+   "allele": "GGGAGCGA",
+   "feature": "ENST00000381285",
+   "feature_type": "Transcript",
+   "record_indices": [
+    126,
+    127,
+    128,
+    129
+   ],
+   "consequence_set": "upstream_gene_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "21",
+   "expected_divergence": "hgvs_added_bases_written_outside_the_transcript"
+  },
+  {
+   "location": "21:35014773-35014774",
+   "allele": "GGGAGCGA",
+   "feature": "ENST00000381291",
+   "feature_type": "Transcript",
+   "record_indices": [
+    126,
+    127,
+    128,
+    129
+   ],
+   "consequence_set": "upstream_gene_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST00000381291.4:c.-265_-258dup",
+   "expected_divergence": "hgvs_added_bases_written_outside_the_transcript"
+  },
+  {
+   "location": "21:35014773-35014774",
+   "allele": "GGGAGCGA",
+   "feature": "ENST00000381291",
+   "feature_type": "Transcript",
+   "record_indices": [
+    126,
+    127,
+    128,
+    129
+   ],
+   "consequence_set": "upstream_gene_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "21",
+   "expected_divergence": "hgvs_added_bases_written_outside_the_transcript"
+  },
+  {
+   "location": "21:35791518",
+   "allele": "-",
+   "feature": "ENST00000450895",
+   "feature_type": "Transcript",
+   "record_indices": [
+    147
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP00000397039.1:p.Ter140%3D",
+   "vep_rs": "ENSP00000397039.1:p.Ter140GluextTer27",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:38877585-38877586",
+   "allele": "TAA",
+   "feature": "ENST00000321219",
+   "feature_type": "Transcript",
+   "record_indices": [
+    181
+   ],
+   "consequence_set": "inframe_insertion,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000319032.8:p.Arg413_Glu414insTer",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:38877585-38877586",
+   "allele": "TAA",
+   "feature": "ENST00000338785",
+   "feature_type": "Transcript",
+   "record_indices": [
+    181
+   ],
+   "consequence_set": "inframe_insertion,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000342690.3:p.Arg413_Glu414insTer",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:38877585-38877586",
+   "allele": "TAA",
+   "feature": "ENST00000339659",
+   "feature_type": "Transcript",
+   "record_indices": [
+    181
+   ],
+   "consequence_set": "inframe_insertion,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000340373.3:p.Arg404_Glu405insTer",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:38877585-38877586",
+   "allele": "TAA",
+   "feature": "ENST00000398956",
+   "feature_type": "Transcript",
+   "record_indices": [
+    181
+   ],
+   "consequence_set": "inframe_insertion,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000381929.2:p.Arg413_Glu414insTer",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:38877585-38877586",
+   "allele": "TAA",
+   "feature": "ENST00000398960",
+   "feature_type": "Transcript",
+   "record_indices": [
+    181
+   ],
+   "consequence_set": "inframe_insertion,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000381932.2:p.Arg413_Glu414insTer",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:38877585-38877586",
+   "allele": "TAA",
+   "feature": "ENST00000451934",
+   "feature_type": "Transcript",
+   "record_indices": [
+    181
+   ],
+   "consequence_set": "inframe_insertion,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000416089.1:p.Arg413_Glu414insTer",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:38877585-38877586",
+   "allele": "TAA",
+   "feature": "ENST00000455387",
+   "feature_type": "Transcript",
+   "record_indices": [
+    181
+   ],
+   "consequence_set": "inframe_insertion,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000407854.2:p.Arg185_Glu186insTer",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:40719394-40719395",
+   "allele": "AC",
+   "feature": "ENST00000419378",
+   "feature_type": "Transcript",
+   "record_indices": [
+    192
+   ],
+   "consequence_set": "NMD_transcript_variant,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP00000396693.1:p.Ter46delinsCysTer",
+   "vep_rs": "ENSP00000396693.1:p.Ter46CysextTer23",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:40719394-40719395",
+   "allele": "AC",
+   "feature": "ENST00000431390",
+   "feature_type": "Transcript",
+   "record_indices": [
+    192
+   ],
+   "consequence_set": "NMD_transcript_variant,stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP00000395291.1:p.Ter46delinsCysTer",
+   "vep_rs": "ENSP00000395291.1:p.Ter46CysextTer23",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:43896157-43896158",
+   "allele": "TCTCAGCTCCTGGAGCGTCTTGGCCAGGTCCATCCGTAGAGGTCGGCTTTTTGGGGAGAGTTGGTGTCCA",
+   "feature": "ENST00000291536",
+   "feature_type": "Transcript",
+   "record_indices": [
+    206
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000291536.3:p.Ser243MetfsTer23",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:43896157-43896158",
+   "allele": "TCTCAGCTCCTGGAGCGTCTTGGCCAGGTCCATCCGTAGAGGTCGGCTTTTTGGGGAGAGTTGGTGTCCA",
+   "feature": "ENST00000398352",
+   "feature_type": "Transcript",
+   "record_indices": [
+    206
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000381395.3:p.Ser205MetfsTer23",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:44483188-44483189",
+   "allele": "CTGCAGAGGGCGCGGCTTCAGGGCTCAAGGCCAGCAAAAGCCCCACCTGGATGATCCACCCCAGTGAC",
+   "feature": "ENST00000352178",
+   "feature_type": "Transcript",
+   "record_indices": [
+    219
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000344460.5:p.Ile277ValfsTer17",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:44483188-44483189",
+   "allele": "CTGCAGAGGGCGCGGCTTCAGGGCTCAAGGCCAGCAAAAGCCCCACCTGGATGATCCACCCCAGTGAC",
+   "feature": "ENST00000359624",
+   "feature_type": "Transcript",
+   "record_indices": [
+    219
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000352643.3:p.Ile277ValfsTer17",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:44483188-44483189",
+   "allele": "CTGCAGAGGGCGCGGCTTCAGGGCTCAAGGCCAGCAAAAGCCCCACCTGGATGATCCACCCCAGTGAC",
+   "feature": "ENST00000398158",
+   "feature_type": "Transcript",
+   "record_indices": [
+    219
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000381225.1:p.Ile277ValfsTer17",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:44483188-44483189",
+   "allele": "CTGCAGAGGGCGCGGCTTCAGGGCTCAAGGCCAGCAAAAGCCCCACCTGGATGATCCACCCCAGTGAC",
+   "feature": "ENST00000398165",
+   "feature_type": "Transcript",
+   "record_indices": [
+    219
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000381231.3:p.Ile277ValfsTer17",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:44483188-44483189",
+   "allele": "CTGCAGAGGGCGCGGCTTCAGGGCTCAAGGCCAGCAAAAGCCCCACCTGGATGATCCACCCCAGTGAC",
+   "feature": "ENST00000398168",
+   "feature_type": "Transcript",
+   "record_indices": [
+    219
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000381234.1:p.Ile277ValfsTer17",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:44483188-44483189",
+   "allele": "CTGCAGAGGGCGCGGCTTCAGGGCTCAAGGCCAGCAAAAGCCCCACCTGGATGATCCACCCCAGTGAC",
+   "feature": "ENST00000544202",
+   "feature_type": "Transcript",
+   "record_indices": [
+    219
+   ],
+   "consequence_set": "frameshift_variant,splice_region_variant,stop_gained",
+   "field": "HGVSp",
+   "vep": "ENSP00000439332.1:p.Ile189ValfsTer17",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_intron_end_insertion"
+  },
+  {
+   "location": "21:46916250-46916251",
+   "allele": "A",
+   "feature": "ENST00000417954",
+   "feature_type": "Transcript",
+   "record_indices": [
+    252,
+    253
+   ],
+   "consequence_set": "stop_lost",
+   "field": "HGVSp",
+   "vep": "ENSP00000393988.1:p.Ter270delinsLeuTer",
+   "vep_rs": "ENSP00000393988.1:p.Ter270LeuextTer34",
+   "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+  },
+  {
+   "location": "21:46951454",
+   "allele": "G",
+   "feature": "ENST00000417954",
+   "feature_type": "Transcript",
+   "record_indices": [
+    263
+   ],
+   "consequence_set": "coding_sequence_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000393988.1:p.Ter1%3D",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_stop_named_on_incomplete_coding_sequence"
+  },
+  {
+   "location": "21:46957692",
+   "allele": "T",
+   "feature": "ENST00000528477",
+   "feature_type": "Transcript",
+   "record_indices": [
+    265
+   ],
+   "consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+   "field": "HGVSp",
+   "vep": "ENSP00000435780.1:p.Ter61%3D",
+   "vep_rs": "-",
+   "expected_divergence": "hgvsp_stop_named_on_incomplete_coding_sequence"
+  },
+  {
+   "location": "21:47407419-47408291",
+   "allele": "-",
+   "feature": "ENST00000492851",
+   "feature_type": "Transcript",
+   "record_indices": [
+    267
+   ],
+   "consequence_set": "intron_variant,non_coding_transcript_exon_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST00000492851.1:n.400_435del",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:47407419-47408291",
+   "allele": "-",
+   "feature": "ENST00000492851",
+   "feature_type": "Transcript",
+   "record_indices": [
+    267
+   ],
+   "consequence_set": "intron_variant,non_coding_transcript_exon_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "3",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:47532290-47532325",
+   "allele": "-",
+   "feature": "ENST00000436769",
+   "feature_type": "Transcript",
+   "record_indices": [
+    270
+   ],
+   "consequence_set": "3_prime_UTR_variant,coding_sequence_variant",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST00000436769.1:c.520_541del",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:47532290-47532325",
+   "allele": "-",
+   "feature": "ENST00000436769",
+   "feature_type": "Transcript",
+   "record_indices": [
+    270
+   ],
+   "consequence_set": "3_prime_UTR_variant,coding_sequence_variant",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "7",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:47532319-47533133",
+   "allele": "-",
+   "feature": "ENST00000460886",
+   "feature_type": "Transcript",
+   "record_indices": [
+    271
+   ],
+   "consequence_set": "transcript_ablation",
+   "field": "HGVSc",
+   "vep": "-",
+   "vep_rs": "ENST00000460886.1:n.1_306del",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+  },
+  {
+   "location": "21:47532319-47533133",
+   "allele": "-",
+   "feature": "ENST00000460886",
+   "feature_type": "Transcript",
+   "record_indices": [
+    271
+   ],
+   "consequence_set": "transcript_ablation",
+   "field": "HGVS_OFFSET",
+   "vep": "-",
+   "vep_rs": "1",
+   "expected_divergence": "hgvs_shifted_indel_written_span_gate"
   }
- ]
+ ],
+ "field_divergence_summary": {
+  "hgvsp_stop_codon_protein_comparison": 6,
+  "hgvs_added_bases_written_outside_the_transcript": 8,
+  "hgvsp_stop_named_on_incomplete_coding_sequence": 3,
+  "hgvsp_intron_end_insertion": 15,
+  "hgvs_shifted_indel_written_span_gate": 6
+ }
 }

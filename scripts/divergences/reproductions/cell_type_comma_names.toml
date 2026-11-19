@@ -1,0 +1,30 @@
+entry = "cell_type_comma_names"
+page = "docs/divergences/cell-type-comma-names.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 457 of 672 epigenome names · 2 flag sets, 6 corpora"
+notes = "The enhancer ENSR21_C6M55 is active in A549_(m,_58_y), an epigenome whose name holds a comma."
+
+[input]
+format = "vcf"
+text = """
+21	46699255	rs868224642	G	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-regulatory/json_cache"
+
+[run]
+flags = ["--regulatory", "--cell_type", "A549_(m,_58_y)"]
+
+[compare]
+kind = "field"
+field = "CELL_TYPE"
+where = { record = "rs868224642", feature = "ENSR21_C6M55" }
+
+[expected]
+ensembl_vep = [""]
+vep_rs = ["A549_(m,_58_y):ACTIVE"]

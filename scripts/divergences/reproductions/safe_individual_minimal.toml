@@ -1,0 +1,39 @@
+entry = "safe_individual_minimal"
+page = "docs/divergences/safe-individual-minimal.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 4 of 373 records with sample columns · 0 flag sets, 3 corpora"
+notes = "The first mechanism of the entry: S1's 1/2 copy of multi_trim names two alleles that trim, so both engines split it; Ensembl VEP's split takes the hash order of the copy's alleles, and its first allele decides REF_ALLELE, VARIANT_CLASS and UPLOADED_ALLELE for every row of the copy."
+
+[input]
+format = "vcf"
+samples = ["S1", "S2", "S3"]
+text = """
+21	10542414	bi_trim	AAAG	AG	.	.	.	GT	0/1	1/1	0/0
+21	10542419	multi_trim	AGCAA	CGCAA,A	.	.	.	GT	1/2	0/1	2/2
+21	10542424	multi_dup	CCG	CGG,CGG	.	.	.	GT	1/2	0/2	1/1
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-individual-zyg/json_cache"
+
+[run]
+flags = ["--safe", "--individual", "all", "--minimal", "--allele_number", "--show_ref_allele", "--uploaded_allele", "--variant_class"]
+
+[compare]
+kind = "rows"
+where = { record = "multi_trim", feature = "ENST00000427445", pattern = "IND=S1;" }
+columns = ["Location", "Allele", "ALLELE_NUM", "Consequence", "REF_ALLELE", "VARIANT_CLASS", "UPLOADED_ALLELE"]
+
+[expected]
+ensembl_vep = [
+  "21:10542419-10542423 | - | 1 | frameshift_variant | GCAA | deletion | AGCAA/A/CGCAA",
+  "21:10542419-10542423 | C | 2 | synonymous_variant | GCAA | deletion | AGCAA/A/CGCAA",
+]
+vep_rs = [
+  "21:10542419-10542423 | - | 2 | frameshift_variant | A | SNV | AGCAA/CGCAA/A",
+  "21:10542419-10542423 | C | 1 | synonymous_variant | A | SNV | AGCAA/CGCAA/A",
+]

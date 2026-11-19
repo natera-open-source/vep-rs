@@ -344,39 +344,6 @@ fn test_output_file_exists_without_force() {
     );
 }
 
-/// The three regulatory and custom-annotation flags vep-rs declares but refuses
-/// exit 1 with the contract's one line, naming why (the regulatory features
-/// come from the cache alone; custom annotation is not supported), before any
-/// input is read.
-#[test]
-fn refused_flags_exit_with_their_message() {
-    for (flag, feature) in [
-        (
-            vec!["--regulatory_gff", "reg.gff3.gz"],
-            "regulatory features are read from the cache alone",
-        ),
-        (
-            vec!["--extended_promoters"],
-            "regulatory features are read from the cache alone",
-        ),
-        (vec!["--custom_suppress_filter"], "custom annotation"),
-    ] {
-        let result = vep_binary()
-            .args(&flag)
-            .args(["-i", "/nonexistent/file.vcf", "--quiet"])
-            .output()
-            .unwrap();
-        assert_eq!(result.status.code(), Some(1), "{flag:?}");
-        let stderr = String::from_utf8_lossy(&result.stderr);
-        assert_eq!(stderr.lines().count(), 1, "{flag:?}: {stderr}");
-        assert!(
-            stderr.starts_with(&format!("ERROR: [cli] {} is not supported: ", flag[0]))
-                && stderr.contains(feature),
-            "{flag:?}: {stderr}"
-        );
-    }
-}
-
 /// A `--distance` value with a part that is not an integer is refused before any
 /// input is read: one line `ERROR: [config] <message>` naming the value on
 /// standard error, exit status 1. Ensembl VEP numifies the part to 0 under an
@@ -412,8 +379,8 @@ fn transcript_filter_refusal_is_one_error_line_and_exit_1() {
             "No such operator \"equals\"",
         ),
         (
-            r"stable_id match ENST\Z",
-            r#"pattern "ENST\Z" is not supported: unrecognized escape sequence"#,
+            r"stable_id match ENST\X",
+            r#"pattern "ENST\X" is not supported: unrecognized escape sequence"#,
         ),
     ] {
         let result = vep_binary()
@@ -1396,6 +1363,27 @@ fn max_sv_size_exclusion_is_documented() {
     ] {
         assert!(row.contains(phrase), "the --max_sv_size row lacks {phrase:?}: {row}");
     }
+    // The value domain departs from Getopt::Long's `=i`, so the compatibility
+    // page states the bound beside the other refused values (`Parser.pm:491`
+    // spares -1 alone, and a value below it makes every record oversize there).
+    let compatibility = std::fs::read_to_string(format!(
+        "{}/../../docs/cli/compatibility.md",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
+    let bullet = compatibility
+        .lines()
+        .find(|l| l.starts_with("- `--max_sv_size` takes"))
+        .expect("docs/cli/compatibility.md has a --max_sv_size bullet");
+    for phrase in [
+        "a value below `-1` is an argument syntax error (exit 2)",
+        "`-2` makes every record oversize and the run drops them all",
+    ] {
+        assert!(
+            bullet.contains(phrase),
+            "the --max_sv_size bullet lacks {phrase:?}: {bullet}"
+        );
+    }
 }
 
 /// `--dont_skip` keeps a record that fails a check (Parser.pm:189: the feature
@@ -1530,129 +1518,9 @@ fn test_builtin_plugin_names_are_recognized() {
         !stderr.contains(unknown) && !warnings.contains(unknown),
         "CADD should be recognized as a builtin plugin:\n{stderr}\n{warnings}"
     );
-    let dropped =
-        "Failed to instantiate plugin CADD: CADD requires at least one file path parameter";
+    let dropped = "Failed to instantiate plugin CADD: CADD: no CADD files specified";
     assert!(
         result.status.success() && stderr.contains(dropped) && warnings.contains(dropped),
         "CADD without a data file is dropped with a warning:\n{stderr}\n{warnings}"
-    );
-}
-
-fn duckdb_available() -> bool {
-    std::process::Command::new("duckdb")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-}
-
-#[test]
-fn parquet_round_trip_nested() {
-    // VCF in, TSV intermediate, DuckDB finalize, Parquet directory, schema probe
-    // via `duckdb -c`. Skipped when `duckdb` is not on PATH.
-    if !duckdb_available() {
-        eprintln!("Skipping parquet_round_trip_nested: duckdb not on PATH");
-        return;
-    }
-    let json_cache = match json_cache_path() {
-        Some(p) => p,
-        None => {
-            eprintln!(
-                "Skipping parquet_round_trip_nested: VEP_RS_TEST_CACHE not set or directory absent"
-            );
-            return;
-        }
-    };
-
-    let vcf = "##fileformat=VCFv4.2\n\
-        #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
-        21\t25000100\trs1\tA\tG\t.\tPASS\t.\n\
-        21\t25000200\t.\tAAA\tA\t.\tPASS\t.\n\
-        21\t25000300\t.\tT\tTGGG\t.\tPASS\t.\n";
-    let dir = tempfile::tempdir().unwrap();
-    let input_path = dir.path().join("in.vcf");
-    std::fs::write(&input_path, vcf).unwrap();
-    let output_path = dir.path().join("out.parquet");
-
-    // `--no_headers` is passed deliberately: the runner special-cases parquet so
-    // the TSV intermediate always carries a header, or DuckDB's
-    // `read_csv(header=true)` would consume the first data row as column names.
-    let result = vep_binary()
-        .args(["-i", input_path.to_str().unwrap()])
-        .args(["-o", output_path.to_str().unwrap()])
-        .args(["--output_format", "parquet"])
-        .args(["--parquet_shape", "nested"])
-        .args(["--json_cache", &json_cache])
-        .args([
-            "--offline",
-            "--force",
-            "--no_stats",
-            "--quiet",
-            "--no_headers",
-            "--fork",
-            "1",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(
-        result.status.success(),
-        "Parquet run failed: stderr={}",
-        String::from_utf8_lossy(&result.stderr)
-    );
-
-    assert!(
-        output_path.is_dir(),
-        "Parquet output path should be a directory: {:?}",
-        output_path
-    );
-
-    // Probe schema via duckdb: Gene must be a LIST<VARCHAR> in nested shape.
-    let probe_sql = format!(
-        "SELECT typeof(Gene) FROM read_parquet('{}/**/*.parquet') LIMIT 1",
-        output_path.display()
-    );
-    let probe = std::process::Command::new("duckdb")
-        .args(["-csv", "-c", &probe_sql])
-        .output()
-        .unwrap();
-    assert!(
-        probe.status.success(),
-        "duckdb schema probe failed: {}",
-        String::from_utf8_lossy(&probe.stderr)
-    );
-    let probe_stdout = String::from_utf8_lossy(&probe.stdout);
-    assert!(
-        probe_stdout.contains("[]") || probe_stdout.contains("LIST"),
-        "Expected LIST type for nested Gene column, got: {}",
-        probe_stdout
-    );
-
-    // Run the adapter against the Parquet dir; require the rsID for
-    // the first variant to surface as Uploaded_variation (rsID branch
-    // of variant.rs::uploaded_variation).
-    let adapter = format!(
-        "{}/../../scripts/adapters/parquet_to_vep_tab.py",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    let adapter_out = dir.path().join("adapter.tsv");
-    let adapter_result = std::process::Command::new("python3")
-        .arg(&adapter)
-        .args(["--input", output_path.to_str().unwrap()])
-        .args(["--output", adapter_out.to_str().unwrap()])
-        .output()
-        .unwrap();
-    assert!(
-        adapter_result.status.success(),
-        "Adapter failed: stderr={}",
-        String::from_utf8_lossy(&adapter_result.stderr)
-    );
-    let adapter_text = std::fs::read_to_string(&adapter_out).unwrap();
-    assert!(
-        adapter_text.contains("rs1"),
-        "Adapter output should contain rsID 'rs1' as Uploaded_variation, got:\n{}",
-        adapter_text
     );
 }

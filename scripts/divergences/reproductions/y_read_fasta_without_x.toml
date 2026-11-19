@@ -1,0 +1,38 @@
+entry = "y_read_fasta_without_x"
+page = "docs/cache-setup.md#a-y-read-on-a-fasta-without-x"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --fasta contract, \"a FASTA file or a directory containing FASTA files\", which sets no rule on the sequences a file holds (Ensembl VEP documentation, \"Running Ensembl VEP\", --fasta); not seen in the measured datasets"
+notes = "The FASTA holds Y alone, 10,200 bases taken from the corpus reference's unmasked lines. The record spans Y:9999-10002: two bases before the GRCh38 pseudoautosomal region, which starts at 10001, and two inside it, which the redirect reads from the absent X as N. --lookup_ref replaces the given reference with the read and --show_ref_allele prints it."
+# A Y-only FASTA with a hand-written index, and a cache copy whose transcripts/Y/ is empty so the record is not skipped.
+prepare = [
+  '{ printf ">Y\n"; gzip -dc "$CORPUS/reference.fa.gz" | grep -v "^>" | grep -v N | awk "NR <= 170"; } > "$STAGE/y.fa"',
+  'printf "Y\t10200\t3\t60\t61\n" > "$STAGE/y.fa.fai"',
+  'cp -al "$CORPUS/json_cache" "$STAGE/json-cache" && mkdir "$STAGE/json-cache/transcripts/Y"',
+]
+
+[input]
+format = "vcf"
+text = """
+Y	9999	ypar_edge	GCNN	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json-cache"
+fasta = "{stage}/y.fa"
+corpus = "tests/golden/116/GRCh38-vcf-check-ref"
+
+[run]
+flags = ["--lookup_ref", "--show_ref_allele"]
+
+[compare]
+kind = "field"
+field = "REF_ALLELE"
+where = { record = "ypar_edge" }
+
+[expected]
+ensembl_vep = ["NN"]
+vep_rs = ["GCNN"]

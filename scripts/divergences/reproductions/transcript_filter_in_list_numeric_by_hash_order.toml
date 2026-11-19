@@ -1,0 +1,30 @@
+entry = "transcript_filter_in_list_numeric_by_hash_order"
+page = "docs/divergences/transcript-filter-in-list-numeric-by-hash-order.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the in operator of the filter notation, whose value is a comma-separated list with no rule on the shape of its entries (Ensembl VEP documentation, \"Filtering results\", Operators, in); not seen in the measured datasets"
+notes = "The corpus record tf_17608184 lies within reach of 41 transcripts: 34 of BTG3 (HGNC:1132), 5 of BTG3-AS1 (HGNC:53145) and 2 of CXADR (HGNC:2559). The filter's `in` list mixes a number and other text, so FilterSet.pm:597-599 picks one key of the list's hash to stand for the filter's value: when the pick is `1132`, lines 600-601 read each transcript's `HGNC:<number>` through its number and the BTG3 transcripts pass; when it is `HGNC:2559`, lines 603-604 compare the value whole and the CXADR transcripts pass. Which key a hash yields first is fixed by the process's hash seed: seeds 0 to 10, 12, 14, 16, 18 and 20 give the 34 BTG3 rows and seeds 11, 13, 15, 17 and 19 the 2 CXADR rows, with either written order. vep-rs decides by the list's first written entry, `HGNC:2559` here, so it compares every value whole and keeps the 2 CXADR rows; the reversed list `1132,HGNC:2559` keeps the 34 BTG3 rows. The same mechanism reaches filter_vep and `vep filter` over the run's HGNC_ID field. The count is read under the seed of the committed references."
+
+[input]
+format = "vcf"
+text = """
+21	17608184	tf_17608184	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-transcript-filter/json_cache"
+
+[run]
+flags = ["--symbol", "--transcript_filter", "gene_hgnc_id in HGNC:2559,1132"]
+perl_hash_seed = "0"
+
+[compare]
+kind = "count"
+where = { record = "tf_17608184" }
+
+[expected]
+ensembl_vep = "34"
+vep_rs = "2"

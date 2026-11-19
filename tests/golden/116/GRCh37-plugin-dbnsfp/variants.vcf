@@ -1,0 +1,17 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	17616932	intron_snv	G	A	.	.	.
+21	26078748	intergenic_snv	T	C	.	.	.
+21	31661647	synonymous_rev	T	C	.	.	.
+21	33416423	stop_lost_fwd	T	C	.	.	.
+21	34950680	missense_rev_two_changes	G	A	.	.	.
+21	36252953	missense_rev	C	T	.	.	.
+21	40762624	start_lost_fwd	A	T	.	.	.
+21	43505445	missense_fwd_two_alts	C	G,T	.	.	.
+21	43505446	deletion_fwd	TG	T	.	.	.
+21	43505450	insertion_fwd	G	GA	.	.	.
+21	43505452	coding_mnv	AA	CC	.	.	.
+21	43505455	missense_fwd_unscored	T	G	.	.	.
+21	44492302	start_lost_rev	A	G	.	.	.
+21	45720003	synonymous_fwd_lowercase	c	t	.	.	.
+21	47734737	stop_gained_rev	C	A	.	.	.

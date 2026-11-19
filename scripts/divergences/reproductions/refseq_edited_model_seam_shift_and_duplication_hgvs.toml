@@ -1,0 +1,77 @@
+entry = "refseq_edited_model_seam_shift_and_duplication_hgvs"
+page = "docs/divergences/refseq-edited-model-seam-shift-and-duplication-hgvs.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 33 of 77,601 cache transcripts · 1 flag set, 3 corpora"
+notes = "Five records at the point where the forward-strand model NM_015120.4 carries the insertion edit `186 185` of three bases, between 2:73385942 and 2:73385943. Two bases inserted there, the first equal to the genome's base at 2:73385943: the genome's 3' shift moves the insertion one place, so Ensembl VEP prints HGVS_OFFSET=1, an `ins` between c.78 and c.79 and a frameshift named at residue 27 beside CDS 75-77; vep-rs reads the row where the record is written, the replacement of c.75 to c.77, a frameshift named at residue 26, and prints no offset. A copy of the genome's two bases beside the point written at the point is carried one place the same way: Ensembl VEP's `dup` of c.77 and c.78 with the offset, vep-rs's replacement of c.75 and c.76 without. The same copy written one base on is the control: CDS 78-79 and `c.77_78dup` in both engines. The last two records spell a copy of two and of three genome bases as a reference doubled across the point, kept whole by a second alternate: Ensembl VEP names as many positions as the genome copies, from the row's first coding position into the model's added bases; vep-rs names the change the alternate makes to the row's span. The prepare steps are those of the entry refseq_edited_model_seam_insertion_hgvsc: the one region file of the Ensembl VEP RefSeq cache that holds the model, converted with the Perl of the image, which the run therefore needs, and a chromosome 2 FASTA of the model's first exon."
+# The region file 2/73000001-74000000 of the Ensembl VEP RefSeq cache, converted into the cache vep-rs reads, and a
+# chromosome 2 FASTA of 74,000,000 bases that holds the 435 genomic bases of the model's first exon and N elsewhere.
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the region file is converted with the Perl of the image: pass --image" >&2; exit 1; }
+mkdir -p "$STAGE/perl-cut/2" "$STAGE/json-cache"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$STAGE/perl-cut/"
+cp "$PERL_CACHE/2/73000001-74000000.gz" "$STAGE/perl-cut/2/"
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$STAGE/perl-cut:/input:ro" -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE/json-cache:/output" "$IMAGE" perl /scripts/storable_to_json.pl /input /output 2 > "$STAGE/convert.log" 2>&1''',
+  '''python3 - "$STAGE/json-cache/transcripts/2/73000001-74000000.json" "$STAGE/chr2_exon_window.fa" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1]) as fh:
+    model = next(t for t in json.load(fh) if t["stable_id"] == "NM_015120.4")
+cached = model["variation_effect_feature_cache"]
+pairs = [(p["from_start"], p["from_end"], p["to_start"], p["to_end"]) for p in cached["mapper"]["pairs"][:2]]
+if pairs != [(1, 185, 73385758, 73385942), (189, 438, 73385943, 73386192)]:
+    sys.exit(f"the model's first exon is mapped otherwise: {pairs}")
+cdna = cached["spliced_seq"].upper()
+exon = cdna[:185] + cdna[188:438]
+chrom = "N" * 73385757 + exon + "N" * (74000000 - 73386192)
+with open(sys.argv[2], "w") as out:
+    out.write(">2\n")
+    out.writelines(chrom[i : i + 60] + "\n" for i in range(0, len(chrom), 60))
+PY
+printf '2\t74000000\t3\t60\t61\n' > "$STAGE/chr2_exon_window.fa.fai"''',
+]
+
+[input]
+format = "vcf"
+text = """
+2	73385942	shifted_two_bases	A	AAC	.	.	.
+2	73385942	copy_on_added_bases	A	AAA	.	.	.
+2	73385942	doubled_two_bases	AA	AAAA,CA	.	.	.
+2	73385942	doubled_three_bases	AAG	AAGAAG,CAG	.	.	.
+2	73385943	copy_one_base_on	A	AAA	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+source = "refseq"
+json_cache = "{stage}/json-cache"
+fasta = "{stage}/chr2_exon_window.fa"
+
+[run]
+flags = ["--refseq", "--hgvs"]
+
+[compare]
+kind = "rows"
+where = { feature = "NM_015120.4", allele = ["AC", "AA", "AAAA", "AAGAAG"] }
+columns = ["Uploaded_variation", "CDS_position", "HGVS_OFFSET", "HGVSc", "HGVSp"]
+# The three-base record's HGVSp names one residue three times; the comparison keeps its closing `%3D`.
+mask = ['p\.(?:Glu){3}25']
+
+[expected]
+ensembl_vep = [
+  "copy_on_added_bases | 75-77 | 1 | NM_015120.4:c.77_78dup | NP_055935.4:p.Glu27LysfsTer16",
+  "copy_one_base_on | 78-79 | - | NM_015120.4:c.77_78dup | NP_055935.4:p.Glu27LysfsTer16",
+  "doubled_three_bases | 74-79 | - | NM_015120.4:c.74_76dup | NP_055935.4:<masked>%3D",
+  "doubled_two_bases | 74-78 | - | NM_015120.4:c.74_75dup | NP_055935.4:p.Glu26LysfsTer16",
+  "shifted_two_bases | 75-77 | 1 | NM_015120.4:c.78_79insAC | NP_055935.4:p.Glu27GlnfsTer16",
+]
+vep_rs = [
+  "copy_on_added_bases | 75-77 | - | NM_015120.4:c.75_76delinsA | NP_055935.4:p.Glu26LysfsTer16",
+  "copy_one_base_on | 78-79 | - | NM_015120.4:c.77_78dup | NP_055935.4:p.Glu27LysfsTer16",
+  "doubled_three_bases | 74-79 | - | NM_015120.4:c.75G>A | NP_055935.4:<masked>%3D",
+  "doubled_two_bases | 74-78 | - | NM_015120.4:c.75_76delinsA | NP_055935.4:p.Glu26LysfsTer16",
+  "shifted_two_bases | 75-77 | - | NM_015120.4:c.75_77delinsAC | NP_055935.4:p.Glu26GlnfsTer16",
+]

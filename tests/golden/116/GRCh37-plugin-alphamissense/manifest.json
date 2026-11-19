@@ -1,0 +1,372 @@
+{
+ "release": "116",
+ "species": "homo_sapiens",
+ "assembly": "GRCh37",
+ "generator_version": "2",
+ "seed": 1,
+ "exemplars_per_combination": 100,
+ "included_records": {
+  "GRCh37-plugin-alphamissense": [
+   "1024247",
+   "1376358",
+   "14469",
+   "1935264",
+   "1998862",
+   "2588930",
+   "2976772",
+   "3216214",
+   "3218915",
+   "3373883",
+   "3652518",
+   "3825765",
+   "4035633",
+   "4293986",
+   "4656931",
+   "662099",
+   "68224",
+   "938232",
+   "shared_base_47539708",
+   "two_alts_14982700"
+  ]
+ },
+ "max_span": 1000000,
+ "flags": [
+  "--dir_plugins",
+  "{corpus}/plugin_data",
+  "--plugin",
+  "AlphaMissense,file={corpus}/plugin_data/alphamissense.tsv.gz"
+ ],
+ "covers": [
+  "AlphaMissense"
+ ],
+ "suites": {
+  "GRCh37-plugin-alphamissense": {
+   "reference": "default.txt",
+   "input": "variants.vcf",
+   "rows": 208,
+   "combinations": 15
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 10,
+   "exemplar_records": 5
+  },
+  "5_prime_UTR_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 3,
+   "exemplar_records": 2
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 26,
+   "exemplar_records": 10
+  },
+  "frameshift_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 11,
+   "exemplar_records": 4
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 2
+  },
+  "missense_variant": {
+   "observed_rows": 72,
+   "exemplar_records": 15
+  },
+  "missense_variant,splice_region_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 28,
+   "exemplar_records": 9
+  },
+  "stop_gained": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 1
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 29,
+   "exemplar_records": 9
+  }
+ },
+ "variant_classes": {
+  "insertion": 7,
+  "mnv_or_complex": 7,
+  "snv": 194
+ },
+ "records": [
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t14982700\ttwo_alts_14982700\tG\tA,T\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t34100257\t1024247\tC\tT\t.\t.\t.",
+   "combinations": [
+    "missense_variant,splice_region_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t34882174\t2588930\tA\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t34925078\t1935264\tG\tA\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t34963484\t4656931\tA\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t35821893\t3373883\tT\tG\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t36259238\t14469\tG\tT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t38850621\t2976772\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t38877680\t4293986\tC\tCAT\t.\t.\t.",
+   "combinations": [
+    "frameshift_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t40571256\t3825765\tC\tT\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t40717127\t4035633\tT\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t44479390\t1376358\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t44488650\t3652518\tA\tT\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t45706585\t68224\tT\tG\t.\t.\t.",
+   "combinations": [
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t46330258\t938232\tC\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "NMD_transcript_variant,missense_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t46685470\t3216214\tG\tA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t47538559\t1998862\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t47539708\tshared_base_47539708\tAG\tAC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t47539709\t662099\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh37-plugin-alphamissense",
+   "vcf": "21\t48083392\t3218915\tC\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 4,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "cols-all",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/plugin_data",
+    "--plugin",
+    "AlphaMissense,file={corpus}/plugin_data/alphamissense.tsv.gz,cols=all"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_cols-all",
+   "covers": [
+    "AlphaMissense"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "transcript-match",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}/plugin_data",
+    "--plugin",
+    "AlphaMissense,file={corpus}/plugin_data/alphamissense.tsv.gz,transcript_match=1"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected_transcript-match",
+   "covers": [
+    "AlphaMissense"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "plugin_files": {
+  "AlphaMissense": [
+   "plugin_data/alphamissense.tsv.gz",
+   "plugin_data/alphamissense.tsv.gz.tbi"
+  ]
+ },
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

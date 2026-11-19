@@ -1,0 +1,31 @@
+entry = "duplicate_output_column_collapsed"
+page = "docs/divergences/duplicate-output-column.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the --custom short_name contract, \"any string without commas\" (Ensembl VEP documentation, \"Custom annotations\", short_name), the dbNSFP plugin's header (dbNSFP.pm:76-79 and 86-87) and the --plugin option; not seen in the measured datasets"
+notes = "A --custom source named SOURCE, the name of the column every --custom run adds. Ensembl VEP's tab writer lists the plugin and custom keys after the flag columns with no test against them (Tab.pm:195), so its column line names SOURCE twice and the row prints the source's record names in both cells; its VCF's CSQ format ends SOURCE|SOURCE the same way (VCF.pm:449). vep-rs lists the column once. The same file named `regions` makes the engines agree."
+
+[input]
+format = "vcf"
+text = """
+21	5028997	.	TCA	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-custom/json_cache"
+fasta = "tests/golden/116/GRCh38-custom/reference.fa.gz"
+
+[run]
+flags = ["--custom", "file={corpus}/custom/regions.bed.gz,short_name=SOURCE,format=bed,type=overlap"]
+format = "tab"
+
+[compare]
+kind = "header"
+pattern = "^#Uploaded_variation"
+
+[expected]
+ensembl_vep = ["#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tIMPACT\tDISTANCE\tSTRAND\tFLAGS\tSOURCE\tSOURCE"]
+vep_rs = ["#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\tConsequence\tcDNA_position\tCDS_position\tProtein_position\tAmino_acids\tCodons\tExisting_variation\tIMPACT\tDISTANCE\tSTRAND\tFLAGS\tSOURCE"]

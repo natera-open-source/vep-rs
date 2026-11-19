@@ -10,7 +10,8 @@
   "numbers",
   "variant_class",
   "show_ref_allele",
-  "allele_number"
+  "allele_number",
+  "rest-option-set"
  ],
  "suites": {
   "flags": {
@@ -591,7 +592,75 @@
    "divergences": [],
    "vep_rs_only_tuples": [],
    "divergence_summary": {},
-   "vep_rs_only_summary": {}
+   "vep_rs_only_summary": {},
+   "fields_compared": [
+    "HGVSc",
+    "HGVSp",
+    "HGVS_OFFSET"
+   ],
+   "field_divergences": [
+    {
+     "location": "21:27850391-27850392",
+     "allele": "AC",
+     "feature": "ENST00000400043",
+     "feature_type": "Transcript",
+     "record_indices": [
+      21
+     ],
+     "consequence_set": "stop_lost",
+     "field": "HGVSp",
+     "vep": "ENSP00000382918.3:p.Ter133delinsCysTer",
+     "vep_rs": "ENSP00000382918.3:p.Ter133CysextTer7",
+     "expected_divergence": "hgvsp_stop_codon_protein_comparison"
+    },
+    {
+     "location": "21:46957692",
+     "allele": "T",
+     "feature": "ENST00000528477",
+     "feature_type": "Transcript",
+     "record_indices": [
+      27
+     ],
+     "consequence_set": "coding_sequence_variant,incomplete_terminal_codon_variant",
+     "field": "HGVSp",
+     "vep": "ENSP00000435780.1:p.Ter61=",
+     "vep_rs": "-",
+     "expected_divergence": "hgvsp_stop_named_on_incomplete_coding_sequence"
+    },
+    {
+     "location": "21:47532319-47533133",
+     "allele": "-",
+     "feature": "ENST00000460886",
+     "feature_type": "Transcript",
+     "record_indices": [
+      29
+     ],
+     "consequence_set": "transcript_ablation",
+     "field": "HGVSc",
+     "vep": "-",
+     "vep_rs": "ENST00000460886.1:n.1_306del",
+     "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+    },
+    {
+     "location": "21:47532319-47533133",
+     "allele": "-",
+     "feature": "ENST00000460886",
+     "feature_type": "Transcript",
+     "record_indices": [
+      29
+     ],
+     "consequence_set": "transcript_ablation",
+     "field": "HGVS_OFFSET",
+     "vep": "-",
+     "vep_rs": "1",
+     "expected_divergence": "hgvs_shifted_indel_written_span_gate"
+    }
+   ],
+   "field_divergence_summary": {
+    "hgvsp_stop_codon_protein_comparison": 1,
+    "hgvsp_stop_named_on_incomplete_coding_sequence": 1,
+    "hgvs_shifted_indel_written_span_gate": 2
+   }
   },
   {
    "name": "allele-flags",

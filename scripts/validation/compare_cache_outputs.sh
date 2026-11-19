@@ -62,6 +62,18 @@ Optional:
   --gate-per-csq-delta <float>  Per-consequence-type delta gate (default: 0.01)
   --help                    Print this help
 
+Environment:
+  VEP_OUTPUTS_COMPARATOR    The tuple comparator of the annotation output comparison.
+                            Unset: the Rust tool this tree builds,
+                            tools/vep-outputs-compare/target/release/vep-outputs-compare
+                            (cargo build --release --locked --manifest-path
+                            tools/vep-outputs-compare/Cargo.toml). `python`:
+                            scripts/concordance/compare_vep_outputs.py, the reference
+                            implementation, which writes the same reports. Any other
+                            value: a comparator binary, as a path or a command on PATH.
+                            A comparator that is not an executable stops the run before
+                            vep-rs runs; nothing is built here.
+
 Outputs:
   <work-dir>/baseline/         Baseline VEP output and metrics
   <work-dir>/builder/          Builder VEP output and metrics
@@ -158,6 +170,24 @@ if [[ -z "$VEP_BINARY" ]]; then
 	exit 1
 fi
 
+# The tuple comparator of Step 4. Unset, VEP_OUTPUTS_COMPARATOR selects the Rust tool this
+# tree builds, tools/vep-outputs-compare; `python` selects compare_vep_outputs.py, the
+# reference implementation; any other value names a comparator binary, a path or a command
+# on PATH (`type -P` resolves it as the exec does). A comparator that is not an executable
+# stops the run here, before vep-rs runs.
+case "${VEP_OUTPUTS_COMPARATOR:-}" in
+python) OUTPUTS_COMPARE=(python3 "${VEP_RS_DIR}/scripts/concordance/compare_vep_outputs.py") ;;
+*)
+	outputs_named="${VEP_OUTPUTS_COMPARATOR:-${VEP_RS_DIR}/tools/vep-outputs-compare/target/release/vep-outputs-compare}"
+	if outputs_bin=$(type -P -- "$outputs_named") && [[ -f "$outputs_bin" && -x "$outputs_bin" ]]; then
+		OUTPUTS_COMPARE=("$outputs_bin")
+	else
+		echo "ERROR: [compare_cache_outputs] the tuple comparator $outputs_named is not an executable: build the tool with 'cargo build --release --locked --manifest-path ${VEP_RS_DIR}/tools/vep-outputs-compare/Cargo.toml' or name a built one in VEP_OUTPUTS_COMPARATOR, or set VEP_OUTPUTS_COMPARATOR=python to score with the Python reference implementation" >&2
+		exit 1
+	fi
+	;;
+esac
+
 if [[ -z "$WORK_DIR" ]]; then
 	WORK_DIR="${VEP_RS_DIR}/tmp/cache_comparison"
 fi
@@ -225,35 +255,27 @@ python3 "${SCRIPT_DIR}/diff_caches.py" \
 	--output-report "${WORK_DIR}/cache_diff.json"
 echo ""
 
-# Step 4: Annotation output comparison (via compare_vep_outputs.py if available)
+# Step 4: Annotation output comparison (the tuple comparator resolved above)
 echo "=== Step 4: Annotation output comparison ==="
 
-CONCORDANCE_SCRIPT="${VEP_RS_DIR}/scripts/concordance/compare_vep_outputs.py"
-CONCORDANCE_REPORT=""
+# The tuple comparator expects directories with paired .txt files, so each single
+# output file is symlinked into a directory of its own.
+BASELINE_OUT_DIR="${WORK_DIR}/baseline_out"
+BUILDER_OUT_DIR="${WORK_DIR}/builder_out"
+REPORT_DIR="${WORK_DIR}/concordance_report"
+mkdir -p "$BASELINE_OUT_DIR" "$BUILDER_OUT_DIR" "$REPORT_DIR"
 
-if [[ -f "$CONCORDANCE_SCRIPT" ]]; then
-	# compare_vep_outputs.py expects directories with paired .txt files, so each
-	# single output file is symlinked into a directory of its own.
-	BASELINE_OUT_DIR="${WORK_DIR}/baseline_out"
-	BUILDER_OUT_DIR="${WORK_DIR}/builder_out"
-	REPORT_DIR="${WORK_DIR}/concordance_report"
-	mkdir -p "$BASELINE_OUT_DIR" "$BUILDER_OUT_DIR" "$REPORT_DIR"
+ln -sf "${WORK_DIR}/baseline/baseline_output.txt" "${BASELINE_OUT_DIR}/output.txt"
+ln -sf "${WORK_DIR}/builder/baseline_output.txt" "${BUILDER_OUT_DIR}/output.txt"
 
-	ln -sf "${WORK_DIR}/baseline/baseline_output.txt" "${BASELINE_OUT_DIR}/output.txt"
-	ln -sf "${WORK_DIR}/builder/baseline_output.txt" "${BUILDER_OUT_DIR}/output.txt"
+"${OUTPUTS_COMPARE[@]}" \
+	--perl-dir "$BASELINE_OUT_DIR" \
+	--rust-dir "$BUILDER_OUT_DIR" \
+	--report-dir "$REPORT_DIR" \
+	--summary-json "concordance.json" || true
 
-	python3 "$CONCORDANCE_SCRIPT" \
-		--perl-dir "$BASELINE_OUT_DIR" \
-		--rust-dir "$BUILDER_OUT_DIR" \
-		--report-dir "$REPORT_DIR" \
-		--summary-json "concordance.json" || true
-
-	CONCORDANCE_REPORT="${REPORT_DIR}/concordance.json"
-	echo ""
-else
-	echo "  WARNING: compare_vep_outputs.py not found, skipping semantic comparison"
-	echo ""
-fi
+CONCORDANCE_REPORT="${REPORT_DIR}/concordance.json"
+echo ""
 
 # Step 5: Gate checks and verdict
 echo "=== Step 5: Validation gates ==="

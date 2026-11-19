@@ -1,0 +1,36 @@
+entry = "stats_protein_position_eleventh_row"
+page = "docs/divergences/stats-protein-position.md#2-an-eleventh-row-for-a-position-past-the-end-of-a-short-peptide"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 19 of 77,601 cache transcripts · 6 flag sets, 6 corpora"
+notes = "The record's row on ENST00000451131, a cds_end_NF model of ten residues, lies at residue 11; its chart key int(10 * 11 / 10) is 11, and only the key 10 is folded under 90-100%."
+
+[input]
+format = "vcf"
+text = """
+21	39428463	tiny_cds_end	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-individual/json_cache"
+
+[run]
+stats = true
+
+[compare]
+kind = "stats"
+section = "[Position in protein]"
+sorted = false
+
+[expected]
+ensembl_vep = [
+  "00-10%\t9", "110-120%\t1", "10-20%\t6", "20-30%\t0", "30-40%\t1", "40-50%\t0",
+  "50-60%\t0", "60-70%\t0", "70-80%\t0", "80-90%\t0", "90-100%\t0",
+]
+vep_rs = [
+  "00-10%\t9", "10-20%\t6", "20-30%\t0", "30-40%\t1", "40-50%\t0",
+  "50-60%\t0", "60-70%\t0", "70-80%\t0", "80-90%\t0", "90-100%\t1",
+]

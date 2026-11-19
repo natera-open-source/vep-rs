@@ -1,0 +1,62 @@
+[VEP run statistics]
+VEP version (API)	 116.2 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh37
+Species	homo_sapiens
+Command line options	vep --assembly GRCh37 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins [PATH]/plugins --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --offline --output_file [PATH]/vcf.vcf --plugin gnomADc,[PATH]/gnomad.coverage.tsv.gz --quiet --stats_text --vcf
+Start time	2026-10-28 23:13:19
+End time	2026-10-28 23:13:19
+Run time	0 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/vcf.vcf
+
+[Data version]
+1000genomes	phase3
+COSMIC	98
+ClinVar	202306
+HGMD-PUBLIC	20204
+assembly	GRCh37.p13
+dbSNP	156
+gencode	GENCODE 19
+genebuild	2011-04
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.2
+regbuild	1.0
+sift	sift5.2.2
+
+[General statistics]
+Lines of input read	11
+Variants processed	11
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	8
+Overlapped transcripts	47
+Overlapped regulatory features	-
+
+[Variant classes]
+insertion	3
+deletion	3
+SNV	5
+
+[Consequences (most severe)]
+5_prime_UTR_variant	1
+non_coding_transcript_exon_variant	1
+intron_variant	4
+upstream_gene_variant	1
+downstream_gene_variant	1
+intergenic_variant	3
+
+[Consequences (all)]
+5_prime_UTR_variant	1
+non_coding_transcript_exon_variant	2
+intron_variant	38
+NMD_transcript_variant	1
+non_coding_transcript_variant	18
+upstream_gene_variant	5
+downstream_gene_variant	1
+intergenic_variant	3
+
+[Coding consequences]
+
+[Variants by chromosome]
+21	11

@@ -1,9 +1,11 @@
 {
  "release": "116",
+ "species": "homo_sapiens",
  "assembly": "GRCh38",
  "generator_version": "2",
  "seed": 1,
  "exemplars_per_combination": 2000,
+ "kept_records": 35,
  "max_span": 1000000,
  "cache_cost_flank": 5000,
  "covers": [
@@ -11,483 +13,6 @@
   "most_severe",
   "summary"
  ],
- "suites": {
-  "ps": {
-   "reference": "candidates.default.txt",
-   "input": "candidates.vcf",
-   "rows": 1604,
-   "combinations": 21
-  }
- },
- "combinations": {
-  "3_prime_UTR_variant": {
-   "observed_rows": 17,
-   "exemplar_records": 3
-  },
-  "3_prime_UTR_variant,NMD_transcript_variant": {
-   "observed_rows": 60,
-   "exemplar_records": 10
-  },
-  "5_prime_UTR_variant": {
-   "observed_rows": 27,
-   "exemplar_records": 5
-  },
-  "5_prime_UTR_variant,NMD_transcript_variant": {
-   "observed_rows": 2,
-   "exemplar_records": 1
-  },
-  "5_prime_UTR_variant,splice_region_variant": {
-   "observed_rows": 14,
-   "exemplar_records": 2
-  },
-  "NMD_transcript_variant,intron_variant": {
-   "observed_rows": 60,
-   "exemplar_records": 7
-  },
-  "NMD_transcript_variant,missense_variant": {
-   "observed_rows": 69,
-   "exemplar_records": 5
-  },
-  "NMD_transcript_variant,splice_region_variant,synonymous_variant": {
-   "observed_rows": 1,
-   "exemplar_records": 1
-  },
-  "NMD_transcript_variant,synonymous_variant": {
-   "observed_rows": 22,
-   "exemplar_records": 3
-  },
-  "downstream_gene_variant": {
-   "observed_rows": 217,
-   "exemplar_records": 10
-  },
-  "intergenic_variant": {
-   "observed_rows": 5,
-   "exemplar_records": 3
-  },
-  "intron_variant": {
-   "observed_rows": 135,
-   "exemplar_records": 10
-  },
-  "intron_variant,non_coding_transcript_variant": {
-   "observed_rows": 62,
-   "exemplar_records": 11
-  },
-  "missense_variant": {
-   "observed_rows": 220,
-   "exemplar_records": 10
-  },
-  "missense_variant,splice_region_variant": {
-   "observed_rows": 2,
-   "exemplar_records": 1
-  },
-  "non_coding_transcript_exon_variant": {
-   "observed_rows": 224,
-   "exemplar_records": 11
-  },
-  "non_coding_transcript_exon_variant,splice_region_variant": {
-   "observed_rows": 102,
-   "exemplar_records": 5
-  },
-  "splice_region_variant,synonymous_variant": {
-   "observed_rows": 6,
-   "exemplar_records": 2
-  },
-  "stop_gained": {
-   "observed_rows": 12,
-   "exemplar_records": 1
-  },
-  "synonymous_variant": {
-   "observed_rows": 103,
-   "exemplar_records": 5
-  },
-  "upstream_gene_variant": {
-   "observed_rows": 244,
-   "exemplar_records": 11
-  }
- },
- "variant_classes": {
-  "snv": 802
- },
- "records": [
-  {
-   "suite": "ps",
-   "vcf": "21\t8857289\tps_8857289\tT\tC,A\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant",
-    "non_coding_transcript_exon_variant,splice_region_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t9327269\tps_9327269\tC\tT\t.\t.\t.",
-   "combinations": [
-    "non_coding_transcript_exon_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t11909772\tps_11909772\tT\tC\t.\t.\t.",
-   "combinations": [
-    "intergenic_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t12410040\tps_12410040\tG\tA,C,T\t.\t.\t.",
-   "combinations": [
-    "intergenic_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t16640433\tps_16640433\tG\tA\t.\t.\t.",
-   "combinations": [
-    "non_coding_transcript_exon_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t16855367\tps_16855367\tT\tC\t.\t.\t.",
-   "combinations": [
-    "intergenic_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t17604928\tps_17604928\tG\tA,C\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant",
-    "NMD_transcript_variant,intron_variant",
-    "NMD_transcript_variant,missense_variant",
-    "NMD_transcript_variant,synonymous_variant",
-    "intron_variant",
-    "missense_variant",
-    "non_coding_transcript_exon_variant",
-    "synonymous_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t20782376\tps_20782376\tC\tT\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant",
-    "non_coding_transcript_exon_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t21410367\tps_21410367\tC\tT\t.\t.\t.",
-   "combinations": [
-    "missense_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t23432208\tps_23432208\tA\tG,T\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t25693624\tps_25693624\tT\tC,A,G\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant",
-    "NMD_transcript_variant,intron_variant",
-    "downstream_gene_variant",
-    "intron_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t29091575\tps_29091575\tA\tG\t.\t.\t.",
-   "combinations": [
-    "5_prime_UTR_variant,splice_region_variant",
-    "NMD_transcript_variant,splice_region_variant,synonymous_variant",
-    "intron_variant",
-    "non_coding_transcript_exon_variant,splice_region_variant",
-    "splice_region_variant,synonymous_variant",
-    "synonymous_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t31663838\tps_31663838\tG\tA,C\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant",
-    "NMD_transcript_variant,intron_variant",
-    "NMD_transcript_variant,missense_variant",
-    "downstream_gene_variant",
-    "intron_variant",
-    "missense_variant",
-    "non_coding_transcript_exon_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t32270468\tps_32270468\tT\tC\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,synonymous_variant",
-    "intron_variant",
-    "missense_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t33266463\tps_33266463\tT\tC\t.\t.\t.",
-   "combinations": [
-    "5_prime_UTR_variant",
-    "5_prime_UTR_variant,NMD_transcript_variant",
-    "downstream_gene_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t33524884\tps_33524884\tT\tC,A\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant",
-    "NMD_transcript_variant,missense_variant",
-    "missense_variant",
-    "non_coding_transcript_exon_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t33765943\tps_33765943\tT\tC\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant",
-    "NMD_transcript_variant,intron_variant",
-    "NMD_transcript_variant,missense_variant",
-    "missense_variant",
-    "non_coding_transcript_exon_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t33917039\tps_33917039\tA\tG,T,C\t.\t.\t.",
-   "combinations": [
-    "downstream_gene_variant",
-    "intron_variant,non_coding_transcript_variant",
-    "non_coding_transcript_exon_variant",
-    "upstream_gene_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t36130346\tps_36130346\tT\tC,A\t.\t.\t.",
-   "combinations": [
-    "downstream_gene_variant",
-    "intron_variant,non_coding_transcript_variant",
-    "upstream_gene_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t37036904\tps_37036904\tT\tC\t.\t.\t.",
-   "combinations": [
-    "downstream_gene_variant",
-    "missense_variant,splice_region_variant",
-    "splice_region_variant,synonymous_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t37208543\tps_37208543\tG\tA\t.\t.\t.",
-   "combinations": [
-    "intron_variant,non_coding_transcript_variant",
-    "non_coding_transcript_exon_variant,splice_region_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t37840683\tps_37840683\tT\tC,A\t.\t.\t.",
-   "combinations": [
-    "5_prime_UTR_variant",
-    "downstream_gene_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t38575746\tps_38575746\tG\tA\t.\t.\t.",
-   "combinations": [
-    "5_prime_UTR_variant,splice_region_variant",
-    "non_coding_transcript_exon_variant,splice_region_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t38734876\tps_38734876\tG\tA\t.\t.\t.",
-   "combinations": [
-    "downstream_gene_variant",
-    "intron_variant,non_coding_transcript_variant",
-    "non_coding_transcript_exon_variant,splice_region_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t39410890\tps_39410890\tG\tA,C,T\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant",
-    "downstream_gene_variant",
-    "intron_variant",
-    "intron_variant,non_coding_transcript_variant",
-    "missense_variant",
-    "synonymous_variant",
-    "upstream_gene_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t42199830\tps_42199830\tT\tC,A\t.\t.\t.",
-   "combinations": [
-    "5_prime_UTR_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t42485736\tps_42485736\tT\tC\t.\t.\t.",
-   "combinations": [
-    "NMD_transcript_variant,intron_variant",
-    "intron_variant",
-    "missense_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t42843095\tps_42843095\tT\tC\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant",
-    "3_prime_UTR_variant,NMD_transcript_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t43100486\tps_43100486\tG\tA,C\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant",
-    "3_prime_UTR_variant,NMD_transcript_variant",
-    "5_prime_UTR_variant",
-    "NMD_transcript_variant,intron_variant",
-    "intron_variant",
-    "missense_variant",
-    "non_coding_transcript_exon_variant",
-    "stop_gained",
-    "upstream_gene_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t43791391\tps_43791391\tC\tT,G,A\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant",
-    "NMD_transcript_variant,missense_variant",
-    "NMD_transcript_variant,synonymous_variant",
-    "intron_variant",
-    "missense_variant",
-    "non_coding_transcript_exon_variant",
-    "synonymous_variant",
-    "upstream_gene_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t44459347\tps_44459347\tA\tG\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t45291996\tps_45291996\tG\tA,C\t.\t.\t.",
-   "combinations": [
-    "downstream_gene_variant",
-    "intron_variant,non_coding_transcript_variant",
-    "non_coding_transcript_exon_variant",
-    "upstream_gene_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t45573402\tps_45573402\tC\tT\t.\t.\t.",
-   "combinations": [
-    "5_prime_UTR_variant",
-    "intron_variant,non_coding_transcript_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t46151781\tps_46151781\tG\tA\t.\t.\t.",
-   "combinations": [
-    "3_prime_UTR_variant,NMD_transcript_variant",
-    "NMD_transcript_variant,intron_variant",
-    "intron_variant",
-    "intron_variant,non_coding_transcript_variant",
-    "upstream_gene_variant"
-   ]
-  },
-  {
-   "suite": "ps",
-   "vcf": "21\t46602347\tps_46602347\tT\tC,A\t.\t.\t.",
-   "combinations": [
-    "synonymous_variant"
-   ],
-   "strata": [
-    "multi_allelic_snv"
-   ]
-  }
- ],
- "multi_allelic_per_suite": 40,
- "uncovered_combinations": [],
- "unresolved_exemplars": [],
  "flag_sets": [
   {
    "name": "pick",
@@ -681,7 +206,8 @@
   {
    "name": "most-severe",
    "flags": [
-    "--most_severe"
+    "--most_severe",
+    "--regulatory"
    ],
    "input": "variants.vcf",
    "stdin": false,
@@ -861,12 +387,555 @@
    "covers": [
     "coding_only"
    ],
-   "divergences": [],
+   "divergences": [
+    {
+     "location": "21:33912200-33915800",
+     "allele": "-",
+     "feature": "ENST00001002788",
+     "feature_type": "Transcript",
+     "record_indices": [
+      21
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_retained_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,5_prime_UTR_variant,intron_variant,splice_acceptor_variant,splice_donor_5th_base_variant,splice_donor_variant,start_lost,stop_lost"
+     ],
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    },
+    {
+     "location": "21:33912250-33912450",
+     "allele": "-",
+     "feature": "ENST00001002788",
+     "feature_type": "Transcript",
+     "record_indices": [
+      22
+     ],
+     "vep_consequence_set": "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_retained_variant",
+     "vep_rs_consequence_sets": [
+      "3_prime_UTR_variant,intron_variant,splice_acceptor_variant,stop_lost"
+     ],
+     "expected_divergence": "stop_codon_removed_without_stop_codon_test"
+    }
+   ],
    "vep_rs_only_tuples": [],
-   "divergence_summary": {},
+   "divergence_summary": {
+    "stop_codon_removed_without_stop_codon_test": 2
+   },
    "vep_rs_only_summary": {}
   }
  ],
+ "suites": {
+  "ps": {
+   "reference": "reference.txt",
+   "input": "candidates.vcf",
+   "rows": 1601,
+   "combinations": 21
+  }
+ },
+ "combinations": {
+  "3_prime_UTR_variant": {
+   "observed_rows": 17,
+   "exemplar_records": 3
+  },
+  "3_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 60,
+   "exemplar_records": 10
+  },
+  "5_prime_UTR_variant": {
+   "observed_rows": 27,
+   "exemplar_records": 5
+  },
+  "5_prime_UTR_variant,NMD_transcript_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "5_prime_UTR_variant,splice_region_variant": {
+   "observed_rows": 14,
+   "exemplar_records": 2
+  },
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 60,
+   "exemplar_records": 7
+  },
+  "NMD_transcript_variant,missense_variant": {
+   "observed_rows": 69,
+   "exemplar_records": 5
+  },
+  "NMD_transcript_variant,splice_region_variant,synonymous_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "NMD_transcript_variant,synonymous_variant": {
+   "observed_rows": 22,
+   "exemplar_records": 3
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 217,
+   "exemplar_records": 17
+  },
+  "intergenic_variant": {
+   "observed_rows": 7,
+   "exemplar_records": 5
+  },
+  "intron_variant": {
+   "observed_rows": 134,
+   "exemplar_records": 10
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 62,
+   "exemplar_records": 11
+  },
+  "missense_variant": {
+   "observed_rows": 220,
+   "exemplar_records": 10
+  },
+  "missense_variant,splice_region_variant": {
+   "observed_rows": 2,
+   "exemplar_records": 1
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 222,
+   "exemplar_records": 20
+  },
+  "non_coding_transcript_exon_variant,splice_region_variant": {
+   "observed_rows": 102,
+   "exemplar_records": 5
+  },
+  "splice_region_variant,synonymous_variant": {
+   "observed_rows": 6,
+   "exemplar_records": 2
+  },
+  "stop_gained": {
+   "observed_rows": 12,
+   "exemplar_records": 1
+  },
+  "synonymous_variant": {
+   "observed_rows": 103,
+   "exemplar_records": 5
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 242,
+   "exemplar_records": 16
+  }
+ },
+ "variant_classes": {
+  "snv": 1601
+ },
+ "records": [
+  {
+   "suite": "ps",
+   "vcf": "21\t8857289\tps_8857289\tT\tC,A\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t9327269\tps_9327269\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t11909772\tps_11909772\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t12410040\tps_12410040\tG\tA,C,T\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t15340770\tps_15340770\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t15669400\tps_15669400\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t16640433\tps_16640433\tG\tA\t.\t.\t.",
+   "combinations": [
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t16855367\tps_16855367\tT\tC\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t17604928\tps_17604928\tG\tA,C\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,missense_variant",
+    "NMD_transcript_variant,synonymous_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t20782376\tps_20782376\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t21410367\tps_21410367\tC\tT\t.\t.\t.",
+   "combinations": [
+    "missense_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t23432208\tps_23432208\tA\tG,T\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t25693624\tps_25693624\tT\tC,A,G\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t29091575\tps_29091575\tA\tG\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,splice_region_variant",
+    "NMD_transcript_variant,splice_region_variant,synonymous_variant",
+    "intron_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant",
+    "splice_region_variant,synonymous_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t31663838\tps_31663838\tG\tA,C\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,missense_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t32270468\tps_32270468\tT\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,synonymous_variant",
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t33266463\tps_33266463\tT\tC\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "5_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t33524884\tps_33524884\tT\tC,A\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,missense_variant",
+    "downstream_gene_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t33765943\tps_33765943\tT\tC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,intron_variant",
+    "NMD_transcript_variant,missense_variant",
+    "downstream_gene_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t33917039\tps_33917039\tA\tG,T,C\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t36130346\tps_36130346\tT\tC,A\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t37036904\tps_37036904\tT\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "missense_variant,splice_region_variant",
+    "splice_region_variant,synonymous_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t37208543\tps_37208543\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t37840683\tps_37840683\tT\tC,A\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t38575746\tps_38575746\tG\tA\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant,splice_region_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t38734876\tps_38734876\tG\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant,splice_region_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t39410890\tps_39410890\tG\tA,C,T\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t42199830\tps_42199830\tT\tC,A\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "non_coding_transcript_exon_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t42485736\tps_42485736\tT\tC\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t42843095\tps_42843095\tT\tC\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "downstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t43100486\tps_43100486\tG\tA,C\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "5_prime_UTR_variant",
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "stop_gained",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t43791391\tps_43791391\tC\tT,G,A\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,missense_variant",
+    "NMD_transcript_variant,synonymous_variant",
+    "intron_variant",
+    "missense_variant",
+    "non_coding_transcript_exon_variant",
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t44459347\tps_44459347\tA\tG\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant",
+    "downstream_gene_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t45291996\tps_45291996\tG\tA,C\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t45573402\tps_45573402\tC\tT\t.\t.\t.",
+   "combinations": [
+    "5_prime_UTR_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t46151781\tps_46151781\tG\tA\t.\t.\t.",
+   "combinations": [
+    "3_prime_UTR_variant,NMD_transcript_variant",
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "ps",
+   "vcf": "21\t46602347\tps_46602347\tT\tC,A\t.\t.\t.",
+   "combinations": [
+    "synonymous_variant",
+    "upstream_gene_variant"
+   ],
+   "strata": [
+    "multi_allelic_snv"
+   ]
+  }
+ ],
+ "multi_allelic_per_suite": 40,
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
  "divergences": [],
  "vep_rs_only_tuples": [],
  "divergence_summary": {},

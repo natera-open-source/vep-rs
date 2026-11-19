@@ -1,0 +1,29 @@
+entry = "plugin_unknown_mode_word_refused"
+page = "docs/divergences/plugin-unknown-mode-word-refused.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the Conservation plugin's header, which names the MAX parameter and sets no rule for a word after it; not seen in the measured datasets; classed by its most reachable shape, a word after MAX: a LOEUF match_by of another word breaks \"matching by either transcript or gene\" (the LOEUF plugin's header)"
+notes = "LOEUF under `match_by=exon`, a word outside its set: Ensembl VEP stores the word, loads the plugin and prints its header line, then returns nothing on every row; vep-rs refuses the plugin with `LOEUF: match_by must be gene or transcript, not 'exon'` and prints no header line. The same shape under pLI's mode word (`pLI,<file>,exon`) and under a word after Conservation's `MAX` (`Conservation,<file>,MAX,foo`) is on the page."
+
+[input]
+format = "vcf"
+text = """
+21	26112000	app_exon	G	A	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-loeuf/json_cache"
+
+[run]
+flags = ["--plugin", "LOEUF,file={corpus}/data/loeuf_dataset_grch38.tsv.gz,match_by=exon"]
+
+[compare]
+kind = "header"
+pattern = "^## LOEUF : "
+
+[expected]
+ensembl_vep = ["## LOEUF : Loss-of-function observed/expected upper bound fraction"]
+vep_rs = []

@@ -1,0 +1,13 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+MT	3	.	T	C	.	.	.
+MT	6	.	C	CCTCAA	.	.	.
+MT	21	.	AT	A	.	.	.
+MT	42	.	T	TC	.	.	.
+MT	60	.	T	G	.	.	.
+MT	1555	rs267606617	A	G	.	.	.
+MT	3243	rs199474657	A	G	.	.	.
+MT	3460	rs199476118	G	A	.	.	.
+MT	8993	rs199476133	T	G,C	.	.	.
+MT	11778	rs199476112	G	A	.	.	.
+MT	14484	rs199476104	T	C	.	.	.

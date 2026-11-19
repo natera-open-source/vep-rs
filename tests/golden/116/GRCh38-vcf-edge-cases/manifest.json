@@ -29,7 +29,7 @@
   "GRCh38-vcf-edge-cases": {
    "reference": "default.txt",
    "input": "variants.vcf",
-   "rows": 56,
+   "rows": 61,
    "combinations": 10
   }
  },
@@ -63,12 +63,12 @@
    "exemplar_records": 2
   },
   "stop_lost": {
-   "observed_rows": 20,
-   "exemplar_records": 20
+   "observed_rows": 23,
+   "exemplar_records": 23
   },
   "stop_retained_variant": {
-   "observed_rows": 7,
-   "exemplar_records": 7
+   "observed_rows": 9,
+   "exemplar_records": 9
   },
   "upstream_gene_variant": {
    "observed_rows": 9,
@@ -404,6 +404,35 @@
    "vcf": "21\t0\tpos0_del\tAT\tA\t.\t.\t.",
    "combinations": [
     "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\t;rs2\tC\tG\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30289183\t0;rs2\tC\tT\t.\t.\t.",
+   "combinations": [
+    "stop_retained_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30396602\t\tTTGA\tT\t.\t.\t.",
+   "combinations": [
+    "stop_lost"
+   ]
+  },
+  {
+   "suite": "GRCh38-vcf-edge-cases",
+   "vcf": "21\t30396602\t0\tTTGA\tT,TTGATC\t.\t.\t.",
+   "combinations": [
+    "stop_lost",
+    "stop_retained_variant"
    ]
   }
  ],

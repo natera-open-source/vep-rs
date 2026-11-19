@@ -1,0 +1,1138 @@
+# The runs a release scores its supported plugins on, as data: one `[[run]]` a run, each naming
+# the rows of scripts/parity/plugin_gate_rows.py it scores and the words both engines and the
+# scorer take. scripts/concordance/reproduce_plugin_concordance.py reads this file and runs them.
+#
+# A whole run annotates a genome-wide dataset and is named by `family`, the group the plugin
+# record lists its rows under. A corpus run annotates one committed corpus under
+# tests/golden/116/ and is named by `corpus` and `set`: `base` is the manifest's own run, any
+# other name a `flag_sets` entry of the manifest.
+#
+# Keys of a run:
+#   rows               the derived rows it scores: plugin (the row's label), assembly, scored_on,
+#                      dataset_or_corpus
+#   reference          Ensembl VEP's default-format output the run is scored against
+#   vep_rs             the words after `vep` for vep-rs; vep_rs_env its environment words
+#   ensembl_vep        the words after `vep` for Ensembl VEP, as the reference's provenance
+#                      records them; ensembl_vep_image the image that ran them
+#   ensembl_vep_tools  programs the plugin calls that the image lacks
+#   score              the words of scripts/concordance/score_plugin_tuples.py that belong to
+#                      the run: its plugins and every file a class reads
+#   data_indexes       the index files that stand beside the plugin data files the run names
+#
+# A word in braces is a named input, filled by the caller; [inputs] says what each one is. No
+# other word names a place outside the tree. A path under {plugin_data} is
+# <scope>/<the path scripts/data/plugin_data_layout.sh gives the file>, the scope grch37, grch38
+# or assembly_agnostic.
+
+[inputs]
+input = "the VCF a whole run annotates"
+output = "the file vep-rs writes"
+reference = "Ensembl VEP's default-format output of the same input under the run's ensembl_vep words"
+fork = "the number of processes vep-rs forks"
+vep_rs_cache = "the vep-rs JSON cache of the run's assembly"
+fasta = "the reference FASTA of the run's assembly, with its .fai beside it"
+plugin_data = "the plugin data directory"
+loftee = "LoFTEE's checkout, its maxEntScan directory holding the stand-in files of scripts/data/write_loftee_stand_ins.py"
+utrannotator_sweep = "the directory of Ensembl VEP's outputs under fixed Perl hash seeds that the UTRAnnotator classes read"
+corpus = "the corpus directory"
+generated = "the directory the corpus manifest's `generated` command writes"
+home = "an empty directory that stands as the home directory of a corpus run"
+ensembl_vep_cache = "the directory holding Ensembl VEP's cache, homo_sapiens/116_<assembly> beneath it"
+ensembl_vep_output = "the file Ensembl VEP writes"
+ensembl_vep_dir = "a writable directory: Ensembl VEP's GWAS module writes its sorted copy of the catalog there"
+plugin_modules = "the directory of Ensembl VEP's plugin modules, a VEP_plugins checkout at release/116"
+
+[[run]]
+family = "plugins_grch37"
+assembly = "GRCh37"
+dataset = "clinvar_grch37"
+rows = [
+  ["AlphaMissense", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["AncestralAllele", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["Blosum62", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["DosageSensitivity", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["Downstream", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["gnomADc", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["HGVSIntronOffset", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["LOEUF", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["LoFtool", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["NearestExonJB", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["NMD", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["pLI", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["REVEL", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["TSSDistance", "GRCh37", "clinvar", "clinvar_grch37"],
+  ["UTRAnnotator", "GRCh37", "clinvar", "clinvar_grch37"],
+]
+reference = "{reference}"
+vep_rs = ["-i", "{input}", "-o", "{output}", "--offline", "--json_cache", "{vep_rs_cache}", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--fork", "{fork}", "--no_stats", "--quiet", "--force_overwrite", "--hgvs", "--plugin", "AlphaMissense,file={plugin_data}/grch37/alphamissense/alphamissense.tsv.gz", "--plugin", "AncestralAllele,{plugin_data}/grch37/ancestral_allele/homo_sapiens_ancestor.fa.gz", "--plugin", "Blosum62", "--plugin", "DosageSensitivity,file={plugin_data}/assembly_agnostic/dosagesensitivity/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz", "--plugin", "Downstream", "--plugin", "gnomADc,{plugin_data}/grch37/gnomadc/gnomad_coverage.tsv.gz", "--plugin", "HGVSIntronOffset", "--plugin", "LOEUF,file={plugin_data}/grch37/loeuf/loeuf_dataset.tsv.gz,match_by=gene", "--plugin", "LoFtool,{plugin_data}/assembly_agnostic/loftool/LoFtool_scores.txt", "--plugin", "NearestExonJB", "--plugin", "NMD", "--plugin", "pLI,{plugin_data}/assembly_agnostic/pli/pLI_values.txt", "--plugin", "REVEL,file={plugin_data}/grch37/revel/revel.tsv.gz", "--plugin", "TSSDistance", "--plugin", "UTRAnnotator,file={plugin_data}/grch37/utrannotator/uORF_5UTR_GRCh37_PUBLIC.txt", "--fasta", "{fasta}"]
+score = ["--plugins", "AlphaMissense,AncestralAllele,Blosum62,DosageSensitivity,Downstream,gnomADc,HGVSIntronOffset,LOEUF,LoFtool,NearestExonJB,NMD,pLI,REVEL,TSSDistance,UTRAnnotator", "--json-cache", "{vep_rs_cache}", "--input", "{input}", "--revel-table", "{plugin_data}/grch37/revel/revel.tsv.gz", "--utrannotator-sweep", "{utrannotator_sweep}/sweep-seed0.txt", "--utrannotator-sweep", "{utrannotator_sweep}/sweep-seed0000000000000000000000000000000002.txt", "--utrannotator-sweep", "{utrannotator_sweep}/sweep-seed0000000000000000000000000000000003.txt", "--utrannotator-sweep", "{utrannotator_sweep}/sweep-seed0000000000000000000000000000000005.txt", "--utrannotator-sweep", "{utrannotator_sweep}/sweep-seed11.txt"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+data_indexes = ["{plugin_data}/grch37/alphamissense/alphamissense.tsv.gz.tbi", "{plugin_data}/grch37/ancestral_allele/homo_sapiens_ancestor.fa.gz.fai", "{plugin_data}/grch37/ancestral_allele/homo_sapiens_ancestor.fa.gz.gzi", "{plugin_data}/grch37/gnomadc/gnomad_coverage.tsv.gz.tbi", "{plugin_data}/grch37/loeuf/loeuf_dataset.tsv.gz.tbi", "{plugin_data}/grch37/revel/revel.tsv.gz.tbi"]
+ensembl_vep = ["-i", "{input}", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "16", "--fasta", "{fasta}", "--no_headers", "--stats_text", "--quiet", "--force_overwrite", "--hgvs", "--plugin", "AlphaMissense,file={plugin_data}/grch37/alphamissense/alphamissense.tsv.gz", "--plugin", "AncestralAllele,{plugin_data}/grch37/ancestral_allele/homo_sapiens_ancestor.fa.gz", "--plugin", "Blosum62", "--plugin", "DosageSensitivity,file={plugin_data}/assembly_agnostic/dosagesensitivity/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz", "--plugin", "Downstream", "--plugin", "gnomADc,{plugin_data}/grch37/gnomadc/gnomad_coverage.tsv.gz", "--plugin", "HGVSIntronOffset", "--plugin", "LOEUF,file={plugin_data}/grch37/loeuf/loeuf_dataset.tsv.gz,match_by=gene", "--plugin", "LoFtool,{plugin_data}/assembly_agnostic/loftool/LoFtool_scores.txt", "--plugin", "NearestExonJB", "--plugin", "NMD", "--plugin", "pLI,{plugin_data}/assembly_agnostic/pli/pLI_values.txt", "--plugin", "REVEL,file={plugin_data}/grch37/revel/revel.tsv.gz", "--plugin", "TSSDistance", "--plugin", "UTRAnnotator,file={plugin_data}/grch37/utrannotator/uORF_5UTR_GRCh37_PUBLIC.txt"]
+
+[[run]]
+family = "plugins_grch38"
+assembly = "GRCh38"
+dataset = "clinvar_grch38"
+rows = [
+  ["AlphaMissense", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["AncestralAllele", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["Blosum62", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["Conservation", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["DosageSensitivity", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["Downstream", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["gnomADc", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["gnomADMt", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["HGVSIntronOffset", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["LOEUF", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["LoFtool", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["NearestExonJB", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["NMD", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["OpenTargets", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["pLI", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["REVEL", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["TSSDistance", "GRCh38", "clinvar", "clinvar_grch38"],
+  ["UTRAnnotator", "GRCh38", "clinvar", "clinvar_grch38"],
+]
+reference = "{reference}"
+vep_rs = ["-i", "{input}", "-o", "{output}", "--offline", "--json_cache", "{vep_rs_cache}", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--fork", "{fork}", "--no_stats", "--quiet", "--force_overwrite", "--hgvs", "--plugin", "AlphaMissense,file={plugin_data}/grch38/alphamissense/alphamissense.tsv.gz", "--plugin", "AncestralAllele,{plugin_data}/grch38/ancestral_allele/homo_sapiens_ancestor.fa.gz", "--plugin", "Blosum62", "--plugin", "Conservation,{plugin_data}/grch38/loftee/grch38/gerp_conservation_scores.homo_sapiens.GRCh38.bw", "--plugin", "DosageSensitivity,file={plugin_data}/assembly_agnostic/dosagesensitivity/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz", "--plugin", "Downstream", "--plugin", "gnomADc,{plugin_data}/grch38/gnomadc/gnomad_coverage.tsv.gz", "--plugin", "gnomADMt,file={plugin_data}/assembly_agnostic/gnomadmt/gnomad.genomes.v3.1.sites.chrM.vcf.bgz", "--plugin", "HGVSIntronOffset", "--plugin", "LOEUF,file={plugin_data}/grch38/loeuf/loeuf_dataset_grch38.tsv.gz,match_by=gene", "--plugin", "LoFtool,{plugin_data}/assembly_agnostic/loftool/LoFtool_scores.txt", "--plugin", "NearestExonJB", "--plugin", "NMD", "--plugin", "OpenTargets,file={plugin_data}/grch38/opentargets/open_targets_vep_full.tsv.gz", "--plugin", "pLI,{plugin_data}/assembly_agnostic/pli/pLI_values.txt", "--plugin", "REVEL,file={plugin_data}/grch38/revel/revel.tsv.gz", "--plugin", "TSSDistance", "--plugin", "UTRAnnotator,file={plugin_data}/grch38/utrannotator/uORF_5UTR_GRCh38_PUBLIC.txt", "--fasta", "{fasta}"]
+score = ["--plugins", "AlphaMissense,AncestralAllele,Blosum62,Conservation,DosageSensitivity,Downstream,gnomADc,gnomADMt,HGVSIntronOffset,LOEUF,LoFtool,NearestExonJB,NMD,OpenTargets,pLI,REVEL,TSSDistance,UTRAnnotator", "--json-cache", "{vep_rs_cache}", "--input", "{input}", "--revel-table", "{plugin_data}/grch38/revel/revel.tsv.gz", "--utrannotator-sweep", "{utrannotator_sweep}/sweep-seed0.txt", "--utrannotator-sweep", "{utrannotator_sweep}/sweep-seed0000000000000000000000000000000002.txt", "--utrannotator-sweep", "{utrannotator_sweep}/sweep-seed0000000000000000000000000000000003.txt", "--utrannotator-sweep", "{utrannotator_sweep}/sweep-seed0000000000000000000000000000000005.txt", "--utrannotator-sweep", "{utrannotator_sweep}/sweep-seed11.txt"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+data_indexes = ["{plugin_data}/grch38/alphamissense/alphamissense.tsv.gz.tbi", "{plugin_data}/grch38/ancestral_allele/homo_sapiens_ancestor.fa.gz.fai", "{plugin_data}/grch38/ancestral_allele/homo_sapiens_ancestor.fa.gz.gzi", "{plugin_data}/grch38/gnomadc/gnomad_coverage.tsv.gz.tbi", "{plugin_data}/assembly_agnostic/gnomadmt/gnomad.genomes.v3.1.sites.chrM.vcf.bgz.tbi", "{plugin_data}/grch38/loeuf/loeuf_dataset_grch38.tsv.gz.tbi", "{plugin_data}/grch38/opentargets/open_targets_vep_full.tsv.gz.tbi", "{plugin_data}/grch38/revel/revel.tsv.gz.tbi"]
+ensembl_vep = ["-i", "{input}", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "16", "--fasta", "{fasta}", "--no_headers", "--stats_text", "--quiet", "--force_overwrite", "--hgvs", "--plugin", "AlphaMissense,file={plugin_data}/grch38/alphamissense/alphamissense.tsv.gz", "--plugin", "AncestralAllele,{plugin_data}/grch38/ancestral_allele/homo_sapiens_ancestor.fa.gz", "--plugin", "Blosum62", "--plugin", "Conservation,{plugin_data}/grch38/loftee/grch38/gerp_conservation_scores.homo_sapiens.GRCh38.bw", "--plugin", "DosageSensitivity,file={plugin_data}/assembly_agnostic/dosagesensitivity/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz", "--plugin", "Downstream", "--plugin", "gnomADc,{plugin_data}/grch38/gnomadc/gnomad_coverage.tsv.gz", "--plugin", "gnomADMt,file={plugin_data}/assembly_agnostic/gnomadmt/gnomad.genomes.v3.1.sites.chrM.vcf.bgz", "--plugin", "HGVSIntronOffset", "--plugin", "LOEUF,file={plugin_data}/grch38/loeuf/loeuf_dataset_grch38.tsv.gz,match_by=gene", "--plugin", "LoFtool,{plugin_data}/assembly_agnostic/loftool/LoFtool_scores.txt", "--plugin", "NearestExonJB", "--plugin", "NMD", "--plugin", "OpenTargets,file={plugin_data}/grch38/opentargets/open_targets_vep_full.tsv.gz", "--plugin", "pLI,{plugin_data}/assembly_agnostic/pli/pLI_values.txt", "--plugin", "REVEL,file={plugin_data}/grch38/revel/revel.tsv.gz", "--plugin", "TSSDistance", "--plugin", "UTRAnnotator,file={plugin_data}/grch38/utrannotator/uORF_5UTR_GRCh38_PUBLIC.txt"]
+
+[[run]]
+family = "gwas"
+assembly = "GRCh38"
+dataset = "clinvar_grch38"
+rows = [
+  ["GWAS", "GRCh38", "clinvar", "clinvar_grch38"],
+]
+reference = "{reference}"
+vep_rs = ["-i", "{input}", "-o", "{output}", "--offline", "--json_cache", "{vep_rs_cache}", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--fork", "{fork}", "--no_stats", "--quiet", "--force_overwrite", "--plugin", "GWAS,file={plugin_data}/assembly_agnostic/gwas/gwas_catalog_associations.tsv", "--fasta", "{fasta}"]
+score = ["--plugins", "GWAS", "--gwas-catalog", "{plugin_data}/assembly_agnostic/gwas/gwas_catalog_associations.tsv", "--json-cache", "{vep_rs_cache}"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "{input}", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "16", "--fasta", "{fasta}", "--no_headers", "--stats_text", "--quiet", "--force_overwrite", "--dir", "{ensembl_vep_dir}", "--plugin", "GWAS,file={plugin_data}/assembly_agnostic/gwas/gwas_catalog_associations.tsv"]
+
+[[run]]
+family = "loftee_grch38"
+assembly = "GRCh38"
+dataset = "clinvar_grch38"
+rows = [
+  ["LoFTEE", "GRCh38", "clinvar", "clinvar_grch38"],
+]
+reference = "{reference}"
+vep_rs = ["-i", "{input}", "-o", "{output}", "--offline", "--json_cache", "{vep_rs_cache}", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--fork", "{fork}", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{loftee}", "--plugin", "LoF,loftee_path:{loftee},human_ancestor_fa:{plugin_data}/grch38/loftee/grch38/human_ancestor.fa,gerp_bigwig:{plugin_data}/grch38/loftee/grch38/gerp_conservation_scores.homo_sapiens.GRCh38.bw", "--fasta", "{fasta}"]
+score = ["--plugins", "LoFTEE", "--json-cache", "{vep_rs_cache}", "--class-population", "loftee_gerp_zoom_level_summary=3996262"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+data_indexes = ["{plugin_data}/grch38/loftee/grch38/human_ancestor.fa.fai"]
+ensembl_vep_tools = ["samtools"]
+ensembl_vep = ["-i", "{input}", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "16", "--fasta", "{fasta}", "--no_headers", "--stats_text", "--quiet", "--force_overwrite", "--dir_plugins", "{loftee}", "--plugin", "LoF,loftee_path:{loftee},human_ancestor_fa:{plugin_data}/grch38/loftee/grch38/human_ancestor.fa,gerp_bigwig:{plugin_data}/grch38/loftee/grch38/gerp_conservation_scores.homo_sapiens.GRCh38.bw"]
+
+[[run]]
+corpus = "GRCh37-plugin-bayesdel-fixture"
+set = "bayesdel"
+assembly = "GRCh37"
+rows = [
+  ["BayesDel", "GRCh37", "synthetic_fixture", "GRCh37-plugin-bayesdel-fixture"],
+]
+reference = "{corpus}/expected_bayesdel/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/data", "--plugin", "BayesDel,file={corpus}/data/BayesDel_170824_addAF_all_scores_synthetic.txt.gz", "-o", "{output}"]
+score = ["--plugins", "BayesDel", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{corpus}/data", "--plugin", "BayesDel,file={corpus}/data/BayesDel_170824_addAF_all_scores_synthetic.txt.gz"]
+
+[[run]]
+corpus = "GRCh37-plugin-bayesdel-fixture"
+set = "base"
+assembly = "GRCh37"
+rows = [
+  ["BayesDel", "GRCh37", "synthetic_fixture", "GRCh37-plugin-bayesdel-fixture"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "-o", "{output}"]
+score = ["--plugins", "BayesDel", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite"]
+
+[[run]]
+corpus = "GRCh37-plugin-cadd"
+set = "cadd-force-annotate"
+assembly = "GRCh37"
+rows = [
+  ["CADD", "GRCh37", "synthetic_fixture", "GRCh37-plugin-cadd"],
+]
+reference = "{corpus}/expected_cadd-force-annotate/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "CADD,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,indels={corpus}/plugin_data/gnomad.genomes-exomes.r4.0.indel.synthetic.tsv.gz,force_annotate=1", "-o", "{output}"]
+score = ["--plugins", "CADD", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--stats_text", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "CADD,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,indels={corpus}/plugin_data/gnomad.genomes-exomes.r4.0.indel.synthetic.tsv.gz,force_annotate=1"]
+
+[[run]]
+corpus = "GRCh37-plugin-cadd"
+set = "cadd-positional"
+assembly = "GRCh37"
+rows = [
+  ["CADD", "GRCh37", "synthetic_fixture", "GRCh37-plugin-cadd"],
+]
+reference = "{corpus}/expected_cadd-positional/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "CADD,{corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,{corpus}/plugin_data/gnomad.genomes-exomes.r4.0.indel.synthetic.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "CADD", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--stats_text", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "CADD,{corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,{corpus}/plugin_data/gnomad.genomes-exomes.r4.0.indel.synthetic.tsv.gz"]
+
+[[run]]
+corpus = "GRCh37-plugin-cadd"
+set = "base"
+assembly = "GRCh37"
+rows = [
+  ["CADD", "GRCh37", "synthetic_fixture", "GRCh37-plugin-cadd"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "CADD,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,indels={corpus}/plugin_data/gnomad.genomes-exomes.r4.0.indel.synthetic.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "CADD", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--stats_text", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "CADD,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,indels={corpus}/plugin_data/gnomad.genomes-exomes.r4.0.indel.synthetic.tsv.gz"]
+
+[[run]]
+corpus = "GRCh37-plugin-clinpred-fixture"
+set = "clinpred-file"
+assembly = "GRCh37"
+rows = [
+  ["ClinPred", "GRCh37", "synthetic_fixture", "GRCh37-plugin-clinpred-fixture"],
+]
+reference = "{corpus}/expected_clinpred-file/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/data", "--plugin", "ClinPred,file={corpus}/data/ClinPred_tabbed_synthetic.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "ClinPred", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{corpus}/data", "--plugin", "ClinPred,file={corpus}/data/ClinPred_tabbed_synthetic.tsv.gz"]
+
+[[run]]
+corpus = "GRCh37-plugin-clinpred-fixture"
+set = "clinpred-positional"
+assembly = "GRCh37"
+rows = [
+  ["ClinPred", "GRCh37", "synthetic_fixture", "GRCh37-plugin-clinpred-fixture"],
+]
+reference = "{corpus}/expected_clinpred-positional/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/data", "--plugin", "ClinPred,{corpus}/data/ClinPred_tabbed_synthetic.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "ClinPred", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{corpus}/data", "--plugin", "ClinPred,{corpus}/data/ClinPred_tabbed_synthetic.tsv.gz"]
+
+[[run]]
+corpus = "GRCh37-plugin-clinpred-fixture"
+set = "base"
+assembly = "GRCh37"
+rows = [
+  ["ClinPred", "GRCh37", "synthetic_fixture", "GRCh37-plugin-clinpred-fixture"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "-o", "{output}"]
+score = ["--plugins", "ClinPred", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite"]
+
+[[run]]
+corpus = "GRCh37-plugin-dbnsfp"
+set = "dbnsfp"
+assembly = "GRCh37"
+rows = [
+  ["dbNSFP", "GRCh37", "synthetic_fixture", "GRCh37-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,SIFT_score,Polyphen2_HDIV_score", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,SIFT_score,Polyphen2_HDIV_score"]
+
+[[run]]
+corpus = "GRCh37-plugin-dbnsfp"
+set = "dbnsfp-consequence-all"
+assembly = "GRCh37"
+rows = [
+  ["dbNSFP", "GRCh37", "synthetic_fixture", "GRCh37-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp-consequence-all/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,consequence=ALL,pep_match=0,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,SIFT_score,Polyphen2_HDIV_score", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,consequence=ALL,pep_match=0,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,SIFT_score,Polyphen2_HDIV_score"]
+
+[[run]]
+corpus = "GRCh37-plugin-dbnsfp"
+set = "dbnsfp-output-prefix"
+assembly = "GRCh37"
+rows = [
+  ["dbNSFP", "GRCh37", "synthetic_fixture", "GRCh37-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp-output-prefix/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,output_prefix=1,pep_match=0,SIFT_score,Polyphen2_HDIV_score", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,output_prefix=1,pep_match=0,SIFT_score,Polyphen2_HDIV_score"]
+
+[[run]]
+corpus = "GRCh37-plugin-dbnsfp"
+set = "dbnsfp-replacement-logic"
+assembly = "GRCh37"
+rows = [
+  ["dbNSFP", "GRCh37", "synthetic_fixture", "GRCh37-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp-replacement-logic/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,{corpus}/plugin_data/dbNSFP_replacement_logic,Interpro_domain,clinvar_trait,SIFT_score", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,{corpus}/plugin_data/dbNSFP_replacement_logic,Interpro_domain,clinvar_trait,SIFT_score"]
+
+[[run]]
+corpus = "GRCh37-plugin-dbnsfp"
+set = "dbnsfp-transcript-match"
+assembly = "GRCh37"
+rows = [
+  ["dbNSFP", "GRCh37", "synthetic_fixture", "GRCh37-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp-transcript-match/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,transcript_match=1,SIFT_score,SIFT_pred,MutationTaster_score,GERP++_RS", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch37_synthetic.gz,transcript_match=1,SIFT_score,SIFT_pred,MutationTaster_score,GERP++_RS"]
+
+[[run]]
+corpus = "GRCh37-plugin-dbnsfp"
+set = "base"
+assembly = "GRCh37"
+rows = [
+  ["dbNSFP", "GRCh37", "synthetic_fixture", "GRCh37-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite"]
+
+[[run]]
+corpus = "GRCh37-plugin-dbscsnv"
+set = "dbscsnv"
+assembly = "GRCh37"
+rows = [
+  ["dbscSNV", "GRCh37", "synthetic_fixture", "GRCh37-plugin-dbscsnv"],
+]
+reference = "{corpus}/expected_dbscsnv/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh37.txt.gz", "-o", "{output}"]
+score = ["--plugins", "dbscSNV", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh37.txt.gz"]
+
+[[run]]
+corpus = "GRCh37-plugin-dbscsnv"
+set = "dbscsnv-assembly-override"
+assembly = "GRCh37"
+rows = [
+  ["dbscSNV", "GRCh37", "synthetic_fixture", "GRCh37-plugin-dbscsnv"],
+]
+reference = "{corpus}/expected_dbscsnv-assembly-override/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh37.txt.gz,GRCh37", "-o", "{output}"]
+score = ["--plugins", "dbscSNV", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh37.txt.gz,GRCh37"]
+
+[[run]]
+corpus = "GRCh37-plugin-dbscsnv"
+set = "base"
+assembly = "GRCh37"
+rows = [
+  ["dbscSNV", "GRCh37", "synthetic_fixture", "GRCh37-plugin-dbscsnv"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "-o", "{output}"]
+score = ["--plugins", "dbscSNV", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite"]
+
+[[run]]
+corpus = "GRCh37-plugin-maxentscan-fixture"
+set = "base"
+assembly = "GRCh37"
+rows = [
+  ["MaxEntScan", "GRCh37", "synthetic_fixture", "GRCh37-plugin-maxentscan-fixture"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}", "--plugin", "MaxEntScan,{generated}/fordownload_synthetic", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "MaxEntScan", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "MaxEntScan,{generated}/fordownload_synthetic"]
+
+[[run]]
+corpus = "GRCh37-plugin-maxentscan-fixture"
+set = "swa-ncss"
+assembly = "GRCh37"
+rows = [
+  ["MaxEntScan", "GRCh37", "synthetic_fixture", "GRCh37-plugin-maxentscan-fixture"],
+]
+reference = "{corpus}/expected_swa-ncss/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}", "--plugin", "MaxEntScan,{generated}/fordownload_synthetic,SWA,NCSS", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "MaxEntScan", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "MaxEntScan,{generated}/fordownload_synthetic,SWA,NCSS"]
+
+[[run]]
+corpus = "GRCh37-plugin-maxentscan-fixture"
+set = "swa-ncss-verbose"
+assembly = "GRCh37"
+rows = [
+  ["MaxEntScan", "GRCh37", "synthetic_fixture", "GRCh37-plugin-maxentscan-fixture"],
+]
+reference = "{corpus}/expected_swa-ncss-verbose/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}", "--plugin", "MaxEntScan,{generated}/fordownload_synthetic,SWA,NCSS,verbose", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "MaxEntScan", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "MaxEntScan,{generated}/fordownload_synthetic,SWA,NCSS,verbose"]
+
+[[run]]
+corpus = "GRCh37-plugin-primateai-fixture"
+set = "base"
+assembly = "GRCh37"
+rows = [
+  ["PrimateAI", "GRCh37", "synthetic_fixture", "GRCh37-plugin-primateai-fixture"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "-o", "{output}"]
+score = ["--plugins", "PrimateAI", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite"]
+
+[[run]]
+corpus = "GRCh37-plugin-primateai-fixture"
+set = "primateai"
+assembly = "GRCh37"
+rows = [
+  ["PrimateAI", "GRCh37", "synthetic_fixture", "GRCh37-plugin-primateai-fixture"],
+]
+reference = "{corpus}/expected_primateai/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/data", "--plugin", "PrimateAI,{corpus}/data/PrimateAI_scores_v0.2_GRCh37_sorted_synthetic.tsv.bgz", "-o", "{output}"]
+score = ["--plugins", "PrimateAI", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{corpus}/data", "--plugin", "PrimateAI,{corpus}/data/PrimateAI_scores_v0.2_GRCh37_sorted_synthetic.tsv.bgz"]
+
+[[run]]
+corpus = "GRCh37-plugin-spliceai"
+set = "cutoff"
+assembly = "GRCh37"
+rows = [
+  ["SpliceAI", "GRCh37", "synthetic_fixture", "GRCh37-plugin-spliceai"],
+]
+reference = "{corpus}/expected_cutoff/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz,cutoff=0.5", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "SpliceAI", "--json-cache", "{corpus}/json_cache", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz,cutoff=0.5"]
+
+[[run]]
+corpus = "GRCh37-plugin-spliceai"
+set = "base"
+assembly = "GRCh37"
+rows = [
+  ["SpliceAI", "GRCh37", "synthetic_fixture", "GRCh37-plugin-spliceai"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "SpliceAI", "--json-cache", "{corpus}/json_cache", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--stats_text", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz"]
+
+[[run]]
+corpus = "GRCh37-plugin-spliceai"
+set = "split-output"
+assembly = "GRCh37"
+rows = [
+  ["SpliceAI", "GRCh37", "synthetic_fixture", "GRCh37-plugin-spliceai"],
+]
+reference = "{corpus}/expected_split-output/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz,split_output=1", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "SpliceAI", "--json-cache", "{corpus}/json_cache", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz,split_output=1"]
+
+[[run]]
+corpus = "GRCh37-plugin-spliceai"
+set = "split-output-cutoff"
+assembly = "GRCh37"
+rows = [
+  ["SpliceAI", "GRCh37", "synthetic_fixture", "GRCh37-plugin-spliceai"],
+]
+reference = "{corpus}/expected_split-output-cutoff/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz,split_output=1,cutoff=0.5", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "SpliceAI", "--json-cache", "{corpus}/json_cache", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg19.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg19.synthetic.vcf.gz,split_output=1,cutoff=0.5"]
+
+[[run]]
+corpus = "GRCh37-plugin-splicevault-fixture"
+set = "base"
+assembly = "GRCh37"
+rows = [
+  ["SpliceVault", "GRCh37", "synthetic_fixture", "GRCh37-plugin-splicevault-fixture"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "-o", "{output}"]
+score = ["--plugins", "SpliceVault", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--stats_text", "--quiet", "--force_overwrite"]
+
+[[run]]
+corpus = "GRCh37-plugin-splicevault-fixture"
+set = "splicevault"
+assembly = "GRCh37"
+rows = [
+  ["SpliceVault", "GRCh37", "synthetic_fixture", "GRCh37-plugin-splicevault-fixture"],
+]
+reference = "{corpus}/expected_splicevault/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/data", "--plugin", "SpliceVault,file={corpus}/data/SpliceVault_data_hg19_synthetic.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "SpliceVault", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{corpus}/data", "--plugin", "SpliceVault,file={corpus}/data/SpliceVault_data_hg19_synthetic.tsv.gz"]
+
+[[run]]
+corpus = "GRCh37-plugin-splicevault-fixture"
+set = "splicevault-transcript-match-0"
+assembly = "GRCh37"
+rows = [
+  ["SpliceVault", "GRCh37", "synthetic_fixture", "GRCh37-plugin-splicevault-fixture"],
+]
+reference = "{corpus}/expected_splicevault-transcript-match-0/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/data", "--plugin", "SpliceVault,file={corpus}/data/SpliceVault_data_hg19_synthetic.tsv.gz,transcript_match=0", "-o", "{output}"]
+score = ["--plugins", "SpliceVault", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{corpus}/data", "--plugin", "SpliceVault,file={corpus}/data/SpliceVault_data_hg19_synthetic.tsv.gz,transcript_match=0"]
+
+[[run]]
+corpus = "GRCh37-plugin-transcript-annotator"
+set = "base"
+assembly = "GRCh37"
+rows = [
+  ["TranscriptAnnotator", "GRCh37", "committed_table", "GRCh37-plugin-transcript-annotator"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh37", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--plugin", "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "TranscriptAnnotator", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh37", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--plugin", "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz"]
+
+[[run]]
+corpus = "GRCh38-plugin-avi"
+set = "base"
+assembly = "GRCh38"
+rows = [
+  ["AVI", "GRCh38", "synthetic_fixture", "GRCh38-plugin-avi"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}", "--plugin", "AVI,file={corpus}/avi_scores.synthetic.tsv.gz,raw=1,links=1", "-o", "{output}"]
+score = ["--plugins", "AVI", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{corpus}", "--plugin", "AVI,file={corpus}/avi_scores.synthetic.tsv.gz,raw=1,links=1"]
+
+[[run]]
+corpus = "GRCh38-plugin-bayesdel-fixture"
+set = "bayesdel"
+assembly = "GRCh38"
+rows = [
+  ["BayesDel", "GRCh38", "synthetic_fixture", "GRCh38-plugin-bayesdel-fixture"],
+]
+reference = "{corpus}/expected_bayesdel/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/data", "--plugin", "BayesDel,file={corpus}/data/BayesDel_170824_addAF_all_scores_synthetic.txt.gz", "-o", "{output}"]
+score = ["--plugins", "BayesDel", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{corpus}/data", "--plugin", "BayesDel,file={corpus}/data/BayesDel_170824_addAF_all_scores_synthetic.txt.gz"]
+
+[[run]]
+corpus = "GRCh38-plugin-bayesdel-fixture"
+set = "base"
+assembly = "GRCh38"
+rows = [
+  ["BayesDel", "GRCh38", "synthetic_fixture", "GRCh38-plugin-bayesdel-fixture"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "-o", "{output}"]
+score = ["--plugins", "BayesDel", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite"]
+
+[[run]]
+corpus = "GRCh38-plugin-cadd"
+set = "cadd-force-annotate"
+assembly = "GRCh38"
+rows = [
+  ["CADD", "GRCh38", "synthetic_fixture", "GRCh38-plugin-cadd"],
+]
+reference = "{corpus}/expected_cadd-force-annotate/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "CADD,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,indels={corpus}/plugin_data/gnomad.genomes.r4.0.indel.synthetic.tsv.gz,force_annotate=1", "-o", "{output}"]
+score = ["--plugins", "CADD", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--stats_text", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "CADD,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,indels={corpus}/plugin_data/gnomad.genomes.r4.0.indel.synthetic.tsv.gz,force_annotate=1"]
+
+[[run]]
+corpus = "GRCh38-plugin-cadd"
+set = "cadd-positional"
+assembly = "GRCh38"
+rows = [
+  ["CADD", "GRCh38", "synthetic_fixture", "GRCh38-plugin-cadd"],
+]
+reference = "{corpus}/expected_cadd-positional/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "CADD,{corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,{corpus}/plugin_data/gnomad.genomes.r4.0.indel.synthetic.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "CADD", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--stats_text", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "CADD,{corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,{corpus}/plugin_data/gnomad.genomes.r4.0.indel.synthetic.tsv.gz"]
+
+[[run]]
+corpus = "GRCh38-plugin-cadd"
+set = "cadd-positional-force"
+assembly = "GRCh38"
+rows = [
+  ["CADD", "GRCh38", "synthetic_fixture", "GRCh38-plugin-cadd"],
+]
+reference = "{corpus}/expected_cadd-positional-force/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "CADD,{corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,{corpus}/plugin_data/gnomad.genomes.r4.0.indel.synthetic.tsv.gz,1", "-o", "{output}"]
+score = ["--plugins", "CADD", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--stats_text", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "CADD,{corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,{corpus}/plugin_data/gnomad.genomes.r4.0.indel.synthetic.tsv.gz,1"]
+
+[[run]]
+corpus = "GRCh38-plugin-cadd"
+set = "base"
+assembly = "GRCh38"
+rows = [
+  ["CADD", "GRCh38", "synthetic_fixture", "GRCh38-plugin-cadd"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "CADD,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,indels={corpus}/plugin_data/gnomad.genomes.r4.0.indel.synthetic.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "CADD", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--stats_text", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "CADD,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,indels={corpus}/plugin_data/gnomad.genomes.r4.0.indel.synthetic.tsv.gz"]
+
+[[run]]
+corpus = "GRCh38-plugin-cadd-sv"
+set = "cadd-sv-and-snv"
+assembly = "GRCh38"
+rows = [
+  ["CADD (structural variants)", "GRCh38", "synthetic_fixture", "GRCh38-plugin-cadd-sv"],
+]
+reference = "{corpus}/expected_cadd-sv-and-snv/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "CADD,sv={corpus}/plugin_data/1000G_phase3_SVs_synthetic.tsv.gz,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "CADD", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--stats_text", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "CADD,sv={corpus}/plugin_data/1000G_phase3_SVs_synthetic.tsv.gz,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz"]
+
+[[run]]
+corpus = "GRCh38-plugin-cadd-sv"
+set = "cadd-sv-and-snv-forced"
+assembly = "GRCh38"
+rows = [
+  ["CADD (structural variants)", "GRCh38", "synthetic_fixture", "GRCh38-plugin-cadd-sv"],
+]
+reference = "{corpus}/expected_cadd-sv-and-snv-forced/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "CADD,sv={corpus}/plugin_data/1000G_phase3_SVs_synthetic.tsv.gz,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,force_annotate=1", "-o", "{output}"]
+score = ["--plugins", "CADD", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--stats_text", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "CADD,sv={corpus}/plugin_data/1000G_phase3_SVs_synthetic.tsv.gz,snv={corpus}/plugin_data/whole_genome_SNVs_synthetic.tsv.gz,force_annotate=1"]
+
+[[run]]
+corpus = "GRCh38-plugin-cadd-sv"
+set = "base"
+assembly = "GRCh38"
+rows = [
+  ["CADD (structural variants)", "GRCh38", "synthetic_fixture", "GRCh38-plugin-cadd-sv"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "CADD,sv={corpus}/plugin_data/1000G_phase3_SVs_synthetic.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "CADD", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--stats_text", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "CADD,sv={corpus}/plugin_data/1000G_phase3_SVs_synthetic.tsv.gz"]
+
+[[run]]
+corpus = "GRCh38-plugin-clinpred-fixture"
+set = "clinpred-file"
+assembly = "GRCh38"
+rows = [
+  ["ClinPred", "GRCh38", "synthetic_fixture", "GRCh38-plugin-clinpred-fixture"],
+]
+reference = "{corpus}/expected_clinpred-file/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/data", "--plugin", "ClinPred,file={corpus}/data/ClinPred_hg38_sorted_tabbed_synthetic.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "ClinPred", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{corpus}/data", "--plugin", "ClinPred,file={corpus}/data/ClinPred_hg38_sorted_tabbed_synthetic.tsv.gz"]
+
+[[run]]
+corpus = "GRCh38-plugin-clinpred-fixture"
+set = "clinpred-positional"
+assembly = "GRCh38"
+rows = [
+  ["ClinPred", "GRCh38", "synthetic_fixture", "GRCh38-plugin-clinpred-fixture"],
+]
+reference = "{corpus}/expected_clinpred-positional/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/data", "--plugin", "ClinPred,{corpus}/data/ClinPred_hg38_sorted_tabbed_synthetic.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "ClinPred", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{corpus}/data", "--plugin", "ClinPred,{corpus}/data/ClinPred_hg38_sorted_tabbed_synthetic.tsv.gz"]
+
+[[run]]
+corpus = "GRCh38-plugin-clinpred-fixture"
+set = "base"
+assembly = "GRCh38"
+rows = [
+  ["ClinPred", "GRCh38", "synthetic_fixture", "GRCh38-plugin-clinpred-fixture"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "-o", "{output}"]
+score = ["--plugins", "ClinPred", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite"]
+
+[[run]]
+corpus = "GRCh38-plugin-dbnsfp"
+set = "dbnsfp"
+assembly = "GRCh38"
+rows = [
+  ["dbNSFP", "GRCh38", "synthetic_fixture", "GRCh38-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,SIFT_score,Polyphen2_HDIV_score", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,SIFT_score,Polyphen2_HDIV_score"]
+
+[[run]]
+corpus = "GRCh38-plugin-dbnsfp"
+set = "dbnsfp-all"
+assembly = "GRCh38"
+rows = [
+  ["dbNSFP", "GRCh38", "synthetic_fixture", "GRCh38-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp-all/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,ALL", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,ALL"]
+
+[[run]]
+corpus = "GRCh38-plugin-dbnsfp"
+set = "dbnsfp-consequence-all"
+assembly = "GRCh38"
+rows = [
+  ["dbNSFP", "GRCh38", "synthetic_fixture", "GRCh38-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp-consequence-all/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,consequence=ALL,pep_match=0,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,SIFT_score,Polyphen2_HDIV_score", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,consequence=ALL,pep_match=0,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,SIFT_score,Polyphen2_HDIV_score"]
+
+[[run]]
+corpus = "GRCh38-plugin-dbnsfp"
+set = "dbnsfp-consequence-list"
+assembly = "GRCh38"
+rows = [
+  ["dbNSFP", "GRCh38", "synthetic_fixture", "GRCh38-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp-consequence-list/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,consequence=synonymous_variant&stop_gained&start_lost,pep_match=0,SIFT_score", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,consequence=synonymous_variant&stop_gained&start_lost,pep_match=0,SIFT_score"]
+
+[[run]]
+corpus = "GRCh38-plugin-dbnsfp"
+set = "dbnsfp-invalid-column"
+assembly = "GRCh38"
+rows = [
+  ["dbNSFP", "GRCh38", "synthetic_fixture", "GRCh38-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp-invalid-column/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,SIFT_score,NoSuchColumn", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,SIFT_score,NoSuchColumn"]
+
+[[run]]
+corpus = "GRCh38-plugin-dbnsfp"
+set = "dbnsfp-output-prefix"
+assembly = "GRCh38"
+rows = [
+  ["dbNSFP", "GRCh38", "synthetic_fixture", "GRCh38-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp-output-prefix/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,output_prefix=1,SIFT_score,Polyphen2_HDIV_score", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,output_prefix=1,SIFT_score,Polyphen2_HDIV_score"]
+
+[[run]]
+corpus = "GRCh38-plugin-dbnsfp"
+set = "dbnsfp-pep-match-off"
+assembly = "GRCh38"
+rows = [
+  ["dbNSFP", "GRCh38", "synthetic_fixture", "GRCh38-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp-pep-match-off/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,pep_match=0,transcript_match=1,SIFT_score,Polyphen2_HDIV_score,GERP++_RS", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,pep_match=0,transcript_match=1,SIFT_score,Polyphen2_HDIV_score,GERP++_RS"]
+
+[[run]]
+corpus = "GRCh38-plugin-dbnsfp"
+set = "dbnsfp-replacement-logic"
+assembly = "GRCh38"
+rows = [
+  ["dbNSFP", "GRCh38", "synthetic_fixture", "GRCh38-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp-replacement-logic/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,{corpus}/plugin_data/dbNSFP_replacement_logic,Interpro_domain,clinvar_trait,SIFT_score", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,{corpus}/plugin_data/dbNSFP_replacement_logic,Interpro_domain,clinvar_trait,SIFT_score"]
+
+[[run]]
+corpus = "GRCh38-plugin-dbnsfp"
+set = "dbnsfp-transcript-match"
+assembly = "GRCh38"
+rows = [
+  ["dbNSFP", "GRCh38", "synthetic_fixture", "GRCh38-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected_dbnsfp-transcript-match/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,transcript_match=1,SIFT_score,SIFT_pred,MutationTaster_score,GERP++_RS", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbNSFP,{corpus}/plugin_data/dbNSFP4.9a_grch38_synthetic.gz,transcript_match=1,SIFT_score,SIFT_pred,MutationTaster_score,GERP++_RS"]
+
+[[run]]
+corpus = "GRCh38-plugin-dbnsfp"
+set = "base"
+assembly = "GRCh38"
+rows = [
+  ["dbNSFP", "GRCh38", "synthetic_fixture", "GRCh38-plugin-dbnsfp"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "-o", "{output}"]
+score = ["--plugins", "dbNSFP", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite"]
+
+[[run]]
+corpus = "GRCh38-plugin-dbscsnv"
+set = "dbscsnv"
+assembly = "GRCh38"
+rows = [
+  ["dbscSNV", "GRCh38", "synthetic_fixture", "GRCh38-plugin-dbscsnv"],
+]
+reference = "{corpus}/expected_dbscsnv/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz", "-o", "{output}"]
+score = ["--plugins", "dbscSNV", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz"]
+
+[[run]]
+corpus = "GRCh38-plugin-dbscsnv"
+set = "dbscsnv-assembly-override"
+assembly = "GRCh38"
+rows = [
+  ["dbscSNV", "GRCh38", "synthetic_fixture", "GRCh38-plugin-dbscsnv"],
+]
+reference = "{corpus}/expected_dbscsnv-assembly-override/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz,GRCh38", "-o", "{output}"]
+score = ["--plugins", "dbscSNV", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "dbscSNV,{corpus}/plugin_data/dbscSNV1.1_synthetic_GRCh38.txt.gz,GRCh38"]
+
+[[run]]
+corpus = "GRCh38-plugin-dbscsnv"
+set = "base"
+assembly = "GRCh38"
+rows = [
+  ["dbscSNV", "GRCh38", "synthetic_fixture", "GRCh38-plugin-dbscsnv"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "-o", "{output}"]
+score = ["--plugins", "dbscSNV", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite"]
+
+[[run]]
+corpus = "GRCh38-plugin-maxentscan-fixture"
+set = "base"
+assembly = "GRCh38"
+rows = [
+  ["MaxEntScan", "GRCh38", "synthetic_fixture", "GRCh38-plugin-maxentscan-fixture"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}", "--plugin", "MaxEntScan,{generated}/fordownload_synthetic", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "MaxEntScan", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "MaxEntScan,{generated}/fordownload_synthetic"]
+
+[[run]]
+corpus = "GRCh38-plugin-maxentscan-fixture"
+set = "swa-ncss"
+assembly = "GRCh38"
+rows = [
+  ["MaxEntScan", "GRCh38", "synthetic_fixture", "GRCh38-plugin-maxentscan-fixture"],
+]
+reference = "{corpus}/expected_swa-ncss/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}", "--plugin", "MaxEntScan,{generated}/fordownload_synthetic,SWA,NCSS", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "MaxEntScan", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "MaxEntScan,{generated}/fordownload_synthetic,SWA,NCSS"]
+
+[[run]]
+corpus = "GRCh38-plugin-maxentscan-fixture"
+set = "swa-ncss-verbose"
+assembly = "GRCh38"
+rows = [
+  ["MaxEntScan", "GRCh38", "synthetic_fixture", "GRCh38-plugin-maxentscan-fixture"],
+]
+reference = "{corpus}/expected_swa-ncss-verbose/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}", "--plugin", "MaxEntScan,{generated}/fordownload_synthetic,SWA,NCSS,verbose", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "MaxEntScan", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "MaxEntScan,{generated}/fordownload_synthetic,SWA,NCSS,verbose"]
+
+[[run]]
+corpus = "GRCh38-plugin-primateai-fixture"
+set = "base"
+assembly = "GRCh38"
+rows = [
+  ["PrimateAI", "GRCh38", "synthetic_fixture", "GRCh38-plugin-primateai-fixture"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "-o", "{output}"]
+score = ["--plugins", "PrimateAI", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite"]
+
+[[run]]
+corpus = "GRCh38-plugin-primateai-fixture"
+set = "primateai"
+assembly = "GRCh38"
+rows = [
+  ["PrimateAI", "GRCh38", "synthetic_fixture", "GRCh38-plugin-primateai-fixture"],
+]
+reference = "{corpus}/expected_primateai/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/data", "--plugin", "PrimateAI,{corpus}/data/PrimateAI_scores_v0.2_GRCh38_sorted_synthetic.tsv.bgz", "-o", "{output}"]
+score = ["--plugins", "PrimateAI", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{corpus}/data", "--plugin", "PrimateAI,{corpus}/data/PrimateAI_scores_v0.2_GRCh38_sorted_synthetic.tsv.bgz"]
+
+[[run]]
+corpus = "GRCh38-plugin-spliceai"
+set = "cutoff"
+assembly = "GRCh38"
+rows = [
+  ["SpliceAI", "GRCh38", "synthetic_fixture", "GRCh38-plugin-spliceai"],
+]
+reference = "{corpus}/expected_cutoff/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz,cutoff=0.5", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "SpliceAI", "--json-cache", "{corpus}/json_cache", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz,cutoff=0.5"]
+
+[[run]]
+corpus = "GRCh38-plugin-spliceai"
+set = "base"
+assembly = "GRCh38"
+rows = [
+  ["SpliceAI", "GRCh38", "synthetic_fixture", "GRCh38-plugin-spliceai"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "SpliceAI", "--json-cache", "{corpus}/json_cache", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--stats_text", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz"]
+
+[[run]]
+corpus = "GRCh38-plugin-spliceai"
+set = "split-output"
+assembly = "GRCh38"
+rows = [
+  ["SpliceAI", "GRCh38", "synthetic_fixture", "GRCh38-plugin-spliceai"],
+]
+reference = "{corpus}/expected_split-output/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz,split_output=1", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "SpliceAI", "--json-cache", "{corpus}/json_cache", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz,split_output=1"]
+
+[[run]]
+corpus = "GRCh38-plugin-spliceai"
+set = "split-output-cutoff"
+assembly = "GRCh38"
+rows = [
+  ["SpliceAI", "GRCh38", "synthetic_fixture", "GRCh38-plugin-spliceai"],
+]
+reference = "{corpus}/expected_split-output-cutoff/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/plugin_data", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz,split_output=1,cutoff=0.5", "--fasta", "{corpus}/reference.fa.gz", "-o", "{output}"]
+score = ["--plugins", "SpliceAI", "--json-cache", "{corpus}/json_cache", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz", "--spliceai-table", "{corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--fasta", "reference.fa", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{plugin_modules}", "--plugin", "SpliceAI,snv={corpus}/plugin_data/spliceai_scores.raw.snv.hg38.synthetic.vcf.gz,indel={corpus}/plugin_data/spliceai_scores.raw.indel.hg38.synthetic.vcf.gz,split_output=1,cutoff=0.5"]
+
+[[run]]
+corpus = "GRCh38-plugin-splicevault-fixture"
+set = "base"
+assembly = "GRCh38"
+rows = [
+  ["SpliceVault", "GRCh38", "synthetic_fixture", "GRCh38-plugin-splicevault-fixture"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "-o", "{output}"]
+score = ["--plugins", "SpliceVault", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--stats_text", "--quiet", "--force_overwrite"]
+
+[[run]]
+corpus = "GRCh38-plugin-splicevault-fixture"
+set = "splicevault"
+assembly = "GRCh38"
+rows = [
+  ["SpliceVault", "GRCh38", "synthetic_fixture", "GRCh38-plugin-splicevault-fixture"],
+]
+reference = "{corpus}/expected_splicevault/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/data", "--plugin", "SpliceVault,file={corpus}/data/SpliceVault_data_GRCh38_synthetic.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "SpliceVault", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{corpus}/data", "--plugin", "SpliceVault,file={corpus}/data/SpliceVault_data_GRCh38_synthetic.tsv.gz"]
+
+[[run]]
+corpus = "GRCh38-plugin-splicevault-fixture"
+set = "splicevault-transcript-match-0"
+assembly = "GRCh38"
+rows = [
+  ["SpliceVault", "GRCh38", "synthetic_fixture", "GRCh38-plugin-splicevault-fixture"],
+]
+reference = "{corpus}/expected_splicevault-transcript-match-0/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--dir_plugins", "{corpus}/data", "--plugin", "SpliceVault,file={corpus}/data/SpliceVault_data_GRCh38_synthetic.tsv.gz,transcript_match=0", "-o", "{output}"]
+score = ["--plugins", "SpliceVault", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--dir_plugins", "{corpus}/data", "--plugin", "SpliceVault,file={corpus}/data/SpliceVault_data_GRCh38_synthetic.tsv.gz,transcript_match=0"]
+
+[[run]]
+corpus = "GRCh38-plugin-transcript-annotator"
+set = "cols"
+assembly = "GRCh38"
+rows = [
+  ["TranscriptAnnotator", "GRCh38", "committed_table", "GRCh38-plugin-transcript-annotator"],
+]
+reference = "{corpus}/expected_cols/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--plugin", "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,cols=SIFT_score:Comment", "-o", "{output}"]
+score = ["--plugins", "TranscriptAnnotator", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--plugin", "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,cols=SIFT_score:Comment"]
+
+[[run]]
+corpus = "GRCh38-plugin-transcript-annotator"
+set = "base"
+assembly = "GRCh38"
+rows = [
+  ["TranscriptAnnotator", "GRCh38", "committed_table", "GRCh38-plugin-transcript-annotator"],
+]
+reference = "{corpus}/expected/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--plugin", "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz", "-o", "{output}"]
+score = ["--plugins", "TranscriptAnnotator", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--plugin", "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz"]
+
+[[run]]
+corpus = "GRCh38-plugin-transcript-annotator"
+set = "prefix-0"
+assembly = "GRCh38"
+rows = [
+  ["TranscriptAnnotator", "GRCh38", "committed_table", "GRCh38-plugin-transcript-annotator"],
+]
+reference = "{corpus}/expected_prefix-0/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--plugin", "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,prefix=0", "-o", "{output}"]
+score = ["--plugins", "TranscriptAnnotator", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--plugin", "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,prefix=0"]
+
+[[run]]
+corpus = "GRCh38-plugin-transcript-annotator"
+set = "trim-0"
+assembly = "GRCh38"
+rows = [
+  ["TranscriptAnnotator", "GRCh38", "committed_table", "GRCh38-plugin-transcript-annotator"],
+]
+reference = "{corpus}/expected_trim-0/default.txt.gz"
+vep_rs_env = ["HOME={home}", "VEP_DIR_PLUGINS={corpus}"]
+vep_rs = ["-i", "{corpus}/variants.vcf", "--offline", "--json_cache", "{corpus}/json_cache", "--species", "homo_sapiens", "--assembly", "GRCh38", "--buffer_size", "5000", "--force_overwrite", "--no_stats", "--quiet", "--plugin", "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,trim=0", "-o", "{output}"]
+score = ["--plugins", "TranscriptAnnotator", "--json-cache", "{corpus}/json_cache"]
+ensembl_vep_image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+ensembl_vep = ["-i", "variants.vcf", "-o", "{ensembl_vep_output}", "--offline", "--cache", "--dir_cache", "{ensembl_vep_cache}", "--cache_version", "116", "--species", "homo_sapiens", "--assembly", "GRCh38", "--format", "vcf", "--buffer_size", "5000", "--fork", "1", "--no_stats", "--quiet", "--force_overwrite", "--plugin", "TranscriptAnnotator,file=data/transcript_annotator.tsv.gz,trim=0"]

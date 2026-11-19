@@ -1,6 +1,6 @@
 # Defect G: a coordinate past the 32-bit bound turns the buffer intergenic
 
-**The defect in one sentence.** When any coordinate of an input buffer plus the `--distance` flank reaches 2^31 (a breakend's mate position, a span's end or a record's own position), Ensembl VEP writes every record of the buffer as `intergenic_variant`.
+**The defect in one sentence.** When any coordinate of an input buffer plus the `--distance` flank reaches 2^31 (a breakend's mate position, a span's end or a record's own position), Ensembl VEP writes every record of the buffer as `intergenic_variant`. vep-rs holds every coordinate in 64 bits and annotates each record against the transcripts it overlaps.
 
 Ensembl VEP adds the flank to every coordinate of the buffer when it chooses the cache regions and the buffer's bounds.
 
@@ -66,7 +66,7 @@ The same file with `END2=2147478646`, four rows, beside vep-rs, for the first fi
 | Feature | `ENST00000334068` | `ENST00000334068` |
 | Feature_type | `Transcript` | `Transcript` |
 | Consequence | `upstream_gene_variant` | `upstream_gene_variant` |
-| Extra | **`ALLELE_NUM=1;IMPACT=MODIFIER;STRAND=1`** |  |
+| Extra | `ALLELE_NUM=1;IMPACT=MODIFIER;STRAND=1` |  |
 
 `control_dup` on ENST00000390690:
 
@@ -79,7 +79,7 @@ The same file with `END2=2147478646`, four rows, beside vep-rs, for the first fi
 | Feature | `ENST00000390690` | `ENST00000390690` |
 | Feature_type | `Transcript` | `Transcript` |
 | Consequence | `feature_elongation,coding_sequence_variant` | `feature_elongation,coding_sequence_variant` |
-| Extra | **`ALLELE_NUM=1;IMPACT=HIGH;STRAND=-1`** |  |
+| Extra | `ALLELE_NUM=1;IMPACT=HIGH;STRAND=-1` |  |
 
 The breakend's own-end allele `N.` on ENST00000334068:
 
@@ -92,7 +92,7 @@ The breakend's own-end allele `N.` on ENST00000334068:
 | Feature | `ENST00000334068` | `ENST00000334068` |
 | Feature_type | `Transcript` | `Transcript` |
 | Consequence | `upstream_gene_variant` | `upstream_gene_variant` |
-| Extra | **`ALLELE_NUM=0;IMPACT=MODIFIER;STRAND=1`** |  |
+| Extra | `ALLELE_NUM=0;IMPACT=MODIFIER;DISTANCE=4569;STRAND=1` | `ALLELE_NUM=0;IMPACT=MODIFIER;DISTANCE=4569;STRAND=1` |
 
 The breakend's own-end allele `N.` on ENST00000390690:
 
@@ -105,7 +105,7 @@ The breakend's own-end allele `N.` on ENST00000390690:
 | Feature | `ENST00000390690` | `ENST00000390690` |
 | Feature_type | `Transcript` | `Transcript` |
 | Consequence | `feature_truncation,coding_sequence_variant` | `feature_truncation,coding_sequence_variant` |
-| Extra | **`ALLELE_NUM=0;IMPACT=HIGH;STRAND=-1`** |  |
+| Extra | `ALLELE_NUM=0;IMPACT=HIGH;STRAND=-1` | `ALLELE_NUM=0;IMPACT=HIGH;STRAND=-1` |
 
 Both engines write no row under the mate allele for a mate this far from any transcript, at 2,147,478,646 as at 46,709,983 or 1,000,000,000; the difference is the transcript rows of the whole buffer.
 
@@ -122,7 +122,7 @@ Ensembl VEP 116.2, one row, and vep-rs (1 of 5,074 rows), the differing cells in
 | Feature | **`-`** | **`ENST00000269844`** |
 | Feature_type | **`-`** | **`Transcript`** |
 | Consequence | **`intergenic_variant`** | **`transcript_ablation`** |
-| Extra | **`ALLELE_NUM=1;IMPACT=MODIFIER`** |  |
+| Extra | **`ALLELE_NUM=1;IMPACT=MODIFIER`** | not shown |
 
 The breakend `21 2147483648 x N N[21:30425700[ . . SVTYPE=BND`, whose own position is past the bound, is two intergenic rows in Ensembl VEP 116.2, one per allele. vep-rs writes the mate allele's rows at the mate (its own end, at 2,147,483,649, reaches no transcript on either side).
 
@@ -150,7 +150,7 @@ The mate allele `N[21:30425700[`, Ensembl VEP's one row against vep-rs's two:
 | Feature | **`-`** | **`ENST00000334068`** | **`ENST00000390690`** |
 | Feature_type | **`-`** | **`Transcript`** | **`Transcript`** |
 | Consequence | **`intergenic_variant`** | **`upstream_gene_variant`** | **`feature_truncation,coding_sequence_variant`** |
-| Extra | **`ALLELE_NUM=1;IMPACT=MODIFIER`** |  |  |
+| Extra | **`ALLELE_NUM=1;IMPACT=MODIFIER`** | **`ALLELE_NUM=1;IMPACT=MODIFIER;DISTANCE=4520;STRAND=1`** | **`ALLELE_NUM=1;IMPACT=HIGH;STRAND=-1`** |
 
 At POS 2147483647 the breakend's own position plus the flank also passes 2^31 and the rows are the same; a mate at 2,147,478,647 annotates normally ([14.1](#141-what-a-reader-needs-to-know-first)).
 
@@ -171,7 +171,7 @@ printf '##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n21\
 docker run --rm -v "$PWD":/work -v /path/to/vep-cache:/cache ensemblorg/ensembl-vep:release_116.2 \
   vep -i /work/overflow.vcf -o /work/overflow.perl.txt --offline --cache --dir_cache /cache --cache_version 116 \
   --assembly GRCh38 --species homo_sapiens --allele_number --no_stats
-vep -i overflow.vcf -o overflow.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --no_stats
+vep -i overflow.vcf -o overflow.vep-rs.txt --offline --json_cache tests/golden/116/GRCh38-release116/json_cache --assembly GRCh38 --allele_number --no_stats
 ```
 
 Changing `END2` to `2147478646` restores the transcript rows in Ensembl VEP's output; adding `--distance 1` moves the turn to `END2=2147483647`. Replacing the breakend line with `21\t30425650\tdel_end_2e31m1\tN\t<DEL>\t.\t.\tSVTYPE=DEL;END=2147483647` and adding `--max_sv_size -1` to both commands shows the same turn from a span's end.

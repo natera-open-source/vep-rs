@@ -7,7 +7,7 @@
 //!
 //! ## Coordinate model
 //!
-//! Structural insertions come in two flavours:
+//! Structural insertions come in three shapes:
 //!
 //! 1. **Ranged insertions** (`<INS>` with SVLEN): The VCF parser sets
 //!    `variant.start` = POS and `variant.end` = POS + abs(SVLEN). Ensembl VEP
@@ -39,7 +39,9 @@
 //! - `intron_variant`: Overlap with an intron.
 //! - `non_coding_transcript_exon_variant`: Exon overlap in a non-coding transcript.
 //! - `coding_transcript_variant` / `non_coding_transcript_variant`: Context term
-//!   when the overlap is entirely intronic or the transcript is fully contained.
+//!   `engulfed_transcript_row_terms` gives, by biotype and translation, when an insertion
+//!   other than `<CNV:TR>` fully contains the transcript; `non_coding_transcript_variant`
+//!   also joins `intron_variant` when a non-coding transcript's overlap is entirely intronic.
 //! - `upstream_gene_variant` / `downstream_gene_variant`: SV is near but does
 //!   not overlap the transcript body.
 //!
@@ -47,11 +49,12 @@
 //! (`Bio/EnsEMBL/Variation/...`).
 
 use super::{
-    engulfed_transcript_row_terms, is_mature_mirna_sv, overlaps_any_exon,
+    engulfed_transcript_row_terms, frameshift_intron_span, is_mature_mirna_sv, overlaps_any_exon,
     overlaps_any_intron_trimmed, overlaps_cds_exon, overlaps_five_prime_utr,
     overlaps_polypyrimidine_tract, overlaps_three_prime_utr,
 };
 use smallvec::{smallvec, SmallVec};
+use std::sync::Arc;
 use vep_core::consequence::{Consequence, ConsequenceList, Impact, TranscriptConsequence};
 use vep_core::coordinate::Strand;
 use vep_core::transcript::Transcript;
@@ -63,7 +66,7 @@ use vep_core::variant::{InputVariant, VariantClass};
 /// extended region (transcript body + upstream/downstream distance).
 pub fn calculate(
     variant: &InputVariant,
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
@@ -142,7 +145,11 @@ pub fn calculate(
 
     let mut consequences: ConsequenceList = SmallVec::new();
 
+    // `within_cdna` holds for an exonic span and for one wholly inside a frameshift
+    // intron, which takes the terms of `frameshift_intron_span`.
+    let frameshift_intron = frameshift_intron_span(transcript, sv_start, sv_end);
     let hits_exon = overlaps_any_exon(transcript, sv_start, sv_end);
+    let within_cdna = hits_exon || frameshift_intron.is_some();
 
     // Ensembl VEP `within_intron` reads `_intron_effects`, which trims 2bp from each
     // intron end before setting the "intronic" flag, attributing the invariant
@@ -169,7 +176,7 @@ pub fn calculate(
         let hits_5utr = overlaps_five_prime_utr(transcript, sv_start, sv_end);
         let hits_3utr = overlaps_three_prime_utr(transcript, sv_start, sv_end);
 
-        if complete_within && hits_exon {
+        if complete_within && within_cdna {
             consequences.push(Consequence::FeatureElongation);
         }
 
@@ -177,28 +184,23 @@ pub fn calculate(
             consequences.push(Consequence::StartLost);
         }
 
-        if hits_cds {
+        if hits_cds || frameshift_intron.is_some_and(|span| span.coding) {
             consequences.push(Consequence::CodingSequenceVariant);
         }
-        if hits_5utr {
+        if hits_5utr || frameshift_intron.is_some_and(|span| span.five_prime_utr) {
             consequences.push(Consequence::FivePrimeUtrVariant);
         }
-        if hits_3utr {
+        if hits_3utr || frameshift_intron.is_some_and(|span| span.three_prime_utr) {
             consequences.push(Consequence::ThreePrimeUtrVariant);
         }
         if hits_intron {
             consequences.push(Consequence::IntronVariant);
             add_polypyrimidine_tract(&mut consequences, transcript, sv_start, sv_end);
         }
-
-        // Intron-only overlap gets the context term instead of feature_elongation.
-        if consequences.is_empty() && hits_intron {
-            consequences.push(Consequence::IntronVariant);
-        }
     } else {
         // feature_elongation only when INS is within the transcript and
-        // overlaps exonic (cDNA) sequence (Perl: within_cdna and complete_within_feature).
-        if hits_exon && complete_within {
+        // within its cDNA (Perl: within_cdna and complete_within_feature).
+        if within_cdna && complete_within {
             consequences.push(Consequence::FeatureElongation);
         }
 
@@ -231,21 +233,16 @@ pub fn calculate(
         consequences.push(Consequence::NonCodingTranscriptVariant);
     }
 
-    // A point ME insertion in the first or last 2bp of an intron (the splice
-    // dinucleotides the trimmed check excludes) matches no Perl predicate, so
-    // Ensembl VEP produces `intergenic_variant`.
-    if consequences.is_empty() {
-        if is_point_me {
-            consequences.push(Consequence::IntergenicVariant);
-        } else if is_protein_coding {
-            consequences.push(Consequence::CodingTranscriptVariant);
-        } else {
-            consequences.push(Consequence::NonCodingTranscriptVariant);
-        }
-    }
-
     if transcript.facts().is_nmd && !consequences.contains(&Consequence::NmdTranscriptVariant) {
         consequences.push(Consequence::NmdTranscriptVariant);
+    }
+
+    // An insertion on only the first or last 2bp of an intron (the splice
+    // dinucleotides the trimmed check excludes) matches no Perl predicate, so
+    // Ensembl VEP writes its default term, `intergenic_variant`
+    // (`BaseVariationFeatureOverlapAllele.pm:285`).
+    if consequences.is_empty() {
+        consequences.push(Consequence::IntergenicVariant);
     }
 
     consequences.sort_by_key(|c| c.rank());
@@ -284,7 +281,7 @@ pub fn calculate(
 pub(super) fn calculate_insertion_pair(
     s: u64,
     e: u64,
-    transcript: &Transcript,
+    transcript: &Arc<Transcript>,
     upstream_distance: u64,
     downstream_distance: u64,
 ) -> Option<TranscriptConsequence> {
@@ -356,7 +353,12 @@ pub(super) fn calculate_insertion_pair(
             let coding_pred = hi >= cds_lo && lo <= cds_hi && exon_pred;
             let utr_pred = exon_pred && (lo < cds_lo || hi > cds_hi);
 
-            if coding_pred && insert_within_cds(transcript, s, e) {
+            // `within_cds` holds on the insert coordinate or, inside a frameshift
+            // intron, when both flanks lie in the coding region
+            // (`Utils/VariationEffect.pm:654-665`).
+            let within_cds = insert_within_cds(transcript, s, e)
+                || (in_frameshift_intron && e >= cds_lo && s <= cds_hi);
+            if coding_pred && within_cds {
                 consequences.push(Consequence::CodingSequenceVariant);
             }
             if coding_pred && structural_start_lost(transcript, s, e) {
@@ -566,6 +568,22 @@ mod tests {
     use crate::test_helpers::make_test_transcript;
     use vep_core::variant::InputVariant;
 
+    /// [`super::calculate`] on a transcript the test owns: the row shares a copy of
+    /// it, as the index shares its handle.
+    fn calculate(
+        variant: &InputVariant,
+        transcript: &Transcript,
+        upstream_distance: u64,
+        downstream_distance: u64,
+    ) -> Option<TranscriptConsequence> {
+        super::calculate(
+            variant,
+            &Arc::new(transcript.clone()),
+            upstream_distance,
+            downstream_distance,
+        )
+    }
+
     /// Helper to build a structural insertion variant.
     fn make_ins(start: u64, sv_end: u64) -> InputVariant {
         let mut v = InputVariant::new("21".into(), start, sv_end, b"N".to_vec(), b"-".to_vec());
@@ -697,9 +715,9 @@ mod tests {
         let pair = make_pair_ins(25_002_100, VariantClass::StructuralInsertion);
         for insertion in [point, pair] {
             let tc = calculate(&insertion, &tx, 5000, 5000).unwrap();
-            assert_eq!(tc.cds_length, tx.cds_length());
-            assert_eq!(tc.cdna_length, tx.spliced_length());
-            assert!(tc.cds_length.is_some_and(|n| n > 0) && tc.cdna_length > 0);
+            assert_eq!(tc.cds_length(), tx.cds_length());
+            assert_eq!(tc.cdna_length(), tx.spliced_length());
+            assert!(tc.cds_length().is_some_and(|n| n > 0) && tc.cdna_length() > 0);
         }
     }
 
@@ -920,10 +938,10 @@ mod tests {
         let v = make_point_ins(25_002_100);
         let result = calculate(&v, &tx, 5000, 5000);
         let tc = result.unwrap();
-        assert_eq!(&*tc.transcript_id, "ENST00000000001");
-        assert_eq!(&*tc.gene_id, "ENSG00000000001");
-        assert_eq!(tc.gene_symbol.as_deref(), Some("TEST1"));
-        assert_eq!(tc.biotype.as_deref(), Some("protein_coding"));
+        assert_eq!(tc.transcript_id(), "ENST00000000001");
+        assert_eq!(tc.gene_id(), "ENSG00000000001");
+        assert_eq!(tc.gene_symbol(), Some("TEST1"));
+        assert_eq!(tc.biotype(), Some("protein_coding"));
         assert!(tc.canonical);
         assert_eq!(tc.strand, 1);
     }

@@ -1,0 +1,42 @@
+entry = "transcript_annotator_header_from_record_at_1_1"
+page = "docs/divergences/transcript-annotator-header-from-record.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the TranscriptAnnotator plugin's header, whose data file is a tabix-indexed table with chromosome, position, reference allele, alternative allele and transcript ID as its first 5 columns: a row at position 1 of the contig named 1 meets it; not seen in the measured datasets"
+notes = "The values agree on every row; only the field names differ: Ensembl VEP's ENST00000618007 row reads oneone_0.1=0.61;oneone_Bogus=Tolerated;oneone_RecordAtOneOne=Intronic, vep-rs's oneone_Comment=Intronic;oneone_SIFT_pred=Tolerated;oneone_SIFT_score=0.61."
+prepare = [
+  "{ zcat \"$CORPUS/data/transcript_annotator.tsv.gz\" | grep '^#'; printf '1\\t1\\tN\\tA\\tENST00000000001\\t0.1\\tBogus\\tRecordAtOneOne\\n'; zcat \"$CORPUS/data/transcript_annotator.tsv.gz\" | grep -v '^#'; } | bgzip > \"$STAGE/oneone.tsv.gz\"",
+  "tabix -s 1 -b 2 -e 2 \"$STAGE/oneone.tsv.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	10521702	rs463608	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-transcript-annotator/json_cache"
+
+[run]
+flags = ["--plugin", "TranscriptAnnotator,file={stage}/oneone.tsv.gz"]
+
+# The plugin's header lines name its fields: the record's cells on Ensembl VEP, the table's header cells on vep-rs.
+[compare]
+kind = "header"
+pattern = "^## oneone_"
+
+[expected]
+ensembl_vep = [
+  "## oneone_0.1 : column from <path>",
+  "## oneone_Bogus : column from <path>",
+  "## oneone_RecordAtOneOne : column from <path>",
+]
+vep_rs = [
+  "## oneone_Comment : column from <path>",
+  "## oneone_SIFT_pred : column from <path>",
+  "## oneone_SIFT_score : column from <path>",
+]

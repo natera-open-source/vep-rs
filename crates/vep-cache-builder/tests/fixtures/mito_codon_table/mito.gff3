@@ -1,0 +1,6 @@
+##gff-version 3
+##sequence-region   Mito 1 90
+Mito	synthetic	gene	1	30	.	+	.	ID=gene:MITOG1;biotype=protein_coding;Name=MITO1;version=1
+Mito	synthetic	mRNA	1	30	.	+	.	ID=transcript:MITOT1;Parent=gene:MITOG1;biotype=protein_coding;version=1
+Mito	synthetic	exon	1	30	.	+	.	Parent=transcript:MITOT1;Name=MITOE1;rank=1
+Mito	synthetic	CDS	11	28	.	+	0	ID=CDS:MITOP1;Parent=transcript:MITOT1;protein_id=MITOP1;version=1

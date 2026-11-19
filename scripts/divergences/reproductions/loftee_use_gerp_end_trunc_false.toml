@@ -1,0 +1,35 @@
+entry = "loftee_use_gerp_end_trunc_false"
+page = "docs/plugins/loftee.md#3-use_gerp_end_truncfalse-keeps-the-gerp-rule"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the use_gerp_end_trunc option of the LoF plugin that Ensembl VEP runs for LoFTEE, an option the module defaults to the word true and its documentation does not list: false is the word that documentation gives for a flag that is off; not seen in the measured datasets"
+notes = "Ensembl VEP's LoF plugin is the LOFTEE repository's grch38 branch, outside the VEP_plugins checkout: the run needs --extra-dir loftee=<LOFTEE checkout>."
+
+# The corpus's stop gain in the single exon of CLDN8, 23.9 percent into the coding sequence.
+[input]
+format = "vcf"
+text = """
+21	30215764	64605	G	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-loftee/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-loftee/reference.fa.gz"
+
+[run]
+flags = [
+  "--dir_plugins", "{loftee}",
+  "--plugin", "LoF,loftee_path:{loftee},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_bigwig:{corpus}/plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw,use_gerp_end_trunc:false",
+]
+
+[compare]
+kind = "rows"
+where = { record = "64605", feature = "ENST00000399899" }
+columns = ["Feature", "Consequence", "LoF", "LoF_filter", "LoF_flags", "LoF_info"]
+
+[expected]
+ensembl_vep = ["ENST00000399899 | stop_gained | LC | END_TRUNC | SINGLE_EXON | PERCENTILE:0.238938053097345,GERP_DIST:-204.02089612931,BP_DIST:516,DIST_FROM_LAST_EXON:-333,50_BP_RULE:FAIL"]
+vep_rs = ["ENST00000399899 | stop_gained | HC | - | SINGLE_EXON | PERCENTILE:0.238938053097345"]

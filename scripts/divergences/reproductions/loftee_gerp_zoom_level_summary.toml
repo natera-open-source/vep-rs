@@ -1,0 +1,42 @@
+entry = "loftee_gerp_zoom_level_summary"
+page = "docs/plugins/loftee.md#5-gerp-totals-read-from-the-bigwigs-zoom-levels"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "seen in gerp_conservation_scores.homo_sapiens.GRCh38.bw, the GERP bigWig of the upstream GRCh38 LoFTEE bundle: ten zoom levels"
+notes = "Ensembl VEP's LoF plugin is the LOFTEE repository's grch38 branch, outside the VEP_plugins checkout: the run needs --extra-dir loftee=<LOFTEE checkout>. The corpus bigWig carries no zoom level, so the prepare steps rebuild it with five (bigtools on the host); both files hold the same per-base values, and on the corpus file the two engines' rows are identical."
+
+# The corpus bigWig rebuilt with zoom levels of 10 to 2,560 bases; the per-base values are unchanged.
+prepare = [
+  'bigtools bigwigtobedgraph "$CORPUS/plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw" "$STAGE/gerp.bedgraph"',
+  'cut -f1,2 "$CORPUS/reference.fa.gz.fai" > "$STAGE/chrom.sizes"',
+  'bigtools bedgraphtobigwig "$STAGE/gerp.bedgraph" "$STAGE/chrom.sizes" "$STAGE/gerp-zoomed.bw" --zooms 10 40 160 640 2560',
+]
+
+# The corpus's stop gain in the single exon of CLDN8; the plugin's one GERP interval is the 517 bases 21:30215248-30215764.
+[input]
+format = "vcf"
+text = """
+21	30215764	64605	G	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-loftee/json_cache"
+fasta = "tests/golden/116/GRCh38-plugin-loftee/reference.fa.gz"
+
+[run]
+flags = [
+  "--dir_plugins", "{loftee}",
+  "--plugin", "LoF,loftee_path:{loftee},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_bigwig:{stage}/gerp-zoomed.bw",
+]
+
+[compare]
+kind = "rows"
+where = { record = "64605", feature = "ENST00000399899" }
+columns = ["Feature", "Consequence", "LoF", "LoF_filter", "LoF_flags", "LoF_info"]
+
+[expected]
+ensembl_vep = ["ENST00000399899 | stop_gained | LC | END_TRUNC | SINGLE_EXON | PERCENTILE:0.238938053097345,GERP_DIST:-283.796467024088,BP_DIST:516,DIST_FROM_LAST_EXON:-333,50_BP_RULE:FAIL"]
+vep_rs = ["ENST00000399899 | stop_gained | LC | END_TRUNC | SINGLE_EXON | PERCENTILE:0.238938053097345,GERP_DIST:-204.02089612931,BP_DIST:516,DIST_FROM_LAST_EXON:-333,50_BP_RULE:FAIL"]

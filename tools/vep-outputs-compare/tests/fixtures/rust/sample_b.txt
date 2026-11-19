@@ -1,0 +1,7 @@
+#Uploaded_variation	Location	Allele	Gene	Feature	Feature_type	Consequence	cDNA_position	CDS_position	Protein_position	Amino_acids	Codons	Existing_variation	Extra
+rs2001	22:1000	A	GENE10	TRANS010	Transcript	NMD_transcript_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+sv2002	22:1000000-20000000	deletion	GENE11	TRANS011	Transcript	transcript_ablation	-	-	-	-	-	-	IMPACT=MODIFIER
+sv2002	22:1000000-20000000	deletion	GENE11	TRANS013	Transcript	transcript_ablation	-	-	-	-	-	-	IMPACT=MODIFIER
+rs2003	22:2000	C	GENE10	TRANS010	Transcript	frameshift_variant,intron_variant,splice_acceptor_variant,stop_gained	-	-	-	-	-	-	IMPACT=MODIFIER
+rs2004	22:3000	T	GENE10	TRANS010	Transcript	intron_variant,splice_polypyrimidine_tract_variant,splice_region_variant	-	-	-	-	-	-	IMPACT=MODIFIER
+rs2005	X:4000	G	GENE12	TRANS012	Transcript	missense_variant	-	-	-	-	-	-	IMPACT=MODIFIER

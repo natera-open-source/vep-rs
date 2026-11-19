@@ -1,0 +1,27 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	15022500	snv_intergenic	A	G	.	.	.
+21	15437000	snv_two_genes_one_scored	C	T	.	.	.
+21	15481500	snv_two_genes	T	C	.	.	.
+21	15481600	snv_two_genes_line_twice	T	C	.	.	.
+21	15481700	snv_two_genes_record_per_gene	C	T	.	.	.
+21	15481800	snv_two_genes_line_thrice	A	G	.	.	.
+21	15481900	snv_two_genes_lines_differ	A	G	.	.	.
+21	15482000	del_two_genes	GCA	G	.	.	.
+21	15525000	snv_missense_rev	A	G	.	.	.
+21	15525500	del_3_rev	ATTG	A	.	.	.
+21	15561500	snv_symbol_mismatch	A	G	.	.	.
+21	15746000	snv_two_alts	G	A,C	.	.	.
+21	15746500	snv_unscored	A	G	.	.	.
+21	15748000	ins_1_rev	C	CA	.	.	.
+21	17199500	snv_synonymous_fwd	A	G	.	.	.
+21	17220000	ins_1_fwd	A	AC	.	.	.
+21	17220100	multi_insertion_unanchored	C	T,CA	.	.	.
+21	18816500	snv_lowercase	t	c	.	.	.
+21	18919000	del_1_fwd	CC	C	.	.	.
+21	18919100	multi_deletion_unanchored	CA	C,GA	.	.	.
+21	18919500	snv_missense_fwd	G	A	.	.	.
+21	18920000	mnv_two_bases	TT	AA	.	.	.
+21	30422500	snv_splice_donor_fwd	G	A	.	.	.
+21	34542000	snv_splice_donor_rev	C	T	.	.	.
+21	47693500	snv_splice_acceptor_rev	C	T	.	.	.

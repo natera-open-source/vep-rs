@@ -1,0 +1,249 @@
+{
+ "release": "116",
+ "assembly": "GRCh38",
+ "generator_version": "2",
+ "flags": [
+  "--dir_plugins",
+  "{corpus}",
+  "--plugin",
+  "OpenTargets,file={corpus}/open_targets_vep.slice.tsv.gz"
+ ],
+ "covers": [
+  "OpenTargets"
+ ],
+ "suites": {
+  "GRCh38-plugin-opentargets": {
+   "reference": "default.txt",
+   "input": "variants.vcf",
+   "rows": 457,
+   "combinations": 7
+  }
+ },
+ "combinations": {
+  "NMD_transcript_variant,intron_variant": {
+   "observed_rows": 9,
+   "exemplar_records": 2
+  },
+  "downstream_gene_variant": {
+   "observed_rows": 21,
+   "exemplar_records": 7
+  },
+  "intergenic_variant": {
+   "observed_rows": 1,
+   "exemplar_records": 1
+  },
+  "intron_variant": {
+   "observed_rows": 89,
+   "exemplar_records": 6
+  },
+  "intron_variant,non_coding_transcript_variant": {
+   "observed_rows": 225,
+   "exemplar_records": 14
+  },
+  "non_coding_transcript_exon_variant": {
+   "observed_rows": 21,
+   "exemplar_records": 5
+  },
+  "upstream_gene_variant": {
+   "observed_rows": 91,
+   "exemplar_records": 5
+  }
+ },
+ "records": [
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t5290136\tot_qtl_deletion_lead_sqtl\tGT\tG\t.\t.\t.",
+   "combinations": [
+    "intergenic_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t13980370\tot_qtl_comma_biosample\tC\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t14281918\tot_gwas_three_leads\tG\tC\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t14640467\tot_gwas_deletion_lead\tGAAT\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t14824378\tot_gwas_and_eqtl_leads\tC\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t14881104\tot_gwas_four_leads\tA\tG\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t14881104\tot_gwas_multiallelic\tA\tG,T\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t14881110\tot_no_record\tT\tA\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t14971491\tot_gwas_lead_and_nonlead\tA\tG\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t14971491\tot_gwas_other_allele\tA\tT\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "non_coding_transcript_exon_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t14979687\tot_gwas_insertion_lead\tG\tGT\t.\t.\t.",
+   "combinations": [
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t15067644\tot_gwas_and_eqtl_two_leads\tA\tT\t.\t.\t.",
+   "combinations": [
+    "downstream_gene_variant",
+    "non_coding_transcript_exon_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t15551809\tot_sqtl_lead_gwas_nonlead_empty_cells\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t15610527\tot_gwas_nonlead_only\tG\tA\t.\t.\t.",
+   "combinations": [
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t46526393\tot_gwas_insertion_nonlead\tA\tAT\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "downstream_gene_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant"
+   ]
+  },
+  {
+   "suite": "GRCh38-plugin-opentargets",
+   "vcf": "21\t46538370\tot_gwas_deletion_nonlead\tGTGTC\tG\t.\t.\t.",
+   "combinations": [
+    "NMD_transcript_variant,intron_variant",
+    "intron_variant",
+    "intron_variant,non_coding_transcript_variant",
+    "upstream_gene_variant"
+   ]
+  }
+ ],
+ "uncovered_combinations": [],
+ "unresolved_exemplars": [],
+ "flag_sets": [
+  {
+   "name": "all-columns-every-record",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "OpenTargets,file={corpus}/open_targets_vep.slice.tsv.gz,cols=all,lead_variants_only=0"
+   ],
+   "expected_dir": "expected_all-columns-every-record",
+   "covers": [
+    "OpenTargets"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "gwas-only",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "OpenTargets,file={corpus}/open_targets_vep.slice.tsv.gz,study_types=gwas"
+   ],
+   "expected_dir": "expected_gwas-only",
+   "covers": [
+    "OpenTargets"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  },
+  {
+   "name": "qtl-named-columns",
+   "flags": [
+    "--dir_plugins",
+    "{corpus}",
+    "--plugin",
+    "OpenTargets,file={corpus}/open_targets_vep.slice.tsv.gz,study_types=QTL,cols=qtlGeneId:qtlBiosampleName:studyId:studyType"
+   ],
+   "expected_dir": "expected_qtl-named-columns",
+   "covers": [
+    "OpenTargets"
+   ],
+   "divergences": [],
+   "vep_rs_only_tuples": [],
+   "divergence_summary": {},
+   "vep_rs_only_summary": {}
+  }
+ ],
+ "divergences": [],
+ "vep_rs_only_tuples": [],
+ "divergence_summary": {},
+ "vep_rs_only_summary": {}
+}

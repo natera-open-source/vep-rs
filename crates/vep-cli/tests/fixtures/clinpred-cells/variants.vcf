@@ -1,0 +1,6 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	30282172	empty_fifth_of_six	T	C	.	.	.
+21	30282928	empty_cell	G	A	.	.	.
+21	30396087	short_row	A	G	.	.	.
+21	30396091	scored	C	T	.	.	.

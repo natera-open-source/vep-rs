@@ -1,0 +1,38 @@
+entry = "individual_trimmable_indel"
+page = "docs/divergences/individual-trimmable-indel.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 2 of 373 records with sample columns · 8 flag sets, 1 corpus"
+notes = "Two records read through the one-sample --individual_zyg rule, where Ensembl VEP compares the chopped genotype alleles with the minimised reference and vep-rs with the chopped reference. A same-length record --minimal trims a base on, with a 0/0 sample: Ensembl VEP keeps the alternate allele's row as HOM; vep-rs reads the sample as HOMREF and annotates the reference allele. A deletion of one copy of a doubled unit, whose chopped alternate equals the minimised reference, with a 1/1 sample: Ensembl VEP reads the sample as HOMREF and annotates the reference allele; vep-rs keeps the deletion's row as HOM."
+
+[input]
+format = "vcf"
+samples = ["S1"]
+text = """
+21	34716420	ind_trim_homalt	ATT	AT	.	.	.	GT	1/1
+21	34716539	ind_trim_homref	GA	GT	.	.	.	GT	0/0
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-individual-zyg/json_cache"
+
+[run]
+flags = ["--individual_zyg", "S1", "--minimal", "--allele_number"]
+
+[compare]
+kind = "rows"
+where = { record = ["ind_trim_homalt", "ind_trim_homref"], feature = "ENST00000349499" }
+columns = ["Location", "Allele", "Feature", "Consequence", "ZYG", "ALLELE_NUM", "MINIMISED"]
+
+[expected]
+ensembl_vep = [
+  "21:34716422 | T | ENST00000349499 | synonymous_variant | S1:HOMREF | 0 | 1",
+  "21:34716540 | T | ENST00000349499 | 3_prime_UTR_variant | S1:HOM | 1 | 1",
+]
+vep_rs = [
+  "21:34716422 | - | ENST00000349499 | frameshift_variant | S1:HOM | 1 | 1",
+  "21:34716540 | A | ENST00000349499 | 3_prime_UTR_variant | S1:HOMREF | 0 | 1",
+]

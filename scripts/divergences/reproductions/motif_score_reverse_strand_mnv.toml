@@ -1,0 +1,37 @@
+entry = "motif_score_reverse_strand_mnv"
+page = "docs/divergences/motif-score-reverse-strand.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 48.3 per million · 19 flag sets, 49 corpora"
+notes = "Two-base alleles over the reverse-strand motif ENSM00000574815 (positions 5090723 to 5090738): one inside it, one over its last two positions."
+
+[input]
+format = "vcf"
+text = """
+21	5090723	rev_mnv_start	CA	TT	.	.	.
+21	5090730	rev_mnv_inside	CT	AG	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-regulatory/json_cache"
+
+[run]
+flags = ["--regulatory"]
+
+[compare]
+kind = "rows"
+where = { record = ["rev_mnv_start", "rev_mnv_inside"], feature = "ENSM00000574815" }
+columns = ["Uploaded_variation", "Feature", "MOTIF_POS", "MOTIF_SCORE_CHANGE"]
+
+[expected]
+ensembl_vep = [
+  "rev_mnv_inside | ENSM00000574815 | 9 | -0.092",
+  "rev_mnv_start | ENSM00000574815 | 16 | -",
+]
+vep_rs = [
+  "rev_mnv_inside | ENSM00000574815 | 9 | -0.136",
+  "rev_mnv_start | ENSM00000574815 | 16 | 0.044",
+]

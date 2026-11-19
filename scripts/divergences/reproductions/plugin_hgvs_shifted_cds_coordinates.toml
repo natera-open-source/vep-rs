@@ -1,0 +1,44 @@
+entry = "plugin_hgvs_shifted_cds_coordinates"
+page = "docs/divergences/plugin-hgvs-shifted-cds-coordinates.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 137,702 per million · 4 flag sets, 104 corpora"
+notes = "The ClinVar record of the page's section 3, on GRCh37. It deletes four bases, 3:10074547-10074550, coding bases 96 to 99 of the forward-strand ENST00000287647, and HGVS notation writes the same deletion three bases on: c.99_102del, HGVS_OFFSET=3. The NMD plugin marks a frameshift whose CDS end is at most 101. Under --hgvs Ensembl VEP's plugin takes the end at the shifted position, 102, and writes no NMD. vep-rs takes the record's own end, 99, the end the row's CDS_position prints, and writes NMD=NMD_escaping_variant. Every other column of the row is equal, and with --hgvs dropped both engines write the field. No committed GRCh37 cache holds the transcript, so the first prepare step copies info.txt, chr_synonyms.txt and one region file of chromosome 3 from the Ensembl VEP GRCh37 cache under the --perl-cache-dir roots and the second converts them with scripts/data/storable_to_json.pl in the image the run names; both engines read that cut. --hgvs needs a FASTA offline and no committed FASTA holds chromosome 3: the run needs --extra-dir grch37_fasta=<a directory holding Ensembl's GRCh37 primary assembly as Homo_sapiens.GRCh37.75.dna.primary_assembly.fa with its .fai>, and --plugins-dir for Ensembl VEP's NMD module."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the cut of the cache is converted in the Ensembl VEP image: pass --image" >&2; exit 1; }
+[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosome 3 under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
+mkdir -p "$cut/3"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
+cp "$PERL_CACHE/3/10000001-11000000.gz" "$cut/3/"''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens/116_GRCh37 /stage/json-cache 3 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+3	10074546	1322879	CAAAG	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = [
+  "--hgvs", "--plugin", "NMD",
+  "--fasta", "{grch37_fasta}/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa",
+]
+
+[compare]
+kind = "rows"
+where = { record = "1322879", feature = "ENST00000287647" }
+columns = ["Uploaded_variation", "Location", "Feature", "Consequence", "CDS_position", "HGVSc", "HGVSp", "HGVS_OFFSET", "NMD"]
+
+[expected]
+ensembl_vep = ["1322879 | 3:10074547-10074550 | ENST00000287647 | frameshift_variant | 96-99 | ENST00000287647.3:c.99_102del | ENSP00000287647.3:p.Lys33AsnfsTer16 | 3 | -"]
+vep_rs = ["1322879 | 3:10074547-10074550 | ENST00000287647 | frameshift_variant | 96-99 | ENST00000287647.3:c.99_102del | ENSP00000287647.3:p.Lys33AsnfsTer16 | 3 | NMD_escaping_variant"]

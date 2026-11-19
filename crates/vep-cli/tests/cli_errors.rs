@@ -11,7 +11,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
-use vep_cli::config::{error_table_entry, Treatment, ERROR_TABLE};
+use vep_cli::config::{error_table_entry, Treatment, ERROR_TABLE, GFF_GTF_RECIPE};
 
 mod common;
 
@@ -144,7 +144,7 @@ fn database_flags_are_refused() {
 /// Ensembl VEP source; and the binary prints exactly the table's line.
 #[test]
 fn every_error_table_entry_names_flag_need_and_route() {
-    assert!(ERROR_TABLE.len() >= 27, "{} entries", ERROR_TABLE.len());
+    assert!(ERROR_TABLE.len() >= 26, "{} entries", ERROR_TABLE.len());
     for entry in ERROR_TABLE {
         let flag = format!("--{}", entry.flag);
         assert!(
@@ -244,6 +244,127 @@ fn lrg_is_refused() {
         &["--lrg"],
         "--lrg is not supported: LRG mapping needs the Ensembl core database (Ensembl VEP: Cannot map to LRGs in offline mode)",
     );
+}
+
+/// Asserts that a transcript-source flag, given a file in both value spellings
+/// and with an output path, is refused with the error table's line, which
+/// opens with `opening` and ends with the cache recipe, that no output file is
+/// written, and that `--help` lists the flag with its value; the message.
+fn assert_transcript_source_flag_refused(flag: &str, opening: &str) -> &'static str {
+    let message = match error_table_entry(flag).map(|entry| entry.treatment) {
+        Some(Treatment::Refused { message, .. }) => message,
+        other => panic!("--{flag}: {other:?}"),
+    };
+    assert!(message.starts_with(opening), "--{flag}: {message}");
+    assert!(message.ends_with(GFF_GTF_RECIPE), "--{flag}: {message}");
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.txt");
+    let out = out.to_str().unwrap();
+    let separate = format!("--{flag}");
+    let attached = format!("--{flag}=models.gz");
+    for argv in [
+        vec![separate.as_str(), "models.gz", "-o", out],
+        vec![attached.as_str(), "-o", out],
+    ] {
+        assert_refused(&argv, message);
+        assert!(!Path::new(out).exists(), "{argv:?}: no output is written");
+    }
+    let help = common::isolated_vep_anywhere()
+        .arg("--help")
+        .output()
+        .unwrap();
+    let help = String::from_utf8(help.stdout).unwrap();
+    assert!(
+        help.contains(&format!("--{flag} <FILE>")),
+        "--help lists --{flag}"
+    );
+    message
+}
+
+/// `--gff` is Ensembl VEP's shortcut to a `--custom file=<gff>,format=gff`
+/// transcript source (Config.pm:260; the option set at :531-536), read in place
+/// of the cache (AnnotationSource/File/GFF.pm:71-116); vep-rs annotates against
+/// a cache built from the GFF3, so the refusal prints the cache recipe.
+#[test]
+fn gff_is_refused_with_the_cache_builder_recipe() {
+    let message = assert_transcript_source_flag_refused(
+        "gff",
+        "--gff is not supported: Ensembl VEP reads a GFF3 as its transcript set through --custom file=<gff>,format=gff; build a cache from the file and the genome",
+    );
+    assert!(
+        message.contains("vep-cache-builder") && message.contains("--gff3 <file>"),
+        "{message}"
+    );
+}
+
+/// `--gtf` is Ensembl VEP's shortcut to a `--custom file=<gtf>,format=gtf`
+/// transcript source (Config.pm:261; the option set at :538-543), read in place
+/// of the cache (AnnotationSource/File/GTF.pm:78-85); the recipe's
+/// `vep-cache-builder --gtf` builds the cache from the GTF itself.
+#[test]
+fn gtf_is_refused_with_the_cache_builder_recipe() {
+    let message = assert_transcript_source_flag_refused(
+        "gtf",
+        "--gtf is not supported: Ensembl VEP reads a GTF as its transcript set through --custom file=<gtf>,format=gtf; build a cache from the file and the genome",
+    );
+    assert!(
+        message.contains("vep-cache-builder") && message.contains("--gtf <file>"),
+        "{message}"
+    );
+}
+
+/// `--gff` reads a GFF3 file as a `--custom` source of transcripts
+/// (Config.pm:531-536; File.pm:96-99 opens it with File/GFF.pm, a transcript
+/// source by BaseGXF.pm:69-72); the refusal is the whole line, recipe included.
+#[test]
+fn gff_is_refused() {
+    let message = format!(
+        "--gff is not supported: Ensembl VEP reads a GFF3 as its transcript set through --custom file=<gff>,format=gff; {GFF_GTF_RECIPE}"
+    );
+    assert_refused(&["--gff", "genes.gff3.gz"], &message);
+    assert_refused(&["--gff=genes.gff3.gz"], &message);
+}
+
+/// `--gtf` reads a GTF file as a `--custom` source of transcripts
+/// (Config.pm:538-543; File.pm:96-99 opens it with File/GTF.pm, a transcript
+/// source by BaseGXF.pm:69-72); the refusal is the whole line, recipe included.
+#[test]
+fn gtf_is_refused() {
+    let message = format!(
+        "--gtf is not supported: Ensembl VEP reads a GTF as its transcript set through --custom file=<gtf>,format=gtf; {GFF_GTF_RECIPE}"
+    );
+    assert_refused(&["--gtf", "genes.gtf.gz"], &message);
+    assert_refused(&["--gtf=genes.gtf.gz"], &message);
+}
+
+/// `--bam` (Config.pm:253) hands an alignment file to the cache, GFF, GTF and
+/// database transcript sources (CacheDir.pm:153; AnnotationSourceAdaptor.pm:162,
+/// 402), whose RefSeq models Ensembl VEP corrects against it as they are read
+/// (AnnotationType/Transcript.pm:421-631 applies the edits as SeqEdits), and
+/// its option set switches on `--use_transcript_ref` (Config.pm:573-579).
+/// The RefSeq cache Ensembl distributes was dumped with those edits applied, the
+/// cache vep-rs reads under `--refseq`, so the refusal names that route.
+#[test]
+fn bam_is_refused_naming_the_refseq_cache_route() {
+    assert_transcript_source_flag_refused(
+        "bam",
+        "--bam is not supported: Ensembl VEP applies a BAM's alignments to RefSeq transcript models at run time; the RefSeq cache Ensembl distributes already carries those edits, which vep-rs reads from a converted homo_sapiens_refseq cache under --refseq",
+    );
+}
+
+/// `--bam` opens a BAM file of transcript alignments through Bio::DB::HTS
+/// (AnnotationType/Transcript.pm:391-399), edits each transcript the input
+/// overlaps to the sequence of its alignment (:119, :421-631) and switches on
+/// `--use_transcript_ref` (Config.pm:573-579); the refusal is the same line in
+/// the two-dash, one-dash and attached spellings.
+#[test]
+fn bam_is_refused() {
+    let message = format!(
+        "--bam is not supported: Ensembl VEP applies a BAM's alignments to RefSeq transcript models at run time; the RefSeq cache Ensembl distributes already carries those edits, which vep-rs reads from a converted homo_sapiens_refseq cache under --refseq; a GFF or GTF transcript set of your own is read without the BAM's edits; {GFF_GTF_RECIPE}"
+    );
+    assert_refused(&["--bam", "edits.bam"], &message);
+    assert_refused(&["-bam", "edits.bam"], &message);
+    assert_refused(&["--bam=edits.bam"], &message);
 }
 
 /// Runs the binary on `input` against the release-116 cache, so a refusal of
@@ -416,6 +537,57 @@ fn transcript_index_impl_is_rejected() {
         assert_eq!(code, Some(2), "{flags:?}: {stderr}");
         assert!(
             stderr.starts_with("error: unexpected argument '--transcript_index_impl'"),
+            "{flags:?}: {stderr}"
+        );
+    }
+}
+
+/// The Parquet writer has one row shape, so `--parquet_shape` is not an option
+/// of vep-rs: clap refuses the name as an unknown argument (exit 2) in both
+/// value spellings, and a run that passes it stops before any input is read.
+#[test]
+fn parquet_shape_is_rejected() {
+    for flags in [
+        &["--parquet_shape", "flat"][..],
+        &["--parquet_shape=nested"][..],
+    ] {
+        let (code, stderr) = refusal(flags);
+        assert_eq!(code, Some(2), "{flags:?}: {stderr}");
+        assert!(
+            stderr.starts_with("error: unexpected argument '--parquet_shape'"),
+            "{flags:?}: {stderr}"
+        );
+    }
+}
+
+/// The Parquet writer writes its file directly, with no intermediate to keep,
+/// so `--keep_intermediate` is not an option of vep-rs: clap refuses the name
+/// as an unknown argument (exit 2), as a switch and with a value.
+#[test]
+fn keep_intermediate_is_rejected() {
+    for flags in [&["--keep_intermediate"][..], &["--keep_intermediate=1"][..]] {
+        let (code, stderr) = refusal(flags);
+        assert_eq!(code, Some(2), "{flags:?}: {stderr}");
+        assert!(
+            stderr.starts_with("error: unexpected argument '--keep_intermediate'"),
+            "{flags:?}: {stderr}"
+        );
+    }
+}
+
+/// The Parquet writer bounds its row groups by encoded size, so
+/// `--parquet_row_group_size` is not an option of vep-rs: clap refuses the name
+/// as an unknown argument (exit 2) in both value spellings.
+#[test]
+fn parquet_row_group_size_is_rejected() {
+    for flags in [
+        &["--parquet_row_group_size", "2048"][..],
+        &["--parquet_row_group_size=2048"][..],
+    ] {
+        let (code, stderr) = refusal(flags);
+        assert_eq!(code, Some(2), "{flags:?}: {stderr}");
+        assert!(
+            stderr.starts_with("error: unexpected argument '--parquet_row_group_size'"),
             "{flags:?}: {stderr}"
         );
     }

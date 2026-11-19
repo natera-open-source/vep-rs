@@ -1,0 +1,124 @@
+{
+ "plugin_fixtures": {
+  "generator": "scripts/fixtures/cut_plugin_regions.py",
+  "flank": 5000,
+  "record_flank": 2000,
+  "exon_flank": 50,
+  "gerp_regions": "exons",
+  "tools": {
+   "bgzip": "bgzip (htslib) 1.22.1",
+   "bigtools": "bigtools 0.5.8"
+  },
+  "files": {
+   "plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw": "9c40836fe11c4265b535e41f9c8c2faf223cc2d733c16498eee5e6954bb00c3f",
+   "plugin_data/human_ancestor.fa.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+   "plugin_data/human_ancestor.fa.gz": "2d2db5fbbede272e2b7d469c71bba4a5d2ce0ece7f3be9392c7a75f9b6727bc7",
+   "plugin_data/human_ancestor.fa.gz.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+   "plugin_data/human_ancestor.fa.gz.gzi": "4991070c7fc0096e0bf07a79806823ecda1e7e974585714447c005136d2fec12",
+   "reference.fa.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+   "reference.fa.gz": "f62802f88e3dfbdf66f163030372bd054c421819fb53f83fceeb542d6545dd82",
+   "reference.fa.gz.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+   "reference.fa.gz.gzi": "a9f3d5ba4b05b78fde9e5457ec6c153dd10d930ef775a64a9076551b71ee89fa"
+  }
+ },
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --mask_header_cache_path --dir_plugins {plugins} --plugin LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_bigwig:{corpus}/plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "reference.fa.gz",
+ "input": "24 ClinVar records on chromosome 21 (public ClinVar identifiers; INFO dropped) chosen from a LoFTEE run over the whole chromosome so that every verdict class the plugin writes appears at least once, plus one constructed record (nagnag_acceptor, the A of a JAM2 acceptor AG that a second AG follows three bases on) whose NAGNAG_SITE motif ends the 9-base context the plugin reads, where the ClinVar NAGNAG_SITE record's motif opens it: high-confidence stop-gained, frameshift, splice-donor and splice-acceptor calls; the END_TRUNC, 5UTR_SPLICE, 3UTR_SPLICE and GC_TO_GT_DONOR filters, alone and beside high-confidence rows of the same record; the SINGLE_EXON, NON_CAN_SPLICE, NAGNAG_SITE and NO_EXON_NUMBER flags; two records whose loss-of-function consequence carries no exon number; and a missense and a synonymous record the plugin leaves alone. No record's loss-of-function allele is the ancestral base, and no END_TRUNC decision lies within 40 GERP units of the -58 cutoff.",
+ "sha256": {
+  "default.txt": "a2fdda18d9b6c748165d557956a96e20a631924db7966cd424317e17ff20dd26",
+  "tab.txt": "18ee2ecfa4080c5ab3bef0a0fc009b9e7429fb3113640b3b7663b5471d491b24",
+  "vcf.vcf": "52e7a56606c47c94ebb8ef4161fb8dfccc5f3dc3abc812816314dd70cdeb7e5a",
+  "json.jsonl": "f77e9d5e5f210aea3df3c69a149cb2ec1855d744a81cd4f88b53b4c31a2e3a3e",
+  "default.summary.log": "571ffeafb1b100a46f0261fbc83e2a9c75ef6bd07a8e7bedcfb57545fec6e200",
+  "tab.summary.log": "2502c2449d4c059d27733b195a2f6e1bd8bdcdafa4cd33da630b38892fd4df32",
+  "vcf.summary.log": "938d2198abd073393caaa9287d44cb87699e60afcd365b431bbbca7a8591476e",
+  "json.summary.log": "f0860e414cbe8184e7b1c64ccd7a41f4f47139d3c5115612fd58e8b6f51fa80a"
+ },
+ "variants_vcf_sha256": "e124bb854272f9cbf217ff25741727100765d80c1ff4fad8ed6fe6bab65961c6",
+ "plugin_files": {
+  "plugin_data/human_ancestor.fa.gz": "2d2db5fbbede272e2b7d469c71bba4a5d2ce0ece7f3be9392c7a75f9b6727bc7",
+  "plugin_data/human_ancestor.fa.gz.fai": "9a25d871c398f70f3d22d9542105e1c9b3dc8fdaa887e3331965b350ec77582d",
+  "plugin_data/human_ancestor.fa.gz.gzi": "4991070c7fc0096e0bf07a79806823ecda1e7e974585714447c005136d2fec12",
+  "plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw": "9c40836fe11c4265b535e41f9c8c2faf223cc2d733c16498eee5e6954bb00c3f"
+ },
+ "generator": "scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --cache-version 116 (the record spans); scripts/fixtures/cut_plugin_regions.py --gerp-name gerp_conservation_scores.homo_sapiens.GRCh38.bw (the reference, the ancestral-allele FASTA and the GERP bigWig cut to the regions the run reads, the bigWig under the name LoFTEE's grch38 branch derives from loftee_path and without zoom levels so a summary read totals the per-base values exactly); scripts/concordance/generate_reference_output.sh --corpus --dir-plugins <loftee checkout> (the manifest's run, Ensembl VEP's LoF plugin at the grch38 branch of its repository reading loftee_path and --dir_plugins through {plugins}); scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite loftee=<reference>=<candidates> --k 100 --seed 1 --covers LoFTEE --matrix tests/parity/matrix.tsv --flag=... --fasta-name reference.fa.gz and classify (the manifest's run and every flag set)",
+ "flag_sets": {
+  "lof-key-value": {
+   "flags": [
+    "--mask_header_cache_path",
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "LoF,loftee_path={plugins},human_ancestor_fa={corpus}/plugin_data/human_ancestor.fa.gz,gerp_bigwig={corpus}/plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected",
+   "perl_mode": "offline",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --mask_header_cache_path --dir_plugins {plugins} --plugin LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_bigwig:{corpus}/plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "a2fdda18d9b6c748165d557956a96e20a631924db7966cd424317e17ff20dd26",
+    "tab.txt": "18ee2ecfa4080c5ab3bef0a0fc009b9e7429fb3113640b3b7663b5471d491b24",
+    "vcf.vcf": "52e7a56606c47c94ebb8ef4161fb8dfccc5f3dc3abc812816314dd70cdeb7e5a",
+    "json.jsonl": "f77e9d5e5f210aea3df3c69a149cb2ec1855d744a81cd4f88b53b4c31a2e3a3e",
+    "default.summary.log": "571ffeafb1b100a46f0261fbc83e2a9c75ef6bd07a8e7bedcfb57545fec6e200",
+    "tab.summary.log": "2502c2449d4c059d27733b195a2f6e1bd8bdcdafa4cd33da630b38892fd4df32",
+    "vcf.summary.log": "938d2198abd073393caaa9287d44cb87699e60afcd365b431bbbca7a8591476e",
+    "json.summary.log": "f0860e414cbe8184e7b1c64ccd7a41f4f47139d3c5115612fd58e8b6f51fa80a"
+   },
+   "reference": "the manifest's run: Ensembl VEP's LoF plugin reads its parameters in the colon grammar alone and has no LoFTEE name, so the key=value grammar and the LoFTEE name are vep-rs spellings of the same run and compare against the same outputs"
+  },
+  "loftee-key-value": {
+   "flags": [
+    "--mask_header_cache_path",
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "LoFTEE,loftee_path={plugins},human_ancestor_fa={corpus}/plugin_data/human_ancestor.fa.gz,gerp_bigwig={corpus}/plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected",
+   "perl_mode": "offline",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --mask_header_cache_path --dir_plugins {plugins} --plugin LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_bigwig:{corpus}/plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "a2fdda18d9b6c748165d557956a96e20a631924db7966cd424317e17ff20dd26",
+    "tab.txt": "18ee2ecfa4080c5ab3bef0a0fc009b9e7429fb3113640b3b7663b5471d491b24",
+    "vcf.vcf": "52e7a56606c47c94ebb8ef4161fb8dfccc5f3dc3abc812816314dd70cdeb7e5a",
+    "json.jsonl": "f77e9d5e5f210aea3df3c69a149cb2ec1855d744a81cd4f88b53b4c31a2e3a3e",
+    "default.summary.log": "571ffeafb1b100a46f0261fbc83e2a9c75ef6bd07a8e7bedcfb57545fec6e200",
+    "tab.summary.log": "2502c2449d4c059d27733b195a2f6e1bd8bdcdafa4cd33da630b38892fd4df32",
+    "vcf.summary.log": "938d2198abd073393caaa9287d44cb87699e60afcd365b431bbbca7a8591476e",
+    "json.summary.log": "f0860e414cbe8184e7b1c64ccd7a41f4f47139d3c5115612fd58e8b6f51fa80a"
+   },
+   "reference": "the manifest's run: Ensembl VEP's LoF plugin reads its parameters in the colon grammar alone and has no LoFTEE name, so the key=value grammar and the LoFTEE name are vep-rs spellings of the same run and compare against the same outputs"
+  },
+  "lof-gerp-default": {
+   "flags": [
+    "--mask_header_cache_path",
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "LoF,loftee_path:{plugins}/,human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz"
+   ],
+   "input": "variants.vcf",
+   "expected_dir": "expected",
+   "perl_mode": "offline",
+   "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --fasta reference.fa --stats_text --quiet --force_overwrite --mask_header_cache_path --dir_plugins {plugins} --plugin LoF,loftee_path:{plugins},human_ancestor_fa:{corpus}/plugin_data/human_ancestor.fa.gz,gerp_bigwig:{corpus}/plugin_data/gerp_conservation_scores.homo_sapiens.GRCh38.bw [--tab|--vcf|--json]",
+   "sha256": {
+    "default.txt": "a2fdda18d9b6c748165d557956a96e20a631924db7966cd424317e17ff20dd26",
+    "tab.txt": "18ee2ecfa4080c5ab3bef0a0fc009b9e7429fb3113640b3b7663b5471d491b24",
+    "vcf.vcf": "52e7a56606c47c94ebb8ef4161fb8dfccc5f3dc3abc812816314dd70cdeb7e5a",
+    "json.jsonl": "f77e9d5e5f210aea3df3c69a149cb2ec1855d744a81cd4f88b53b4c31a2e3a3e",
+    "default.summary.log": "571ffeafb1b100a46f0261fbc83e2a9c75ef6bd07a8e7bedcfb57545fec6e200",
+    "tab.summary.log": "2502c2449d4c059d27733b195a2f6e1bd8bdcdafa4cd33da630b38892fd4df32",
+    "vcf.summary.log": "938d2198abd073393caaa9287d44cb87699e60afcd365b431bbbca7a8591476e",
+    "json.summary.log": "f0860e414cbe8184e7b1c64ccd7a41f4f47139d3c5115612fd58e8b6f51fa80a"
+   },
+   "reference": "the manifest's run: Ensembl VEP's LoF plugin reads loftee_path followed by gerp_conservation_scores.homo_sapiens.GRCh38.bw as its GERP bigWig when no gerp_bigwig word is given (LoF.pm line 130), the file this corpus's plugin directory holds under that name, so the word set names the same bigWig the manifest's run names and compares against the same outputs; measured on the image with the bigWig beside the plugin's files, 585 rows identical to default.txt"
+  }
+ }
+}

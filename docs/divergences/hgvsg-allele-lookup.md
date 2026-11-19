@@ -1,6 +1,6 @@
 # HGVSg on a record whose ALT list repeats an allele or names the reference
 
-A difference in the `HGVSg` text of a multi-allelic record whose ALT column repeats an allele or names the reference base, not in any tuple; nothing is set aside, since the comparators score consequence sets and never see the field.
+A difference in the `HGVSg` text of a multi-allelic record whose ALT column repeats an allele or names the reference base, not in any tuple; nothing is set aside, since the comparators score consequence sets and never see the field. On the row of an allele written after such an entry, Ensembl VEP prints another allele's notation, where vep-rs prints the notation of the row's own allele.
 
 Under `--hgvsg`, Ensembl VEP computes a notation for each alternate allele of the record's allele string, every written ALT kept (`Parser/VCF.pm` line 342), and stores it under the written allele (`VariationFeature.pm` line 2039). A row prints the notation stored under one entry of that string: the second entry when the string has two, else the entry at the row's allele number (`OutputFactory.pm` lines 1386-1393). The allele number is counted over a list from which a repeated allele (`VariationFeatureOverlap.pm` line 463) and an allele equal to the reference (line 481) are dropped first. So the number and the string fall out of step at every allele written after such an entry, and the row prints another allele's notation.
 

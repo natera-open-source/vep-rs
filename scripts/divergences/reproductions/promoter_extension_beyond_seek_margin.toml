@@ -1,0 +1,35 @@
+entry = "promoter_extension_beyond_seek_margin"
+page = "docs/divergences/regulatory-rows.md#1-a-promoter-whose-extension-reaches-past-the-seek-margin-of-the-next-1-mb-region"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the GFF3 specification and the --regulatory_gff file contract, which states that a promoter's extended region is never smaller than its core and sets no upper bound on its length (Ensembl VEP documentation, \"Running Ensembl VEP\", --extended_promoters); not seen in the measured datasets"
+notes = "The promoter's core starts 20,000 bases past the edge of the variant's 1 Mb region, twice the margin Ensembl VEP pads a region's seek with; a core 100 bases past it is found by both engines."
+# A one-record regulatory file: a promoter at 21:21020000-21020500 extended back to 21:20990000.
+prepare = [
+  "printf '##gff-version 3\\n21\\tEnsembl\\tpromoter\\t21020000\\t21020500\\t.\\t.\\t.\\tID=FAR_BIN;extended_start=20990000;extended_end=21020500\\n' | bgzip -c > \"$STAGE/far_bin.gff3.gz\"",
+  "tabix -p gff \"$STAGE/far_bin.gff3.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	20995000	vc_far_bin_ext	A	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-regulatory-gff/json_cache"
+
+[run]
+flags = ["--regulatory_gff", "file={stage}/far_bin.gff3.gz", "--extended_promoters"]
+
+[compare]
+kind = "rows"
+where = { record = "vc_far_bin_ext", feature = "FAR_BIN" }
+columns = ["Location", "Allele", "Feature", "Consequence", "BIOTYPE"]
+
+[expected]
+ensembl_vep = []
+vep_rs = ["21:20995000 | C | FAR_BIN | regulatory_region_variant | promoter"]

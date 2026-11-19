@@ -467,6 +467,20 @@
     "coding_sequence_variant,feature_truncation"
    ],
    "expected_divergence": "breakend_mate_local_read"
+  },
+  {
+   "location": "21:30592776-30592777",
+   "allele": "AATA",
+   "feature": "ENST00000391624",
+   "feature_type": "Transcript",
+   "record_indices": [
+    28
+   ],
+   "vep_consequence_set": "coding_sequence_variant,inframe_insertion",
+   "vep_rs_consequence_sets": [
+    "inframe_insertion,stop_retained_variant"
+   ],
+   "expected_divergence": "stop_codon_overlap_insertion_range"
   }
  ],
  "vep_rs_only_tuples": [
@@ -524,7 +538,8 @@
   }
  ],
  "divergence_summary": {
-  "breakend_mate_local_read": 2
+  "breakend_mate_local_read": 2,
+  "stop_codon_overlap_insertion_range": 1
  },
  "vep_rs_only_summary": {
   "reference_skipped_record": 4
@@ -649,6 +664,56 @@
    "expected_dir": "expected",
    "covers": [
     "decompression_threads"
+   ]
+  },
+  {
+   "name": "prewarm-ahead-all",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--prewarm_ahead",
+    "all"
+   ],
+   "input": "variants.vcf.gz",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "prewarm_ahead"
+   ]
+  },
+  {
+   "name": "parse-threads-two",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--parse_threads",
+    "2"
+   ],
+   "input": "variants.vcf.gz",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "parse_threads"
    ]
   }
  ]

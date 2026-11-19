@@ -3,7 +3,8 @@
 # reads: transcripts/<chr>/<start>-<end>.json for every chromosome directory,
 # the variation files copied as they are into variations/<chr>/ (all_vars.gz with
 # its index, or the <start>-<end>_var.gz region files of a cache dumped without
-# the tabix conversion), regulatory/<chr>/<start>-<end>.json from *_reg.gz,
+# the tabix conversion), regulatory/<chr>/<start>-<end>.json from *_reg.gz with
+# the binding matrices they name stored once in regulatory/binding_matrices.json,
 # info.json from the cache's info.txt, and chr_synonyms.txt copied beside them.
 # Every field the cache dumper keeps on a transcript is written under its own or
 # a renamed key, flattened (a UTR object
@@ -138,6 +139,39 @@ sub extract_mapper_pair {
     return \%out;
 }
 
+# The pairs of a Bio::EnsEMBL::TranscriptMapper's exon_coord_mapper, a
+# Bio::EnsEMBL::Mapper whose `_pair_<from>` hash holds, under the upper-cased
+# coordinate system name, one Bio::EnsEMBL::Mapper::Pair per pair added
+# (Mapper.pm add_map_coordinates): a `from` and a `to` Unit (id, start, end)
+# and the orientation. TranscriptMapper::_load_mapper writes them with every
+# insertion or deletion SeqEdit of the transcript folded in, so a BAM-edited
+# transcript's cDNA coordinates come from here and never from its exons.
+# Returned in cDNA order; empty when the object carries none.
+sub mapper_object_pairs {
+    my ($mapper) = @_;
+    my $coord_mapper = $mapper->{exon_coord_mapper};
+    return () unless (reftype($coord_mapper) // '') eq 'HASH' && defined $coord_mapper->{from};
+    my $lists = $coord_mapper->{ '_pair_' . $coord_mapper->{from} };
+    return () unless (reftype($lists) // '') eq 'HASH';
+    my @pairs;
+    for my $list (values %$lists) {
+        next unless (reftype($list) // '') eq 'ARRAY';
+        for my $pair (@$list) {
+            next unless (reftype($pair) // '') eq 'HASH'
+                && (reftype($pair->{from}) // '') eq 'HASH'
+                && (reftype($pair->{to}) // '') eq 'HASH';
+            push @pairs, {
+                from_start => $pair->{from}{start} + 0,
+                from_end   => $pair->{from}{end} + 0,
+                to_start   => $pair->{to}{start} + 0,
+                to_end     => $pair->{to}{end} + 0,
+                ori        => ($pair->{ori} // 1) + 0,
+            };
+        }
+    }
+    return sort { $a->{from_start} <=> $b->{from_start} } @pairs;
+}
+
 sub extract_mapper {
     my ($mapper, $sorted_exons, $strand) = @_;
     return undef unless ref $mapper;
@@ -146,12 +180,17 @@ sub extract_mapper {
         $out{$k} = $mapper->{$k} if defined $mapper->{$k};
     }
 
+    my @object_pairs = mapper_object_pairs($mapper);
     # Try to get pairs from the mapper directly (GRCh37 format)
     if (ref $mapper->{pairs} eq 'ARRAY' && @{$mapper->{pairs}}) {
         $out{pairs} = [map { extract_mapper_pair($_) } grep { defined $_ && ref $_ } @{$mapper->{pairs}}];
         $out{pair_count} = scalar @{$out{pairs}};
     }
-    # Otherwise, compute pairs from sorted exons (GRCh38 Storable format)
+    elsif (@object_pairs) {
+        $out{pairs} = \@object_pairs;
+        $out{pair_count} = scalar @object_pairs;
+    }
+    # A mapper object without pairs: the exons give the unedited cDNA coordinates.
     elsif (ref $sorted_exons eq 'ARRAY' && @{$sorted_exons}) {
         my @pairs;
         my $cdna_pos = 1;
@@ -369,45 +408,186 @@ sub extract_transcript {
 }
 my $json = JSON->new->utf8->canonical->allow_blessed->convert_blessed;
 
+# The shape of the regulatory shards and of regulatory/binding_matrices.json;
+# info.json carries it as `regulatory_schema`, and the annotator refuses a
+# regulatory tree whose info.json declares none.
+my $REGULATORY_SCHEMA = 1;
+
+# One code per activity value of the funcgen regulatory_activity table
+# (sql/table.sql: INACTIVE, REPRESSED, POISED, ACTIVE, NA). A feature's
+# `activity` string holds one code per name of info.json's cell_types list, in
+# list order, and `-` where the feature's map lacks the name.
+my %ACTIVITY_CODE = (ACTIVE => 'A', INACTIVE => 'I', POISED => 'P', REPRESSED => 'R', NA => 'N');
+
+# The binding matrices the shards name, each stored once under its stable id as
+# its canonical JSON, with the shard that first carried it: the Storable cache
+# repeats the whole matrix on every motif, and a repeat that differs is corrupt.
+my %binding_matrices;
+my %binding_matrix_source;
+
+sub read_regulatory_shard {
+    my ($in) = @_;
+    open my $fh, '-|', 'gzip', '-dc', $in or die "gzip pipe failed: $!";
+    my $data = fd_retrieve($fh);
+    close($fh) or die "gzip -dc failed (wait status $?)\n";
+    die "invalid regulatory Storable image\n" unless (reftype($data) // '') eq 'HASH';
+    for my $chr (keys %$data) {
+        die "invalid regulatory chromosome entry\n" unless (reftype($data->{$chr}) // '') eq 'HASH';
+        for my $type (keys %{$data->{$chr}}) {
+            die "invalid regulatory feature list\n" unless (reftype($data->{$chr}{$type}) // '') eq 'ARRAY';
+        }
+    }
+    return $data;
+}
+
+# The cell_types list of info.json: the sorted union of every regulatory
+# feature's activity-map keys (Database/RegFeat.pm:196-203, epigenome short
+# names with spaces as `_`) over the chromosomes being converted. The shards are
+# read once for the list before any is written, because every feature's
+# activity string is aligned to it; the cache's own info.txt line cannot be
+# split back into names, since some names contain commas.
+sub collect_cell_types {
+    my (@chr_dirs) = @_;
+    my %names;
+    for my $chr (@chr_dirs) {
+        my $chr_path = "$cache_dir/$chr";
+        opendir(my $ch, $chr_path) or fail("cannot open $chr_path: $!");
+        my @files = sort grep { /^\d+-\d+_reg\.gz$/ } readdir($ch);
+        closedir($ch);
+        for my $file (@files) {
+            my $data = eval { read_regulatory_shard("$chr_path/$file") };
+            fail("$chr_path/$file: $@") if $@;
+            for my $c (keys %$data) {
+                for my $rf (@{ $data->{$c}{RegulatoryFeature} // [] }) {
+                    my $map = (reftype($rf) // '') eq 'HASH' ? $rf->{cell_types} : undef;
+                    next unless (reftype($map) // '') eq 'HASH';
+                    $names{$_} = 1 for keys %$map;
+                }
+            }
+        }
+    }
+    return [sort keys %names];
+}
+
+sub activity_string {
+    my ($feature, $cell_types) = @_;
+    my $map = $feature->{cell_types};
+    $map = {} unless (reftype($map) // '') eq 'HASH';
+    my $codes = '';
+    for my $name (@$cell_types) {
+        my $value = $map->{$name};
+        if (!defined $value) {
+            $codes .= '-';
+            next;
+        }
+        my $code = $ACTIVITY_CODE{$value};
+        die "RegulatoryFeature $feature->{stable_id} has activity '$value' in $name; expected one of "
+            . join(', ', sort keys %ACTIVITY_CODE) . "\n" unless defined $code;
+        $codes .= $code;
+    }
+    return $codes;
+}
+
+# A motif's binding matrix as the table stores it (funcgen BindingMatrix.pm:
+# `elements` by position then nucleotide, `length` the number of positions,
+# the complexes' display names as TRANSCRIPTION_FACTORS prints them). Returns
+# the stable id and the entry.
+sub extract_binding_matrix {
+    my ($matrix, $motif_id) = @_;
+    die "MotifFeature $motif_id lacks binding_matrix\n" unless defined $matrix;
+    die "invalid binding matrix\n" unless (reftype($matrix) // '') eq 'HASH';
+    die "binding matrix lacks stable_id\n" unless defined $matrix->{stable_id};
+    my $id = "$matrix->{stable_id}";
+    my %entry;
+    $entry{name} = "$matrix->{name}" if defined $matrix->{name};
+    $entry{source} = "$matrix->{source}" if defined $matrix->{source};
+    $entry{threshold} = $matrix->{threshold} + 0 if defined $matrix->{threshold};
+    # The motif score arithmetic reads the elements as counts, as funcgen's
+    # converter does (BindingMatrix/Converter.pm:108-114 throws on another unit).
+    die "binding matrix $id has unit '$matrix->{unit}'; only Frequencies converts\n"
+        if defined $matrix->{unit} && $matrix->{unit} ne 'Frequencies';
+    my $complexes = $matrix->{associated_transcription_factor_complexes} // [];
+    die "invalid transcription factor complexes\n" unless (reftype($complexes) // '') eq 'ARRAY';
+    $entry{transcription_factors} = [
+        map { "$_->{display_name}" }
+        grep { (reftype($_) // '') eq 'HASH' && defined $_->{display_name} }
+        @$complexes
+    ];
+    my $elements = $matrix->{elements};
+    my $length = $matrix->{length};
+    if (defined $elements) {
+        die "invalid binding matrix elements\n" unless (reftype($elements) // '') eq 'HASH';
+        my $positions = scalar keys %$elements;
+        $length //= $positions;
+        die "binding matrix $id declares length $length but has $positions positions\n"
+            unless $length == $positions;
+        my @rows;
+        for my $position (1 .. $length) {
+            my $row = $elements->{$position};
+            die "binding matrix $id lacks position $position\n" unless (reftype($row) // '') eq 'HASH';
+            push @rows, [map {
+                die "binding matrix $id lacks $_ at position $position\n" unless defined $row->{$_};
+                $row->{$_} + 0
+            } qw(A C G T)];
+        }
+        $entry{frequencies} = \@rows;
+    } else {
+        die "binding matrix $id has neither elements nor a length\n" unless defined $length;
+        $entry{frequencies} = [];
+    }
+    $entry{length} = $length + 0;
+    return ($id, \%entry);
+}
+
+sub record_binding_matrix {
+    my ($id, $entry, $file) = @_;
+    my $encoded = $json->encode($entry);
+    if (exists $binding_matrices{$id}) {
+        die "binding matrix $id differs from its copy in $binding_matrix_source{$id}\n"
+            unless $binding_matrices{$id} eq $encoded;
+        return;
+    }
+    $binding_matrices{$id} = $encoded;
+    $binding_matrix_source{$id} = $file;
+}
+
 # RegFeat.pm stores chromosome => feature class => array of blessed hashes.
 # OutputFactory.pm uses feature_type (or its so_name) for regulatory BIOTYPE,
 # and complex display_name, not component gene names, for TRANSCRIPTION_FACTORS.
+# A motif's stranded sequence is the one the dumper stored (Regulation.pm:137).
 sub extract_regulatory_feature {
-    my ($feature, $type) = @_;
+    my ($feature, $type, $cell_types, $file) = @_;
     die "invalid $type object\n" unless (reftype($feature) // '') eq 'HASH';
     my %out = (feature_type => $type);
-    for my $key (qw(stable_id start end strand)) {
+    for my $key (qw(stable_id start end dbID)) {
         die "$type lacks $key\n" unless defined $feature->{$key};
-        $out{$key} = $key eq 'stable_id' ? "$feature->{$key}" : $feature->{$key} + 0;
     }
+    $out{stable_id} = "$feature->{stable_id}";
+    $out{start} = $feature->{start} + 0;
+    $out{end} = $feature->{end} + 0;
+    $out{dbid} = $feature->{dbID} + 0;
     if ($type eq 'RegulatoryFeature') {
         my $biotype = $feature->{feature_type};
         $biotype = $biotype->{so_name} if (reftype($biotype) // '') eq 'HASH';
         $out{biotype} = "$biotype" if defined $biotype && !ref $biotype;
+        $out{activity} = activity_string($feature, $cell_types);
     } elsif ($type eq 'MotifFeature') {
+        die "MotifFeature $out{stable_id} lacks strand\n" unless defined $feature->{strand};
+        $out{strand} = $feature->{strand} + 0;
+        die "MotifFeature $out{stable_id} lacks score\n" unless defined $feature->{score};
+        $out{score} = $feature->{score} + 0;
+        my $vefc = $feature->{_variation_effect_feature_cache};
+        my $seq = (reftype($vefc) // '') eq 'HASH' ? $vefc->{seq} : undef;
+        die "MotifFeature $out{stable_id} lacks its sequence\n" unless defined $seq && !ref $seq;
+        my $span = $out{end} - $out{start} + 1;
+        die "MotifFeature $out{stable_id} has a sequence of " . length($seq) . " bases on a span of $span\n"
+            unless length($seq) == $span;
+        $out{seq} = "$seq";
         # Every motif feature carries a binding matrix: the funcgen schema requires
         # one and the GFF route blesses a stub, so a motif without one is corrupt.
-        my $matrix = $feature->{binding_matrix};
-        die "MotifFeature $out{stable_id} lacks binding_matrix\n" unless defined $matrix;
-        die "invalid binding matrix\n" unless (reftype($matrix) // '') eq 'HASH';
-        die "binding matrix lacks stable_id\n" unless defined $matrix->{stable_id};
-        my %binding_matrix = (stable_id => "$matrix->{stable_id}");
-        $binding_matrix{name} = "$matrix->{name}" if defined $matrix->{name};
-        my $complexes = $matrix->{associated_transcription_factor_complexes} // [];
-        die "invalid transcription factor complexes\n" unless (reftype($complexes) // '') eq 'ARRAY';
-        $binding_matrix{transcription_factors} = [
-            map { "$_->{display_name}" }
-            grep { (reftype($_) // '') eq 'HASH' && defined $_->{display_name} }
-            @$complexes
-        ];
-        # Keep raw position keys and counts; these are not normalized
-        # probabilities. GFF-derived matrices can legitimately lack elements.
-        if (defined $matrix->{elements}) {
-            my $kind = reftype($matrix->{elements}) // '';
-            die "invalid binding matrix elements\n" unless $kind eq 'HASH' || $kind eq 'ARRAY';
-            $binding_matrix{frequencies} = $matrix->{elements};
-        }
-        $out{binding_matrix} = \%binding_matrix;
+        my ($matrix_id, $entry) = extract_binding_matrix($feature->{binding_matrix}, $out{stable_id});
+        record_binding_matrix($matrix_id, $entry, $file);
+        $out{matrix} = $matrix_id;
     } else {
         die "unknown regulatory feature type $type\n";
     }
@@ -415,7 +595,7 @@ sub extract_regulatory_feature {
 }
 
 sub convert_regulatory_files {
-    my ($chr_path, $out_chr, $entries) = @_;
+    my ($chr_path, $out_chr, $entries, $cell_types) = @_;
     my @files = sort grep { /^\d+-\d+_reg\.gz$/ } @$entries;
     return 0 unless @files;
     make_path($out_chr);
@@ -424,17 +604,14 @@ sub convert_regulatory_files {
         (my $base = $file) =~ s/_reg\.gz$/.json/;
         my $out = "$out_chr/$base";
         eval {
-            open my $fh, '-|', 'gzip', '-dc', $in or die "gzip pipe failed: $!";
-            my $data = fd_retrieve($fh);
-            close($fh) or die "gzip -dc failed (wait status $?)\n";
-            die "invalid regulatory Storable image\n" unless (reftype($data) // '') eq 'HASH';
+            my $data = read_regulatory_shard($in);
             my @features;
             for my $chr (sort keys %$data) {
-                die "invalid regulatory chromosome entry\n" unless (reftype($data->{$chr}) // '') eq 'HASH';
+                # RegulatoryFeature before MotifFeature, as Cache/RegFeat.pm:212-213 lists them.
                 for my $type (reverse sort keys %{$data->{$chr}}) {
-                    my $features = $data->{$chr}{$type};
-                    die "invalid regulatory feature list\n" unless (reftype($features) // '') eq 'ARRAY';
-                    push @features, map { extract_regulatory_feature($_, $type) } @$features;
+                    push @features,
+                        map { extract_regulatory_feature($_, $type, $cell_types, $in) }
+                        @{$data->{$chr}{$type}};
                 }
             }
             open my $ofh, '>', $out or die "write failed: $!";
@@ -448,6 +625,19 @@ sub convert_regulatory_files {
         }
     }
     return scalar @files;
+}
+
+sub write_binding_matrices {
+    my ($out_path) = @_;
+    my $table = '{' . join(',', map { $json->encode($_) . ':' . $binding_matrices{$_} } sort keys %binding_matrices) . "}\n";
+    open(my $ofh, '>', $out_path) or fail("cannot write $out_path: $!");
+    print $ofh $table;
+    unless (close($ofh)) {
+        my $error = $!;
+        unlink $out_path;
+        fail("write of $out_path failed: $error");
+    }
+    print "Wrote $out_path (" . scalar(keys %binding_matrices) . " binding matrices)\n";
 }
 
 
@@ -469,8 +659,9 @@ if (@chrs) {
 }
 
 print "Processing " . scalar(@chr_dirs) . " chromosomes\n";
-# A run that stops early leaves neither file, whatever an earlier run left there.
-unlink "$output_dir/info.json", "$output_dir/chr_synonyms.txt";
+# A run that stops early leaves none of these files, whatever an earlier run left there.
+unlink "$output_dir/info.json", "$output_dir/chr_synonyms.txt", "$output_dir/regulatory/binding_matrices.json";
+my $cell_types = collect_cell_types(@chr_dirs);
 
 my $total = 0;
 my $ok = 0;
@@ -541,7 +732,7 @@ foreach my $chr (@chr_dirs) {
     $transcripts_total += $chr_tx;
     my $variation_files = copy_variation_files($chr_path, "$output_dir/variations/$chr", \@entries);
     $variation_files_total += $variation_files;
-    my $regulatory_files = convert_regulatory_files($chr_path, "$output_dir/regulatory/$chr", \@entries);
+    my $regulatory_files = convert_regulatory_files($chr_path, "$output_dir/regulatory/$chr", \@entries, $cell_types);
     $regulatory_files_total += $regulatory_files;
     print "  chr$chr: " . scalar(@files) . " files, $chr_tx transcripts, $variation_files variation files, $regulatory_files regulatory files\n";
 }
@@ -570,9 +761,15 @@ $info->{contig_order} = [sort by_contig_order @chr_dirs];
 for my $tool (qw(sift polyphen)) {
     delete $info->{$tool} unless $matrices_written{$tool} && $info->{source_versions}{$tool};
 }
-# An input marker alone must not advertise a tree that was never converted.
-delete $info->{regulatory};
-$info->{regulatory} = JSON::true if $regulatory_files_total;
+# An input marker alone must not advertise a tree that was never converted; the
+# cell-type list and the schema describe the written tree alone.
+delete $info->{$_} for qw(regulatory cell_types regulatory_schema);
+if ($regulatory_files_total) {
+    write_binding_matrices("$output_dir/regulatory/binding_matrices.json");
+    $info->{regulatory} = JSON::true;
+    $info->{cell_types} = $cell_types;
+    $info->{regulatory_schema} = $REGULATORY_SCHEMA;
+}
 write_info_json($info, "$output_dir/info.json");
 
 print "\nDone. Converted: $ok / $total files, $transcripts_total total transcripts, $variation_files_total variation files copied, $regulatory_files_total regulatory files\n";
@@ -603,8 +800,10 @@ sub copy_variation_files {
 
 # info.txt is translated the way VEP's own reader does (CacheDir.pm
 # read_cache_info_file): every `source_<key>` line becomes a source version,
-# `variation_cols` becomes a list, `-` means unset, `cell_types` is not carried.
-# Regulatory availability is set only after its shards have been written.
+# `variation_cols` becomes a list, `-` means unset, and the `cell_types` line is
+# dropped (its comma-joined names cannot be split back; collect_cell_types
+# rebuilds the list from the features). Regulatory availability is set only
+# after its shards have been written.
 sub read_info_txt {
     my ($info_txt) = @_;
     my %info = (source_versions => {});
@@ -632,6 +831,16 @@ sub read_info_txt {
     # (<species>[_<assembly>]/<version>), never a line of info.txt.
     if ($cache_dir =~ m{/(\d+)(?:_[^/]+)?/?$}) {
         $info{cache_version} = $1 + 0;
+    }
+    # The transcript set is the species directory's suffix (CacheDir.pm:312
+    # appends `_refseq` or `_merged` to the species under --refseq or --merged);
+    # Ensembl VEP's info.txt has no line for it, and a cache outside that
+    # layout declares none.
+    if ($cache_dir =~ m{(?:^|/)([^/]+)/\d+(?:_[^/]+)?/?$}) {
+        my $species_dir = $1;
+        $info{source_type} = $species_dir =~ /_refseq$/ ? 'refseq'
+            : $species_dir =~ /_merged$/ ? 'merged'
+            : 'ensembl';
     }
     return \%info;
 }

@@ -17,7 +17,8 @@ set -euo pipefail
 # the `--source upstream` steps, then upload the prepared tree laid out as
 #   <bucket>/plugin_data/<scope>/<relative path>
 #   <bucket>/plugin_data/MANIFEST.json
-# where <scope> is grch37, grch38, or assembly_agnostic (LoFtool, pLI, GWAS),
+# where <scope> is grch37, grch38, or assembly_agnostic (LoFtool, pLI, GWAS,
+# DosageSensitivity),
 # and <relative path> is the path plugin_data_layout.sh assigns to the file, the
 # same path it takes under --data-dir. MANIFEST.json is optional. When present, a
 # staged file whose byte size differs from its entry is re-fetched as a truncated
@@ -33,7 +34,7 @@ set -euo pipefail
 #
 # Usage:
 #   scripts/data/setup_plugin_data.sh --assembly GRCh38
-#   scripts/data/setup_plugin_data.sh --assembly GRCh37 --plugins CADD,REVEL
+#   scripts/data/setup_plugin_data.sh --assembly GRCh37 --plugins REVEL,gnomADc
 #   scripts/data/setup_plugin_data.sh --assembly GRCh38 --tier full
 #   scripts/data/setup_plugin_data.sh --assembly GRCh38 --source s3 --bucket <name>
 
@@ -56,25 +57,24 @@ DRY_RUN=0
 #
 # A combination absent here is NOT a vep-rs gap -- the database does not offer
 # it. Staging a substitute would annotate from the wrong genome build.
-# CADD           GRCh37 + GRCh38   separate per-assembly trees
-# dbscSNV        GRCh37 + GRCh38   pre-split per assembly
 # AlphaMissense  GRCh37 + GRCh38   hg19 + hg38 files
 # REVEL          GRCh37 + GRCh38   ONE file, two coordinate columns; per-assembly index
 # gnomADc        GRCh37 + GRCh38   v2.1 genomes (37) / v4.0 exomes (38)
 # LoFtool        both              gene-symbol keyed, assembly-independent
 # pLI            both              gene keyed, assembly-independent
 # LoFTEE         GRCh37 + GRCh38   STRUCTURALLY different bundles (tabix TSV vs bigWig)
+# AncestralAllele GRCh37 + GRCh38  Ensembl's EPO ancestral FASTA, one archive per assembly
 # GWAS           GRCh38 only       the catalog publishes GRCh38 coordinates
-# SpliceAI       GRCh38 SNV only   GRCh37 + all indels are Illumina-login-gated
-# dbNSFP         UNSUPPORTED       commercial license required for clinical use
+# OpenTargets    GRCh38 only       the Platform publishes GRCh38 coordinates
+# LOEUF          GRCh37 + GRCh38   gnomAD v2.1.1 (37) / Ensembl's cut of v4.1.1 (38)
+# DosageSensitivity both           gene-symbol keyed, assembly-independent
+# Conservation   GRCh38 only       Ensembl Compara publishes the GERP bigWig for GRCh38 alone;
+#                                  LoFTEE's GRCh38 bundle ships a copy (an earlier Compara release)
 
-ALL_PLUGINS=(CADD REVEL SpliceAI gnomADc AlphaMissense dbscSNV GWAS LoFtool LoFTEE pLI)
+ALL_PLUGINS=(REVEL gnomADc AlphaMissense GWAS LoFtool LoFTEE pLI AncestralAllele OpenTargets Conservation LOEUF DosageSensitivity)
 
 # Plugins that only support one assembly.
-GRCH38_ONLY_PLUGINS=(GWAS SpliceAI)
-
-# Explicitly unsupported, with the reason surfaced to the user.
-UNSUPPORTED_PLUGINS=(dbNSFP)
+GRCH38_ONLY_PLUGINS=(GWAS OpenTargets Conservation)
 
 usage() {
 	cat <<'EOF'
@@ -85,7 +85,8 @@ Usage:
 
 Required:
   --assembly <name>     GRCh37 or GRCh38. Determines which files are staged and
-                        which plugins are applicable.
+                        which plugins are applicable; every plugin bundle is human,
+                        so another assembly exits 1.
 
 Options:
   --data-dir <path>     Destination (default: ~/.vep/plugin_data/<assembly>/<tier>)
@@ -99,8 +100,9 @@ Options:
                                     layout is in this script's header.
   --tier <quick|full>   quick: chr21 subsets  full: genome-wide (default: quick)
   --plugins <list>      Comma-separated (default: all supported for the assembly)
-                          CADD,REVEL,SpliceAI,gnomADc,AlphaMissense,dbscSNV,
-                          GWAS,LoFtool,LoFTEE,pLI
+                          REVEL,gnomADc,AlphaMissense,GWAS,LoFtool,LoFTEE,pLI,
+                          AncestralAllele,OpenTargets,Conservation,LOEUF,
+                          DosageSensitivity
   --bucket <name>       Your S3 bucket holding an already-prepared copy. Required
                         for --source s3; defaults to $VEP_BENCHMARK_BUCKET.
   --profile <name>      AWS profile for S3 access
@@ -108,14 +110,18 @@ Options:
   --help                Print this help
 
 Not supported:
-  dbNSFP    Its license requires a paid commercial license for clinical or
-            commercial use, so it is neither distributed nor validated against.
-  SpliceAI  GRCh38 SNV scores only (open, from the Ensembl MANE release).
-            GRCh37 scores and the indel files for both assemblies are
-            distributed solely via Illumina BaseSpace, which requires an
-            account signup.
   GWAS      GRCh38 only, because the NHGRI-EBI catalog publishes GRCh38
             coordinates. Not a vep-rs limitation.
+  OpenTargets  GRCh38 only, because the Open Targets Platform publishes GRCh38
+            coordinates. Not a vep-rs limitation.
+  Conservation  GRCh38 only: Ensembl Compara publishes its GERP bigWig for
+            GRCh38 alone (the GRCh37 scores live in its database, which the
+            plugin's database mode reads and vep-rs does not). The staged file is
+            the copy LoFTEE's GRCh38 bundle ships (an earlier Compara release),
+            under loftee/.
+
+A plugin whose data cannot be redistributed reads the file you pass to it; this
+script stages no file for it.
 
 The script is idempotent: existing files are skipped, and tabix indexes are
 verified for every file that needs one.
@@ -192,7 +198,7 @@ grch38 | hg38)
 	UCSC_BUILD="hg38"
 	;;
 *)
-	echo "ERROR: --assembly must be GRCh37 or GRCh38 (got '${ASSEMBLY}')" >&2
+	echo "ERROR: --assembly must be GRCh37 or GRCh38 (got '${ASSEMBLY}'): every plugin bundle is human" >&2
 	exit 1
 	;;
 esac
@@ -237,10 +243,6 @@ in_list() {
 # Drop (or reject) plugins the requested assembly cannot support.
 APPLICABLE_PLUGINS=()
 for plugin in "${SELECTED_PLUGINS[@]}"; do
-	if in_list "${plugin}" "${UNSUPPORTED_PLUGINS[@]}"; then
-		echo "SKIP  ${plugin}: not supported (commercial license required for clinical/commercial use)" >&2
-		continue
-	fi
 	if ! in_list "${plugin}" "${ALL_PLUGINS[@]}"; then
 		echo "ERROR: unknown plugin '${plugin}'. Known: ${ALL_PLUGINS[*]}" >&2
 		exit 1
@@ -250,8 +252,11 @@ for plugin in "${SELECTED_PLUGINS[@]}"; do
 		GWAS)
 			echo "SKIP  GWAS: GRCh38 only (the NHGRI-EBI catalog publishes GRCh38 coordinates)" >&2
 			;;
-		SpliceAI)
-			echo "SKIP  SpliceAI: GRCh38 SNV only (GRCh37 + indels are behind an Illumina BaseSpace signup)" >&2
+		OpenTargets)
+			echo "SKIP  OpenTargets: GRCh38 only (the Open Targets Platform publishes GRCh38 coordinates)" >&2
+			;;
+		Conservation)
+			echo "SKIP  Conservation: GRCh38 only (Ensembl Compara publishes the GERP bigWig for GRCh38 alone)" >&2
 			;;
 		esac
 		continue
@@ -293,7 +298,7 @@ staged_files_for() {
 # Which S3 prefix holds a plugin's data: per-assembly, or shared.
 s3_scope_for() {
 	case "$1" in
-	LoFtool | pLI | GWAS) echo "assembly_agnostic" ;;
+	LoFtool | pLI | GWAS | DosageSensitivity) echo "assembly_agnostic" ;;
 	*) echo "${ASSEMBLY_LC}" ;;
 	esac
 }
@@ -355,9 +360,12 @@ verify_tabix_index() {
 	if [[ ! -f "${file}" ]]; then
 		return 1
 	fi
-	# Only index-bearing formats need a .tbi; flat gene-keyed files do not.
+	# Only tabix-indexed formats need a .tbi: flat gene-keyed files, FASTA files and
+	# their .fai and .gzi indexes, bigWig files and the .tbi files themselves do not.
+	# Nor does the DosageSensitivity table, a gzipped file both engines read whole.
+	[[ "${file}" == "${DATA_DIR}/$(plugin_data_file DosageSensitivity file "${ASSEMBLY_LC}")" ]] && return 0
 	case "${file}" in
-	*.txt | *.tsv | *.fa | *.fai | *.bw) return 0 ;;
+	*.txt | *.tsv | *.fa | *.fa.gz | *.fai | *.gzi | *.bw | *.tbi) return 0 ;;
 	esac
 	if [[ -f "${file}.tbi" ]]; then
 		return 0
@@ -408,10 +416,6 @@ stage_from_s3() {
 
 # Upstream staging (the default; also how a bucket is seeded)
 
-CADD_BASE="https://kircherlab.bihealth.org/download/CADD/v1.7/${ASSEMBLY}"
-# The kircherlab host is the one the CADD site advertises; the older
-# krishna.gs.washington.edu host also serves these files.
-
 upstream_note() {
 	cat <<EOF
     [manual] ${1}
@@ -436,20 +440,6 @@ stage_from_upstream() {
 	for plugin in "${APPLICABLE_PLUGINS[@]}"; do
 		echo "[${plugin}]"
 		case "${plugin}" in
-		CADD)
-			echo "    SNV:   ${CADD_BASE}/whole_genome_SNVs.tsv.gz (+ .tbi)"
-			if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
-				echo "    indel: ${CADD_BASE}/gnomad.genomes-exomes.r4.0.indel.tsv.gz (+ .tbi)"
-				upstream_note "GRCh37 note: the SNV file's REMOTE tabix index is corrupt (bgzf read fails at every offset), so a streaming 'tabix <url> 21' slice does not work. Download the full file, or resolve chr21's offsets from the .tbi and range-GET them."
-			else
-				echo "    indel: ${CADD_BASE}/gnomad.genomes.r4.0.indel.tsv.gz (+ .tbi)"
-				upstream_note "GRCh38: remote tabix works, so 'tabix <url> 21 | bgzip' yields a chr21 subset without the full download."
-			fi
-			;;
-		dbscSNV)
-			echo "    ${CADD_BASE}/dbscSNV1.1_${ASSEMBLY}.txt.gz (+ .tbi)"
-			upstream_note "PREPARATION REQUIRED: the published header has NO leading '#' (GRCh37 'chr pos ref alt ada_score rf_score'; GRCh38 'hg38_chr hg38_pos ...'). vep-rs tolerates that, but Perl's dbscSNV.pm does not, so store it with '#' prepended: zcat f | sed '1s/^/#/' | bgzip > out; tabix -s 1 -b 2 -e 2 out. Files are also CRLF."
-			;;
 		AlphaMissense)
 			echo "    https://zenodo.org/records/8208688/files/AlphaMissense_${UCSC_BUILD}.tsv.gz"
 			upstream_note "No .tbi is shipped: build one with 'tabix -s 1 -b 2 -e 2'. Contigs are UCSC-style ('chr21') on BOTH builds. License CC-BY-NC-SA-4.0."
@@ -457,10 +447,11 @@ stage_from_upstream() {
 		REVEL)
 			echo "    https://zenodo.org/records/7072866 (revel-v1.3_all_chromosomes.zip,"
 			echo "      or revel-v1.3_segments_chrom_21.zip for the chr21 tier -- 6.8 MB vs 667 MB)"
+			upstream_note "PREPARATION REQUIRED: both zips hold comma-separated files whose header has NO leading '#' (revel_with_transcript_ids in the full zip; two CSVs, each with its own header, in the chr21 one), and Perl's REVEL.pm and vep-rs both refuse a header without it. Keep one header, tab-separate, prefix and compress: awk 'FNR==1 && NR>1 {next} 1' <members> | tr ',' '\t' | sed '1s/.*/#&/' | bgzip > out, then index as below."
 			if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
 				upstream_note "Index on the hg19 column: tabix -f -s 1 -b 2 -e 2"
 			else
-				upstream_note "Index on the grch38 column, which needs a re-sort first: keep the header, drop rows whose grch38_pos is '.', sort -k1,1 -k3,3n, then tabix -f -s 1 -b 3 -e 3. One REVEL file serves both assemblies via different indexes."
+				upstream_note "Index on the grch38 column, which needs a re-sort first: zcat out, set the header line aside, drop rows whose grch38_pos is '.', LC_ALL=C sort -k1,1 -k3,3n, put the header back on top, bgzip, then tabix -f -s 1 -b 3 -e 3. One REVEL file serves both assemblies via different indexes."
 			fi
 			;;
 		gnomADc)
@@ -471,15 +462,15 @@ stage_from_upstream() {
 			fi
 			upstream_note "Public AWS Open Data bucket: fetch with 'aws s3 cp --no-sign-request'. No .tbi is published, so build one. Perl's gnomADc.pm needs a '#'-prefixed header: sed '1s/.*/#&/'."
 			;;
-		SpliceAI)
-			echo "    https://ftp.ensembl.org/pub/data_files/homo_sapiens/GRCh38/variation_plugins/"
-			echo "      spliceai_scores.raw.snv.ensembl_mane_v1.4.grch38.vcf.gz (+ .tbi)"
-			upstream_note "GRCh38 SNV only, and MANE-restricted, so coverage is narrower than Illumina's full callset. Remote tabix works. Indel scores and all GRCh37 scores require an Illumina BaseSpace account and are NOT supported."
-			;;
 		GWAS)
 			echo "    https://ftp.ebi.ac.uk/pub/databases/gwas/releases/latest/"
 			echo "      gwas-catalog-associations_ontology-annotated-full.zip"
 			upstream_note "Unzip to a plain TSV: Perl's GWAS.pm needs it uncompressed, and the header row starts with 'DATE ADDED TO CATALOG'. GRCh38 coordinates only."
+			;;
+		OpenTargets)
+			echo "    https://ftp.ebi.ac.uk/pub/databases/opentargets/platform/26.03/etc/export/vep_data/"
+			echo "      open_targets_vep_full.tsv.gz (+ .tbi)"
+			upstream_note "PREPARATION REQUIRED (OpenTargets.pm:64-66): the published header line has no leading '#', which Perl's OpenTargets.pm reads through 'tabix -H' and so finds no header; comment it and index again: zcat f | sed '1 s/.*/#&/' | bgzip > out; tabix -s 1 -b 2 -e 2 out. vep-rs reads either form. The 26.03 release is the last that publishes the export (26.06 and 26.09 carry no etc/export/vep_data/), so the release directory is named, not latest/. GRCh38 coordinates only. Licence as the Platform states it (https://platform-docs.opentargets.org/licence): 'Open Targets Platform is marked with CC0 1.0. This dedicates the data to the public domain, allowing downstream users to consume the data without restriction.'"
 			;;
 		LoFtool)
 			echo "    https://raw.githubusercontent.com/Ensembl/VEP_plugins/release/116/LoFtool_scores.txt"
@@ -493,12 +484,38 @@ stage_from_upstream() {
 			echo "    https://personal.broadinstitute.org/konradk/loftee_data/${ASSEMBLY}/"
 			if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
 				echo "      GERP_scores.final.sorted.txt.gz (+ .tbi), human_ancestor.fa.gz (+ .fai/.gzi)"
-				upstream_note "GRCh37 (master branch) ships GERP as a tabix per-base TSV, NOT a bigWig. Pass it as gerp_tabix=. The END_TRUNC cutoff is +180 here, vs -58 on grch38."
+				upstream_note "GRCh37 (master branch) ships GERP as a tabix per-base TSV, NOT a bigWig. Pass it as gerp_tabix= with run_splice_predictions=0, without which vep-rs refuses a GRCh37 run. The END_TRUNC cutoff is +180 here, vs -58 on grch38."
 			else
 				echo "      gerp_conservation_scores.homo_sapiens.GRCh38.bw, human_ancestor.fa.gz (+ .fai/.gzi)"
 				upstream_note "GRCh38 (grch38 branch) ships GERP as a bigWig. Pass it as gerp_bigwig=."
 			fi
 			upstream_note "Both engines read human_ancestor.fa.gz with its .fai and .gzi as shipped, and vep-rs reads a plain human_ancestor.fa with its .fai as well; this layout stages both, so keep the upstream .gz trio and decompress a copy, re-indexed with samtools faidx, which the concordance harness hands to vep-rs."
+			;;
+		LOEUF)
+			if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
+				echo "    https://storage.googleapis.com/gcp-public-data--gnomad/release/2.1.1/constraint/gnomad.v2.1.1.lof_metrics.by_transcript.txt.bgz"
+				upstream_note "PREPARATION REQUIRED (LOEUF.pm:54-59): the table is not sorted on its gene coordinates and its header has no leading '#'. The per-TRANSCRIPT table (78 columns: transcript, oe_lof_upper and gene_id at columns 2, 31 and 65, chromosome, start and end at 76 to 78) is the layout the plugin's header check reads; the per-gene table LOEUF.pm names has 77 columns and fails that check. Write the header and the body in two passes, since 'head -n 1' on a pipe swallows the lines after it: { zcat f | head -n 1 | sed 's/^/#/'; zcat f | tail -n +2 | sort -t\$'\\t' -k76,76 -k77,77n; } | bgzip > loeuf_dataset.tsv.gz; tabix -f -s 76 -b 77 -e 78 loeuf_dataset.tsv.gz."
+			else
+				echo "    https://ftp.ensembl.org/pub/release-116/variation/LOEUF/loeuf_dataset_grch38.tsv.gz (+ .tbi)"
+				upstream_note "Ensembl's cut of the gnomAD v4.1.1 constraint metrics with the gene coordinates appended as the last two columns, sorted, '#'-headed and indexed (tabix -s 114 -b 115 -e 116, LOEUF.pm:61-67); stage as published."
+			fi
+			upstream_note "Licence: gnomAD terms, 'The primary data from the gnomAD exomes and genomes are available free of restrictions under the Creative Commons Zero Public Domain Dedication' (https://gnomad.broadinstitute.org/terms)."
+			;;
+		DosageSensitivity)
+			echo "    https://zenodo.org/records/6347673/files/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz"
+			upstream_note "Gene-symbol keyed and read whole (no index), so one copy serves both assemblies. Licence as the Zenodo record states it: 'Creative Commons Attribution 4.0 International'."
+			;;
+		Conservation)
+			echo "    https://ftp.ensembl.org/pub/release-116/compara/conservation_scores/92_mammals.gerp_conservation_score/gerp_conservation_scores.homo_sapiens.GRCh38.bw"
+			upstream_note "The layout stages one GERP bigWig for GRCh38, under loftee/grch38/, where LoFTEE's GRCh38 bundle ships its copy of this file (an earlier Compara release); the copy prepared for LoFTEE serves Conservation as it is. Ensembl places no restriction on the use of its data."
+			;;
+		AncestralAllele)
+			if [[ "${ASSEMBLY_LC}" == "grch37" ]]; then
+				echo "    https://ftp.ensembl.org/pub/release-75/fasta/ancestral_alleles/homo_sapiens_ancestor_GRCh37_e71.tar.bz2"
+			else
+				echo "    https://ftp.ensembl.org/pub/release-116/fasta/ancestral_alleles/homo_sapiens_ancestor_GRCh38.tar.gz"
+			fi
+			upstream_note "One FASTA per chromosome inside the archive: unpack, 'cat <dir>/*.fa | bgzip -c > homo_sapiens_ancestor.fa.gz', then 'samtools faidx homo_sapiens_ancestor.fa.gz' for the .fai and .gzi. Both engines read the bgzipped trio; the record names keep Ensembl's ANCESTOR_for_chromosome:<assembly>:<chr>:... form, which the plugins key on. Ensembl places no restriction on the use of its data."
 			;;
 		esac
 		echo ""

@@ -1,0 +1,60 @@
+entry = "loftee_gerp_walk_without_conservation_database"
+page = "docs/divergences/loftee-gerp-walk-without-the-conservation-database.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the parameters of the LoF plugin that Ensembl VEP runs for LoFTEE on GRCh37, whose module defaults conservation_file to the word false and whose basic usage line names no such file; not seen in the measured datasets"
+notes = "Ensembl VEP's LoF plugin on GRCh37 is the LOFTEE repository's master branch, outside the VEP_plugins checkout: the run needs --extra-dir loftee_grch37=<checkout of that branch>. The GERP table is built by the prepare steps (bgzip and tabix on the host) and scores every base 1, so a GERP total is the number of bases summed. The walk crosses a whole exon on the three three-exon coding transcripts of CBR1, whose second exon is coding, and on CLDN8's ENST00000286809, whose second exon is untranslated; it crosses none on the two-exon ENST00000439427 and the single-exon ENST00000399899, whose rows both engines write alike."
+
+# A GERP table in the layout of the plugin's own GRCh37 file (chromosome, position, score), over the two genes.
+prepare = [
+  '''{ seq 31586001 31589000; seq 37442001 37446000; } | awk -v OFS='\t' '{ print 21, $1, 1 }' | bgzip > "$STAGE/GERP_scores.txt.gz"''',
+  'tabix -s 1 -b 2 -e 2 "$STAGE/GERP_scores.txt.gz"',
+]
+
+# A frameshift and a stop gain in the coding exon of CLDN8, and a stop gain in the first exon of CBR1.
+[input]
+format = "vcf"
+text = """
+21	31588080	frameshift_before_utr_exon	AC	A	.	.	.
+21	31588082	stop_before_utr_exon	G	T	.	.	.
+21	37442543	first_exon_stop	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "tests/golden/116/GRCh37/json_cache"
+
+[run]
+flags = [
+  "--dir_plugins", "{loftee_grch37}",
+  "--plugin", "LoF,loftee_path:{loftee_grch37},gerp_file:{stage}/GERP_scores.txt.gz,human_ancestor_fa:false,run_splice_predictions:0",
+]
+
+[compare]
+kind = "rows"
+where = { consequence = ["stop_gained", "frameshift_variant"] }
+columns = ["Uploaded_variation", "Feature", "Consequence", "LoF", "LoF_filter", "LoF_flags", "LoF_info"]
+
+[expected]
+ensembl_vep = [
+  "first_exon_stop | ENST00000290349 | stop_gained | - | - | - | -",
+  "first_exon_stop | ENST00000399191 | stop_gained | - | - | - | -",
+  "first_exon_stop | ENST00000439427 | stop_gained | HC | - | - | GERP_DIST:408,BP_DIST:406,PERCENTILE:0.242085661080074,DIST_FROM_LAST_EXON:159,50_BP_RULE:PASS",
+  "first_exon_stop | ENST00000530908 | stop_gained | - | - | - | -",
+  "frameshift_before_utr_exon | ENST00000286809 | frameshift_variant | - | - | - | -",
+  "frameshift_before_utr_exon | ENST00000399899 | frameshift_variant | HC | - | SINGLE_EXON | GERP_DIST:516,BP_DIST:515,PERCENTILE:0.240412979351032,DIST_FROM_LAST_EXON:-310,50_BP_RULE:FAIL",
+  "stop_before_utr_exon | ENST00000286809 | stop_gained | - | - | - | -",
+  "stop_before_utr_exon | ENST00000399899 | stop_gained | HC | - | SINGLE_EXON | GERP_DIST:517,BP_DIST:516,PERCENTILE:0.238938053097345,DIST_FROM_LAST_EXON:-309,50_BP_RULE:FAIL",
+]
+vep_rs = [
+  "first_exon_stop | ENST00000290349 | stop_gained | HC | - | - | GERP_DIST:705,BP_DIST:702,PERCENTILE:0.155875299760192,DIST_FROM_LAST_EXON:266,50_BP_RULE:PASS",
+  "first_exon_stop | ENST00000399191 | stop_gained | HC | - | - | GERP_DIST:540,BP_DIST:537,PERCENTILE:0.194319880418535,DIST_FROM_LAST_EXON:266,50_BP_RULE:PASS",
+  "first_exon_stop | ENST00000439427 | stop_gained | HC | - | - | GERP_DIST:408,BP_DIST:406,PERCENTILE:0.242085661080074,DIST_FROM_LAST_EXON:159,50_BP_RULE:PASS",
+  "first_exon_stop | ENST00000530908 | stop_gained | HC | - | - | GERP_DIST:393,BP_DIST:390,PERCENTILE:0.24904214559387,DIST_FROM_LAST_EXON:266,50_BP_RULE:PASS",
+  "frameshift_before_utr_exon | ENST00000286809 | frameshift_variant | HC | - | - | GERP_DIST:1498,BP_DIST:1496,PERCENTILE:0.240412979351032,DIST_FROM_LAST_EXON:710,50_BP_RULE:PASS",
+  "frameshift_before_utr_exon | ENST00000399899 | frameshift_variant | HC | - | SINGLE_EXON | GERP_DIST:516,BP_DIST:515,PERCENTILE:0.240412979351032,DIST_FROM_LAST_EXON:-310,50_BP_RULE:FAIL",
+  "stop_before_utr_exon | ENST00000286809 | stop_gained | HC | - | - | GERP_DIST:1499,BP_DIST:1497,PERCENTILE:0.238938053097345,DIST_FROM_LAST_EXON:711,50_BP_RULE:PASS",
+  "stop_before_utr_exon | ENST00000399899 | stop_gained | HC | - | SINGLE_EXON | GERP_DIST:517,BP_DIST:516,PERCENTILE:0.238938053097345,DIST_FROM_LAST_EXON:-309,50_BP_RULE:FAIL",
+]

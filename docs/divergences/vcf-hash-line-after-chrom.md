@@ -1,6 +1,6 @@
 # A `#` line after the `#CHROM` line
 
-A difference in which samples a VCF header names under `--individual` and `--individual_zyg`, and in the header of the VCF output, on an input shape no measured dataset has: a single-`#` line after the mandatory `#CHROM` column line; nothing is set aside.
+A difference in which samples a VCF header names under `--individual` and `--individual_zyg`, and in the header of the VCF output, on an input shape no measured dataset has: a single-`#` line after the mandatory `#CHROM` column line; nothing is set aside. Ensembl VEP takes the last single-`#` line as the column line, so the header names no sample, `--individual all` writes no row and the VCF output prints the stray line where the column line belongs. vep-rs reads the sample names from the `#CHROM` line alone and writes the stray line nowhere.
 
 Ensembl VEP reads a VCF header through ensembl-io, which takes every single-`#` line as the column line in turn, so the last one stands (`BaseVCF4.pm` lines 96-97: `elsif ($line =~ /^#\s*(.+)$/) { $self->{'metadata'}->{'header'} = [split("\t",$1)];`). The sample names are that line's columns after its `FORMAT` column (lines 805-808), so a header whose `#CHROM` line is followed by `#note` names none.
 

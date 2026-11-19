@@ -1,0 +1,31 @@
+entry = "hgvs_shift_shared_across_alleles"
+page = "docs/divergences/multiallelic-hgvs-shift.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 98.6 per million · 23 flag sets, 21 corpora"
+notes = "Two insertion alleles at the stop codon of ENSMUST00000405524 on one record; the second allele's row is read at the positions the first allele's shift left cached."
+
+[input]
+format = "vcf"
+text = """
+19	42047557	rs265482355	A	AAAAGGG,AAAAG	.	.	.
+"""
+
+[cache]
+species = "mus_musculus"
+assembly = "GRCm39"
+json_cache = "tests/golden/116/GRCm39-mouse/json_cache"
+fasta = "tests/golden/116/GRCm39-mouse/reference.fa.gz"
+
+[run]
+flags = ["--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = "rs265482355", allele = "AAAG", feature = "ENSMUST00000405524" }
+columns = ["Consequence", "Protein_position", "Amino_acids", "Codons", "HGVSc", "HGVS_OFFSET"]
+
+[expected]
+ensembl_vep = ["frameshift_variant,NMD_transcript_variant | - | - | - | ENSMUST00000405524.1:c.207_*1insAAGA | 1"]
+vep_rs = ["inframe_insertion,stop_retained_variant,NMD_transcript_variant | 69 | */*KX | taa/taAAAGa | ENSMUST00000405524.1:c.207_*1insAAGA | 1"]

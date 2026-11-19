@@ -1,0 +1,47 @@
+entry = "colocated_list_cut_at_cache_cap"
+page = "docs/divergences/colocated-list-cut-at-cache-cap.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "seen in the variation files of the human caches of release 116: 1,079 pubmed and 22 var_synonyms lists of exactly 1,024 characters end inside an item on GRCh38, 726 and 6 on GRCh37"
+notes = "Every identifier is invented. The known variant rs9920000001 at 21:500 stores a pubmed list of 113 eight-digit ids and the first seven digits of a 114th, 1,024 characters in all. The first step copies the Ensembl VEP cache by hard links and replaces the chromosome 21 variation file with that one row, in the column order of the cache's info.txt; the second builds vep-rs's cache with the same row. Ensembl VEP prints the stored list, the seven digits as a 114th id; vep-rs writes the 113 whole ids. The mask stands for the first 112 ids, equal on both sides."
+
+prepare = [
+  '''mkdir -p "$STAGE/perl-cache/homo_sapiens" && cp -al "$PERL_CACHE" "$STAGE/perl-cache/homo_sapiens/116_GRCh38"
+value="$(seq -s, 99000001 99000113),9900011"
+[ "${#value}" = 1024 ] || { echo "the stored list is ${#value} characters, not 1,024" >&2; exit 1; }
+dir="$STAGE/perl-cache/homo_sapiens/116_GRCh38/21"
+rm -f "$dir/all_vars.gz" "$dir/all_vars.gz.csi" "$dir/all_vars.gz.tbi"
+awk -F '\t' '$1 == "variation_cols" { print $2 }' "$PERL_CACHE/info.txt" | awk -F, -v OFS='\t' -v value="$value" '{ for (i = 1; i <= NF; i++) { cell = "."; if ($i == "chr") cell = "21"; if ($i == "variation_name") cell = "rs9920000001"; if ($i == "start") cell = "500"; if ($i == "allele_string") cell = "A/G"; if ($i == "pubmed") cell = value; $i = cell } print }' | bgzip > "$dir/all_vars.gz"
+tabix -C -s 1 -b 5 -e 5 "$dir/all_vars.gz"''',
+  '''mkdir -p "$STAGE/json-cache/transcripts/21" "$STAGE/json-cache/variations/21"
+printf '[]' > "$STAGE/json-cache/transcripts/21/1-1000000.json"
+printf 'rs9920000001 . . 500 . A/G . . . . . . %s,9900011 .\n' "$(seq -s, 99000001 99000113)" | gzip -n > "$STAGE/json-cache/variations/21/1-1000000_var.gz"
+printf '{"assembly": "GRCh38", "source_versions": {"dbSNP": "156"}, "variation_cols": ["variation_name", "failed", "somatic", "start", "end", "allele_string", "strand", "clin_sig", "phenotype_or_disease", "clin_sig_allele", "clin_sig_ref_allele", "clinical_impact", "pubmed", "var_synonyms"]}\n' > "$STAGE/json-cache/info.json"''',
+]
+
+[input]
+format = "vcf"
+text = """
+21	500	.	A	G	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = ["--check_existing", "--pubmed", "--var_synonyms"]
+format = "default"
+
+[compare]
+kind = "field"
+field = "PUBMED"
+where = { location = "21:500" }
+mask = ["^99000001,(?:99[0-9]{6},){111}"]
+
+[expected]
+ensembl_vep = ["<masked>99000113,9900011"]
+vep_rs = ["<masked>99000113"]

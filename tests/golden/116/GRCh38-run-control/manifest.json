@@ -48,7 +48,14 @@
   "config-file",
   "vep-environment-variables",
   "option-prefix-abbreviation",
-  "single-dash-long-options"
+  "single-dash-long-options",
+  "cache-dir-resolution",
+  "final-summary-line",
+  "startup-banner",
+  "status-messages",
+  "verbose-and-v",
+  "exit-codes",
+  "nextflow-nf-core-drop-in"
  ],
  "flag_sets": [
   {
@@ -281,6 +288,106 @@
    "covers": [
     "writer_strategy",
     "output_buffer_size"
+   ]
+  },
+  {
+   "name": "no-progress",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--no_progress"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "no_progress",
+    "progress-line"
+   ]
+  },
+  {
+   "name": "safe",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--safe"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "safe",
+    "api-safe"
+   ]
+  },
+  {
+   "name": "reader-core-none",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--reader_core",
+    "none"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "reader_core"
+   ]
+  },
+  {
+   "name": "reader-core-cpu-0",
+   "flags": [
+    "--protein",
+    "--protein_version",
+    "--mask_header_cache_path",
+    "--max_sv_size",
+    "-1",
+    "--reader_core",
+    "0"
+   ],
+   "input": "variants.vcf",
+   "stdin": false,
+   "unordered": false,
+   "formats": [
+    "default",
+    "tab",
+    "vcf",
+    "json"
+   ],
+   "expected_dir": "expected",
+   "covers": [
+    "reader_core"
    ]
   }
  ],
@@ -749,6 +856,20 @@
     "coding_sequence_variant,feature_truncation"
    ],
    "expected_divergence": "breakend_mate_local_read"
+  },
+  {
+   "location": "21:30592776-30592777",
+   "allele": "AATA",
+   "feature": "ENST00000391624",
+   "feature_type": "Transcript",
+   "record_indices": [
+    28
+   ],
+   "vep_consequence_set": "coding_sequence_variant,inframe_insertion",
+   "vep_rs_consequence_sets": [
+    "inframe_insertion,stop_retained_variant"
+   ],
+   "expected_divergence": "stop_codon_overlap_insertion_range"
   }
  ],
  "vep_rs_only_tuples": [
@@ -806,7 +927,8 @@
   }
  ],
  "divergence_summary": {
-  "breakend_mate_local_read": 2
+  "breakend_mate_local_read": 2,
+  "stop_codon_overlap_insertion_range": 1
  },
  "vep_rs_only_summary": {
   "reference_skipped_record": 4
@@ -966,6 +1088,36 @@
     "exit": 0,
     "output": "tab.txt",
     "format": "tab"
+   }
+  },
+  {
+   "name": "nf-core-ensemblvep-vep",
+   "argv": [
+    "-i",
+    "{input}",
+    "-o",
+    "{out}",
+    "--vcf",
+    "{flags}",
+    "--compress_output",
+    "bgzip",
+    "--assembly",
+    "{assembly}",
+    "--species",
+    "homo_sapiens",
+    "--cache",
+    "--cache_version",
+    "116",
+    "--dir_cache",
+    "{cache_root}",
+    "--fork",
+    "2"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "vcf.vcf",
+    "format": "vcf",
+    "warnings_file": "default.txt_warnings.txt"
    }
   },
   {
@@ -1150,7 +1302,7 @@
    ],
    "expect": {
     "exit": 1,
-    "stderr_contains": "ERROR: [plugin] Failed to instantiate plugin LoFtool: LoFtool: failed to open /no/such/scores.txt: "
+    "stderr_contains": "ERROR: [plugin] Failed to instantiate plugin LoFtool: LoFtool: scores file /no/such/scores.txt not found"
    }
   },
   {
@@ -1254,7 +1406,7 @@
    ],
    "expect": {
     "exit": 0,
-    "stdout_contains": "\tLoFtool_percentile"
+    "stdout_contains": "\tLoFtool"
    }
   },
   {
@@ -1931,6 +2083,139 @@
    "expect": {
     "exit": 0,
     "output": "default.txt"
+   }
+  },
+  {
+   "name": "summary-line",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--cache",
+    "--dir_cache",
+    "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "{flags}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "stderr_contains": "Processed 51 variants (973 consequences) in "
+   }
+  },
+  {
+   "name": "banner",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--cache",
+    "--dir_cache",
+    "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "{flags}",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "stderr_contains": "-------------------- -------------------- --------------------\nEnsembl VEP (Rust)   v116.2\n-------------------- -------------------- --------------------\n"
+   }
+  },
+  {
+   "name": "info-notice",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--cache",
+    "--dir_cache",
+    "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "{flags}",
+    "--shift_hgvs",
+    "0",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "stderr_contains": "INFO: --shift_hgvs has been set to zero, setting shift_3prime to 0\n"
+   }
+  },
+  {
+   "name": "short-v-safe",
+   "argv": [
+    "{golden}",
+    "-o",
+    "{out}",
+    "-v",
+    "--safe"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt"
+   }
+  },
+  {
+   "name": "no-progress-summary",
+   "argv": [
+    "-i",
+    "{input}",
+    "--offline",
+    "--cache",
+    "--dir_cache",
+    "{cache_root}",
+    "--cache_version",
+    "116",
+    "--species",
+    "homo_sapiens",
+    "--assembly",
+    "{assembly}",
+    "--buffer_size",
+    "5000",
+    "--force_overwrite",
+    "--no_stats",
+    "{flags}",
+    "--no_progress",
+    "-o",
+    "{out}"
+   ],
+   "expect": {
+    "exit": 0,
+    "output": "default.txt",
+    "stderr_contains": "Processed 51 variants (973 consequences) in "
    }
   }
  ]

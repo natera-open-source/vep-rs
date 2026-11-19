@@ -21,6 +21,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde::Serialize;
 use tracing::info;
+use vep_core::cache_info::REGULATORY_SCHEMA;
 
 use crate::builder::BuildStats;
 use crate::core_dumps::{id_to_name, read_table};
@@ -37,7 +38,12 @@ pub struct CacheInfoJson {
     /// `b` when the cache carries PolyPhen matrices.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub polyphen: Option<String>,
+    /// Whether the cache holds a regulatory tree.
     pub regulatory: bool,
+    /// The shape of the regulatory shards ([`REGULATORY_SCHEMA`]), present
+    /// only when the tree was written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub regulatory_schema: Option<u32>,
     /// The columns of the variation files, present only when the files were
     /// written.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -47,7 +53,7 @@ pub struct CacheInfoJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub var_type: Option<String>,
     pub source_versions: BTreeMap<String, String>,
-    /// The chromosome directories written, in [`contig_order`].
+    /// The chromosome directories written, in [`karyotype_order`].
     pub contig_order: Vec<String>,
 }
 
@@ -55,7 +61,9 @@ impl CacheInfoJson {
     /// The metadata of a build: `sift` and `polyphen` read `b` only when a
     /// matrix of that tool was written, `variation_cols` and `var_type` are
     /// present only when variation files were (`variation_cols` names their
-    /// columns), and `contig_order` lists the chromosomes the build wrote.
+    /// columns), and `contig_order` lists the chromosomes the build wrote in
+    /// [`karyotype_order`], the karyotype's order when the core dumps give one
+    /// ([`CoreDumps::karyotype_ranks`](crate::core_dumps::CoreDumps::karyotype_ranks)).
     pub fn new(
         species: &str,
         assembly: &str,
@@ -63,6 +71,7 @@ impl CacheInfoJson {
         stats: &BuildStats,
         variation_cols: Option<Vec<String>>,
         source_versions: BTreeMap<String, String>,
+        karyotype_ranks: Option<&HashMap<String, u64>>,
     ) -> Self {
         let marker = |written: usize| (written > 0).then(|| "b".to_string());
         Self {
@@ -72,11 +81,21 @@ impl CacheInfoJson {
             sift: marker(stats.sift_matrices),
             polyphen: marker(stats.polyphen_matrices),
             regulatory: false,
+            regulatory_schema: None,
             var_type: variation_cols.is_some().then(|| "tabix".to_string()),
             variation_cols,
             source_versions,
-            contig_order: stats.chromosomes.clone(),
+            contig_order: karyotype_order(stats.chromosomes.iter().cloned(), karyotype_ranks),
         }
+    }
+
+    /// The metadata with the regulatory markers a written tree needs:
+    /// `regulatory` and the shard schema, and no `cell_types`, since a tree
+    /// baked from GFF files carries no epigenome activity.
+    pub fn with_regulatory(mut self, written: bool) -> Self {
+        self.regulatory = written;
+        self.regulatory_schema = written.then_some(REGULATORY_SCHEMA);
+        self
     }
 
     /// Writes `info.json` into the cache directory.
@@ -90,23 +109,39 @@ impl CacheInfoJson {
     }
 }
 
-/// Chromosome names in the order a cache lists them: autosomes by number, then
-/// X, Y and MT, then every other contig by name, the converter's order.
+/// Chromosome names in the order a cache lists them when no karyotype is
+/// known: autosomes by number, then X, Y and MT, then every other contig by
+/// name, the converter's order.
 pub fn contig_order(names: impl IntoIterator<Item = String>) -> Vec<String> {
-    let rank = |name: &str| -> (u8, u64, String) {
+    karyotype_order(names, None)
+}
+
+/// Chromosome names in the order a cache lists them: the names with a
+/// karyotype rank first, by rank, the order `SliceAdaptor::fetch_all_karyotype`
+/// lists the assembly's chromosomes in (`SliceAdaptor.pm:1271-1314`), then
+/// every other name in [`contig_order`]. Without ranks the whole list follows
+/// [`contig_order`].
+pub fn karyotype_order(
+    names: impl IntoIterator<Item = String>,
+    karyotype_ranks: Option<&HashMap<String, u64>>,
+) -> Vec<String> {
+    let key = |name: &str| -> (u8, u64, String) {
+        if let Some(rank) = karyotype_ranks.and_then(|ranks| ranks.get(name)) {
+            return (0, *rank, String::new());
+        }
         if let Ok(number) = name.parse::<u64>() {
-            return (0, number, String::new());
+            return (1, number, String::new());
         }
         let tier = match name {
-            "X" => 1,
-            "Y" => 2,
-            "MT" => 3,
-            _ => 4,
+            "X" => 2,
+            "Y" => 3,
+            "MT" => 4,
+            _ => 5,
         };
         (tier, 0, name.to_string())
     };
     let mut names: Vec<String> = names.into_iter().collect();
-    names.sort_by_cached_key(|name| rank(name));
+    names.sort_by_cached_key(|name| key(name));
     names
 }
 
@@ -248,6 +283,93 @@ mod tests {
         assert_eq!(lines, ["A\tB", "A\tC", "B\tC", "B\tD", "C\tD"]);
     }
 
+    /// With the core dumps the karyotype ranks order the chromosomes: the
+    /// release 116 BDGP6.54 core ranks `2L` 1, `2R` 2, `3L` 3, `3R` 4, `4` 5,
+    /// `X` 6, `Y` 7 and `mitochondrion_genome` 8, so the cache lists them so,
+    /// and `rDNA`, a region without a rank, follows them; without the dumps
+    /// the name rule puts the numbered `4` first, then `X` and `Y`, then
+    /// every other name in string order.
+    #[test]
+    fn contig_order_follows_karyotype_rank_when_the_dumps_carry_it() {
+        let names = [
+            "rDNA",
+            "X",
+            "3R",
+            "2R",
+            "mitochondrion_genome",
+            "4",
+            "3L",
+            "Y",
+            "2L",
+        ]
+        .map(str::to_string);
+        let fly_ranks: HashMap<String, u64> = [
+            ("2L", 1),
+            ("2R", 2),
+            ("3L", 3),
+            ("3R", 4),
+            ("4", 5),
+            ("X", 6),
+            ("Y", 7),
+            ("mitochondrion_genome", 8),
+        ]
+        .into_iter()
+        .map(|(name, rank)| (name.to_string(), rank))
+        .collect();
+        assert_eq!(
+            karyotype_order(names.iter().cloned(), Some(&fly_ranks)),
+            [
+                "2L",
+                "2R",
+                "3L",
+                "3R",
+                "4",
+                "X",
+                "Y",
+                "mitochondrion_genome",
+                "rDNA"
+            ]
+        );
+        assert_eq!(
+            contig_order(names.iter().cloned()),
+            [
+                "4",
+                "X",
+                "Y",
+                "2L",
+                "2R",
+                "3L",
+                "3R",
+                "mitochondrion_genome",
+                "rDNA"
+            ]
+        );
+        assert_eq!(
+            karyotype_order(names.iter().cloned(), None),
+            contig_order(names.iter().cloned())
+        );
+
+        let stats = BuildStats {
+            transcript_count: 0,
+            chromosome_count: names.len(),
+            region_file_count: 0,
+            chromosomes: contig_order(names.iter().cloned()),
+            sift_matrices: 0,
+            polyphen_matrices: 0,
+        };
+        let info = CacheInfoJson::new(
+            "drosophila_melanogaster",
+            "BDGP6.54",
+            116,
+            &stats,
+            None,
+            BTreeMap::new(),
+            Some(&fly_ranks),
+        );
+        assert_eq!(info.contig_order[..3], ["2L", "2R", "3L"]);
+        assert_eq!(info.contig_order[8], "rDNA");
+    }
+
     /// Autosomes by number, X, Y, MT, then the rest by name.
     #[test]
     fn contig_order_follows_the_converter() {
@@ -298,7 +420,7 @@ mod tests {
             sift_matrices: 3,
             polyphen_matrices: 0,
         };
-        CacheInfoJson::new("homo_sapiens", "GRCh38", 116, &stats, None, versions)
+        CacheInfoJson::new("homo_sapiens", "GRCh38", 116, &stats, None, versions, None)
             .write(dir.path())
             .unwrap();
         let parsed: serde_json::Value =
@@ -330,6 +452,7 @@ mod tests {
             &stats,
             Some(columns.clone()),
             BTreeMap::new(),
+            None,
         );
         let parsed = serde_json::to_value(&with_variations).unwrap();
         assert!(parsed.get("sift").is_none());

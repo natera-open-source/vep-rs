@@ -1,0 +1,31 @@
+entry = "shift_3prime_shared_predicates"
+page = "docs/divergences/shift-3prime-shared-predicates.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 98.6 per million · 3 flag sets, 21 corpora"
+notes = "The multi-allelic mechanism of the entry: the G allele shifts four bases along a run of Gs into intron 7 of HUNK and stores the span predicates there; the GT allele, shifted one base and still in exon 7, is tested against the intron's candidate terms."
+
+[input]
+format = "vcf"
+text = """
+21	31974714	multi_two_motifs_fwd	A	AG,AGT	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-identifiers/json_cache"
+fasta = "tests/golden/116/GRCh38-identifiers/reference.fa.gz"
+
+[run]
+flags = ["--shift_3prime", "1", "--shift_length", "--hgvs"]
+
+[compare]
+kind = "rows"
+where = { record = "multi_two_motifs_fwd", allele = ["GT", "TG"], feature = "ENST00000270112" }
+columns = ["Allele", "Consequence", "cDNA_position", "CDS_position", "Protein_position", "Amino_acids", "HGVSc", "HGVSp", "HGVS_OFFSET", "SHIFT_LENGTH"]
+
+[expected]
+ensembl_vep = ["GT | splice_region_variant | - | - | - | - | ENST00000270112.7:c.1171_1172insTG | - | 1 | 1"]
+vep_rs = ["TG | frameshift_variant,splice_region_variant | 1826-1827 | 1171-1172 | 391 | G/VX | ENST00000270112.7:c.1171_1172insTG | ENSP00000270112.2:p.Gly391ValfsTer19 | 1 | 1"]

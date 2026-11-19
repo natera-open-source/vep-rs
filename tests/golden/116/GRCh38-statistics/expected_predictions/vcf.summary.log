@@ -1,0 +1,134 @@
+[VEP run statistics]
+VEP version (API)	 116.2 (116)
+Annotation sources	Cache: /work/cache/homo_sapiens/116_GRCh38
+Species	homo_sapiens
+Command line options	vep --assembly GRCh38 --cache --cache_version 116 --database 0 --dir_cache [PATH]/cache --dir_plugins /plugins --force_overwrite --fork --format vcf --input_file [PATH]/input.vcf --offline --output_file [PATH]/vcf.vcf --polyphen b --quiet --sift b --stats_text --vcf
+Start time	2026-10-28 17:29:36
+End time	2026-10-28 17:29:37
+Run time	1 seconds
+Input file	/work/input.vcf
+Output file	/work/perl_out/vcf.vcf
+
+[Data version]
+1000genomes	phase3
+COSMIC	102
+ClinVar	202509
+HGMD-PUBLIC	20204
+assembly	GRCh38.p14
+dbSNP	156
+gencode	GENCODE 50
+genebuild	GENCODE50
+gnomADe	v4.1
+gnomADg	v4.1
+polyphen	2.2.3
+regbuild	1.0
+sift	6.2.1
+
+[General statistics]
+Lines of input read	340
+Variants processed	339
+Variants filtered out	0
+Novel / existing variants	-
+Overlapped genes	98
+Overlapped transcripts	843
+Overlapped regulatory features	-
+
+[Variant classes]
+duplication	1
+indel	7
+sequence_alteration	7
+substitution	9
+deletion	35
+insertion	37
+SNV	243
+
+[Consequences (most severe)]
+splice_acceptor_variant	6
+splice_donor_variant	6
+stop_gained	7
+frameshift_variant	41
+stop_lost	5
+start_lost	5
+feature_elongation	1
+inframe_insertion	8
+inframe_deletion	11
+missense_variant	169
+splice_region_variant	6
+splice_donor_region_variant	1
+splice_polypyrimidine_tract_variant	2
+synonymous_variant	17
+mature_miRNA_variant	1
+5_prime_UTR_variant	4
+3_prime_UTR_variant	7
+non_coding_transcript_exon_variant	4
+intron_variant	19
+upstream_gene_variant	1
+downstream_gene_variant	6
+intergenic_variant	12
+
+[Consequences (all)]
+splice_acceptor_variant	88
+splice_donor_variant	35
+stop_gained	14
+frameshift_variant	177
+stop_lost	12
+start_lost	11
+feature_elongation	1
+inframe_insertion	35
+inframe_deletion	101
+missense_variant	361
+splice_donor_5th_base_variant	4
+splice_region_variant	95
+splice_donor_region_variant	6
+splice_polypyrimidine_tract_variant	80
+synonymous_variant	66
+coding_sequence_variant	3
+mature_miRNA_variant	2
+5_prime_UTR_variant	8
+3_prime_UTR_variant	83
+non_coding_transcript_exon_variant	521
+intron_variant	963
+NMD_transcript_variant	219
+non_coding_transcript_variant	599
+upstream_gene_variant	1682
+downstream_gene_variant	383
+intergenic_variant	17
+
+[Coding consequences]
+stop_gained	14
+frameshift_variant	177
+stop_lost	12
+start_lost	11
+inframe_insertion	35
+inframe_deletion	101
+missense_variant	361
+synonymous_variant	66
+coding_sequence_variant	3
+
+[SIFT summary]
+tolerated_low_confidence	14
+deleterious_low_confidence	51
+tolerated	128
+deleterious	139
+
+[PolyPhen summary]
+unknown	13
+possibly_damaging	29
+probably_damaging	68
+benign	148
+
+[Variants by chromosome]
+21	337
+chr21	2
+
+[Position in protein]
+00-10%	158
+10-20%	50
+20-30%	124
+30-40%	71
+40-50%	54
+50-60%	76
+60-70%	63
+70-80%	83
+80-90%	54
+90-100%	45

@@ -1,0 +1,38 @@
+entry = "regulatory_duplicate_identifier_rows"
+page = "docs/divergences/regulatory-rows.md#3-one-identifier-in-both-the-regulatory-file-and-the-emar-file-of---regulatory_gff"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the GFF3 specification, \"Description of the Format\", column 9, whose ID is unique within one file, and under the --regulatory_gff contract, with no rule on an identifier its file= and emars= files share (Ensembl VEP documentation, \"Annotation sources\", \"Regulatory annotation from GFF files\"); not seen in the measured datasets"
+notes = "The corpus regulatory file's enhancer ENSR21_85ZF5 (21:5011320-5011550) beside a one-record EMAR file whose EMAR carries the same identifier; the variant lies inside both records."
+# A one-record EMAR file naming its EMAR after the regulatory file's enhancer.
+prepare = [
+  "printf '##gff-version 3\\n21\\tEnsembl\\tEMAR\\t5011300\\t5011600\\t.\\t.\\t.\\tID=ENSR21_85ZF5\\n' | bgzip -c > \"$STAGE/emar_collision.gff.gz\"",
+  "tabix -p gff \"$STAGE/emar_collision.gff.gz\"",
+]
+
+[input]
+format = "vcf"
+text = """
+21	5011400	v_collision	A	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-regulatory-gff/json_cache"
+
+[run]
+flags = ["--regulatory_gff", "file={corpus}/gff/regulatory_features.gff3.gz,emars={stage}/emar_collision.gff.gz"]
+
+[compare]
+kind = "rows"
+where = { record = "v_collision", feature = "ENSR21_85ZF5" }
+columns = ["Location", "Allele", "Feature", "Consequence", "BIOTYPE"]
+
+[expected]
+ensembl_vep = ["21:5011400 | C | ENSR21_85ZF5 | regulatory_region_variant | EMAR"]
+vep_rs = [
+  "21:5011400 | C | ENSR21_85ZF5 | regulatory_region_variant | enhancer",
+  "21:5011400 | C | ENSR21_85ZF5 | regulatory_region_variant | EMAR",
+]

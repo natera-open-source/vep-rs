@@ -1,0 +1,38 @@
+entry = "filter_vep_short_entry_reads_info_key"
+page = "docs/divergences/filter-vep-short-entry-info-key.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the filter_vep input contract, VCF output produced by Ensembl VEP (Ensembl VEP documentation, \"Filtering results\"): under --keep_csq a new consequence is added, not merged (\"Running Ensembl VEP\", --keep_csq), so a run that adds fields leaves the earlier entries shorter than the last Format list; not seen in the measured datasets"
+notes = "A --keep_csq output re-annotated under more flags: the header's two CSQ lines carry Format lists of three and four fields, and the earlier annotation's entries are read under the longer list. s1 is a three-field entry beside INFO AF=0.5; filter_vep reads the INFO value as the consequence field AF, so `AF exists` passes it; vep filter reads the field the entry lacks as undefined and fails it. s2 writes its own AF and passes on both; s3 writes an empty AF and fails on both."
+
+[input]
+format = "vcf"
+header = [
+  "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele frequency in the cohort\">",
+  "##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT\">",
+  "##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Consequence annotations from Ensembl VEP. Format: Allele|Consequence|IMPACT|AF\">",
+]
+text = """
+21	100	s1	A	G	.	.	AF=0.5;CSQ=G|missense_variant|MODERATE
+21	200	s2	C	T	.	.	AF=0.5;CSQ=T|missense_variant|MODERATE|0.01
+21	300	s3	G	A	.	.	AF=0.5;CSQ=A|missense_variant|MODERATE|
+"""
+
+[run]
+tool = "filter"
+args = [
+  "-i", "{input}", "-o", "{out}", "--force_overwrite",
+  "--no_missing_consequence_warning", "--filter", "AF exists",
+]
+
+[compare]
+kind = "lines"
+pattern = "^21\t"
+
+[expected]
+ensembl_vep = [
+  "21\t100\ts1\tA\tG\t.\t.\tAF=0.5;CSQ=G|missense_variant|MODERATE",
+  "21\t200\ts2\tC\tT\t.\t.\tAF=0.5;CSQ=T|missense_variant|MODERATE|0.01",
+]
+vep_rs = ["21\t200\ts2\tC\tT\t.\t.\tAF=0.5;CSQ=T|missense_variant|MODERATE|0.01"]

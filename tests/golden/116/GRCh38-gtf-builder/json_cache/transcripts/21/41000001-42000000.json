@@ -1,0 +1,2024 @@
+[
+  {
+    "stable_id": "ENST00000836721",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41171944,
+    "end": 41186788,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "is_canonical": 1,
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256475",
+        "start": 41186448,
+        "end": 41186788,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001802711",
+        "start": 41186123,
+        "end": 41186342,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256454",
+        "start": 41172409,
+        "end": 41172768,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256458",
+        "start": 41171944,
+        "end": 41172114,
+        "rank": 4,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "gencode_primary",
+        "value": "GENCODE primary"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186343,
+          "end": 41186447,
+          "rank": 1
+        },
+        {
+          "start": 41172769,
+          "end": 41186122,
+          "rank": 2
+        },
+        {
+          "start": 41172115,
+          "end": 41172408,
+          "rank": 3
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 341,
+            "to_start": 41186448,
+            "to_end": 41186788,
+            "ori": -1
+          },
+          {
+            "from_start": 342,
+            "from_end": 561,
+            "to_start": 41186123,
+            "to_end": 41186342,
+            "ori": -1
+          },
+          {
+            "from_start": 562,
+            "from_end": 921,
+            "to_start": 41172409,
+            "to_end": 41172768,
+            "ori": -1
+          },
+          {
+            "from_start": 922,
+            "from_end": 1092,
+            "to_start": 41171944,
+            "to_end": 41172114,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256458",
+          "start": 41171944,
+          "end": 41172114,
+          "rank": 4,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256454",
+          "start": 41172409,
+          "end": 41172768,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001802711",
+          "start": 41186123,
+          "end": 41186342,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256475",
+          "start": 41186448,
+          "end": 41186788,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000836722",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41171947,
+    "end": 41186788,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256475",
+        "start": 41186448,
+        "end": 41186788,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001802711",
+        "start": 41186123,
+        "end": 41186342,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256466",
+        "start": 41171947,
+        "end": 41172768,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186343,
+          "end": 41186447,
+          "rank": 1
+        },
+        {
+          "start": 41172769,
+          "end": 41186122,
+          "rank": 2
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 341,
+            "to_start": 41186448,
+            "to_end": 41186788,
+            "ori": -1
+          },
+          {
+            "from_start": 342,
+            "from_end": 561,
+            "to_start": 41186123,
+            "to_end": 41186342,
+            "ori": -1
+          },
+          {
+            "from_start": 562,
+            "from_end": 1383,
+            "to_start": 41171947,
+            "to_end": 41172768,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256466",
+          "start": 41171947,
+          "end": 41172768,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001802711",
+          "start": 41186123,
+          "end": 41186342,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256475",
+          "start": 41186448,
+          "end": 41186788,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000430327",
+    "version": 7,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41175225,
+    "end": 41186791,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256463",
+        "start": 41186448,
+        "end": 41186791,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001802711",
+        "start": 41186123,
+        "end": 41186342,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256476",
+        "start": 41175225,
+        "end": 41176786,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "TSL",
+        "value": "tsl3 (assigned to previous version 6)"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186343,
+          "end": 41186447,
+          "rank": 1
+        },
+        {
+          "start": 41176787,
+          "end": 41186122,
+          "rank": 2
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 344,
+            "to_start": 41186448,
+            "to_end": 41186791,
+            "ori": -1
+          },
+          {
+            "from_start": 345,
+            "from_end": 564,
+            "to_start": 41186123,
+            "to_end": 41186342,
+            "ori": -1
+          },
+          {
+            "from_start": 565,
+            "from_end": 2126,
+            "to_start": 41175225,
+            "to_end": 41176786,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256476",
+          "start": 41175225,
+          "end": 41176786,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001802711",
+          "start": 41186123,
+          "end": 41186342,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256463",
+          "start": 41186448,
+          "end": 41186791,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000440221",
+    "version": 3,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41175227,
+    "end": 41186789,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256471",
+        "start": 41186448,
+        "end": 41186789,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001802711",
+        "start": 41186123,
+        "end": 41186342,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003463767",
+        "start": 41180472,
+        "end": 41180573,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256467",
+        "start": 41175227,
+        "end": 41176786,
+        "rank": 4,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "TSL",
+        "value": "tsl3 (assigned to previous version 2)"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186343,
+          "end": 41186447,
+          "rank": 1
+        },
+        {
+          "start": 41180574,
+          "end": 41186122,
+          "rank": 2
+        },
+        {
+          "start": 41176787,
+          "end": 41180471,
+          "rank": 3
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 342,
+            "to_start": 41186448,
+            "to_end": 41186789,
+            "ori": -1
+          },
+          {
+            "from_start": 343,
+            "from_end": 562,
+            "to_start": 41186123,
+            "to_end": 41186342,
+            "ori": -1
+          },
+          {
+            "from_start": 563,
+            "from_end": 664,
+            "to_start": 41180472,
+            "to_end": 41180573,
+            "ori": -1
+          },
+          {
+            "from_start": 665,
+            "from_end": 2224,
+            "to_start": 41175227,
+            "to_end": 41176786,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256467",
+          "start": 41175227,
+          "end": 41176786,
+          "rank": 4,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00003463767",
+          "start": 41180472,
+          "end": 41180573,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001802711",
+          "start": 41186123,
+          "end": 41186342,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256471",
+          "start": 41186448,
+          "end": 41186789,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000623119",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41175231,
+    "end": 41180818,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00003755206",
+        "start": 41175231,
+        "end": 41180818,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "TSL",
+        "value": "tslNA"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 5588,
+            "to_start": 41175231,
+            "to_end": 41180818,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00003755206",
+          "start": 41175231,
+          "end": 41180818,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000836725",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41175231,
+    "end": 41186788,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256475",
+        "start": 41186448,
+        "end": 41186788,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001802711",
+        "start": 41186123,
+        "end": 41186342,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001753386",
+        "start": 41182150,
+        "end": 41182245,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256461",
+        "start": 41175231,
+        "end": 41176786,
+        "rank": 4,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186343,
+          "end": 41186447,
+          "rank": 1
+        },
+        {
+          "start": 41182246,
+          "end": 41186122,
+          "rank": 2
+        },
+        {
+          "start": 41176787,
+          "end": 41182149,
+          "rank": 3
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 341,
+            "to_start": 41186448,
+            "to_end": 41186788,
+            "ori": -1
+          },
+          {
+            "from_start": 342,
+            "from_end": 561,
+            "to_start": 41186123,
+            "to_end": 41186342,
+            "ori": -1
+          },
+          {
+            "from_start": 562,
+            "from_end": 657,
+            "to_start": 41182150,
+            "to_end": 41182245,
+            "ori": -1
+          },
+          {
+            "from_start": 658,
+            "from_end": 2213,
+            "to_start": 41175231,
+            "to_end": 41176786,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256461",
+          "start": 41175231,
+          "end": 41176786,
+          "rank": 4,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001753386",
+          "start": 41182150,
+          "end": 41182245,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001802711",
+          "start": 41186123,
+          "end": 41186342,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256475",
+          "start": 41186448,
+          "end": 41186788,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000836726",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41175231,
+    "end": 41186788,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256475",
+        "start": 41186448,
+        "end": 41186788,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001802711",
+        "start": 41186123,
+        "end": 41186342,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003463767",
+        "start": 41180472,
+        "end": 41180573,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256460",
+        "start": 41175231,
+        "end": 41176348,
+        "rank": 4,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186343,
+          "end": 41186447,
+          "rank": 1
+        },
+        {
+          "start": 41180574,
+          "end": 41186122,
+          "rank": 2
+        },
+        {
+          "start": 41176349,
+          "end": 41180471,
+          "rank": 3
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 341,
+            "to_start": 41186448,
+            "to_end": 41186788,
+            "ori": -1
+          },
+          {
+            "from_start": 342,
+            "from_end": 561,
+            "to_start": 41186123,
+            "to_end": 41186342,
+            "ori": -1
+          },
+          {
+            "from_start": 562,
+            "from_end": 663,
+            "to_start": 41180472,
+            "to_end": 41180573,
+            "ori": -1
+          },
+          {
+            "from_start": 664,
+            "from_end": 1781,
+            "to_start": 41175231,
+            "to_end": 41176348,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256460",
+          "start": 41175231,
+          "end": 41176348,
+          "rank": 4,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00003463767",
+          "start": 41180472,
+          "end": 41180573,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001802711",
+          "start": 41186123,
+          "end": 41186342,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256475",
+          "start": 41186448,
+          "end": 41186788,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000836727",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41175231,
+    "end": 41186788,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256475",
+        "start": 41186448,
+        "end": 41186788,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256479",
+        "start": 41186123,
+        "end": 41186362,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256461",
+        "start": 41175231,
+        "end": 41176786,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186363,
+          "end": 41186447,
+          "rank": 1
+        },
+        {
+          "start": 41176787,
+          "end": 41186122,
+          "rank": 2
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 341,
+            "to_start": 41186448,
+            "to_end": 41186788,
+            "ori": -1
+          },
+          {
+            "from_start": 342,
+            "from_end": 581,
+            "to_start": 41186123,
+            "to_end": 41186362,
+            "ori": -1
+          },
+          {
+            "from_start": 582,
+            "from_end": 2137,
+            "to_start": 41175231,
+            "to_end": 41176786,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256461",
+          "start": 41175231,
+          "end": 41176786,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256479",
+          "start": 41186123,
+          "end": 41186362,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256475",
+          "start": 41186448,
+          "end": 41186788,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000836728",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41175231,
+    "end": 41186788,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256462",
+        "start": 41186514,
+        "end": 41186788,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001802711",
+        "start": 41186123,
+        "end": 41186342,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256461",
+        "start": 41175231,
+        "end": 41176786,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186343,
+          "end": 41186513,
+          "rank": 1
+        },
+        {
+          "start": 41176787,
+          "end": 41186122,
+          "rank": 2
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 275,
+            "to_start": 41186514,
+            "to_end": 41186788,
+            "ori": -1
+          },
+          {
+            "from_start": 276,
+            "from_end": 495,
+            "to_start": 41186123,
+            "to_end": 41186342,
+            "ori": -1
+          },
+          {
+            "from_start": 496,
+            "from_end": 2051,
+            "to_start": 41175231,
+            "to_end": 41176786,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256461",
+          "start": 41175231,
+          "end": 41176786,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001802711",
+          "start": 41186123,
+          "end": 41186342,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256462",
+          "start": 41186514,
+          "end": 41186788,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000836729",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41175231,
+    "end": 41186788,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256475",
+        "start": 41186448,
+        "end": 41186788,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001802711",
+        "start": 41186123,
+        "end": 41186342,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00003463767",
+        "start": 41180472,
+        "end": 41180573,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256459",
+        "start": 41175231,
+        "end": 41176830,
+        "rank": 4,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "value": "GENCODE basic"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186343,
+          "end": 41186447,
+          "rank": 1
+        },
+        {
+          "start": 41180574,
+          "end": 41186122,
+          "rank": 2
+        },
+        {
+          "start": 41176831,
+          "end": 41180471,
+          "rank": 3
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 341,
+            "to_start": 41186448,
+            "to_end": 41186788,
+            "ori": -1
+          },
+          {
+            "from_start": 342,
+            "from_end": 561,
+            "to_start": 41186123,
+            "to_end": 41186342,
+            "ori": -1
+          },
+          {
+            "from_start": 562,
+            "from_end": 663,
+            "to_start": 41180472,
+            "to_end": 41180573,
+            "ori": -1
+          },
+          {
+            "from_start": 664,
+            "from_end": 2263,
+            "to_start": 41175231,
+            "to_end": 41176830,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256459",
+          "start": 41175231,
+          "end": 41176830,
+          "rank": 4,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00003463767",
+          "start": 41180472,
+          "end": 41180573,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001802711",
+          "start": 41186123,
+          "end": 41186342,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256475",
+          "start": 41186448,
+          "end": 41186788,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000836723",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41175231,
+    "end": 41186791,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256453",
+        "start": 41186123,
+        "end": 41186791,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256461",
+        "start": 41175231,
+        "end": 41176786,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41176787,
+          "end": 41186122,
+          "rank": 1
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 669,
+            "to_start": 41186123,
+            "to_end": 41186791,
+            "ori": -1
+          },
+          {
+            "from_start": 670,
+            "from_end": 2225,
+            "to_start": 41175231,
+            "to_end": 41176786,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256461",
+          "start": 41175231,
+          "end": 41176786,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256453",
+          "start": 41186123,
+          "end": 41186791,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000836724",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41175231,
+    "end": 41186791,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256463",
+        "start": 41186448,
+        "end": 41186791,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001802711",
+        "start": 41186123,
+        "end": 41186342,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256459",
+        "start": 41175231,
+        "end": 41176830,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186343,
+          "end": 41186447,
+          "rank": 1
+        },
+        {
+          "start": 41176831,
+          "end": 41186122,
+          "rank": 2
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 344,
+            "to_start": 41186448,
+            "to_end": 41186791,
+            "ori": -1
+          },
+          {
+            "from_start": 345,
+            "from_end": 564,
+            "to_start": 41186123,
+            "to_end": 41186342,
+            "ori": -1
+          },
+          {
+            "from_start": 565,
+            "from_end": 2164,
+            "to_start": 41175231,
+            "to_end": 41176830,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256459",
+          "start": 41175231,
+          "end": 41176830,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001802711",
+          "start": 41186123,
+          "end": 41186342,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256463",
+          "start": 41186448,
+          "end": 41186791,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000645185",
+    "version": 2,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41175231,
+    "end": 41186793,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "ensembl_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256464",
+        "start": 41186448,
+        "end": 41186793,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256455",
+        "start": 41175231,
+        "end": 41186342,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "value": "GENCODE basic"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186343,
+          "end": 41186447,
+          "rank": 1
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 346,
+            "to_start": 41186448,
+            "to_end": 41186793,
+            "ori": -1
+          },
+          {
+            "from_start": 347,
+            "from_end": 11458,
+            "to_start": 41175231,
+            "to_end": 41186342,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256455",
+          "start": 41175231,
+          "end": 41186342,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256464",
+          "start": 41186448,
+          "end": 41186793,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000836730",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41176382,
+    "end": 41186535,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256470",
+        "start": 41186448,
+        "end": 41186535,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256465",
+        "start": 41186161,
+        "end": 41186342,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256469",
+        "start": 41176382,
+        "end": 41176786,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "gencode_basic",
+        "value": "GENCODE basic"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186343,
+          "end": 41186447,
+          "rank": 1
+        },
+        {
+          "start": 41176787,
+          "end": 41186160,
+          "rank": 2
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 88,
+            "to_start": 41186448,
+            "to_end": 41186535,
+            "ori": -1
+          },
+          {
+            "from_start": 89,
+            "from_end": 270,
+            "to_start": 41186161,
+            "to_end": 41186342,
+            "ori": -1
+          },
+          {
+            "from_start": 271,
+            "from_end": 675,
+            "to_start": 41176382,
+            "to_end": 41176786,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256469",
+          "start": 41176382,
+          "end": 41176786,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256465",
+          "start": 41186161,
+          "end": 41186342,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256470",
+          "start": 41186448,
+          "end": 41186535,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000836731",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41176863,
+    "end": 41186788,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256475",
+        "start": 41186448,
+        "end": 41186788,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256479",
+        "start": 41186123,
+        "end": 41186362,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256478",
+        "start": 41176863,
+        "end": 41176941,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186363,
+          "end": 41186447,
+          "rank": 1
+        },
+        {
+          "start": 41176942,
+          "end": 41186122,
+          "rank": 2
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 341,
+            "to_start": 41186448,
+            "to_end": 41186788,
+            "ori": -1
+          },
+          {
+            "from_start": 342,
+            "from_end": 581,
+            "to_start": 41186123,
+            "to_end": 41186362,
+            "ori": -1
+          },
+          {
+            "from_start": 582,
+            "from_end": 660,
+            "to_start": 41176863,
+            "to_end": 41176941,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256478",
+          "start": 41176863,
+          "end": 41176941,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256479",
+          "start": 41186123,
+          "end": 41186362,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256475",
+          "start": 41186448,
+          "end": 41186788,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000414699",
+    "version": 2,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41180092,
+    "end": 41186788,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256475",
+        "start": 41186448,
+        "end": 41186788,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001802711",
+        "start": 41186123,
+        "end": 41186342,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00001753386",
+        "start": 41182150,
+        "end": 41182245,
+        "rank": 3,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256474",
+        "start": 41180092,
+        "end": 41180573,
+        "rank": 4,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "attributes": [
+      {
+        "code": "TSL",
+        "value": "tsl3 (assigned to previous version 1)"
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186343,
+          "end": 41186447,
+          "rank": 1
+        },
+        {
+          "start": 41182246,
+          "end": 41186122,
+          "rank": 2
+        },
+        {
+          "start": 41180574,
+          "end": 41182149,
+          "rank": 3
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 341,
+            "to_start": 41186448,
+            "to_end": 41186788,
+            "ori": -1
+          },
+          {
+            "from_start": 342,
+            "from_end": 561,
+            "to_start": 41186123,
+            "to_end": 41186342,
+            "ori": -1
+          },
+          {
+            "from_start": 562,
+            "from_end": 657,
+            "to_start": 41182150,
+            "to_end": 41182245,
+            "ori": -1
+          },
+          {
+            "from_start": 658,
+            "from_end": 1139,
+            "to_start": 41180092,
+            "to_end": 41180573,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256474",
+          "start": 41180092,
+          "end": 41180573,
+          "rank": 4,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001753386",
+          "start": 41182150,
+          "end": 41182245,
+          "rank": 3,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00001802711",
+          "start": 41186123,
+          "end": 41186342,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256475",
+          "start": 41186448,
+          "end": 41186788,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000836732",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41185532,
+    "end": 41186807,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256468",
+        "start": 41185532,
+        "end": 41186807,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 1276,
+            "to_start": 41185532,
+            "to_end": 41186807,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256468",
+          "start": 41185532,
+          "end": 41186807,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000836734",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41185951,
+    "end": 41186788,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256475",
+        "start": 41186448,
+        "end": 41186788,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256457",
+        "start": 41185951,
+        "end": 41186362,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186363,
+          "end": 41186447,
+          "rank": 1
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 341,
+            "to_start": 41186448,
+            "to_end": 41186788,
+            "ori": -1
+          },
+          {
+            "from_start": 342,
+            "from_end": 753,
+            "to_start": 41185951,
+            "to_end": 41186362,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256457",
+          "start": 41185951,
+          "end": 41186362,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256475",
+          "start": 41186448,
+          "end": 41186788,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "ENST00000836733",
+    "version": 1,
+    "gene_stable_id": "ENSG00000280109",
+    "start": 41185951,
+    "end": 41186790,
+    "strand": -1,
+    "biotype": "lncRNA",
+    "source": "havana_tagene",
+    "gene_symbol": "PLAC4",
+    "ccds": "-",
+    "exons": [
+      {
+        "stable_id": "ENSE00004256456",
+        "start": 41186514,
+        "end": 41186790,
+        "rank": 1,
+        "phase": -1,
+        "end_phase": -1
+      },
+      {
+        "stable_id": "ENSE00004256477",
+        "start": 41185951,
+        "end": 41186342,
+        "rank": 2,
+        "phase": -1,
+        "end_phase": -1
+      }
+    ],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "introns": [
+        {
+          "start": 41186343,
+          "end": 41186513,
+          "rank": 1
+        }
+      ],
+      "mapper": {
+        "start_phase": -1,
+        "pairs": [
+          {
+            "from_start": 1,
+            "from_end": 277,
+            "to_start": 41186514,
+            "to_end": 41186790,
+            "ori": -1
+          },
+          {
+            "from_start": 278,
+            "from_end": 669,
+            "to_start": 41185951,
+            "to_end": 41186342,
+            "ori": -1
+          }
+        ]
+      },
+      "translateable_seq": "",
+      "sorted_exons": [
+        {
+          "stable_id": "ENSE00004256477",
+          "start": 41185951,
+          "end": 41186342,
+          "rank": 2,
+          "phase": -1,
+          "end_phase": -1
+        },
+        {
+          "stable_id": "ENSE00004256456",
+          "start": 41186514,
+          "end": 41186790,
+          "rank": 1,
+          "phase": -1,
+          "end_phase": -1
+        }
+      ],
+      "seq_edits": []
+    }
+  }
+]

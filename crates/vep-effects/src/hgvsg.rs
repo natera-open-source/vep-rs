@@ -21,19 +21,84 @@ pub struct HgvsgOptions {
     /// Describe an insertion or deletion at its most 3' position
     /// (`shift_hgvs_variants_3prime`, VariationFeature.pm 1981-1988).
     pub shift: bool,
-    /// The RefSeq accession printed in place of each input chromosome name as
-    /// written (ensembl-vep OutputFactory.pm 1367-1377 under `hgvsg_use_accession`);
-    /// `None` prints the chromosome name, as does a name absent from the map.
+    /// The RefSeq name of each sequence name ([`refseq_name`]; ensembl-vep
+    /// OutputFactory.pm 1367-1377 under `hgvsg_use_accession`), read under the
+    /// name as the input writes it and under the cache's name for the
+    /// sequence, an `NC_` entry under either before any other; a sequence
+    /// absent from the map under both names prints the cache's name for it,
+    /// and `None` prints the name as written.
     pub accessions: Option<HashMap<String, String>>,
 }
 
 /// The RefSeq accession among the synonyms of one chromosome name (ensembl-vep
 /// OutputFactory.pm 1369-1370): the first synonym containing `NC_`.
-/// `synonyms` are the entries one hop from the name as the input writes it, so
-/// `chr21` finds nothing in a table whose rows pair `21` with `chr21` and `21`
-/// with `NC_000021.9`.
+/// `synonyms` are the entries one hop from that name, so `chr21` finds nothing
+/// in a table whose rows pair `21` with `chr21` and `21` with `NC_000021.9`.
 pub fn nc_accession<'a>(synonyms: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
     synonyms.into_iter().find(|s| s.contains("NC_"))
+}
+
+/// The RefSeq name among the synonyms of one sequence name: its `NC_` accession
+/// ([`nc_accession`]) or, where it has none, the first synonym in the form of a
+/// RefSeq accession, whatever its prefix (`NT_187383.1`, `NW_003315945.1`).
+/// That is the name Ensembl VEP prints for a scaffold or a patch with a
+/// database, the slice's `RefSeq_genomic` synonym (ensembl-variation
+/// VariationFeature.pm 1912-1916). Where the synonyms list the accession taken
+/// in more than one form, the latest is returned ([`later_form`]): a cache's
+/// table links the previous assembly's version of a sequence to it, and the
+/// slice's own synonym is the higher version.
+pub fn refseq_name<'a>(synonyms: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+    let names: Vec<&str> = synonyms.into_iter().collect();
+    let taken = names
+        .iter()
+        .copied()
+        .find(|name| name.contains("NC_"))
+        .or_else(|| names.iter().copied().find(|name| is_refseq_accession(name)))?;
+    Some(latest_form(taken, names))
+}
+
+/// The latest form of `accession` among `names` and itself ([`later_form`]).
+pub fn latest_form<'a>(accession: &'a str, names: impl IntoIterator<Item = &'a str>) -> &'a str {
+    names.into_iter().fold(accession, |latest, name| {
+        later_form(latest, name).unwrap_or(latest)
+    })
+}
+
+/// The later of two forms of one accession: the higher version, a versioned
+/// form over one without a version, `a` where they are equal. `None` when the
+/// names are not forms of one accession.
+pub fn later_form<'a>(a: &'a str, b: &'a str) -> Option<&'a str> {
+    let (accession_a, version_a) = accession_and_version(a);
+    let (accession_b, version_b) = accession_and_version(b);
+    (accession_a == accession_b).then(|| if version_b > version_a { b } else { a })
+}
+
+/// A name as an accession and its version: the text before a last full stop
+/// and the digits after it, or the whole name with no version.
+fn accession_and_version(name: &str) -> (&str, Option<u64>) {
+    name.rsplit_once('.')
+        .and_then(|(accession, version)| {
+            let digits = !version.is_empty() && version.bytes().all(|b| b.is_ascii_digit());
+            Some((accession, Some(version.parse().ok().filter(|_| digits)?)))
+        })
+        .unwrap_or((name, None))
+}
+
+/// Whether `name` has the form of a RefSeq accession: two capital letters, an
+/// underscore, digits and an optional version of digits after a full stop.
+fn is_refseq_accession(name: &str) -> bool {
+    let Some((prefix, number)) = name.split_once('_') else {
+        return false;
+    };
+    let (digits, version) = match number.split_once('.') {
+        Some((digits, version)) => (digits, Some(version)),
+        None => (number, None),
+    };
+    let all_digits = |text: &str| !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit());
+    prefix.len() == 2
+        && prefix.bytes().all(|b| b.is_ascii_uppercase())
+        && all_digits(digits)
+        && version.is_none_or(all_digits)
 }
 
 /// Sets `variant.hgvsg` for a sequence variant when the configuration asks for
@@ -46,11 +111,26 @@ pub fn annotate(variant: &mut InputVariant, config: &EffectsConfig) {
     if variant.is_structural {
         return;
     }
-    let reference_name = options
-        .accessions
-        .as_ref()
-        .and_then(|names| names.get(&variant.original_chr))
-        .map_or(variant.original_chr.as_str(), String::as_str);
+    // Ensembl VEP looks the accession up under the name as written alone and
+    // has no output when that misses (OutputFactory.pm 1368-1372); with a
+    // database it names the slice's RefSeq synonym, the resolved sequence's
+    // (ensembl-variation VariationFeature.pm 1912-1916).
+    let reference_name = match &options.accessions {
+        None => variant.original_chr.as_str(),
+        Some(names) => {
+            let written = names.get(&variant.original_chr);
+            let resolved = names.get(&variant.chr);
+            // An `NC_` accession under either name comes before a RefSeq name
+            // of another prefix.
+            [written, resolved]
+                .into_iter()
+                .flatten()
+                .find(|name| name.contains("NC_"))
+                .or(written)
+                .or(resolved)
+                .map_or(variant.chr.as_str(), String::as_str)
+        }
+    };
     variant.hgvsg = for_variant(variant, fasta, reference_name, options.shift);
 }
 
@@ -941,12 +1021,56 @@ mod tests {
         );
     }
 
-    /// An input name whose synonyms carry no `NC_` entry (`chr21` in a table
-    /// pairing it with `21` alone) is printed as written. Ensembl VEP 116.2 has no
-    /// output for this case: it passes the missing name on to `hgvs_genomic`, which
-    /// asks the adaptor-less offline slice for its synonyms and dies (the Ensembl
-    /// core API's Slice.pm `get_all_synonyms`); the chromosome name is the one
-    /// honest value.
+    /// A name the synonyms table pairs with no `NC_` entry takes the accession
+    /// of the chromosome the cache reads it as: `Chr21`, read as `21`, prints
+    /// `NC_000021.9`, the name Ensembl VEP 116.2 prints for the record with a
+    /// database connection (the slice's `RefSeq_genomic` synonym,
+    /// ensembl-variation VariationFeature.pm 1912-1916). Offline it has no
+    /// output for the record: OutputFactory.pm 1368-1372 reads the synonyms of
+    /// the name as written alone and passes the missing name on to
+    /// `hgvs_genomic`, which asks the adaptor-less slice for its synonyms and
+    /// dies. A name with an accession of its own keeps it, and the resolved
+    /// chromosome's `NC_` accession comes before a RefSeq name of another
+    /// prefix under the name as written.
+    #[test]
+    fn use_accession_follows_the_resolved_chromosome() {
+        let (_dir, fasta) = test_fasta();
+        let config = config(
+            &fasta,
+            HgvsgOptions {
+                shift: true,
+                accessions: Some(HashMap::from([
+                    ("21".to_string(), "NC_000021.9".to_string()),
+                    ("chr21".to_string(), "NC_000021.8".to_string()),
+                    ("linked".to_string(), "NT_187383.1".to_string()),
+                ])),
+            },
+        );
+        let mut resolved = variant("21", 150, 150, "C", "A");
+        resolved.original_chr = "Chr21".to_string();
+        assert_eq!(
+            hgvsg_of(&mut resolved, &config).as_deref(),
+            Some("NC_000021.9:g.150C>A")
+        );
+        let mut own = variant("21", 150, 150, "C", "A");
+        own.original_chr = "chr21".to_string();
+        assert_eq!(
+            hgvsg_of(&mut own, &config).as_deref(),
+            Some("NC_000021.8:g.150C>A")
+        );
+        let mut linked = variant("21", 150, 150, "C", "A");
+        linked.original_chr = "linked".to_string();
+        assert_eq!(
+            hgvsg_of(&mut linked, &config).as_deref(),
+            Some("NC_000021.9:g.150C>A")
+        );
+    }
+
+    /// A chromosome whose synonyms carry no RefSeq name, under the name as
+    /// written or under the cache's, is printed by the cache's name for it:
+    /// the slice's own name, which Ensembl VEP 116.2 prints with a database
+    /// connection where the slice has no `RefSeq_genomic` synonym
+    /// (ensembl-variation VariationFeature.pm 1916).
     #[test]
     fn use_accession_without_nc_falls_back_to_chromosome_name() {
         assert_eq!(nc_accession(["21"]), None);
@@ -957,13 +1081,14 @@ mod tests {
             HgvsgOptions {
                 shift: true,
                 accessions: Some(HashMap::from([(
-                    "21".to_string(),
-                    "NC_000021.9".to_string(),
+                    "MT".to_string(),
+                    "NC_012920.1".to_string(),
                 )])),
             },
         );
         let mut v = variant("chr21", 150, 150, "C", "A");
-        assert_eq!(hgvsg_of(&mut v, &config).as_deref(), Some("chr21:g.150C>A"));
+        assert_eq!((v.chr.as_str(), v.original_chr.as_str()), ("21", "chr21"));
+        assert_eq!(hgvsg_of(&mut v, &config).as_deref(), Some("21:g.150C>A"));
     }
 
     /// Nothing is computed without the option or without a FASTA, and a

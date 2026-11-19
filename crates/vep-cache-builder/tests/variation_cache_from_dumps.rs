@@ -45,9 +45,20 @@ const VCF_HEADER: &str = "##fileformat=VCFv4.2\n\
 /// genome-wide files through their index; `records` are sorted by chromosome
 /// then position and name every chromosome in `chromosomes` order.
 fn write_indexed_vcf(dir: &Path, name: &str, chromosomes: &[&str], records: &str) {
+    write_indexed_vcf_with_header(dir, name, VCF_HEADER, chromosomes, records);
+}
+
+/// [`write_indexed_vcf`] with the header text given.
+fn write_indexed_vcf_with_header(
+    dir: &Path,
+    name: &str,
+    header: &str,
+    chromosomes: &[&str],
+    records: &str,
+) {
     let path = dir.join(name);
     let mut writer = bgzf::io::Writer::new(std::fs::File::create(&path).unwrap());
-    writer.write_all(VCF_HEADER.as_bytes()).unwrap();
+    writer.write_all(header.as_bytes()).unwrap();
     let mut indexer = Indexer::<BinnedIndex>::new(14, 5);
     for line in records.lines() {
         let fields: Vec<&str> = line.split('\t').collect();
@@ -263,4 +274,150 @@ fn variation_files_carry_ensembl_form_and_read_back_through_the_runtime_source()
     assert_eq!(somatic.somatic, 1);
     assert_eq!(somatic.allele_string, "COSMIC_MUTATION");
     assert!(somatic.frequencies.is_empty());
+}
+
+/// Ensembl VEP's dumper reads a VCF through ensembl-io's VCF parser
+/// (`Dumper/Variation.pm:307`), which ends the run on a `##fileformat` line
+/// naming a major version other than 4 (`BaseVCF4.pm:125`): a chromosome file
+/// headed `VCFv3.3`, read through, and a frequency file headed so, read through
+/// its index, each end the build with that text and no variation file; the
+/// files headed `VCFv4.5` build.
+#[test]
+fn a_variation_vcf_whose_fileformat_is_not_vcf_4_ends_the_build() {
+    let build = |chromosome: &str, frequency: &str| {
+        build_with_headers(&headed(chromosome), &headed(frequency))
+    };
+    let refused = |stderr: &str, file: &str| {
+        stderr.contains("Failed to read VCF header: ")
+            && stderr.contains(&format!(
+                "{file}: The VCF file format version 3.3 is not compatible with the parser \
+                 version (VCF v4.2)"
+            ))
+    };
+
+    let (ok, stderr, written) = build("VCFv3.3", "VCFv4.2");
+    assert!(!ok, "{stderr}");
+    assert!(refused(&stderr, "homo_sapiens-chr21.vcf.gz"), "{stderr}");
+    assert!(written.is_none(), "a variation file was written: {stderr}");
+
+    let (ok, stderr, written) = build("VCFv4.2", "VCFv3.3");
+    assert!(!ok, "{stderr}");
+    assert!(refused(&stderr, "1000GENOMES-phase_3.vcf.gz"), "{stderr}");
+    assert!(written.is_none(), "a variation file was written: {stderr}");
+
+    let (ok, stderr, written) = build("VCFv4.5", "VCFv4.5");
+    assert!(ok, "{stderr}");
+    assert_eq!(written.as_deref(), Some(JOINED_RECORD), "{stderr}");
+}
+
+/// The dumper's parser refuses no header line but a `##fileformat` line
+/// (`BaseVCF4.pm:116-130`), reads the version as the line's first
+/// `<digits>.<digits>` and prints it as the line spelt it: a header without
+/// the line builds with its records read, as do `VCFv4.2.1` (4.2) and
+/// `VCFv04.2`; `VCFv4` ends the build with the unreadable-version text and
+/// `VCFv05.0` with the incompatible-version text naming `05.0`; each shape on
+/// the chromosome file, read through, and on the frequency file, read through
+/// its index.
+#[test]
+fn a_variation_vcf_header_reads_as_ensembl_vep_reads_it_on_every_fileformat_shape() {
+    let no_line = VCF_HEADER.replacen("##fileformat=VCFv4.2\n", "", 1);
+    for header in [no_line, headed("VCFv4.2.1"), headed("VCFv04.2")] {
+        for (chromosome, frequency) in
+            [(header.as_str(), VCF_HEADER), (VCF_HEADER, header.as_str())]
+        {
+            let (ok, stderr, written) = build_with_headers(chromosome, frequency);
+            assert!(ok, "{header:?}: {stderr}");
+            assert_eq!(
+                written.as_deref(),
+                Some(JOINED_RECORD),
+                "{header:?}: {stderr}"
+            );
+        }
+    }
+    for (version, reason) in [
+        (
+            "VCFv4",
+            "The script can't read the VCF file format version of 'fileformat'",
+        ),
+        (
+            "VCFv05.0",
+            "The VCF file format version 05.0 is not compatible with the parser version \
+             (VCF v4.2)",
+        ),
+    ] {
+        let header = headed(version);
+        for (chromosome, frequency, file) in [
+            (header.as_str(), VCF_HEADER, "homo_sapiens-chr21.vcf.gz"),
+            (VCF_HEADER, header.as_str(), "1000GENOMES-phase_3.vcf.gz"),
+        ] {
+            let (ok, stderr, written) = build_with_headers(chromosome, frequency);
+            assert!(!ok, "{version}: {stderr}");
+            assert!(
+                stderr.contains("Failed to read VCF header: ")
+                    && stderr.contains(&format!("{file}: {reason}")),
+                "{version} on {file}: {stderr}"
+            );
+            assert!(written.is_none(), "{version}: a variation file was written");
+        }
+    }
+}
+
+/// [`VCF_HEADER`] with its `##fileformat` line naming `version`.
+fn headed(version: &str) -> String {
+    VCF_HEADER.replacen("VCFv4.2", version, 1)
+}
+
+/// The one record [`build_with_headers`] writes when both files are read: the
+/// chromosome file's SNV with the frequency file's populations joined.
+const JOINED_RECORD: &str =
+    "21\trs2\t.\t.\t300\t.\tA/G\t.\t.\t.\t.\t.\t.\t.\t.\tG:0.0001997\tG:0.0008\tG:0\tG:0\tG:0\tG:0\n";
+
+/// Builds with a one-record chromosome file headed `chromosome`, read through,
+/// and the matching frequency file headed `frequency`, read through its index:
+/// whether the build succeeded, its standard error, and the chromosome's
+/// variation file when one was written.
+fn build_with_headers(chromosome: &str, frequency: &str) -> (bool, String, Option<String>) {
+    let fixture = fixture_dir();
+    let record = "21\t300\trs2\tA\tG\t.\t.\tdbSNP_156;TSA=SNV\n";
+    let frequencies =
+        "21\t300\trs2\tA\tG\t.\t.\tdbSNP_156;TSA=SNV;AFR=0.0008;AMR=0;EAS=0;EUR=0;SAS=0\n";
+    let inputs = tempfile::tempdir().unwrap();
+    for (name, header, records) in [
+        ("homo_sapiens-chr21.vcf.gz", chromosome, record),
+        ("1000GENOMES-phase_3.vcf.gz", frequency, frequencies),
+    ] {
+        write_indexed_vcf_with_header(inputs.path(), name, header, &["21"], records);
+    }
+    let out = tempfile::tempdir().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_vep-cache-builder"))
+        .args([
+            "--release",
+            "116",
+            "--assembly",
+            "GRCh38",
+            "--include-variations",
+        ])
+        .arg("--gff3")
+        .arg(fixture.join("slice.gff3"))
+        .arg("--fasta")
+        .arg(fixture.join("peptides.fa"))
+        .arg("--output-dir")
+        .arg(out.path())
+        .arg("--variation-vcf-dir")
+        .arg(inputs.path())
+        .output()
+        .expect("vep-cache-builder runs");
+    let all_vars = out.path().join("variations/21/all_vars.gz");
+    let written = all_vars.exists().then(|| {
+        let mut text = String::new();
+        bgzf::io::Reader::new(std::fs::File::open(&all_vars).unwrap())
+            .read_to_string(&mut text)
+            .unwrap();
+        text
+    });
+    (
+        output.status.success(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+        written,
+    )
 }

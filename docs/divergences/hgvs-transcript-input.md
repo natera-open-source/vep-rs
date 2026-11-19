@@ -1,6 +1,6 @@
 # HGVS transcript and protein notation resolved from the cache
 
-A difference in which inputs resolve, on an input format no measured dataset uses; nothing is set aside.
+A difference in which HGVS transcript and protein inputs resolve, on an input format no measured dataset uses; nothing is set aside. Ensembl VEP refuses HGVS input offline and resolves a notation through its core database. vep-rs resolves the same notations from its transcript cache and the reference FASTA, and differs in five readings of a transcript notation and six of a protein notation.
 
 Ensembl VEP refuses HGVS input offline (`Parser/HGVS.pm` line 104) and resolves a `c.` or `n.` notation through its core database. The transcript is found by stable id, or by external name for an `NM_` or `XM_` reference, else as the likely transcript of the gene the reference names (`VariationFeatureAdaptor.pm` lines 1829-1849 and 2146-2226). The position is resolved through the transcript's exon mapper (lines 1608-1751), and the alleles against the genome on the transcript's strand (lines 2054-2142).
 

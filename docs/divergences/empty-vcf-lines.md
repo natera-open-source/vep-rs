@@ -1,6 +1,6 @@
 # Empty lines in a VCF input
 
-A difference in which records are written, on an input shape no measured dataset has; nothing is set aside.
+A difference in which records are written after an empty line of a VCF input, on an input shape no measured dataset has; nothing is set aside. Where the first data line is empty or two empty lines stand in a row, Ensembl VEP annotates up to that point and no further, with no message. vep-rs skips the empty lines, annotates every record around them and warns.
 
 Ensembl VEP's parsers for the HGVS, ID, SPDI, region and CAID formats skip a run of empty lines and warn `Skipped N empty line(s) from line M` (`Parser.pm` lines 266-293, `skip_empty_lines`).
 

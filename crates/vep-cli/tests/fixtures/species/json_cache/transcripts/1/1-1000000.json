@@ -1,0 +1,79 @@
+[
+  {
+    "stable_id": "SYNT0000001",
+    "version": 1,
+    "dbID": 1,
+    "gene_stable_id": "SYNG0000001",
+    "gene_version": 1,
+    "gene_symbol": "genA",
+    "gene_symbol_source": "synthetic",
+    "chr": "1",
+    "start": 1001,
+    "end": 1260,
+    "strand": 1,
+    "biotype": "protein_coding",
+    "source": "ensembl",
+    "is_canonical": 1,
+    "protein": "SYNP0000001",
+    "cdna_coding_start": 10,
+    "cdna_coding_end": 105,
+    "exons": [
+      {"stable_id": "SYNE0000001", "start": 1001, "end": 1060, "phase": -1, "end_phase": 0},
+      {"stable_id": "SYNE0000002", "start": 1201, "end": 1260, "phase": 0, "end_phase": -1}
+    ],
+    "translation": {"stable_id": "SYNP0000001", "version": 1, "dbID": 1, "start": 10, "end": 45},
+    "attributes": [],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "five_prime_utr": "GGCAGCACC",
+      "translateable_seq": "ATGGCTTGCGACGAATTCGGCCACATCAAACTGATGAACCCCCAGCGCAGCACCGTGTGGTACGCAGCCGATGAGTTTGGGCATATTAAGCTTTGA",
+      "peptide": "MACDEFGHIKLMNPQRSTVWYAADEFGHIKL",
+      "three_prime_utr": "TCCAGCTTGAAGCTG",
+      "introns": [{"start": 1061, "end": 1200}],
+      "mapper": {
+        "start_phase": -1,
+        "cdna_coding_start": 10,
+        "cdna_coding_end": 105,
+        "pair_count": 2,
+        "pairs": [
+          {"from_start": 1, "from_end": 60, "to_start": 1001, "to_end": 1060, "ori": 1},
+          {"from_start": 61, "from_end": 120, "to_start": 1201, "to_end": 1260, "ori": 1}
+        ]
+      },
+      "seq_edits": []
+    }
+  },
+  {
+    "stable_id": "SYNT0000002",
+    "version": 1,
+    "dbID": 2,
+    "gene_stable_id": "SYNG0000002",
+    "gene_version": 1,
+    "gene_symbol": "genB",
+    "gene_symbol_source": "synthetic",
+    "chr": "1",
+    "start": 900,
+    "end": 1080,
+    "strand": 1,
+    "biotype": "lncRNA",
+    "source": "ensembl",
+    "is_canonical": 1,
+    "exons": [
+      {"stable_id": "SYNE0000003", "start": 900, "end": 1080, "phase": -1, "end_phase": -1}
+    ],
+    "attributes": [],
+    "variation_effect_feature_cache": {
+      "codon_table": 1,
+      "translateable_seq": "",
+      "introns": [],
+      "mapper": {
+        "start_phase": -1,
+        "pair_count": 1,
+        "pairs": [
+          {"from_start": 1, "from_end": 181, "to_start": 900, "to_end": 1080, "ori": 1}
+        ]
+      },
+      "seq_edits": []
+    }
+  }
+]

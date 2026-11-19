@@ -1,6 +1,6 @@
 # Unescaped JSON under `--output_format json`
 
-A difference in the text of one field, not in any tuple: the comparators score consequence sets and never see it, and nothing is set aside.
+A difference in the text of one field, not in any tuple: the comparators score consequence sets and never see it, and nothing is set aside. Under `--output_format json`, Ensembl VEP writes the `=` of a synonymous HGVSp notation as `%3D`, and vep-rs writes it unescaped, as `=`.
 
 Ensembl VEP percent-encodes the `=` of a synonymous HGVSp notation as `%3D` in every output unless `--no_escape` is set (`OutputFactory.pm`, `TranscriptVariationAllele_to_output_hash`: `$hgvs_p =~ s/\=/\%3D/g if $hgvs_p && !$self->{no_escape}`). It sets `--no_escape` through the `rest` option set that `--json` switches on (`Config.pm` lines 484-498). `--output_format json` is not in that set, so Ensembl VEP's JSON written through it carries `%3D` while its JSON written through `--json` carries `=`. vep-rs reads the resolved output format: `--json` and `--output_format json` both imply `--no_escape`, so its JSON is unescaped either way. A text output stays escaped unless `--no_escape` is given.
 

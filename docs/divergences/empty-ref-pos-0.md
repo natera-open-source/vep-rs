@@ -1,6 +1,6 @@
 # An empty REF column at POS 0
 
-A difference in whether one malformed record is written, on an input shape no measured dataset has; nothing is set aside.
+A difference in whether a record at POS 0 is written, one malformed and one well-formed, on input shapes no measured dataset has; nothing is set aside. Ensembl VEP writes both records, the malformed one as `intergenic_variant`, and vep-rs skips both with the insertion warning.
 
 VCF places a telomere at POS 0 and requires a REF of at least one base. Ensembl VEP reads a record whose REF column is empty at POS 0 (two tabs where the base would be, the ALT `A`) as the allele string `/A` over the coordinates 0 to -1 (`Parser/VCF.pm` line 254, `$end += length($ref) - 1`). `validate_vf` admits those coordinates, and the record is written as `intergenic_variant` at `21:-1-0`.
 

@@ -1,0 +1,63 @@
+entry = "hgvsp_intron_end_insertion"
+page = "docs/divergences/hgvsp-intron-end-insertion.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 63,698 per million · 23 flag sets, 93 corpora"
+notes = "Five records on GRCh37. Three write an insertion before an exon: a copy of the last base of intron 4 of the forward-strand ENST00000312957 written between that base, 21:27070988, and the first base of exon 5, the same copy written one base earlier, at 21:27070987, and three bases written between 21:38877585, the last base of intron 8 of ENST00000321219, and the first base of exon 9. Two write three bases between 3:37045965, the last coding base of exon 4 of ENST00000231790, and the intron's first base, alone and beside a substitution of the base at 37045965. Both engines write the same consequence terms, positions and HGVSc on every row. Ensembl VEP writes an HGVSp on the four rows of an insertion written in a gap between an intron and a coding exon, where vep-rs writes none; both write none for the copy written one base earlier, and the same HGVSp on the substitution's row."
+
+prepare = [
+  '''[ -n "$IMAGE" ] || { echo "the cut of the cache is converted in the Ensembl VEP image: give --image" >&2; exit 1; }
+[ -n "$PERL_CACHE" ] || { echo "no homo_sapiens/116_GRCh37 with chromosomes 3 and 21 under the --perl-cache-dir roots" >&2; exit 1; }
+cut="$STAGE/perl-cache/homo_sapiens/116_GRCh37"
+mkdir -p "$cut/3" "$cut/21"
+cp "$PERL_CACHE/info.txt" "$PERL_CACHE/chr_synonyms.txt" "$cut/"
+cp "$PERL_CACHE/3/37000001-38000000.gz" "$cut/3/"
+cp "$PERL_CACHE/21/27000001-28000000.gz" "$PERL_CACHE/21/38000001-39000000.gz" "$cut/21/"''',
+  '''docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO/scripts/data:/scripts:ro" -v "$STAGE:/stage" "$IMAGE" perl /scripts/storable_to_json.pl /stage/perl-cache/homo_sapiens/116_GRCh37 /stage/json-cache 3,21 > "$STAGE/convert.log" 2>&1 || { tail -n 1 "$STAGE/convert.log" >&2; exit 1; }''',
+]
+
+[input]
+format = "vcf"
+text = """
+3	37045965	shared_base_after_exon_3_37045965	G	GTAT,A	.	.	.
+3	37045965	three_bases_after_exon_3_37045965	G	GTAT	.	.	.
+21	27070987	copy_written_one_base_earlier_21_27070987	A	AG	.	.	.
+21	27070988	copy_of_last_intron_base_21_27070988	G	GG	.	.	.
+21	38877585	three_bases_before_exon_21_38877585	G	GTAA	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh37"
+json_cache = "{stage}/json-cache"
+perl_cache = "{stage}/perl-cache"
+
+[run]
+flags = [
+  "--hgvs",
+  "--fasta", "{grch37_fasta}/Homo_sapiens.GRCh37.75.dna.primary_assembly.fa",
+]
+
+[compare]
+kind = "rows"
+where = { record = ["shared_base_after_exon_3_37045965", "three_bases_after_exon_3_37045965", "copy_written_one_base_earlier_21_27070987", "copy_of_last_intron_base_21_27070988", "three_bases_before_exon_21_38877585"], feature = ["ENST00000231790", "ENST00000312957", "ENST00000321219"] }
+columns = ["Uploaded_variation", "Location", "Allele", "Feature", "Consequence", "CDS_position", "Protein_position", "HGVSc", "HGVS_OFFSET", "HGVSp"]
+
+[expected]
+ensembl_vep = [
+  "copy_of_last_intron_base_21_27070988 | 21:27070988-27070989 | G | ENST00000312957 | frameshift_variant,splice_region_variant | 394-395 | 132 | ENST00000312957.5:c.395-1dup | - | ENSP00000318416.5:p.Val132GlyfsTer9",
+  "copy_written_one_base_earlier_21_27070987 | 21:27070987-27070988 | G | ENST00000312957 | splice_acceptor_variant | - | - | ENST00000312957.5:c.395-1dup | 1 | -",
+  "shared_base_after_exon_3_37045965 | 3:37045965 | A | ENST00000231790 | missense_variant,splice_region_variant | 380 | 127 | ENST00000231790.2:c.380G>A | - | ENSP00000231790.2:p.Arg127Lys",
+  "shared_base_after_exon_3_37045965 | 3:37045965 | GTAT | ENST00000231790 | protein_altering_variant,splice_region_variant | 380 | 127 | ENST00000231790.2:c.380_380+1insTAT | - | ENSP00000231790.2:p.Arg127delinsSerIle",
+  "three_bases_after_exon_3_37045965 | 3:37045965-37045966 | TAT | ENST00000231790 | protein_altering_variant,splice_region_variant | 380-381 | 127 | ENST00000231790.2:c.380_380+1insTAT | - | ENSP00000231790.2:p.Arg127delinsSerIle",
+  "three_bases_before_exon_21_38877585 | 21:38877585-38877586 | TAA | ENST00000321219 | stop_gained,inframe_insertion,splice_region_variant | 1239-1240 | 413-414 | ENST00000321219.8:c.1240-1_1240insTAA | - | ENSP00000319032.8:p.Arg413_Glu414insTer",
+]
+vep_rs = [
+  "copy_of_last_intron_base_21_27070988 | 21:27070988-27070989 | G | ENST00000312957 | frameshift_variant,splice_region_variant | 394-395 | 132 | ENST00000312957.5:c.395-1dup | - | -",
+  "copy_written_one_base_earlier_21_27070987 | 21:27070987-27070988 | G | ENST00000312957 | splice_acceptor_variant | - | - | ENST00000312957.5:c.395-1dup | 1 | -",
+  "shared_base_after_exon_3_37045965 | 3:37045965 | A | ENST00000231790 | missense_variant,splice_region_variant | 380 | 127 | ENST00000231790.2:c.380G>A | - | ENSP00000231790.2:p.Arg127Lys",
+  "shared_base_after_exon_3_37045965 | 3:37045965 | GTAT | ENST00000231790 | protein_altering_variant,splice_region_variant | 380 | 127 | ENST00000231790.2:c.380_380+1insTAT | - | -",
+  "three_bases_after_exon_3_37045965 | 3:37045965-37045966 | TAT | ENST00000231790 | protein_altering_variant,splice_region_variant | 380-381 | 127 | ENST00000231790.2:c.380_380+1insTAT | - | -",
+  "three_bases_before_exon_21_38877585 | 21:38877585-38877586 | TAA | ENST00000321219 | stop_gained,inframe_insertion,splice_region_variant | 1239-1240 | 413-414 | ENST00000321219.8:c.1240-1_1240insTAA | - | -",
+]

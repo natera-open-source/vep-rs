@@ -13,12 +13,16 @@ The static checks: the branch contains the tip of the base branch; a change to c
 a crate's or tool's `tests/` directory, a line of a `#[cfg(test)]` module or a `#[test]` function of a
 source file, a `test_*.py` or `test_*.sh` under `scripts/`, a golden `expected/` or `expected_*/` file
 or a corpus `manifest.json`), unless a maintainer sets the `tests-not-needed` label; a commit declares
-the model that wrote the change with a `Co-Authored-By` trailer (`No LLM` for none); the description
-carries the template's three text sections and its `## Intended divergences` section with one of the
+the model that wrote the change with a `Co-Authored-By` trailer that names it before the vendor's
+noreply address (the mailbox `noreply` or `no-reply`) or names `No LLM` for none, any other
+trailer, one with an address on `users.noreply.github.com` included, being a co-author's credit
+that declares nothing; the description carries the template's three text sections and its
+`## Intended divergences` section with one of the
 three statements checked (none of the index's entries touched, which the change may not claim while it
-edits the index, a page the index links or `scripts/divergences/`; existing entries touched, one line
-per entry naming it as the index's first column does and saying what the change does to it and why;
-a new intended divergence proposed, with its description), the first statement excluding the other
+edits the index, a page the index links or the reproduction registry under
+`scripts/divergences/reproductions/`, its README excepted; existing entries touched, one line per
+entry naming it as the index's first column does and saying what the change does to it and why; a
+new intended divergence proposed, with its description), the first statement excluding the other
 two; a crate change adds a line under `## [Unreleased]` of CHANGELOG.md, or under a release heading
 the change itself adds; a change from outside the maintainers leaves `.github/workflows/` alone; the
 parity matrix resolves on the contributed tree; and every commit carries a `Signed-off-by` trailer
@@ -31,7 +35,8 @@ The entry names the divergences check accepts are read from `docs/intended-diver
 tip and at the pull request's head: the first cell of each table row that links a page (the literal
 `none` and a number alone excepted), and each link target of the row with and without the `docs/`
 prefix and any fragment, so an entry the pull request itself adds resolves and the check keeps working
-when the index is regrouped.
+when the index is regrouped. The index's own path, with or without the `docs/` prefix, resolves too,
+for a change to its text or order that no row names.
 
 The issues job reads the `Intended divergences` choice an issue form writes under its `### ` heading
 and the entries or description under the next one, checks the named entries against the index on the
@@ -88,7 +93,13 @@ SECTIONS = ("Summary", "Verification", "Upgrade impact")
 # text test of `check_body_sections`, which would read it as empty.
 DIVERGENCE_SECTION = "Intended divergences"
 INDEX_PATH = "docs/intended-divergences.md"
-DIVERGENCE_SCRIPTS = "scripts/divergences/"
+# The index cited as a whole, by its path, for a change to its text or order that no row names.
+INDEX_NAMES = frozenset({INDEX_PATH, INDEX_PATH.removeprefix("docs/")})
+# The reproduction registry, one record per entry with the inputs it reads; the runner, the order
+# checker, their tests and their test data sit beside it and record no entry.
+DIVERGENCE_REGISTRY = "scripts/divergences/reproductions/"
+# The registry's own page describes the record shape without recording one.
+REGISTRY_PAGE = DIVERGENCE_REGISTRY + "README.md"
 # The rule's own landing date: the oldest base-branch commit touching a file that arrived with it.
 DIVERGENCE_LANDING_PATH = "scripts/ci/fixtures/admission/divergences-none-clean.json"
 # The three statements, told apart by a word each alone carries; the order breaks a tie in a
@@ -147,7 +158,11 @@ CRATE_MANIFEST_RE = re.compile(r"^crates/[^/]+/Cargo\.toml$")
 MOD_DECL_TEMPLATE = r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+{name}\s*;"
 HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 SIGNOFF_RE = re.compile(r"^Signed-off-by:\s*(.*?)\s*<([^<>]+)>\s*$", re.MULTILINE | re.IGNORECASE)
-DECLARATION_RE = re.compile(r"^Co-Authored-By:\s*(.+?)\s*$", re.MULTILINE | re.IGNORECASE)
+# The blanks after the key stay on its line, so a key without a value reads nothing.
+DECLARATION_RE = re.compile(r"^Co-Authored-By:[^\S\n]*(.+?)\s*$", re.MULTILINE | re.IGNORECASE)
+MODEL_VALUE_RE = re.compile(r"[^<>]*[^<>\s]\s*<no-?reply@([^<>@\s]+)>", re.IGNORECASE)
+# Every address on this domain is a GitHub account's, whatever its mailbox.
+ACCOUNT_DOMAIN = "users.noreply.github.com"
 AUTHOR_RE = re.compile(r"^author (.*?) <([^>]*)> \d+ [+-]\d{4}$")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$")
 # The template's checklist sits under its last heading; a checkbox line is never a section's text.
@@ -701,15 +716,27 @@ def check_signoff(commits: list[dict]) -> Finding | None:
     )
 
 
+def is_model_line(value: str) -> bool:
+    """Whether a `Co-Authored-By` value is a model's line: a name before a vendor's noreply address,
+    the mailbox `noreply` or `no-reply` on a domain other than the one of GitHub's account
+    addresses."""
+    form = MODEL_VALUE_RE.fullmatch(value)
+    return form is not None and form.group(1).lower() != ACCOUNT_DOMAIN
+
+
 def declared_models(commits: list[dict]) -> list[str]:
-    """The distinct names of the `Co-Authored-By` trailers, their addresses dropped, `No LLM` normalised."""
+    """The distinct names the `Co-Authored-By` trailers declare, their addresses dropped: `No LLM`,
+    normalised, and the name of each model's line. Any other trailer credits a co-author and
+    declares nothing."""
     names: list[str] = []
     for commit in commits:
         for match in DECLARATION_RE.finditer(commit["commit"].get("message") or ""):
             name = re.sub(r"\s+", " ", re.sub(r"<[^>]*>", "", match.group(1))).strip()
             if name.lower() == NO_MODEL_DECLARATION.lower():
                 name = NO_MODEL_DECLARATION
-            if name and name not in names:
+            elif not is_model_line(match.group(1)):
+                continue
+            if name not in names:
                 names.append(name)
     return names
 
@@ -720,8 +747,10 @@ def check_declaration(models: list[str]) -> Finding | None:
     return Finding(
         "declaration",
         "No commit declares the model that wrote the change: add one new signed commit whose message "
-        "carries `Co-Authored-By: <model name> <email>` (or `Co-Authored-By: No LLM`); do not amend or "
-        "force-push a pushed branch.",
+        "carries `Co-Authored-By: <model name> <noreply@the vendor's domain>` (the mailbox `noreply` "
+        "or `no-reply`) or `Co-Authored-By: No LLM`; any other `Co-Authored-By` line credits a co-author and "
+        f"declares nothing, one with a GitHub account's `{ACCOUNT_DOMAIN}` address included; do "
+        "not amend or force-push a pushed branch.",
     )
 
 
@@ -950,25 +979,29 @@ def entry_problems(
     entries: list[tuple[str, str]], index: Index, claim: str, remedy: str
 ) -> list[str]:
     """What is wrong with the cited entries: none named, a name the index lacks, a line that says
-    nothing after the name. `claim` opens the first sentence (the statement or choice that names
-    existing entries) and `remedy` is what the rest of an entry line must say: for a pull request
-    what the change does to the entry, for an issue what should change."""
+    nothing after the name. A token names an entry as the index does or by the path of its page,
+    or names the index itself by its path (`INDEX_NAMES`) for a change to the index's own text or
+    order. `claim` opens the first sentence (the statement or choice that names existing entries)
+    and `remedy` is what the rest of an entry line must say: for a pull request what the change does
+    to the entry, for an issue what should change."""
     if not entries:
         return [
             (
                 f"{claim} and no entry line follows it: add one line per entry, ``- `<entry>`: "
                 f"{remedy}, because ...``, the entry named as the first column of `{INDEX_PATH}` "
                 "names it (the text of its row's first cell, inner backticks dropped) or by the path "
-                "of its page."
+                "of its page; a change to the index's own text or order names the index by its path."
             )
         ]
     problems = []
-    unknown = [token for token, _rest in entries if entry_name(token) not in index.names]
+    known = index.names | INDEX_NAMES
+    unknown = [token for token, _rest in entries if entry_name(token) not in known]
     if unknown:
         problems.append(
             f"No entry of `{INDEX_PATH}` is named {listed_codes(unknown)}: name an entry as the "
             "index's first column does (the text of its row's first cell, inner backticks dropped), "
-            "or by the path of its page."
+            "or by the path of its page; a change to the index's own text or order names the index "
+            "by its path."
         )
     bare = [token for token, rest in entries if not rest]
     if bare:
@@ -981,7 +1014,8 @@ def entry_problems(
 
 def divergence_artefacts(files: list[dict], index: Index) -> list[str]:
     """The changed paths that record the intended divergences: the index, a page one of its rows
-    links, or a file under `scripts/divergences/`."""
+    links, or a record or input of the reproduction registry under
+    `scripts/divergences/reproductions/` (its README excepted)."""
     touched = {
         path
         for entry in files
@@ -991,7 +1025,9 @@ def divergence_artefacts(files: list[dict], index: Index) -> list[str]:
     return sorted(
         path
         for path in touched
-        if path == INDEX_PATH or path in index.pages or path.startswith(DIVERGENCE_SCRIPTS)
+        if path == INDEX_PATH
+        or path in index.pages
+        or (path.startswith(DIVERGENCE_REGISTRY) and path != REGISTRY_PAGE)
     )
 
 
@@ -1005,8 +1041,9 @@ def check_divergences(
     """The `## Intended divergences` section carries one of its three statements checked: the first
     (none of the index's entries touched) excludes the other two and is refused while the change
     edits a divergence artefact; the second needs one line per entry, the entry resolving against
-    the index at the base tip or the head and the line saying what the change does to it; the third
-    needs its description. One finding states every problem; `closes` is False for a pull request
+    the index at the base tip or the head (or naming the index by its path, which only a change that
+    edits the index may do) and the line saying what the change does to it; the third needs its
+    description. One finding states every problem; `closes` is False for a pull request
     opened before the rule landed, whose template had no such section."""
     index = read_index(base_index) | read_index(head_index)
     section_lines = body_sections(body).get(DIVERGENCE_SECTION.lower(), [])
@@ -1033,14 +1070,24 @@ def check_divergences(
         )
     else:
         if "touches" in checked:
+            cited = entry_lines(unfenced(statements["touches"][1]))
             problems.extend(
                 entry_problems(
-                    entry_lines(unfenced(statements["touches"][1])),
+                    cited,
                     index,
                     f"The second statement of the `## {DIVERGENCE_SECTION}` section is checked",
                     CHANGE_REMEDY,
                 )
             )
+            cites_index = any(entry_name(token) in INDEX_NAMES for token, _rest in cited)
+            edits_index = INDEX_PATH in divergence_artefacts(files, index)
+            if cites_index and not edits_index:
+                problems.append(
+                    f"The second statement of the `## {DIVERGENCE_SECTION}` section cites "
+                    f"`{INDEX_PATH}` by its path while the change does not edit it: the index's "
+                    "path names a change to its own text or order; name the entries the change "
+                    "touches instead."
+                )
         if "proposes" in checked and not any(line.strip() for line in statements["proposes"][1]):
             problems.append(
                 f"The third statement of the `## {DIVERGENCE_SECTION}` section is checked and no "
@@ -1053,8 +1100,9 @@ def check_divergences(
                 problems.append(
                     f"The first statement of the `## {DIVERGENCE_SECTION}` section (none "
                     f"touched) is checked while the change edits {listed_codes(artefacts)}: name "
-                    "the entries the change touches under the second statement, or describe the "
-                    "proposed divergence under the third."
+                    "the entries the change touches under the second statement (a change to the "
+                    "index's own text or order names the index by its path there), or describe "
+                    "the proposed divergence under the third."
                 )
     if not problems:
         return None

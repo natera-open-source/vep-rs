@@ -25,3 +25,4 @@
 # Format example (a comment; the parser reads only uncommented lines):
 #
 #   RUSTSEC-YYYY-NNNN | YYYY-MM-DD | <crate>: which call the defect needs and why the production binary never makes it
+RUSTSEC-2026-0543 | 2027-02-15 | chrono: the advisory reports the crate as unmaintained and names no defect to trigger; vep-cli links it through vep-io, whose parquet and arrow-array dependencies use it

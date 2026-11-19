@@ -1,0 +1,87 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "vep_command": "vep -i variants.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin gnomADc,plugin_data/gnomad.coverage.tsv.gz [--tab|--vcf|--json]",
+ "perl_cache": "homo_sapiens/116_GRCh38",
+ "fasta": "none on either side",
+ "input": "variants.vcf: 14 gnomAD v4.1 records on chromosome 21 (public rs identifiers; INFO dropped), chosen against the exome coverage file so that every span shape the plugin averages appears: five substitutions at covered positions, in an intron, a 3 prime UTR, a missense codon, a non-coding exon and upstream of a gene; one substitution at a position the exome file does not cover, which prints no coverage field; three three-base deletions whose every deleted base is covered, averaged over three records; two three-base deletions covered at one and at two of their three bases, averaged over the records found; three insertions, one whose base before the insertion point is covered too, so the mean is the record after the insertion point alone. The input names the chromosome 21 and the file chr21, the mapping both engines resolve. Reference alleles are the records' own.",
+ "sha256": {
+  "default.txt": "af09719de7cf0ac91bf5ba2389c0eb126427491e828f7ad0acfaa8801f1a521e",
+  "tab.txt": "d89cd5371655f55cf21cd0b1c5ca90783e00c4750c55f8acfceaaf16fa89130c",
+  "vcf.vcf": "1b36f37c1a11b6d41b103ef965814176c8f0347ea3df41f94d83685ba6d147b4",
+  "json.jsonl": "3827f2ed0d5f632003b25b5d44824b3e0ced0b4a5461c08e838037eec0f34e55",
+  "default.summary.log": "f998e3dc37252fe42489dde68608c236cf3a03538317e6b27dc2c86b5a8c3958",
+  "tab.summary.log": "629e970e15de7689fcc885aed63c35a4745ffb8427ddd98ac8ea65ad354e731d",
+  "vcf.summary.log": "46941c6e4e2784c1cdd3490938c888c220d1c4552c805204170749fb230abab8",
+  "json.summary.log": "0b8d4b9ac4939f03e006ac2fbd063f0373bf0e6687b3e959e649fd2dfa41460d"
+ },
+ "variants_vcf_sha256": "bc46142f2218a8f777c2e76ee1b2e80fd9c8bd10e8a5f097dcf78acb88d5ab07",
+ "plugin_files": {
+  "plugin_data/gnomad.coverage.tsv.gz": "0d65cdac643e88058d6a43e91ac156083d54ff345c4971ed79b2b0b381e0e8f0",
+  "plugin_data/gnomad.coverage.tsv.gz.tbi": "1145ab90d8c36e97674e4d6a8d1999af3235b24aadd855f6944e5117e4dd07d5"
+ },
+ "generator": "manifest: scripts/golden/build_golden_corpus.py select --release 116 --assembly GRCh38 --suite gnomadc=<reference>=<candidates> --k 100 --max-records 100 --include <each record> --covers gnomADc --matrix tests/parity/matrix.tsv --flag=--dir_plugins --flag={plugins} --flag=--plugin --flag=gnomADc,plugin_data/gnomad.coverage.tsv.gz --cache <cache>, then plugin_files added; json_cache: scripts/golden/prune_json_cache.py --gzip --drop sorted_exons --drop protein_features --drop protein_function_predictions --perl-info <cache>/info.txt --assembly GRCh38 --cache-version 116 over the chromosome 21 slice converted from the Ensembl VEP 116 GRCh38 cache; expected and this record: scripts/concordance/generate_reference_output.sh --corpus --format all --dir-plugins <the VEP_plugins checkout at release/116>",
+ "plugin_fixtures": {
+  "description": "plugin_data/gnomad.coverage.tsv.gz: a cut of the real coverage file, the records within two bases before and six bases after each input record, so the fixture carries every record a span reads and its neighbours; identical on both sides",
+  "source": "gnomAD v4.0 exome coverage summary (gnomad.exomes.v4.0.coverage.summary.tsv.bgz, https://gnomad.broadinstitute.org/downloads), prepared as the Ensembl VEP plugin documents: the locus column split into chr and pos, the header prefixed with #, bgzip-compressed and indexed with tabix -s 1 -b 2 -e 2; fourteen columns, contigs named chr1 to chrY and chrM",
+  "source_prepared_sha256": "a89d1dacd4269958dedabea31a99ee9d9b36687a445226666a106e3c78416935",
+  "cut": "tabix -H <prepared file>; tabix <prepared file> <regions> | bgzip -c; tabix -s 1 -b 2 -e 2 plugin_data/gnomad.coverage.tsv.gz",
+  "regions": "chr21:13826642-13826650 chr21:14011312-14011320 chr21:18486437-18486445 chr21:24811604-24811612 chr21:25769397-25769405 chr21:26924281-26924289 chr21:30806879-30806887 chr21:32699957-32699965 chr21:33324523-33324531 chr21:36170552-36170560 chr21:39212644-39212652 chr21:39217040-39217048 chr21:43332020-43332028 chr21:45073960-45073968",
+  "records": 102,
+  "tools": {
+   "tabix": "tabix (htslib) 1.22.1",
+   "bgzip": "bgzip (htslib) 1.22.1"
+  },
+  "files": {
+   "plugin_data/gnomad.coverage.tsv.gz": "0d65cdac643e88058d6a43e91ac156083d54ff345c4971ed79b2b0b381e0e8f0",
+   "plugin_data/gnomad.coverage.tsv.gz.tbi": "1145ab90d8c36e97674e4d6a8d1999af3235b24aadd855f6944e5117e4dd07d5"
+  }
+ },
+ "pruned_cache": {
+  "transcripts_per_chromosome": {
+   "21": 182
+  },
+  "shards": 13,
+  "spans_by_chromosome": {
+   "21": 14
+  }
+ },
+ "flag_sets": {
+  "minimal": {
+   "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+   "vep_version_reported": "ensembl-vep          : 116.2",
+   "cache_version": 116,
+   "vep_command": "vep -i minimal.vcf -o <out> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly GRCh38 --format vcf --buffer_size 5000 --fork 1 --stats_text --quiet --force_overwrite --dir_plugins {plugins} --plugin gnomADc,{corpus}/plugin_data/gnomad.coverage.tsv.gz --minimal --allele_number [--tab|--vcf|--json]",
+   "perl_cache": "homo_sapiens/116_GRCh38",
+   "fasta": "none on either side",
+   "input": "minimal.vcf",
+   "input_notes": "variants.vcf with a second ALT on two records, `21 36170554 C CCA,T` and `21 39212646 AACC A,T`, so that the --minimal split runs and the rejoin restores the record span the plugin reads; the other 12 records as in variants.vcf",
+   "sha256": {
+    "default.txt": "d5aed07decdb75f0688c3ee7fd93849d57e78385aa7197ed8c7649969f00834d",
+    "tab.txt": "1d09a4cab355ef50c77a231677e149321c86412cc5763eb80c1afccb30dcd60b",
+    "vcf.vcf": "d6d85e740f627e28cc5634e7d77eba36e59358e6f6c065c0996f5a87dda07501",
+    "json.jsonl": "9490f85717f1d084d7a117a1a2053c902ebcf5d8fcd3e8e0c99c5fb2f65993c9",
+    "default.summary.log": "fd90303be8dfd933256bc3b8d06ba86aec5b0cddf6447e10c881e8cbe2c3dd2d",
+    "tab.summary.log": "15db555a4cea3389a66a5db251520a882d892ab541ab43383946a266f9862afd",
+    "vcf.summary.log": "37b1162f0b23fd1c04e888f0299ae3d3f9e0aafc2793f2cc28c7fc15e1f3ad75",
+    "json.summary.log": "1f63d326565d51e64f4f5eab261faec76d8b5927e1e6de007cdbe8c8ff5c7fff"
+   },
+   "perl_env": [
+    "PERL_HASH_SEED=0",
+    "PERL_PERTURB_KEYS=0"
+   ],
+   "flags": [
+    "--dir_plugins",
+    "{plugins}",
+    "--plugin",
+    "gnomADc,{corpus}/plugin_data/gnomad.coverage.tsv.gz",
+    "--minimal",
+    "--allele_number"
+   ],
+   "expected_dir": "expected_minimal"
+  }
+ }
+}

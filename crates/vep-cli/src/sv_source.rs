@@ -76,6 +76,10 @@ struct Prefetched {
     records: BatchQueryResult,
 }
 
+/// One batch's read-ahead, fetched ([`SvSource::fetch`]) and held until
+/// [`SvSource::install`] makes it the one the lookups answer from.
+pub struct Prefetch(Prefetched);
+
 /// Ensembl's structural-variant VCF, indexed, opened once for a run.
 pub struct SvSource {
     path: PathBuf,
@@ -111,15 +115,33 @@ impl SvSource {
 
     /// Reads ahead the records every variant of a batch (`(chr, start, end)`
     /// per variant) can reach, so that the batch's lookups are answered from
-    /// memory, and releases the previous batch's. The index answers a window
-    /// at a time (the records are indexed by their spans, so a window's read
-    /// starts at the bins that can reach it): windows within `GAP_BRIDGE` of
-    /// each other share one read, and the reads go across the thread pool in
-    /// runs of neighbours so that a record spanning two reads is kept once.
+    /// memory, and releases the previous batch's: [`Self::fetch`] then
+    /// [`Self::install`].
     pub fn prefetch<'a>(
         &self,
         spans: impl IntoIterator<Item = (&'a str, u64, u64)>,
     ) -> anyhow::Result<()> {
+        self.install(self.fetch(spans)?);
+        Ok(())
+    }
+
+    /// Makes `prefetch` the read-ahead the lookups answer from, releasing the
+    /// previous batch's.
+    pub fn install(&self, prefetch: Prefetch) {
+        *self.prefetched.write().unwrap() = Some(prefetch.0);
+    }
+
+    /// Reads the records every variant of a batch (`(chr, start, end)` per
+    /// variant) can reach, leaving the lookups on the batch installed before.
+    /// The index answers a window at a time (the records are indexed by their
+    /// spans, so a window's read starts at the bins that can reach it): windows
+    /// within `GAP_BRIDGE` of each other share one read, and the reads go
+    /// across the current rayon pool in runs of neighbours so that a record
+    /// spanning two reads is kept once.
+    pub fn fetch<'a>(
+        &self,
+        spans: impl IntoIterator<Item = (&'a str, u64, u64)>,
+    ) -> anyhow::Result<Prefetch> {
         let mut windows: FxHashMap<String, Vec<(u64, u64)>> = FxHashMap::default();
         for (chr, start, end) in spans {
             windows
@@ -150,8 +172,7 @@ impl SvSource {
             }
         }
         let records = BatchQueryResult::from_records(records);
-        *self.prefetched.write().unwrap() = Some(Prefetched { windows, records });
-        Ok(())
+        Ok(Prefetch(Prefetched { windows, records }))
     }
 
     /// The records of the database query that reach a window of `windows`

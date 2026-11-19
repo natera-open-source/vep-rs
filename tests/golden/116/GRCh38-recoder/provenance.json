@@ -1,0 +1,75 @@
+{
+ "vep_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "vep_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "vep_version_reported": "ensembl-vep          : 116.2",
+ "cache_version": 116,
+ "perl_cache": "none: variant_recoder reads the Ensembl database (--db_version 116)",
+ "fasta": "none on the Ensembl VEP side (the slice sequence comes from the database); reference.fa.gz on the vep-rs side",
+ "input": "the eight variants of the GRCh38-input-id corpus that are neither failed in dbSNP nor co-located with a COSMIC or HGMD-PUBLIC variant, each written as an identifier (variants.id.txt, one of them in upper case as well), as HGVS notations (variants.hgvs.txt), as SPDI notations (variants.spdi.txt) and as a VCF record (variants.recode.vcf); the failed variants are left out because variant_recoder --var_synonyms stops with an error on a failed variant, as it does on a VCF input, whose case carries no --var_synonyms; the variants with a co-located COSMIC or HGMD-PUBLIC variant are left out because those identifiers are not redistributed",
+ "annotation_command": "variant_recoder -i <input> --vcf_string [--var_synonyms] --mane_select --ga4gh_vrs --pretty --db_version 116",
+ "vep_rs_command": "vep recode -i <input> --json_cache json_cache --fasta reference.fa.gz --synonyms chr_synonyms.txt <the case's args>",
+ "tool_cases_generator": "scripts/concordance/generate_reference_output.sh --corpus tests/golden/116/GRCh38-recoder --tool variant_recoder; every case connects variant_recoder to the public Ensembl database (its perl_args, --db_version 116), the mode the tool runs in by construction",
+ "reference": "reference.fa.gz is GRCh38 chromosome 21 (Ensembl release 116 primary assembly) with every base outside 2,000 bases of a record of variants.recode.vcf or of the GRCh38-input-id corpus's variants.vcf masked to N, bgzip-compressed with reference.fa.gz.fai and reference.fa.gz.gzi for the compressed file and reference.fa.fai for its decompressed form",
+ "chr_synonyms": "chr_synonyms.txt: the six lines of the Ensembl GRCh38 cache's chr_synonyms.txt that link chromosome 21's names (21, chr21, NC_000021.9, CM000683.2) to one another, copied whole; the GRCh38-input-id cache carries no synonyms file, and the accession is what HGVSg, SPDI and the GA4GH VRS allele are named by",
+ "cache": "json_cache: the GRCh38-input-id corpus's transcripts, pruned to the records of both corpora, with a variation slice of the Ensembl release-116 GRCh38 cache",
+ "sha256": {
+  "recoder/vcf.json": "f6db52458419b313b36fc8aef563b311f15f4ca3eb00d9dad24e18c1586343c0",
+  "recoder/spdi.json": "d7000e14311104166655e93e50d63949a45d141fdf8743066953e7fba64f8b88",
+  "recoder/id.json": "15cc1999b307f8bff40663bdbb3cb4e57bd816d45820a2e758938889b1fde1ee",
+  "recoder/hgvs.json": "55cf170db842c8bead6e4abcb38f080ce1b2dbad1457c0d3880a1250fed2507a"
+ },
+ "tool": "variant_recoder",
+ "tool_image": "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+ "tool_image_tag": "ensemblorg/ensembl-vep:release_116.2",
+ "tool_cases": {
+  "vcf": {
+   "input": "variants.recode.vcf",
+   "command": "variant_recoder -i variants.recode.vcf --vcf_string --mane_select --ga4gh_vrs --pretty --db_version 116",
+   "expected": "expected/recoder/vcf.json",
+   "sha256": "f6db52458419b313b36fc8aef563b311f15f4ca3eb00d9dad24e18c1586343c0",
+   "data_lines": 1167,
+   "wall_seconds": 1584
+  },
+  "spdi": {
+   "input": "variants.spdi.txt",
+   "command": "variant_recoder -i variants.spdi.txt --vcf_string --var_synonyms --mane_select --ga4gh_vrs --pretty --db_version 116",
+   "expected": "expected/recoder/spdi.json",
+   "sha256": "d7000e14311104166655e93e50d63949a45d141fdf8743066953e7fba64f8b88",
+   "data_lines": 1069,
+   "wall_seconds": 1481
+  },
+  "id": {
+   "input": "variants.id.txt",
+   "command": "variant_recoder -i variants.id.txt --vcf_string --var_synonyms --mane_select --ga4gh_vrs --pretty --db_version 116",
+   "expected": "expected/recoder/id.json",
+   "sha256": "15cc1999b307f8bff40663bdbb3cb4e57bd816d45820a2e758938889b1fde1ee",
+   "data_lines": 1214,
+   "wall_seconds": 1585
+  },
+  "hgvs": {
+   "input": "variants.hgvs.txt",
+   "command": "variant_recoder -i variants.hgvs.txt --vcf_string --var_synonyms --mane_select --ga4gh_vrs --pretty --db_version 116",
+   "expected": "expected/recoder/hgvs.json",
+   "sha256": "55cf170db842c8bead6e4abcb38f080ce1b2dbad1457c0d3880a1250fed2507a",
+   "data_lines": 1961,
+   "wall_seconds": 1932
+  }
+ },
+ "variation_slice": {
+  "source": "homo_sapiens/116_GRCh38/21/all_vars.gz of the Ensembl VEP release-116 indexed cache",
+  "window": "records whose start lies within 2,000 bases of a record of variants.recode.vcf or of the GRCh38-input-id corpus's variants.vcf",
+  "windows": 15,
+  "records_kept": 26787,
+  "records_excluded": 1895,
+  "excludes": [
+   "^COSV\\d",
+   "^(C[A-Z]|BM|HM)\\d{6}"
+  ],
+  "generator": "scripts/golden/prune_json_cache.py --cache ../GRCh38-input-id/json_cache --vcf variants.recode.vcf --vcf ../GRCh38-input-id/variants.vcf --gzip --variations <cache>/ --variation-flank 2000 --exclude-variation '^COSV\\d' --exclude-variation '^(C[A-Z]|BM|HM)\\d{6}'",
+  "sha256": {
+   "all_vars.gz": "80f88c17355bf843c17f473cb0802b8ebcf08897f0b2a5da62ade2796fa7cf6e",
+   "all_vars.gz.csi": "22ef4b0715428c9cde64e7ceb64f60802aac7618a26a246252ccc5e22d7bc6ed"
+  }
+ },
+ "comparison": "scripts/concordance/compare_vep_formats.py --format recoder --masks refseq_transcript_entries,lrg_transcript_entries,archive_dbsnp_synonyms,identifier_indel_transcript_notations; the last two name the Archive dbSNP synonyms the cache's column never holds and the transcript notations variant_recoder leaves unshifted for an identifier input's insertions and deletions"
+}

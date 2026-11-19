@@ -1,0 +1,36 @@
+entry = "file_cache_honours_gencode_basic"
+page = "docs/divergences/file-cache-honours-gencode-basic.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 876 of 77,675 cache transcripts · 2 flag sets, 2 corpora"
+notes = "Ensembl VEP applies --gencode_basic in filter_transcript (AnnotationType/Transcript.pm:223), which only its cache and database sources call (Cache/Transcript.pm:241, Database/Transcript.pm:251), so its --gtf source annotates every transcript under the flag; the cache built from the dataset's GTF drops ENST00000657104, which the file tags gencode_primary and Ensembl_canonical but not gencode_basic. Without the flag both engines write both rows."
+
+[input]
+format = "vcf"
+text = """
+21	22098664	linc00308_exon_snv	T	C	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-gtf-builder/json_cache"
+gxf = "{corpus}/chr21_genes.gtf.gz"
+gxf_kind = "gtf"
+fasta = "tests/golden/116/GRCh38-gtf-builder/reference.fa.gz"
+
+[run]
+flags = ["--gencode_basic"]
+
+[compare]
+kind = "rows"
+where = { record = "linc00308_exon_snv" }
+columns = ["Location", "Allele", "Feature", "Consequence"]
+
+[expected]
+ensembl_vep = [
+  "21:22098664 | C | ENST00000419431 | non_coding_transcript_exon_variant",
+  "21:22098664 | C | ENST00000657104 | non_coding_transcript_exon_variant",
+]
+vep_rs = ["21:22098664 | C | ENST00000419431 | non_coding_transcript_exon_variant"]

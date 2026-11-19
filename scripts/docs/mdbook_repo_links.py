@@ -32,7 +32,10 @@ files whose links are relative to the repository root. mdBook copies only
 - keeps a link to a page in the book relative (mdBook turns `.md` into `.html`),
   points `README.md`, `CHANGELOG.md` and `CONTRIBUTING.md` at their pages when
   the book has them, and sends any other repository path to its GitHub view at
-  the ref the site is built from.
+  the ref the site is built from;
+- keeps an image whose file lies under the book source relative to the chapter
+  that shows it: mdBook copies the file into the site, and a GitHub view is a
+  page, which no `<img>` can show.
 
 Links, directives and tokens inside fenced code blocks are left alone. The
 GitHub base URL comes from `output.html.git-repository-url` in `book.toml`; the
@@ -124,12 +127,26 @@ def latest_release(root):
     return described.stdout.strip() or None
 
 
-def rewrite_target(target, base_dir, chapter_dir, site, fragment_page=None):
+def is_image(line, close):
+    """Whether the `]` at `close` ends an image's alternative text: its `[` follows a `!`."""
+    depth = 0
+    for i in range(close, -1, -1):
+        if line[i] == "]":
+            depth += 1
+        elif line[i] == "[":
+            depth -= 1
+            if depth == 0:
+                return i > 0 and line[i - 1] == "!"
+    return False
+
+
+def rewrite_target(target, base_dir, chapter_dir, site, fragment_page=None, image=False):
     """Return the site-correct form of one link target.
 
     base_dir is the repository-relative directory the link was written in;
     chapter_dir is the chapter's directory relative to the book source;
-    fragment_page, when set, is the page a bare `#fragment` link points at.
+    fragment_page, when set, is the page a bare `#fragment` link points at;
+    image says the target is an image's source.
     """
     if target.startswith("#"):
         return fragment_page + target if fragment_page else target
@@ -142,7 +159,7 @@ def rewrite_target(target, base_dir, chapter_dir, site, fragment_page=None):
     in_book = None
     if site.chapter_of_repo_file.get(resolved) in site.chapters:
         in_book = site.chapter_of_repo_file[resolved]
-    elif resolved.startswith(site.src + "/") and resolved[len(site.src) + 1 :] in site.chapters:
+    elif resolved.startswith(site.src + "/") and (image or resolved[len(site.src) + 1 :] in site.chapters):
         in_book = resolved[len(site.src) + 1 :]
     if in_book is not None:
         rel = os.path.relpath(in_book, chapter_dir or ".").replace(os.sep, "/")
@@ -228,7 +245,7 @@ def rewrite(content, base_dir, chapter_dir, site, fragment_page=None, included=F
                 line = SELF_NAMED_LINK.sub(name_by_file, line)
             line = LINK.sub(
                 lambda m: m[1]
-                + rewrite_target(m[2], base_dir, chapter_dir, site, fragment_page)
+                + rewrite_target(m[2], base_dir, chapter_dir, site, fragment_page, is_image(m.string, m.start(1)))
                 + m[3],
                 line,
             )

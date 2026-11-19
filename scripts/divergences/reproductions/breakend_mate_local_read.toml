@@ -1,0 +1,36 @@
+entry = "breakend_mate_local_read"
+page = "docs/divergences/defect-e.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "seen in gnomad_sv_v4.1_chr21.vcf.gz, the gnomAD-SV file of the GRCh38 structural-variant set: 4,158 pairs of class 11"
+notes = "The mate-allele rows are selected by the mate's coordinate, 21:30425600, and Ensembl VEP evaluates them at the record's own coordinate, 21:11200001, so the transcript the mate lies in gets bare feature_truncation and the one it lies near intergenic_variant; vep-rs evaluates the mate where it is."
+
+[input]
+format = "vcf"
+text = """
+21	11200000	bnd_intergenic_with_genic_mate	N	N[21:30425600[	.	.	SVTYPE=BND
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-input-compressed/json_cache"
+
+[run]
+flags = []
+
+[compare]
+kind = "rows"
+where = { record = "bnd_intergenic_with_genic_mate", allele = "N[21:30425600[" }
+columns = ["Location", "Allele", "Feature", "Consequence", "DISTANCE"]
+
+[expected]
+ensembl_vep = [
+  "21:11200001 | N[21:30425600[ | ENST00000334068 | intergenic_variant | -",
+  "21:11200001 | N[21:30425600[ | ENST00000390690 | feature_truncation | -",
+]
+vep_rs = [
+  "21:11200001 | N[21:30425600[ | ENST00000334068 | upstream_gene_variant | 4620",
+  "21:11200001 | N[21:30425600[ | ENST00000390690 | feature_truncation,coding_sequence_variant | -",
+]

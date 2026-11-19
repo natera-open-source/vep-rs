@@ -18,9 +18,9 @@ use vep_core::terms::Vocabulary;
 use vep_io::input::Delimiter;
 
 use crate::args::Args;
-use crate::input_shape::InputShape;
+use crate::input_shape::{CpuTopology, InputShape};
 use crate::nearest::NearestType;
-use crate::option_rules::{split_list_flag, FlagState, OWN_RULES};
+use crate::option_rules::{split_list_flag, FlagState, DEPRECATED, OWN_RULES};
 
 /// A refusal under the error contract: printed as one line on standard error,
 /// `ERROR: [<component>] <message>`, and the run exits 1. `<message>` is Ensembl
@@ -111,9 +111,19 @@ pub struct ErrorTableEntry {
 }
 
 impl ErrorTableEntry {
+    /// Whether the refusal applies to an active flag alone. Ensembl VEP refuses
+    /// a deprecated flag only when its value is true (`Config.pm:977, 902-906`),
+    /// so `--convert 0` proceeds; every other refused flag is refused when given.
+    fn is_refused_when_active_alone(&self) -> bool {
+        DEPRECATED.iter().any(|(flag, _)| *flag == self.flag)
+    }
+
     /// The help text `--help` and the CLI reference print for the flag.
     pub fn help(&self) -> String {
         match self.treatment {
+            Treatment::Refused { message, .. } if self.is_refused_when_active_alone() => {
+                format!("Refused with an error unless its value is 0 or empty: {message}")
+            }
             Treatment::Refused { message, .. } => format!("Refused with an error: {message}"),
             Treatment::AcceptedWithoutEffect { reason } => {
                 format!("Accepted without effect: {reason}")
@@ -153,6 +163,47 @@ const fn noop(
         route: "nothing changes",
     }
 }
+
+/// `a` then `b` as bytes, in an array the caller sizes to their total length.
+const fn joined<const N: usize>(a: &str, b: &str) -> [u8; N] {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    assert!(N == a.len() + b.len(), "the array holds both strings");
+    let mut bytes = [0u8; N];
+    let mut i = 0;
+    while i < a.len() {
+        bytes[i] = a[i];
+        i += 1;
+    }
+    let mut j = 0;
+    while j < b.len() {
+        bytes[a.len() + j] = b[j];
+        j += 1;
+    }
+    bytes
+}
+
+/// A refusal ending in [`GFF_GTF_RECIPE`], joined at compile time: the error
+/// table's messages are `&'static str`.
+macro_rules! with_recipe {
+    ($prefix:expr) => {{
+        const PREFIX: &str = $prefix;
+        const BYTES: [u8; PREFIX.len() + GFF_GTF_RECIPE.len()] = joined(PREFIX, GFF_GTF_RECIPE);
+        match std::str::from_utf8(&BYTES) {
+            Ok(message) => message,
+            Err(_) => panic!("two UTF-8 strings joined"),
+        }
+    }};
+}
+
+const GFF_MESSAGE: &str = with_recipe!(
+    "--gff is not supported: Ensembl VEP reads a GFF3 as its transcript set through --custom file=<gff>,format=gff; "
+);
+const GTF_MESSAGE: &str = with_recipe!(
+    "--gtf is not supported: Ensembl VEP reads a GTF as its transcript set through --custom file=<gtf>,format=gtf; "
+);
+const BAM_MESSAGE: &str = with_recipe!(
+    "--bam is not supported: Ensembl VEP applies a BAM's alignments to RefSeq transcript models at run time; the RefSeq cache Ensembl distributes already carries those edits, which vep-rs reads from a converted homo_sapiens_refseq cache under --refseq; a GFF or GTF transcript set of your own is read without the BAM's edits; "
+);
 
 /// The error table: every flag vep-rs refuses, declared or caught before parsing,
 /// and the flags accepted without effect whose rows it owns. Help text, the
@@ -221,7 +272,7 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
     refused(
         "convert",
         "--convert has been deprecated",
-        "Config.pm:636-638 lists it as deprecated and :977-985 refuses it with this text",
+        "Config.pm:636-638 lists it as deprecated and :977-985 refuses it with this text when its value is true; a value Perl reads as false, `0` or the empty value, leaves the flag inactive (:902-906) and the run proceeds, there and here. Behind such a value, a true one from a lower source is refused there (:1101, 1158) and not read here",
         "none",
     ),
     refused(
@@ -247,27 +298,32 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
         route: "--af_gnomade",
     },
     refused(
-        "regulatory_gff",
-        "--regulatory_gff is not supported: it would annotate regulatory features and motifs from a GFF3 file in place of the cache; regulatory features are read from the cache alone",
-        "Config.pm:210; the option set at :434-439 switches on --regulatory",
-        "none",
+        "gff",
+        GFF_MESSAGE,
+        "Config.pm:260 (gff=s); the option set at :531-536 sets --custom file=%gff%,format=gff; AnnotationSource/File/GFF.pm:71-116 lists the feature types read",
+        "a cache built from the GFF3 by vep-cache-builder --gff3, read with --json_cache",
     ),
     refused(
-        "extended_promoters",
-        "--extended_promoters is not supported: it would widen the promoters read with --regulatory_gff to their extended bounds; regulatory features are read from the cache alone",
-        "Config.pm:211",
-        "none",
+        "gtf",
+        GTF_MESSAGE,
+        "Config.pm:261 (gtf=s); the option set at :538-543 sets --custom file=%gtf%,format=gtf; AnnotationSource/File/GTF.pm:78-85 lists the feature types read",
+        "a cache built from the GTF by vep-cache-builder --gtf, read with --json_cache",
     ),
     refused(
-        "custom_suppress_filter",
-        "--custom_suppress_filter is not supported: it would keep a --custom VCF source's FILTER column out of the output unless the --custom source's fields argument names it, and custom annotation is not supported",
-        "Config.pm:268",
-        "none",
+        "bam",
+        BAM_MESSAGE,
+        "Config.pm:253 (bam=s); the option set at :573-579 switches on use_transcript_ref and bam_edited; AnnotationType/Transcript.pm:421-631 applies the alignments to each transcript as SeqEdits; CacheDir.pm:412-416 reads a BAM-edited cache's info",
+        "--refseq on a converted homo_sapiens_refseq cache, which carries the edits",
     ),
     noop(
         "condel",
         "Ensembl VEP declares it and reads nothing from it",
         "Config.pm:206 (condel=s), read by no module",
+    ),
+    noop(
+        "debug",
+        "Ensembl VEP reads it only to print the plugin directories and modules it loads; the annotation output is unchanged",
+        "Config.pm:275; Runner.pm:920, 941",
     ),
     noop(
         "hgnc",
@@ -296,7 +352,7 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
     ),
     noop(
         "tmpdir",
-        "no module of Ensembl VEP reads it, and vep-rs writes its Parquet intermediate beside the output file",
+        "no module of Ensembl VEP reads it, and vep-rs writes no temporary file",
         "Config.pm:259 (tmpdir=s), default /tmp at :304, read by no module",
     ),
     noop(
@@ -304,21 +360,108 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
         "vep-rs always runs offline and never contacts a database",
         "Config.pm:245; the option set at :464-469 switches on --cache and off --database",
     ),
-    noop(
-        "use_given_ref",
-        "the default it names, the input's reference allele, stands without it, and given beside --use_transcript_ref it keeps that default",
-        "Config.pm:255; the option set at :588-592 switches off use_transcript_ref, which CacheDir.pm:412-416 enables for a BAM-edited cache",
-    ),
-    noop(
-        "no_check_variants_order",
-        "vep-rs never checks the input order: every record is annotated where it stands, and an input whose chromosomes interleave keeps more transcript indexes in memory",
-        "Config.pm:83; InputBuffer.pm:189-258 aborts after 100 records more than 100 bp behind their predecessor",
-    ),
 ];
 
 /// The value `--cache` carries when given without a directory
 /// ([`Args::cache`]'s `default_missing_value`).
 pub const CACHE_FLAG_ALONE: &str = "1";
+
+/// How a GFF or GTF transcript model is annotated against: the text a
+/// `--custom` string in `format=gff` or `format=gtf` transcript mode is
+/// refused with ([`vep_builtins::custom::GFF_GTF_RECIPE`]).
+pub const GFF_GTF_RECIPE: &str = vep_builtins::custom::GFF_GTF_RECIPE;
+
+/// The keys a `--regulatory_gff` string takes (`AnnotationSourceAdaptor.pm:77-81`
+/// at release/116.2), in the sorted order its error texts list them.
+pub const REGULATORY_GFF_KEYS: [&str; 3] = ["emars", "file", "motifs"];
+
+/// The files `--regulatory_gff` names (`AnnotationSourceAdaptor.pm:227-262`):
+/// `key=value` pairs joined by commas, or a bare file name, which is `file`.
+/// Each file is a bgzip-compressed GFF with its tabix index. A value that is
+/// false in Perl (`0` or empty) names no file.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RegulatoryGff {
+    /// `file=`: the regulatory features.
+    pub file: Option<String>,
+    /// `emars=`: regulatory features with an identifier space of their own,
+    /// read as `file=` is.
+    pub emars: Option<String>,
+    /// `motifs=`: the motif features.
+    pub motifs: Option<String>,
+}
+
+impl RegulatoryGff {
+    /// Parses the flag's value with Ensembl VEP's texts (`AnnotationSourceAdaptor.pm:237-262`):
+    /// a string without `=` is the `file`; otherwise every comma-separated part,
+    /// as Perl's `split` returns them ([`vep_core::sv_routing::perl_split`]: a
+    /// trailing comma is no part), is `key=value` with a non-empty value, every
+    /// key is one of [`REGULATORY_GFF_KEYS`], and at least one value is true in
+    /// Perl.
+    pub fn parse(spec: &str) -> Result<Self, CliError> {
+        if !spec.contains('=') {
+            return Ok(Self {
+                file: Some(spec.to_string()),
+                ..Self::default()
+            });
+        }
+        let mut given: std::collections::BTreeMap<&str, &str> = Default::default();
+        for param in vep_core::sv_routing::perl_split(spec, &[',']) {
+            match param.split_once('=') {
+                Some((key, value)) if !value.is_empty() => {
+                    given.insert(key, value);
+                }
+                _ => {
+                    return Err(CliError::cli(format!(
+                        "Failed to parse --regulatory_gff parameter \"{param}\"; expected key=value"
+                    )))
+                }
+            }
+        }
+        let invalid: Vec<&str> = given
+            .keys()
+            .copied()
+            .filter(|key| !REGULATORY_GFF_KEYS.contains(key))
+            .collect();
+        if !invalid.is_empty() {
+            return Err(CliError::cli(format!(
+                "Unsupported --regulatory_gff key(s): {}\nSupported keys: {}",
+                invalid.join(", "),
+                REGULATORY_GFF_KEYS.join(", ")
+            )));
+        }
+        let value = |key: &str| {
+            given
+                .get(key)
+                .copied()
+                .filter(|value| crate::argv::truthy(value))
+                .map(str::to_string)
+        };
+        let parsed = Self {
+            file: value("file"),
+            emars: value("emars"),
+            motifs: value("motifs"),
+        };
+        if parsed.sources().next().is_none() {
+            return Err(CliError::cli(format!(
+                "--regulatory_gff requires at least one of: {}",
+                REGULATORY_GFF_KEYS.join(", ")
+            )));
+        }
+        Ok(parsed)
+    }
+
+    /// The files named, each with its key, in the order Ensembl VEP builds its
+    /// sources (`AnnotationSourceAdaptor.pm:284-310`): `file`, `emars`, `motifs`.
+    pub fn sources(&self) -> impl Iterator<Item = (&'static str, &str)> {
+        [
+            ("file", self.file.as_deref()),
+            ("emars", self.emars.as_deref()),
+            ("motifs", self.motifs.as_deref()),
+        ]
+        .into_iter()
+        .filter_map(|(key, file)| file.map(|file| (key, file)))
+    }
+}
 
 /// Environment variables vep-rs reads that Ensembl VEP has no counterpart for.
 pub const ENVIRONMENT: &[(&str, &str)] = &[(
@@ -341,12 +484,16 @@ pub const COMPONENTS: &[(&str, &str)] = &[
         "the output file or format, the warnings file or the skipped-variants file",
     ),
     (
+        "parquet",
+        "the Parquet writer: input out of chromosome and position order without --no_check_variants_order, or an output directory holding files vep-rs did not write",
+    ),
+    (
         "plugin",
-        "under --safe, a plugin that cannot be loaded or a plugins directory that does not exist",
+        "a `--plugin` naming an Ensembl VEP plugin vep-rs does not provide, or a Perl module (a `.pm` file by path or under the plugins directories), with or without --safe; under --safe, a plugin that cannot be loaded or a plugins directory that does not exist",
     ),
     (
         "cache",
-        "the cache: nothing resolves at the configured path, its layout or metadata is unusable, a transcript shard cannot be read (a transcript an HGVS input names included), its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read",
+        "the cache: nothing resolves at the configured path, its layout or metadata is unusable, a transcript or regulatory shard cannot be read (a transcript an HGVS input names included), or a regulatory chromosome directory holds files but no shard, its assembly disagrees with --assembly or with its own directory name, or a variation file cannot be opened or read",
     ),
     (
         "fasta",
@@ -359,6 +506,10 @@ pub const COMPONENTS: &[(&str, &str)] = &[
     (
         "check_svs",
         "the `--check_svs` file: it is not a file, has no `.csi` or `.tbi` index beside it, or cannot be read",
+    ),
+    (
+        "custom",
+        "a `--custom` source: its string is malformed (Ensembl VEP's text), it names what vep-rs does not read (a remote URL, or a GFF or GTF source in transcript mode), or its file cannot be opened or read",
     ),
     (
         "config",
@@ -501,7 +652,17 @@ where
         .try_get_matches_from(program.into_iter().chain(options))
         .map_err(usage)?;
     let args = Args::from_arg_matches(&matches).map_err(usage)?;
-    let state = FlagState::from_matches(&command, &matches);
+    let mut state = FlagState::from_matches(&command, &matches);
+    // Getopt::Long stores an `=i` value as its number, and the option rules read
+    // that for truth (Config.pm:902-906), so `--shift_3prime 00` is not active.
+    for (flag, number) in [
+        ("shift_3prime", args.shift_3prime),
+        ("shift_genomic", args.shift_genomic),
+    ] {
+        if let Some(number) = number {
+            state.set(flag, &number.to_string());
+        }
+    }
     Ok(ParsedArgs {
         args,
         state,
@@ -510,7 +671,7 @@ where
 }
 
 /// Fully resolved configuration for a VEP run.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)] // Many fields are parsed from CLI args but only consumed by specific code paths
 pub struct Config {
     pub input_file: String,
@@ -529,14 +690,10 @@ pub struct Config {
     /// run as any other output file would.
     pub output_file_as_spelled: String,
     pub output_format: String,
-    /// Only consulted when `output_format == "parquet"`.
-    /// `"nested"` = one row per variant, CSQ subfields as `LIST<T>`.
-    /// `"flat"` = one row per (variant × consequence) tuple.
-    pub parquet_shape: String,
-    /// Keep the Parquet intermediate TSV after DuckDB finalize (debug aid).
-    pub keep_intermediate: bool,
-    pub parquet_row_group_size: u64,
     pub compress_output: Option<String>,
+    /// `--parquet_partition`: the column the Parquet parts are laid out in
+    /// directories by, `chrom` alone; `None` lays every part at the root.
+    pub parquet_partition: Option<String>,
     pub force_overwrite: bool,
     pub no_headers: bool,
     /// The vocabulary consequence terms print in (`--terms`).
@@ -560,11 +717,11 @@ pub struct Config {
     /// else a directory given to `--cache`, else `--dir`; an empty or `0`
     /// `--dir_cache` counts as absent (AnnotationSourceAdaptor.pm:127's `||`).
     pub dir_cache: String,
-    /// The plugins directory: `--dir_plugins`, else `<dir>/Plugins`
-    /// (Runner.pm:907), an empty or `0` value counting as absent, and a leading
-    /// `~` expanded; any other pattern `glob` would expand (`:908`) is one
-    /// literal path.
-    pub dir_plugins: String,
+    /// The plugins directories: `--dir_plugins`, else `<dir>/Plugins`
+    /// (Runner.pm:907), an empty or `0` value counting as absent, expanded as
+    /// `glob` expands the value (`:908`) and split by whether each match is a
+    /// directory (`:910-923`).
+    pub dir_plugins: PluginDirs,
     /// `--safe`: a plugin that cannot be loaded or a missing plugins directory is
     /// an error rather than a warning (Runner.pm:912-916, 929-953).
     pub safe: bool,
@@ -604,12 +761,28 @@ pub struct Config {
     /// Parquet outputs, carries its VCF line without consequences and omits it
     /// from the JSON output (`docs/intended-divergences.md`).
     pub max_sv_size: Option<u64>,
-    pub fork: usize,
+    /// The annotator pool's threads, as `--fork` was given; [`Fork::resolve`]
+    /// turns `0` into a count once the input's shape and its inflater count are
+    /// known.
+    pub fork: Fork,
     /// BGZF decompression worker threads for a BGZF input in any format, as the
     /// flag was given (a plain gzip input decompresses on one thread);
     /// [`resolve_decompression_threads`] turns it into a count once the input's
     /// shape is known.
     pub decompression_threads: DecompressionThreads,
+    /// BGZF deflate worker threads for `--compress_output bgzip`
+    /// (`--compression_threads`, resolved; one is the writing thread itself).
+    pub compression_threads: usize,
+    /// Threads the cache shards parse on (`--parse_threads`); `None` is the
+    /// pool's built-in width.
+    pub parse_threads: Option<usize>,
+    /// How far ahead of the reader the prewarm helper loads chromosomes
+    /// (`--prewarm_ahead`).
+    pub prewarm_ahead: PrewarmAhead,
+    /// Whether the reader thread gets a physical core of its own on a host
+    /// with hardware threads (`--reader_core`); [`reserve_reader_core`] decides
+    /// once the input's record width is known.
+    pub reader_core: ReaderCore,
     pub distance: (u64, u64),
     /// How the batches move through the pipeline (`--pipeline_mode`).
     pub pipeline_mode: PipelineMode,
@@ -660,11 +833,18 @@ pub struct Config {
     pub gene_version: bool,
     pub hgvs: bool,
     pub hgvsg: bool,
-    /// `--hgvsg_use_accession`: HGVSg names the chromosome by the `NC_` synonym
-    /// of the input name, when the synonyms table has one.
+    /// `--hgvsg_use_accession`: HGVSg names the sequence by the RefSeq synonym,
+    /// an `NC_` name before any other, of the input name or of the sequence it
+    /// resolves to, when the synonyms table has one.
     pub hgvsg_use_accession: bool,
     /// `--spdi`: the SPDI column.
     pub spdi: bool,
+    /// The SPDI names its sequence as the cache names it on every row, as a
+    /// database slice names itself (ensembl-variation VariationFeature.pm
+    /// 2151): set by `vep recode`, whose reference reads a database. Off, a
+    /// row that overlaps no transcript takes the FASTA's name, as Ensembl
+    /// VEP's offline run does.
+    pub spdi_on_the_cache_name: bool,
     /// `--ga4gh_vrs`: the GA4GH_VRS column, refused with `--vcf`.
     pub ga4gh_vrs: bool,
     /// `--hgvsp_use_prediction`: HGVSp's description after `p.` is parenthesised.
@@ -680,6 +860,23 @@ pub struct Config {
     pub numbers: bool,
     pub domains: bool,
     pub regulatory: bool,
+    /// `--cell_type` as given, when Ensembl VEP's comma split of it names
+    /// anything (Config.pm:761; a value of commas alone is an empty list, which
+    /// `_is_flag_active` reads as unset, :905); `None` otherwise. The names are
+    /// read from it against the cache's list once the cache is resolved
+    /// ([`split_cell_types`]), since an epigenome name may hold a comma.
+    /// Switches `regulatory` on through the option set (`:427-432`).
+    pub cell_type: Option<String>,
+    /// `--regulatory_gff` (`Config.pm:210`): the regulatory and motif GFF files
+    /// read in place of the cache's regulatory data; `None` without the flag or
+    /// with a value that is false in Perl. The flag's option set switches
+    /// `regulatory` on (`:434-439`).
+    pub regulatory_gff: Option<RegulatoryGff>,
+    /// `--extended_promoters` (`Config.pm:211`): a promoter read from
+    /// `--regulatory_gff` is widened to its `extended_start` and `extended_end`.
+    /// Only the GFF source reads it, so without `--regulatory_gff` it changes
+    /// nothing.
+    pub extended_promoters: bool,
     pub variant_class: bool,
     pub overlaps: bool,
     /// `--nearest <type>`: the NEAREST column names the nearest protein-coding
@@ -753,9 +950,16 @@ pub struct Config {
     pub no_stats: bool,
     pub stats_file: Option<String>,
     pub stats_text: bool,
+    /// The HTML statistics report: the flag as given, or the default when
+    /// neither `--stats_text` nor `--stats_html` names a report
+    /// (`Runner.pm:787-790`); `--no_stats` overrides either.
+    pub stats_html: bool,
 
     pub verbose: bool,
     pub quiet: bool,
+    /// `--no_progress`: the progress line is not written; the status lines, the
+    /// summary line and the output are as without it.
+    pub no_progress: bool,
     /// The `INFO:` lines the resolution owes the run, in Ensembl VEP's order
     /// (`Runner.pm:117-120` before `post_setup_checks`), printed by the runner
     /// unless `--quiet`.
@@ -763,9 +967,20 @@ pub struct Config {
 
     pub plugin: Vec<String>,
     pub custom: Vec<String>,
+    /// `--custom_multi_allelic`: a `--custom` VCF source keeps a comma-separated
+    /// INFO value whole on every allele (`File/VCF.pm:199`).
+    pub custom_multi_allelic: bool,
+    /// `--custom_suppress_filter`: a `--custom` VCF source adds its FILTER column
+    /// only when its `fields` name it (`File/VCF.pm:219`).
+    pub custom_suppress_filter: bool,
 
     pub refseq: bool,
     pub merged: bool,
+    /// `--all_refseq` (`Config.pm:98`): every model of a RefSeq or merged
+    /// cache is annotated, not the RefSeq accessions alone
+    /// (`AnnotationType/Transcript.pm:237`); nothing changes on an Ensembl
+    /// cache, where the RefSeq clause never runs.
+    pub all_refseq: bool,
     pub gencode_basic: bool,
     pub gencode_primary: bool,
     pub flag_gencode_primary: bool,
@@ -792,6 +1007,9 @@ pub struct Config {
     /// `--process_ref_homs` (`Config.pm:143`): every sequence record gains the
     /// reference allele's row, and a reference-homozygous individual annotates it.
     pub process_ref_homs: bool,
+    /// `--no_check_variants_order` (`Config.pm:83`): the Parquet writer skips its
+    /// order check and relaxes its layout; every text format ignores the flag.
+    pub no_check_variants_order: bool,
     /// `--chr` as given, split on commas (`Config.pm:759-761`); `None` without the
     /// flag. The names it admits are read by `validate::ChromosomeList`.
     pub chr: Option<Vec<String>>,
@@ -801,8 +1019,18 @@ pub struct Config {
     pub lookup_ref: bool,
     /// `--use_transcript_ref` (`Config.pm:254`): each row's reference allele is
     /// the transcript's, and `GIVEN_REF` and `USED_REF` are written; off again
-    /// under `--use_given_ref` (`:588-590`).
+    /// under `--use_given_ref` (`:588-590`), and switched on by a BAM-edited
+    /// cache unless that flag was given (`CacheDir.pm:412-416`).
     pub use_transcript_ref: bool,
+    /// `--use_given_ref` (`Config.pm:255`) was given: the input's reference allele
+    /// stands, and a BAM-edited cache leaves `use_transcript_ref` off.
+    pub use_given_ref: bool,
+    /// The cache's transcript models were edited against its alignment file,
+    /// set by the cache resolution for a cache whose metadata names one, as
+    /// `CacheDir.pm:415` sets it: the `BAM_EDIT` column is written. Never set by
+    /// a flag: `--bam`, whose option set switches it on in Ensembl VEP
+    /// (`Config.pm:573-579`), is refused.
+    pub bam_edited: bool,
 }
 
 /// The output format as the writers name it: `OutputFactory.pm:229-231` lower-cases
@@ -854,6 +1082,58 @@ fn var_synonyms_implies_check_existing(state: &mut FlagState) -> Option<&'static
     Some("INFO: Colocated variants will be provided when using --var_synonyms")
 }
 
+/// The remote root `--phyloP` and `--phastCons` read their bigWigs from by
+/// default (`Config.pm:314`) is refused: the sources are read from a local
+/// copy of the same layout, or named through `--custom`.
+fn check_ucsc_data_root(state: &FlagState) -> Result<(), CliError> {
+    let shortcut_given = state.is_active("phyloP") || state.is_active("phastCons");
+    let remote_root = state
+        .scalar("ucsc_data_root")
+        .is_some_and(vep_builtins::custom::grammar::is_remote);
+    if shortcut_given && remote_root {
+        return Err(CliError::new(
+            "custom",
+            "--ucsc_data_root must name a local directory laid out as \
+             <root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw; the same source is \
+             --custom file=<local>.bw,format=bigwig,type=exact",
+        ));
+    }
+    Ok(())
+}
+
+/// The `--custom` strings the state holds after the option sets, the ones the
+/// `phyloP` set appended with their short name spelt `phyloP<N>way`: Ensembl
+/// VEP's set writes `phlyoP<N>way` (`Config.pm:555`), a misspelling whose
+/// column vep-rs does not reproduce.
+fn custom_sources(state: &FlagState) -> Vec<String> {
+    // An unset flag leaves its `%name%` reference in the set's value as written
+    // (`FlagState::expand`, `Config.pm:867`), so the string the set appended is
+    // rebuilt here byte for byte and matched whole.
+    let root = state.scalar("ucsc_data_root").unwrap_or("%ucsc_data_root%");
+    let assembly = state.scalar("ucsc_assembly").unwrap_or("%ucsc_assembly%");
+    let corrections: Vec<(String, String)> = state
+        .list("phyloP")
+        .iter()
+        .map(|way| {
+            let file = format!("{root}{assembly}/phyloP{way}way/{assembly}.phyloP{way}way.bw");
+            (
+                format!("{file},phlyoP{way}way,bigwig,exact"),
+                format!("{file},phyloP{way}way,bigwig,exact"),
+            )
+        })
+        .collect();
+    state
+        .list("custom")
+        .into_iter()
+        .map(|source| {
+            corrections
+                .iter()
+                .find(|(as_set, _)| *as_set == source)
+                .map_or(source, |(_, corrected)| corrected.clone())
+        })
+        .collect()
+}
+
 impl Config {
     /// Parses a command line (the binary name first) and resolves it.
     pub fn from_argv<I, T>(argv: I) -> Result<Self, ParseFailure>
@@ -877,7 +1157,12 @@ impl Config {
             let Treatment::Refused { component, message } = entry.treatment else {
                 continue;
             };
-            if state.is_given(entry.flag) {
+            let refusal_applies = if entry.is_refused_when_active_alone() {
+                state.is_active(entry.flag)
+            } else {
+                state.is_given(entry.flag)
+            };
+            if refusal_applies {
                 return Err(CliError::new(component, message));
             }
         }
@@ -897,6 +1182,7 @@ impl Config {
                 return Err(CliError::new(rule.component, rule.message));
             }
         }
+        check_ucsc_data_root(&state)?;
         let distance =
             parse_distance(&args.distance).map_err(|message| CliError::new("config", message))?;
         // Only the Ensembl and VCF parsers split on the delimiter (Parser/VEP_input.pm:90,
@@ -915,10 +1201,35 @@ impl Config {
         let notices = var_synonyms_implies_check_existing(&mut state)
             .into_iter()
             .collect();
+        // Parsed apart from `resolve`, which cannot fail: a value false in Perl
+        // names no file, and any other value must parse.
+        let regulatory_gff = state
+            .scalar("regulatory_gff")
+            .filter(|value| crate::argv::truthy(value))
+            .map(RegulatoryGff::parse)
+            .transpose()?;
         let mut config = Config::resolve(args, &state, distance, delimiter);
+        config.regulatory_gff = regulatory_gff;
         config.notices = notices;
         config.command_line = command_line;
         Ok(config)
+    }
+
+    /// The root the statistics report files are named from
+    /// (`BaseRunner.pm:254`): `--stats_file` when its value is true in Perl, else
+    /// `<output>_summary` on the output file as the command line spelled it, so
+    /// `-o stdout` names `stdout_summary` in the working directory.
+    pub fn stats_file_root(&self) -> String {
+        crate::stats::stats_file_root(self.stats_file.as_deref(), &self.output_file_as_spelled)
+    }
+
+    /// Whether the input is standard input: `-i` names `STDIN` in any letter
+    /// case (`uc($file) eq 'STDIN'`, Parser.pm:235). `input_file` keeps the
+    /// spelling given, which the statistics report's `Input file` row
+    /// (Stats.pm:652) and the skipped-variants file (BaseRunner.pm:371-372)
+    /// print.
+    pub fn reads_stdin(&self) -> bool {
+        self.input_file.eq_ignore_ascii_case("STDIN")
     }
 
     /// The configuration from the arguments and the flag state after the option
@@ -968,11 +1279,11 @@ impl Config {
             .map(|d| expand_tilde(&d))
             .or(cache_dir_value)
             .unwrap_or_else(|| dir.clone());
-        let dir_plugins = args
+        let plugins_pattern = args
             .dir_plugins
             .filter(|d| crate::argv::truthy(d))
-            .map(|d| expand_tilde(&d))
             .unwrap_or_else(|| format!("{dir}/Plugins"));
+        let dir_plugins = PluginDirs::expand(&plugins_pattern);
 
         // `cache_version || db_version || software_version` (CacheDir.pm:323):
         // a `0` is Perl-false and falls through to the release.
@@ -983,30 +1294,25 @@ impl Config {
 
         let fields = args.fields.as_deref().map(split_list_flag);
 
-        // `uc($file) eq 'STDIN'` (Parser.pm:235): the literal in any case.
-        let input_file = if args.input_file.eq_ignore_ascii_case("STDIN") {
-            "STDIN".to_string()
-        } else {
-            args.input_file
-        };
-
         // `shift_hgvs` is a setting only as 0 or 1 (BaseRunner.pm:498), and 0 sets
         // `shift_3prime` to 0 whatever the command line passes (Runner.pm:792-795).
+        // Every reader of `shift_3prime` and `shift_genomic` tests the value for
+        // truth (AnnotationType/Transcript.pm:162, OutputFactory.pm:1349, 1992), so
+        // any integer but 0 is on.
         let shift_hgvs = args.shift_hgvs.as_deref() != Some("0");
-        let shift_3prime = shift_hgvs && args.shift_3prime.as_deref() == Some("1");
+        let is_on = |value: Option<i64>| value.is_some_and(|number| number != 0);
+        let shift_3prime = shift_hgvs && is_on(args.shift_3prime);
 
         Config {
-            input_file,
+            input_file: args.input_file,
             input_data,
             format: state.scalar("format").unwrap_or("guess").to_string(),
             delimiter,
             output_file,
             output_file_as_spelled,
             output_format,
-            parquet_shape: args.parquet_shape,
-            keep_intermediate: args.keep_intermediate,
-            parquet_row_group_size: args.parquet_row_group_size,
             compress_output: args.compress_output,
+            parquet_partition: args.parquet_partition,
             force_overwrite: args.force_overwrite,
             no_headers: args.no_headers,
             // clap's enumeration admits the `%VALID` spellings alone; a `None` here
@@ -1031,15 +1337,24 @@ impl Config {
             synonyms: args.synonyms.as_deref().map(expand_tilde),
             shift_3prime,
             shift_hgvs,
-            shift_genomic: args.shift_genomic.as_deref() == Some("1"),
+            shift_genomic: is_on(args.shift_genomic),
             shift_length: args.shift_length,
             species: args.species,
             assembly: state.scalar("assembly").map(str::to_string),
             buffer_size: args.buffer_size,
             max_sv_size: u64::try_from(args.max_sv_size).ok(),
-            fork: resolve_fork(args.fork),
+            fork: Fork::from_raw(args.fork),
             // clap validated the text with `decompression_threads_text`.
-            decompression_threads: args.decompression_threads.parse().unwrap_or_default(),
+            decompression_threads: match args.decompression_threads.as_deref() {
+                Some(text) => text.parse().unwrap_or_default(),
+                None => DECOMPRESSION_THREADS_DEFAULT,
+            },
+            compression_threads: resolve_compression_threads(args.compression_threads),
+            parse_threads: resolve_parse_threads(args.parse_threads),
+            // clap validated the text with `prewarm_ahead_text`.
+            prewarm_ahead: args.prewarm_ahead.parse().unwrap_or_default(),
+            // clap validated the text with `reader_core_text`.
+            reader_core: args.reader_core.parse().unwrap_or_default(),
             distance,
             pipeline_mode: args.pipeline_mode.parse().unwrap_or_default(),
             pipeline_depth: resolve_pipeline_depth(args.pipeline_depth),
@@ -1068,6 +1383,7 @@ impl Config {
             hgvsg: args.hgvsg,
             hgvsg_use_accession: args.hgvsg_use_accession,
             spdi: args.spdi,
+            spdi_on_the_cache_name: false,
             ga4gh_vrs: args.ga4gh_vrs,
             hgvsp_use_prediction: args.hgvsp_use_prediction,
             remove_hgvsp_version: args.remove_hgvsp_version,
@@ -1077,6 +1393,9 @@ impl Config {
             numbers: on("numbers") || vcf_output,
             domains: on("domains"),
             regulatory: on("regulatory"),
+            cell_type: args.cell_type.filter(|_| on("cell_type")),
+            regulatory_gff: None,
+            extended_promoters: args.extended_promoters,
             variant_class: on("variant_class"),
             overlaps: args.overlaps,
             // A value here passed clap's list and `VALID`, so it parses.
@@ -1126,13 +1445,18 @@ impl Config {
             no_stats: on("no_stats"),
             stats_file: args.stats_file,
             stats_text: args.stats_text,
+            stats_html: on("stats_html") || !args.stats_text,
             verbose: args.verbose,
             quiet: args.quiet,
+            no_progress: args.no_progress,
             notices: Vec::new(),
             plugin: args.plugin,
-            custom: state.list("custom"),
+            custom: custom_sources(state),
+            custom_multi_allelic: args.custom_multi_allelic,
+            custom_suppress_filter: args.custom_suppress_filter,
             refseq: args.refseq,
             merged: args.merged,
+            all_refseq: args.all_refseq,
             gencode_basic: args.gencode_basic,
             gencode_primary: args.gencode_primary,
             flag_gencode_primary: args.flag_gencode_primary,
@@ -1149,10 +1473,13 @@ impl Config {
                 .is_given("individual_zyg")
                 .then(|| state.list("individual_zyg")),
             process_ref_homs: args.process_ref_homs,
+            no_check_variants_order: args.no_check_variants_order,
             chr: state.is_given("chr").then(|| state.list("chr")),
             check_ref: args.check_ref,
             lookup_ref: args.lookup_ref,
             use_transcript_ref: on("use_transcript_ref"),
+            use_given_ref: args.use_given_ref,
+            bam_edited: false,
         }
     }
 }
@@ -1166,27 +1493,102 @@ pub const DECOMPRESSION_THREADS_AUTO_CAP: usize = 10;
 /// batches, so the wall time stops falling past about 32 workers and rises on
 /// wider hosts, where the extra workers wait at the batch barrier and contend
 /// for the allocator. User-supplied values are not capped.
-const FORK_AUTO_CAP: usize = 32;
+pub const FORK_AUTO_CAP: usize = 32;
 
 /// Resolve the --fork value. `0` means "auto": use the number of available
 /// logical CPUs, capped at `FORK_AUTO_CAP`. Any non-zero value is returned
 /// as-is so users can still pin the worker count explicitly.
 ///
-/// Public so an embedding consumer of this crate can apply the same
+/// The host's rule alone: a run that knows its input's shape resolves `0`
+/// through [`Fork::resolve`], which lowers the count on an inflate-bound
+/// input. Public so an embedding consumer of this crate can apply the same
 /// auto-detect default without going through the full `Config::from_argv`
 /// pipeline.
 pub fn resolve_fork(raw: usize) -> usize {
-    if raw != 0 {
-        return raw;
+    Fork::from_raw(raw).host_count()
+}
+
+/// The `--fork` value: `0` and an absent flag are `Auto`, resolved from the
+/// host and the input's shape; a positive count is kept as given.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Fork {
+    /// `0`: [`resolve_fork_auto`]'s rule.
+    #[default]
+    Auto,
+    /// A positive count, uncapped.
+    Fixed(usize),
+}
+
+impl Fork {
+    /// The flag's value: `0` is `Auto`.
+    pub fn from_raw(raw: usize) -> Self {
+        if raw == 0 {
+            Fork::Auto
+        } else {
+            Fork::Fixed(raw)
+        }
     }
-    std::thread::available_parallelism()
-        .map(|n| n.get().min(FORK_AUTO_CAP))
-        .unwrap_or(1)
+
+    /// The annotator count for a run over an input of `shape`, read by
+    /// `inflaters` block-inflating threads (0 when the input is inflated on the
+    /// reader's own thread or not at all), on this host.
+    pub fn resolve(self, shape: &InputShape, inflaters: usize) -> usize {
+        match self {
+            Fork::Fixed(count) => count,
+            Fork::Auto => resolve_fork_auto(shape, inflaters, fork_host_parallelism()),
+        }
+    }
+
+    /// The annotator count without an input shape, the one an embedding
+    /// consumer gets ([`resolve_fork`]).
+    pub fn host_count(self) -> usize {
+        self.resolve(&InputShape::Unknown, 0)
+    }
+}
+
+/// The logical CPUs the `--fork` rule reads: 1 on a host that reports no count
+/// (where the decompression rules assume [`UNREPORTED_HOST_CPUS`]).
+fn fork_host_parallelism() -> usize {
+    reported_parallelism().unwrap_or(1)
+}
+
+/// The `auto` rule for `--fork` on a host of `available_parallelism` logical
+/// CPUs: the CPUs capped at [`FORK_AUTO_CAP`], except on an inflate-bound input
+/// ([`is_inflate_bound`]), where the annotators take the CPUs the `inflaters`
+/// leave, capped the same way and never fewer than half the capped CPU count
+/// (nor than 1). The half floor is for the host whose inflate-bound pool is as
+/// wide as its CPUs ([`INFLATE_BOUND_INFLATERS`] on a 32-CPU aarch64 host),
+/// where the inflaters leave nothing and one annotator would carry the whole
+/// file.
+pub fn resolve_fork_auto(
+    shape: &InputShape,
+    inflaters: usize,
+    available_parallelism: usize,
+) -> usize {
+    let host = available_parallelism.clamp(1, FORK_AUTO_CAP);
+    if !is_inflate_bound(shape) {
+        return host;
+    }
+    let beside_the_inflaters = available_parallelism.saturating_sub(inflaters);
+    beside_the_inflaters.clamp((host / 2).max(1), FORK_AUTO_CAP)
 }
 
 /// An input whose records inflate to at least this many bytes is bound by
 /// inflation rather than annotation; a wider inflater pool only pays there.
 pub const INFLATE_BOUND_BYTES_PER_RECORD: u64 = 8_000;
+
+/// Whether `shape` is an indexed input whose records inflate to at least
+/// [`INFLATE_BOUND_BYTES_PER_RECORD`] bytes, the shape the `auto` rules of
+/// `--decompression_threads` and `--fork` act on.
+pub fn is_inflate_bound(shape: &InputShape) -> bool {
+    matches!(
+        shape,
+        InputShape::Indexed {
+            inflated_bytes_per_record,
+            ..
+        } if *inflated_bytes_per_record >= INFLATE_BOUND_BYTES_PER_RECORD
+    )
+}
 
 /// Inflaters for an input bound by inflation on an aarch64 host, before the
 /// host's parallelism caps them: the count past which such an input stopped
@@ -1202,17 +1604,35 @@ pub const INFLATE_BOUND_INFLATERS: usize = DECOMPRESSION_THREADS_AUTO_CAP;
 
 /// The `--decompression_threads` value: the form the flag was given in, resolved
 /// to a count once the input's shape is known.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecompressionThreads {
     /// `0`: the host's available parallelism, capped at
     /// [`DECOMPRESSION_THREADS_AUTO_CAP`].
-    #[default]
     HostCapped,
     /// `auto`: the count the input's shape asks for
     /// ([`resolve_decompression_threads_auto`]).
     Auto,
     /// A positive count, lowered to the host's available parallelism.
     Fixed(usize),
+}
+
+/// The value an absent `--decompression_threads` takes: `auto` on an aarch64
+/// host, where an inflate-bound input gains from the wider pool, and `0` on
+/// any other, where [`INFLATE_BOUND_INFLATERS`] is the `0` rule's cap, so `auto`
+/// would read the input's shape to resolve the same count.
+#[cfg(target_arch = "aarch64")]
+pub const DECOMPRESSION_THREADS_DEFAULT: DecompressionThreads = DecompressionThreads::Auto;
+
+/// The value an absent `--decompression_threads` takes on a host that is not
+/// aarch64: the `0` rule.
+#[cfg(not(target_arch = "aarch64"))]
+pub const DECOMPRESSION_THREADS_DEFAULT: DecompressionThreads = DecompressionThreads::HostCapped;
+
+impl Default for DecompressionThreads {
+    /// [`DECOMPRESSION_THREADS_DEFAULT`].
+    fn default() -> Self {
+        DECOMPRESSION_THREADS_DEFAULT
+    }
 }
 
 impl FromStr for DecompressionThreads {
@@ -1305,14 +1725,184 @@ pub fn resolve_decompression_threads_auto(
     shape: &InputShape,
     available_parallelism: usize,
 ) -> usize {
-    match shape {
-        InputShape::Indexed {
-            inflated_bytes_per_record,
-            ..
-        } if *inflated_bytes_per_record >= INFLATE_BOUND_BYTES_PER_RECORD => {
-            INFLATE_BOUND_INFLATERS.min(available_parallelism)
+    if is_inflate_bound(shape) {
+        INFLATE_BOUND_INFLATERS.min(available_parallelism)
+    } else {
+        available_parallelism.min(DECOMPRESSION_THREADS_AUTO_CAP)
+    }
+}
+
+/// Cap for the `0` rule of `--compression_threads`, the default: a worker
+/// deflates a few hundred megabytes of output text per second, and a run's wall
+/// time stops falling once about sixteen workers keep pace with the annotators'
+/// output on a wide host, so the rule stops there rather than starting a deflate
+/// thread per CPU.
+pub const COMPRESSION_THREADS_AUTO_CAP: usize = 16;
+
+/// Resolve the `--compression_threads` value: `0` is the host's available
+/// logical CPUs capped at [`COMPRESSION_THREADS_AUTO_CAP`]; a positive count is
+/// lowered to the host's CPUs when the host reports them (a worker beyond them
+/// deflates nothing more), else kept as given. One is the single-threaded
+/// encoder on the writing thread.
+pub fn resolve_compression_threads(raw: usize) -> usize {
+    resolve_compression_threads_on(raw, reported_parallelism())
+}
+
+/// [`resolve_compression_threads`] on a host whose logical CPU count is
+/// `reported`, `None` when the host does not report one.
+fn resolve_compression_threads_on(raw: usize, reported: Option<usize>) -> usize {
+    match raw {
+        0 => reported
+            .unwrap_or(UNREPORTED_HOST_CPUS)
+            .min(COMPRESSION_THREADS_AUTO_CAP),
+        n => reported.map_or(n, |cpus| n.min(cpus)),
+    }
+}
+
+/// The `--reader_core` value: whether the reader thread, the one that scans
+/// the inflated input text, is given a physical core no other thread of the
+/// run may use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ReaderCore {
+    /// `auto`: a core is reserved by [`reserve_reader_core`]'s rule once the
+    /// input's records read as inflate-bound.
+    #[default]
+    Auto,
+    /// `none`: no core is reserved.
+    None,
+    /// A logical CPU number: the reader runs there and that CPU's core is
+    /// reserved for it, whatever the input.
+    Fixed(usize),
+}
+
+impl FromStr for ReaderCore {
+    type Err = String;
+
+    /// Accepts exactly `auto`, `none` and a CPU number written in digits alone.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "auto" {
+            return Ok(ReaderCore::Auto);
         }
-        _ => available_parallelism.min(DECOMPRESSION_THREADS_AUTO_CAP),
+        if s == "none" {
+            return Ok(ReaderCore::None);
+        }
+        let digits_only = !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+        match s.parse::<usize>() {
+            Ok(cpu) if digits_only => Ok(ReaderCore::Fixed(cpu)),
+            _ => Err(format!("'{s}' is not auto, none or a logical CPU number")),
+        }
+    }
+}
+
+impl fmt::Display for ReaderCore {
+    /// The value as the flag spells it.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ReaderCore::Auto => f.write_str("auto"),
+            ReaderCore::None => f.write_str("none"),
+            ReaderCore::Fixed(cpu) => write!(f, "{cpu}"),
+        }
+    }
+}
+
+/// The `--reader_core` text, validated as [`ReaderCore`] parses it; the
+/// command-line parser's value parser.
+pub fn reader_core_text(text: &str) -> Result<String, String> {
+    text.parse::<ReaderCore>().map(|_| text.to_string())
+}
+
+/// Physical cores a host needs before the `auto` rule reserves one for the
+/// reader: on a smaller host the annotators and the inflaters would lose too
+/// large a share of it.
+pub const READER_CORE_MIN_PHYSICAL_CORES: usize = 8;
+
+/// The threads outside the annotator pool and the inflater pool that stay busy
+/// through a run (the reader, the block reader's frame thread and the writer),
+/// counted when the run is tested for oversubscribing the physical cores.
+const READER_CORE_OTHER_THREADS: usize = 3;
+
+/// Records the reader scans before it decides its core: enough lines for the
+/// inflated bytes per record to stand for the file (a header's bytes spread
+/// over them move the figure by a few bytes), and few enough that a run of
+/// seconds decides within its first hundredth.
+pub const READER_CORE_DECISION_RECORDS: u64 = 4_096;
+
+/// The CPUs a reserved reader core leaves to each side.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReaderCoreReservation {
+    /// The CPU the reader runs on.
+    pub reader_cpu: usize,
+    /// The CPUs every other thread of the run keeps: the allowed set less the
+    /// reader's core.
+    pub others: Vec<usize>,
+}
+
+/// The reader's core under `value`, on a host of `topology` whose process may
+/// run on the `allowed` CPUs, for a run of `annotators` pool threads and
+/// `inflaters` block-inflating threads over an input whose records inflate to
+/// `inflated_bytes_per_record` bytes.
+///
+/// `auto` reserves the highest-numbered core whose every CPU is allowed when
+/// the host has hardware threads (a core with two or more allowed CPUs), the
+/// allowed CPUs make up at least [`READER_CORE_MIN_PHYSICAL_CORES`] whole
+/// cores, the run's threads outnumber those cores (`annotators + inflaters`
+/// plus the reader, frame and writer threads), and the records inflate to at
+/// least [`INFLATE_BOUND_BYTES_PER_RECORD`] bytes, the width at which the
+/// reader's scan of the inflated text sets the wall and every thread sharing
+/// its core slows it. A fixed CPU puts the reader on that CPU and reserves its
+/// core when the CPU and its core's other CPUs are allowed and leave another
+/// CPU for the rest of the run. `none`, a host without a topology, and any
+/// failed test reserve nothing.
+pub fn reserve_reader_core(
+    value: ReaderCore,
+    topology: Option<&CpuTopology>,
+    allowed: &[usize],
+    annotators: usize,
+    inflaters: usize,
+    inflated_bytes_per_record: u64,
+) -> Option<ReaderCoreReservation> {
+    let topology = topology?;
+    let whole_core = |core: &[usize]| core.iter().all(|cpu| allowed.contains(cpu));
+    let reserve = |core: &[usize], reader_cpu: usize| {
+        let others: Vec<usize> = allowed
+            .iter()
+            .copied()
+            .filter(|cpu| !core.contains(cpu))
+            .collect();
+        (!others.is_empty()).then_some(ReaderCoreReservation { reader_cpu, others })
+    };
+    match value {
+        ReaderCore::None => None,
+        ReaderCore::Fixed(cpu) => {
+            let core = topology.core_of(cpu)?;
+            if !whole_core(core) {
+                return None;
+            }
+            reserve(core, cpu)
+        }
+        ReaderCore::Auto => {
+            if inflated_bytes_per_record < INFLATE_BOUND_BYTES_PER_RECORD {
+                return None;
+            }
+            let whole_cores: Vec<&[usize]> = topology
+                .cores()
+                .iter()
+                .map(Vec::as_slice)
+                .filter(|core| whole_core(core))
+                .collect();
+            let hardware_threads = whole_cores.iter().any(|core| core.len() >= 2);
+            if !hardware_threads
+                || whole_cores.len() < READER_CORE_MIN_PHYSICAL_CORES
+                || annotators + inflaters + READER_CORE_OTHER_THREADS <= whole_cores.len()
+            {
+                return None;
+            }
+            whole_cores
+                .iter()
+                .rev()
+                .find(|core| core.len() >= 2)
+                .and_then(|core| reserve(core, core[0]))
+        }
     }
 }
 
@@ -1419,6 +2009,72 @@ pub fn resolve_output_buffer_size(raw: u64) -> usize {
     }
 }
 
+/// Resolve the `--parse_threads` value: `0` is `None`, the pool's built-in
+/// width (the host's available parallelism), else the thread count the cache
+/// shards parse on. The flag's parser bounds the value, so it fits a `usize`.
+pub fn resolve_parse_threads(raw: u64) -> Option<usize> {
+    if raw == 0 {
+        None
+    } else {
+        Some(raw as usize)
+    }
+}
+
+/// The `--prewarm_ahead` value: how far ahead of the reader the prewarm helper
+/// loads the input's chromosomes, in the input index's contig order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrewarmAhead {
+    /// A count of chromosomes after the one the reader has reached; `0` warms
+    /// the reached chromosome alone.
+    Chromosomes(usize),
+    /// `all`: every indexed contig the cache holds, queued when the reader
+    /// starts, so the helper loads the whole file's chromosomes in index order
+    /// however far the reader has got.
+    All,
+}
+
+/// The chromosomes an absent `--prewarm_ahead` warms ahead of the reader: one.
+pub const PREWARM_AHEAD_DEFAULT: PrewarmAhead = PrewarmAhead::Chromosomes(1);
+
+impl Default for PrewarmAhead {
+    /// [`PREWARM_AHEAD_DEFAULT`].
+    fn default() -> Self {
+        PREWARM_AHEAD_DEFAULT
+    }
+}
+
+impl FromStr for PrewarmAhead {
+    type Err = String;
+
+    /// Accepts exactly `all` and a count written in digits alone.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "all" {
+            return Ok(PrewarmAhead::All);
+        }
+        let digits_only = !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+        match s.parse::<usize>() {
+            Ok(count) if digits_only => Ok(PrewarmAhead::Chromosomes(count)),
+            _ => Err(format!("'{s}' is not all or a whole number of chromosomes")),
+        }
+    }
+}
+
+impl fmt::Display for PrewarmAhead {
+    /// The value as the flag spells it.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PrewarmAhead::Chromosomes(count) => write!(f, "{count}"),
+            PrewarmAhead::All => f.write_str("all"),
+        }
+    }
+}
+
+/// The `--prewarm_ahead` text, validated as [`PrewarmAhead`] parses it; the
+/// command-line parser's value parser.
+pub fn prewarm_ahead_text(text: &str) -> Result<String, String> {
+    text.parse::<PrewarmAhead>().map(|_| text.to_string())
+}
+
 /// The `--distance` value as (upstream, downstream) bp: one integer for both, or
 /// the pair `up,down`. The value is a `@LIST_FLAGS` entry, split with Perl's
 /// `split` (`Config.pm:761`, [`split_list_flag`]), so `5000,` is the one integer
@@ -1443,10 +2099,101 @@ fn parse_distance(s: &str) -> Result<(u64, u64), String> {
     Ok((integer(up)?, integer(down)?))
 }
 
+/// The epigenomes a `--cell_type` value names, each as its position in the
+/// cache's `cell_types` list, in the order given, a name given twice listed
+/// twice. The value is read by greedy longest match: at each position the
+/// longest list entry that the rest of the value starts with, followed by a
+/// comma or the end, is the next name, and the comma is consumed. Ensembl VEP
+/// splits the value on every comma (Config.pm:761) and tests each piece against
+/// the list it splits the cache's comma-joined `cell_types` line on
+/// (CacheDir.pm:174), so a name holding a comma (77 of the 112 GRCh38 names,
+/// `A549_(m,_58_y)` among them) can never be asked for there. A remainder of
+/// commas alone is the trailing empty fields Perl's `split` drops, and names
+/// nothing more; any other remainder that starts with no name is Ensembl VEP's
+/// refusal (AnnotationType/RegFeat.pm:85-92), naming the remainder up to its
+/// next comma, the piece Ensembl VEP's split would name, over the list.
+pub fn split_cell_types(value: &str, available: &[String]) -> Result<Vec<usize>, CliError> {
+    let mut names = Vec::new();
+    let mut rest = value;
+    while !rest.is_empty() {
+        let trailing_empty_fields = rest.bytes().all(|b| b == b',');
+        if trailing_empty_fields {
+            break;
+        }
+        let longest = available
+            .iter()
+            .enumerate()
+            .filter(|(_, name)| {
+                rest.starts_with(name.as_str())
+                    && matches!(rest.as_bytes().get(name.len()), None | Some(b','))
+            })
+            .max_by_key(|(_, name)| name.len());
+        let Some((index, name)) = longest else {
+            let unknown = rest.split_once(',').map_or(rest, |(piece, _)| piece);
+            return Err(CliError::cli(format!(
+                "Cell type \"{unknown}\" unavailable; available cell types are:\n{}",
+                available.join(",")
+            )));
+        };
+        names.push(index);
+        rest = rest[name.len()..].strip_prefix(',').unwrap_or("");
+    }
+    Ok(names)
+}
+
 /// Expand a leading `~` to the user's home directory
 /// ([`crate::argv::expand_tilde_text`] with `HOME`, empty when it is unset).
 fn expand_tilde(path: &str) -> String {
     crate::argv::expand_tilde_text(path, &std::env::var("HOME").unwrap_or_default())
+}
+
+/// The plugins directories of a run, from the one value `get_all_Plugins` reads
+/// (Runner.pm:907-923): every path `glob` expands it to ([`crate::glob::expand`],
+/// `:908`), each a search directory when it is one and a warning otherwise.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PluginDirs {
+    /// The value as given: `--dir_plugins`, else `<dir>/Plugins`.
+    pub pattern: String,
+    /// The matches that are directories, the last match first: `unshift @INC,
+    /// $dir` over the matches in order (`:921`) searches the last one first.
+    pub dirs: Vec<String>,
+    /// The matches that are not directories, in match order, each `Plugins
+    /// directory '<match>' not found.` when a plugin is named (`:911-916`).
+    pub not_found: Vec<String>,
+}
+
+impl PluginDirs {
+    /// `pattern` expanded under `HOME` (empty when it is unset) and split.
+    pub fn expand(pattern: &str) -> Self {
+        let home = std::env::var("HOME").unwrap_or_default();
+        let mut dirs = Vec::new();
+        let mut not_found = Vec::new();
+        for path in crate::glob::expand(pattern, &home) {
+            if std::path::Path::new(&path).is_dir() {
+                dirs.push(path);
+            } else {
+                not_found.push(path);
+            }
+        }
+        dirs.reverse();
+        Self {
+            pattern: pattern.to_string(),
+            dirs,
+            not_found,
+        }
+    }
+
+    /// Where a plugin that resolved to no file was looked for, for the `Failed to
+    /// load plugin` line: the directories searched; with none, the one match
+    /// that is no directory, or the value as given when there is no such match
+    /// or several.
+    pub fn searched(&self) -> String {
+        match (self.dirs.as_slice(), self.not_found.as_slice()) {
+            ([], [missing]) => missing.clone(),
+            ([], _) => self.pattern.clone(),
+            (dirs, _) => dirs.join(", "),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1457,6 +2204,15 @@ mod tests {
 
     fn config(argv: &[&str]) -> Config {
         Config::from_argv(argv).unwrap()
+    }
+
+    /// An indexed input shape whose records inflate to the given bytes.
+    fn indexed(inflated_bytes_per_record: u64) -> InputShape {
+        InputShape::Indexed {
+            inflated_bytes_per_record,
+            records_estimate: 1_000,
+            file_bytes: 1 << 20,
+        }
     }
 
     fn refusal(argv: &[&str]) -> String {
@@ -1496,7 +2252,6 @@ mod tests {
             &["vep", "--af_exac", "--help"][..],
             &["vep", "--help", "--af_exac"][..],
             &["vep", "--bogus", "--help"][..],
-            &["vep", "--stats_html", "--help"][..],
             &["vep", "extra", "--help"][..],
             &["vep", "--fork=x", "--help"][..],
             &["vep", "--fork", "--help"][..],
@@ -1526,7 +2281,8 @@ mod tests {
     }
 
     /// The auto thread count never exceeds the cap, whatever the host offers; an
-    /// explicit value passes through uncapped.
+    /// explicit value passes through uncapped, through `resolve_fork` and
+    /// through the configuration's `Fork` alike.
     #[test]
     fn auto_fork_is_capped_and_explicit_fork_is_not() {
         let auto = resolve_fork(0);
@@ -1536,6 +2292,173 @@ mod tests {
         );
         assert_eq!(resolve_fork(1), 1);
         assert_eq!(resolve_fork(64), 64);
+        assert_eq!(config(&["vep"]).fork, Fork::Auto);
+        assert_eq!(config(&["vep", "--fork", "0"]).fork, Fork::Auto);
+        assert_eq!(config(&["vep", "--fork", "64"]).fork, Fork::Fixed(64));
+        assert_eq!(Fork::Auto.host_count(), auto);
+        assert_eq!(Fork::Fixed(64).host_count(), 64);
+        assert_eq!(
+            Fork::Fixed(3).resolve(&indexed(INFLATE_BOUND_BYTES_PER_RECORD), 10),
+            3
+        );
+        assert_eq!(Fork::Auto.resolve(&InputShape::Unknown, 10), auto);
+    }
+
+    /// An absent `--decompression_threads` is `auto` on an aarch64 host and the
+    /// `0` rule on any other, where `auto` would resolve the same count on every
+    /// shape: `INFLATE_BOUND_INFLATERS` is the `0` rule's cap there.
+    #[test]
+    fn decompression_threads_default_is_auto_on_aarch64_and_host_capped_elsewhere() {
+        let default = config(&["vep"]).decompression_threads;
+        assert_eq!(default, DecompressionThreads::default());
+        assert_eq!(default, DECOMPRESSION_THREADS_DEFAULT);
+        if cfg!(target_arch = "aarch64") {
+            assert_eq!(default, DecompressionThreads::Auto);
+            assert_eq!(INFLATE_BOUND_INFLATERS, 32);
+        } else {
+            assert_eq!(default, DecompressionThreads::HostCapped);
+            assert_eq!(INFLATE_BOUND_INFLATERS, DECOMPRESSION_THREADS_AUTO_CAP);
+            for shape in [
+                InputShape::Unknown,
+                indexed(INFLATE_BOUND_BYTES_PER_RECORD - 1),
+                indexed(INFLATE_BOUND_BYTES_PER_RECORD),
+            ] {
+                for cpus in [1, 4, 10, 32, 64] {
+                    assert_eq!(
+                        resolve_decompression_threads_on(
+                            DecompressionThreads::Auto,
+                            &shape,
+                            Some(cpus)
+                        ),
+                        resolve_decompression_threads_on(
+                            DecompressionThreads::HostCapped,
+                            &shape,
+                            Some(cpus)
+                        ),
+                        "{shape:?} on {cpus} CPUs"
+                    );
+                }
+            }
+        }
+        // The explicit forms keep their meaning on every architecture.
+        assert_eq!(
+            config(&["vep", "--decompression_threads", "0"]).decompression_threads,
+            DecompressionThreads::HostCapped
+        );
+        assert_eq!(
+            config(&["vep", "--decompression_threads", "auto"]).decompression_threads,
+            DecompressionThreads::Auto
+        );
+    }
+
+    /// `--fork 0` on an inflate-bound input gives the annotators the CPUs the
+    /// inflaters leave, capped at `FORK_AUTO_CAP` and floored at half the capped
+    /// CPU count; on any other shape, and whatever the inflaters, it is the
+    /// host's rule.
+    #[test]
+    fn fork_auto_leaves_the_inflaters_their_cores() {
+        let wide = indexed(INFLATE_BOUND_BYTES_PER_RECORD);
+        let narrow = indexed(INFLATE_BOUND_BYTES_PER_RECORD - 1);
+        // (shape, inflaters, cpus, annotators)
+        for (shape, inflaters, cpus, annotators) in [
+            // The inflaters' CPUs are left to them.
+            (&wide, 10, 32, 22),
+            (&wide, 10, 16, 8),
+            (&wide, 4, 8, 4),
+            (&wide, 2, 8, 6),
+            // The cap holds where the inflaters leave more than it.
+            (&wide, 10, 64, 32),
+            (&wide, 32, 64, 32),
+            (&wide, 0, 64, 32),
+            // The floor: an inflater pool as wide as the host leaves nothing.
+            (&wide, 32, 32, 16),
+            (&wide, 4, 4, 2),
+            (&wide, 2, 2, 1),
+            (&wide, 1, 1, 1),
+            (&wide, 40, 32, 16),
+            // A narrow or unknown shape keeps the host's rule.
+            (&narrow, 10, 32, 32),
+            (&narrow, 32, 32, 32),
+            (&InputShape::Unknown, 10, 32, 32),
+            (&InputShape::Unknown, 0, 64, 32),
+            (&InputShape::Unknown, 0, 1, 1),
+        ] {
+            assert_eq!(
+                resolve_fork_auto(shape, inflaters, cpus),
+                annotators,
+                "{shape:?} with {inflaters} inflaters on {cpus} CPUs"
+            );
+        }
+        // Never below 1, whatever the host reports.
+        assert_eq!(resolve_fork_auto(&wide, 5, 0), 1);
+        assert_eq!(resolve_fork_auto(&InputShape::Unknown, 0, 0), 1);
+        // The inflate-bound test is the one `--decompression_threads auto` uses.
+        assert!(is_inflate_bound(&wide));
+        assert!(!is_inflate_bound(&narrow));
+        assert!(!is_inflate_bound(&InputShape::Unknown));
+    }
+
+    /// `--parse_threads` and `--prewarm_ahead` reach the configuration: `0`
+    /// parse threads is the pool's built-in width, a count pins it and the
+    /// flag's bound refuses more; `--prewarm_ahead` takes a count or `all`, one
+    /// chromosome without the flag.
+    #[test]
+    fn parse_pool_is_bounded() {
+        assert_eq!(resolve_parse_threads(0), None);
+        assert_eq!(resolve_parse_threads(1), Some(1));
+        assert_eq!(resolve_parse_threads(1024), Some(1024));
+        assert_eq!(config(&["vep"]).parse_threads, None);
+        assert_eq!(config(&["vep", "--parse_threads", "0"]).parse_threads, None);
+        assert_eq!(
+            config(&["vep", "--parse_threads", "16"]).parse_threads,
+            Some(16)
+        );
+        for text in ["1025", "-1", "auto", "1.5"] {
+            match Config::from_argv(["vep", "--parse_threads", text]).unwrap_err() {
+                ParseFailure::Usage(e) => assert!(
+                    matches!(
+                        e.kind(),
+                        clap::error::ErrorKind::ValueValidation
+                            | clap::error::ErrorKind::UnknownArgument
+                    ),
+                    "{text}: {e}"
+                ),
+                ParseFailure::Refused(e) => panic!("{text} refused instead: {e}"),
+            }
+        }
+
+        assert_eq!(config(&["vep"]).prewarm_ahead, PrewarmAhead::Chromosomes(1));
+        assert_eq!(config(&["vep"]).prewarm_ahead, PrewarmAhead::default());
+        for (text, value) in [
+            ("0", PrewarmAhead::Chromosomes(0)),
+            ("1", PrewarmAhead::Chromosomes(1)),
+            ("2", PrewarmAhead::Chromosomes(2)),
+            ("all", PrewarmAhead::All),
+        ] {
+            assert_eq!(text.parse::<PrewarmAhead>().unwrap(), value, "{text}");
+            assert_eq!(prewarm_ahead_text(text).unwrap(), text);
+            assert_eq!(value.to_string(), text);
+            assert_eq!(
+                config(&["vep", "--prewarm_ahead", text]).prewarm_ahead,
+                value,
+                "{text}"
+            );
+        }
+        for text in ["-1", "ALL", "", "+1", "1.5", "every"] {
+            assert!(text.parse::<PrewarmAhead>().is_err(), "{text}");
+            assert!(prewarm_ahead_text(text).is_err(), "{text}");
+            match Config::from_argv(["vep", "--prewarm_ahead", text]).unwrap_err() {
+                ParseFailure::Usage(e) => assert!(
+                    matches!(
+                        e.kind(),
+                        clap::error::ErrorKind::ValueValidation
+                            | clap::error::ErrorKind::UnknownArgument
+                    ),
+                    "{text}: {e}"
+                ),
+                ParseFailure::Refused(e) => panic!("{text} refused instead: {e}"),
+            }
+        }
     }
 
     /// `0` on each numeric runtime knob is the built-in value; any other value
@@ -1580,7 +2503,7 @@ mod tests {
         }
         assert_eq!(
             config(&["vep"]).decompression_threads,
-            DecompressionThreads::HostCapped
+            DecompressionThreads::default()
         );
         assert_eq!(DecompressionThreads::Fixed(7).to_string(), "7");
         assert_eq!(DecompressionThreads::Auto.to_string(), "auto");
@@ -1602,17 +2525,143 @@ mod tests {
         }
     }
 
+    /// `--reader_core` takes exactly `auto`, `none` and a CPU number in digits;
+    /// everything else is clap's usage error, and the default is `auto`.
+    #[test]
+    fn reader_core_parses_its_three_forms() {
+        for (text, value) in [
+            ("auto", ReaderCore::Auto),
+            ("none", ReaderCore::None),
+            ("0", ReaderCore::Fixed(0)),
+            ("31", ReaderCore::Fixed(31)),
+        ] {
+            assert_eq!(text.parse::<ReaderCore>().unwrap(), value, "{text}");
+            assert_eq!(reader_core_text(text).unwrap(), text);
+            assert_eq!(
+                config(&["vep", "--reader_core", text]).reader_core,
+                value,
+                "{text}"
+            );
+            assert_eq!(value.to_string(), text);
+        }
+        assert_eq!(config(&["vep"]).reader_core, ReaderCore::Auto);
+        for text in ["-1", "1.5", "AUTO", "None", "", "+1", "0x10", "auto1"] {
+            assert!(text.parse::<ReaderCore>().is_err(), "{text}");
+            assert!(reader_core_text(text).is_err(), "{text}");
+            match Config::from_argv(["vep", "--reader_core", text]).unwrap_err() {
+                ParseFailure::Usage(e) => assert!(
+                    matches!(
+                        e.kind(),
+                        clap::error::ErrorKind::ValueValidation
+                            | clap::error::ErrorKind::UnknownArgument
+                    ),
+                    "{text}: {e}"
+                ),
+                ParseFailure::Refused(e) => panic!("{text} refused instead: {e}"),
+            }
+        }
+    }
+
+    /// The reader-core rule over its inputs, on a sixteen-core host of paired
+    /// hardware threads (CPU `i` with `i + 16`) with every CPU allowed:
+    /// `auto` reserves the last core, CPUs 15 and 31, for an inflate-bound input
+    /// of a run that oversubscribes the cores (16 annotators, 10 inflaters), the
+    /// reader on CPU 15 and the other 30 CPUs to the rest; the same host reserves
+    /// nothing for an input one byte under the threshold, for a run of 1
+    /// annotator and 10 inflaters (14 threads on 16 cores), under `none`, or
+    /// without a topology. A host whose cores are single CPUs (no hardware
+    /// threads), one of 7 paired cores, and one whose allowed set lacks a CPU of
+    /// every core but 7 reserve nothing under `auto`; one whose allowed set
+    /// lacks CPU 31 alone reserves the last whole core, CPUs 14 and 30. A fixed
+    /// CPU puts the reader on that CPU and reserves its core whatever the input
+    /// and the counts, and nothing when the CPU is outside the topology, outside
+    /// the allowed set, or its core is the only one allowed.
+    #[test]
+    fn reader_core_reserved_on_oversubscribed_paired_cores_only() {
+        let paired = |cores: usize| {
+            CpuTopology::from_cores((0..cores).map(|core| vec![core, core + cores]).collect())
+        };
+        let single = CpuTopology::from_cores((0..32).map(|cpu| vec![cpu]).collect());
+        let host = paired(16);
+        let all: Vec<usize> = (0..32).collect();
+        let wide = INFLATE_BOUND_BYTES_PER_RECORD;
+        let reserve = |value, topology: Option<&CpuTopology>, allowed: &[usize], a, i, b| {
+            reserve_reader_core(value, topology, allowed, a, i, b)
+        };
+
+        let reserved = reserve(ReaderCore::Auto, Some(&host), &all, 16, 10, wide).unwrap();
+        assert_eq!(reserved.reader_cpu, 15);
+        assert_eq!(
+            reserved.others,
+            all.iter()
+                .copied()
+                .filter(|&c| c != 15 && c != 31)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            reserve(ReaderCore::Auto, Some(&host), &all, 16, 10, wide - 1),
+            None
+        );
+        assert_eq!(
+            reserve(ReaderCore::Auto, Some(&host), &all, 1, 10, wide),
+            None
+        );
+        assert!(reserve(ReaderCore::Auto, Some(&host), &all, 4, 10, wide).is_some());
+        assert_eq!(
+            reserve(ReaderCore::None, Some(&host), &all, 16, 10, wide),
+            None
+        );
+        assert_eq!(reserve(ReaderCore::Auto, None, &all, 16, 10, wide), None);
+        assert_eq!(
+            reserve(ReaderCore::Auto, Some(&single), &all, 16, 10, wide),
+            None
+        );
+        let small = paired(7);
+        let small_all: Vec<usize> = (0..14).collect();
+        assert_eq!(
+            reserve(ReaderCore::Auto, Some(&small), &small_all, 16, 10, wide),
+            None
+        );
+        // Seven whole cores: CPUs 0 to 6 with 16 to 22, the other cores missing a CPU.
+        let seven_whole: Vec<usize> = (0..7).chain(16..23).chain(7..16).collect();
+        assert_eq!(
+            reserve(ReaderCore::Auto, Some(&host), &seven_whole, 16, 10, wide),
+            None
+        );
+        let without_31: Vec<usize> = (0..31).collect();
+        let reserved = reserve(ReaderCore::Auto, Some(&host), &without_31, 16, 10, wide).unwrap();
+        assert_eq!(reserved.reader_cpu, 14);
+        assert_eq!(reserved.others.len(), 29);
+        assert!(!reserved.others.contains(&30));
+
+        let fixed = reserve(ReaderCore::Fixed(3), Some(&host), &all, 1, 0, 0).unwrap();
+        assert_eq!(fixed.reader_cpu, 3);
+        assert!(!fixed.others.contains(&3) && !fixed.others.contains(&19));
+        assert_eq!(fixed.others.len(), 30);
+        let fixed = reserve(ReaderCore::Fixed(19), Some(&host), &all, 1, 0, 0).unwrap();
+        assert_eq!(fixed.reader_cpu, 19);
+        assert!(!fixed.others.contains(&3) && !fixed.others.contains(&19));
+        assert_eq!(
+            reserve(ReaderCore::Fixed(99), Some(&host), &all, 1, 0, 0),
+            None
+        );
+        assert_eq!(
+            reserve(ReaderCore::Fixed(31), Some(&host), &without_31, 1, 0, 0),
+            None
+        );
+        assert_eq!(
+            reserve(ReaderCore::Fixed(0), Some(&host), &[0, 16], 1, 0, 0),
+            None
+        );
+        assert_eq!(reserve(ReaderCore::Fixed(0), None, &all, 1, 0, 0), None);
+    }
+
     /// The `auto` rule over the three shapes and both sides of the threshold:
     /// an unknown shape and an input below the threshold take the `0` rule, an
     /// input at or above it takes the inflate-bound pool, and the host's
     /// parallelism caps both.
     #[test]
     fn auto_decompression_threads_follow_the_input_shape() {
-        let indexed = |inflated_bytes_per_record: u64| InputShape::Indexed {
-            inflated_bytes_per_record,
-            records_estimate: 1_000,
-            file_bytes: 1 << 20,
-        };
         let wide = 64;
         assert_eq!(
             resolve_decompression_threads_auto(&InputShape::Unknown, wide),
@@ -1794,6 +2843,34 @@ mod tests {
         );
     }
 
+    /// The `0` compression worker count is the host's CPUs within its cap; a
+    /// pinned count is kept up to the host's logical CPUs and lowered to them
+    /// above that, and kept whole on a host that reports no count.
+    #[test]
+    fn compression_threads_pinned_up_to_the_host_cpus() {
+        let cpus = std::thread::available_parallelism().unwrap().get();
+        let host_capped = resolve_compression_threads(0);
+        assert_eq!(host_capped, cpus.min(COMPRESSION_THREADS_AUTO_CAP));
+        assert!((1..=COMPRESSION_THREADS_AUTO_CAP).contains(&host_capped));
+        assert_eq!(resolve_compression_threads(1), 1);
+        assert_eq!(resolve_compression_threads(cpus), cpus);
+        assert_eq!(resolve_compression_threads(cpus + 1), cpus);
+        assert_eq!(resolve_compression_threads(usize::MAX), cpus);
+
+        assert_eq!(resolve_compression_threads_on(1, None), 1);
+        assert_eq!(resolve_compression_threads_on(64, None), 64);
+        assert_eq!(
+            resolve_compression_threads_on(0, None),
+            UNREPORTED_HOST_CPUS
+        );
+        assert_eq!(resolve_compression_threads_on(64, Some(16)), 16);
+        assert_eq!(resolve_compression_threads_on(0, Some(2)), 2);
+        assert_eq!(
+            resolve_compression_threads_on(0, Some(COMPRESSION_THREADS_AUTO_CAP * 4)),
+            COMPRESSION_THREADS_AUTO_CAP
+        );
+    }
+
     /// The flags `--everything` turns on are Ensembl VEP's set (Config.pm:351-380)
     /// closed under its own option sets (`hgvs` at :382-388, `mane` at :580-586,
     /// `check_existing` at :448-453), and nothing else: `allele_number` and
@@ -1891,10 +2968,12 @@ mod tests {
     }
 
     /// The `--everything` help, which the CLI reference prints, states what its
-    /// `--regulatory` part writes, the regulatory and motif rows, and the two
-    /// omissions, motif scores and cell-type activity.
+    /// `--regulatory` part writes, the regulatory and motif rows with every
+    /// motif field, and names no exclusion: `--everything` switches on exactly
+    /// Ensembl VEP's set (Config.pm:351-380), `cell_type` outside it on both
+    /// engines, so `CELL_TYPE` comes from `--cell_type` beside the set.
     #[test]
-    fn everything_help_names_the_regulatory_rows_and_omissions() {
+    fn everything_help_names_no_exclusion() {
         let mut command = Args::command_with_error_table();
         command.build();
         let help = command
@@ -1905,12 +2984,212 @@ mod tests {
             .unwrap();
         for phrase in [
             "regulatory and motif rows",
-            "motif scores",
-            "cell-type activity",
-            "omitted",
+            "every motif field included",
+            "CELL_TYPE is added by --cell_type",
         ] {
             assert!(help.contains(phrase), "{phrase:?} missing from {help}");
         }
+        for word in [
+            "omitted",
+            "not implemented",
+            "no effect",
+            "never",
+            "except",
+            "without",
+        ] {
+            assert!(
+                !help.contains(word),
+                "{word:?} names an exclusion in {help}"
+            );
+        }
+        assert!(!FlagState::implied_by("everything").contains(&"cell_type"));
+    }
+
+    /// `--cell_type` is read against the cache's epigenome list by greedy
+    /// longest match (`split_cell_types`), since a name may hold a comma:
+    /// `A549_(m,_58_y),BJ_(m)` names two epigenomes, and
+    /// `common_myeloid_progenitor,_CD34-positive_(27-36_y)` one, where Ensembl
+    /// VEP's comma split (Config.pm:761) would ask for `A549_(m` and `_58_y)`.
+    /// Trailing commas name nothing more, as Perl's `split` drops the trailing
+    /// empty fields, one or several; a name given twice is listed twice.
+    #[test]
+    fn cell_type_splits_by_known_names() {
+        let available: Vec<String> = [
+            "A549_(m,_58_y)",
+            "BJ_(m)",
+            "H1_(m)",
+            "H1_(m)_derived_neuronal_progenitor",
+            "common_myeloid_progenitor,_CD34-positive_(27-36_y)",
+            "astrocyte",
+        ]
+        .map(str::to_string)
+        .to_vec();
+        let names = |value: &str| -> Vec<&str> {
+            split_cell_types(value, &available)
+                .unwrap()
+                .into_iter()
+                .map(|index| available[index].as_str())
+                .collect()
+        };
+        assert_eq!(names("A549_(m,_58_y),BJ_(m)"), ["A549_(m,_58_y)", "BJ_(m)"]);
+        assert_eq!(
+            names("common_myeloid_progenitor,_CD34-positive_(27-36_y)"),
+            ["common_myeloid_progenitor,_CD34-positive_(27-36_y)"]
+        );
+        assert_eq!(
+            names("H1_(m),H1_(m)_derived_neuronal_progenitor,astrocyte,"),
+            ["H1_(m)", "H1_(m)_derived_neuronal_progenitor", "astrocyte"]
+        );
+        assert_eq!(names("astrocyte,astrocyte"), ["astrocyte", "astrocyte"]);
+        assert_eq!(names("astrocyte,,"), ["astrocyte"]);
+        assert_eq!(names("A549_(m,_58_y),,,"), ["A549_(m,_58_y)"]);
+        assert_eq!(names(""), [] as [&str; 0]);
+        assert_eq!(names(",,"), [] as [&str; 0]);
+    }
+
+    /// A remainder that starts with no name of the list is refused with Ensembl
+    /// VEP's text (AnnotationType/RegFeat.pm:85-92): the piece up to the next
+    /// comma, then the list on its own line; a prefix of a name (`astro`), a
+    /// name run into the next without a comma (`astrocyteBJ_(m)`) and an empty
+    /// piece before a name (`,astrocyte`, `astrocyte,,HUVEC`), which Perl's
+    /// `split` keeps where it drops a trailing one, are refused the same way.
+    #[test]
+    fn cell_type_unknown_name_fails_with_ensembl_veps_text() {
+        let available: Vec<String> = ["A549_(m,_58_y)", "BJ_(m)", "HUVEC", "astrocyte"]
+            .map(str::to_string)
+            .to_vec();
+        let refused = |value: &str| split_cell_types(value, &available).unwrap_err().to_string();
+        assert_eq!(
+            refused("HUVEC,bogus"),
+            "ERROR: [cli] Cell type \"bogus\" unavailable; available cell types are:\n\
+             A549_(m,_58_y),BJ_(m),HUVEC,astrocyte"
+        );
+        assert!(refused("bogus,HUVEC").contains("Cell type \"bogus\" unavailable"));
+        assert!(refused("astro").contains("Cell type \"astro\" unavailable"));
+        assert!(refused("astrocyteBJ_(m)").contains("Cell type \"astrocyteBJ_(m)\" unavailable"));
+        assert!(refused(",astrocyte").contains("Cell type \"\" unavailable"));
+        assert!(refused("astrocyte,,HUVEC").contains("Cell type \"\" unavailable"));
+        assert!(refused("A549_(m,_58_y").contains("Cell type \"A549_(m\" unavailable"));
+    }
+
+    /// `--cell_type` switches `--regulatory` on through the option set
+    /// (Config.pm:427-432), and its value is kept as given for the cache-time
+    /// split; a value Ensembl VEP's comma split reads as an empty list (`""`,
+    /// `,`) is not an active flag (`_is_flag_active`, Config.pm:902-905), so it
+    /// switches nothing on and names no epigenome.
+    #[test]
+    fn cell_type_switches_regulatory_on() {
+        let c = config(&["vep", "--cell_type", "A549_(m,_58_y),BJ_(m)"]);
+        assert!(c.regulatory);
+        assert_eq!(c.cell_type.as_deref(), Some("A549_(m,_58_y),BJ_(m)"));
+        assert_eq!(FlagState::implied_by("cell_type"), ["regulatory"]);
+        for value in ["", ","] {
+            let c = config(&["vep", "--cell_type", value]);
+            assert!(!c.regulatory, "{value:?}");
+            assert!(c.cell_type.is_none(), "{value:?}");
+        }
+        let c = config(&["vep", "--regulatory"]);
+        assert!(c.cell_type.is_none());
+    }
+
+    /// `--regulatory_gff` takes Ensembl VEP's grammar (`AnnotationSourceAdaptor.pm:237-262`):
+    /// a bare name is the `file`; otherwise comma-separated `key=value` pairs,
+    /// refused with its four texts when a pair has no `=` or an empty value, a
+    /// key is not `emars`, `file` or `motifs`, or every value is false in Perl.
+    /// A trailing comma is no pair, as Perl's `split` drops it; a later pair
+    /// overwrites an earlier one with the same key; a value false in Perl
+    /// names no file; and the flag's option set switches `--regulatory` on,
+    /// except for a value that is itself false.
+    #[test]
+    fn regulatory_gff_grammar_matches_ensembl_vep() {
+        let gff = |value: &str| config(&["vep", "--regulatory_gff", value]);
+        let c = gff("reg.gff3.gz");
+        assert!(c.regulatory);
+        assert_eq!(
+            c.regulatory_gff,
+            Some(RegulatoryGff {
+                file: Some("reg.gff3.gz".into()),
+                ..Default::default()
+            })
+        );
+        let c = gff("motifs=m.gff3.gz,file=r.gff3.gz,emars=e.gff.gz,");
+        assert_eq!(
+            c.regulatory_gff,
+            Some(RegulatoryGff {
+                file: Some("r.gff3.gz".into()),
+                emars: Some("e.gff.gz".into()),
+                motifs: Some("m.gff3.gz".into()),
+            })
+        );
+        assert_eq!(
+            c.regulatory_gff
+                .as_ref()
+                .unwrap()
+                .sources()
+                .collect::<Vec<_>>(),
+            [
+                ("file", "r.gff3.gz"),
+                ("emars", "e.gff.gz"),
+                ("motifs", "m.gff3.gz")
+            ]
+        );
+        assert_eq!(
+            gff("file=a.gff3.gz,file=b.gff3.gz,motifs=0").regulatory_gff,
+            Some(RegulatoryGff {
+                file: Some("b.gff3.gz".into()),
+                ..Default::default()
+            })
+        );
+        // A bare name that holds a comma is one file name.
+        assert_eq!(
+            gff("a.gff,b.gff").regulatory_gff.unwrap().file.as_deref(),
+            Some("a.gff,b.gff")
+        );
+        let c = gff("0");
+        assert!(c.regulatory_gff.is_none() && !c.regulatory);
+
+        let refused = |value: &str| refusal(&["vep", "--regulatory_gff", value]);
+        assert_eq!(
+            refused("file=r.gff3.gz,motifs"),
+            "ERROR: [cli] Failed to parse --regulatory_gff parameter \"motifs\"; expected key=value"
+        );
+        assert_eq!(
+            refused("file=,motifs=m.gff3.gz"),
+            "ERROR: [cli] Failed to parse --regulatory_gff parameter \"file=\"; expected key=value"
+        );
+        assert_eq!(
+            refused("file=r.gff3.gz,,motifs=m.gff3.gz"),
+            "ERROR: [cli] Failed to parse --regulatory_gff parameter \"\"; expected key=value"
+        );
+        assert_eq!(
+            refused("matrices=x.json,file=r.gff3.gz,activity=a.tsv"),
+            "ERROR: [cli] Unsupported --regulatory_gff key(s): activity, matrices\nSupported keys: emars, file, motifs"
+        );
+        assert_eq!(
+            refused("file=0,emars=0"),
+            "ERROR: [cli] --regulatory_gff requires at least one of: emars, file, motifs"
+        );
+    }
+
+    /// `--extended_promoters` is read by the GFF regulatory source alone
+    /// (`RegFeat.pm:170`, a shortcut of that source; no `REQUIRES` entry names
+    /// it, `Config.pm:607-612`), so without `--regulatory_gff` the configuration
+    /// is the one the same line resolves to without the flag, the flag's own
+    /// field and the recorded command line apart.
+    #[test]
+    fn extended_promoters_without_regulatory_gff_changes_nothing() {
+        let with = config(&["vep", "--extended_promoters", "--regulatory"]);
+        let without = config(&["vep", "--regulatory"]);
+        assert!(with.extended_promoters && !without.extended_promoters);
+        assert!(with.regulatory_gff.is_none());
+        let settled = Config {
+            extended_promoters: false,
+            command_line: without.command_line.clone(),
+            ..with
+        };
+        assert_eq!(format!("{settled:?}"), format!("{without:?}"));
+        let alone = config(&["vep", "--extended_promoters"]);
+        assert!(!alone.regulatory, "the flag switches nothing on");
     }
 
     /// An option set overwrites an explicit value, as `apply_option_sets` does
@@ -2108,6 +3387,48 @@ mod tests {
             ]);
             assert_eq!(c.compress_output.as_deref(), Some("bgzip"), "{format}");
         }
+    }
+
+    /// `--parquet_partition` takes `chrom` and nothing else, as a clap value
+    /// enumeration, and is refused under the output component with every format
+    /// but Parquet, whose configuration carries the value.
+    #[test]
+    fn parquet_partition_takes_chrom_alone() {
+        assert_eq!(
+            usage_kind(&["vep", "--parquet_partition", "gene"]),
+            clap::error::ErrorKind::InvalidValue
+        );
+        let message = usage_error(&["vep", "--parquet_partition", "gene"]);
+        assert!(
+            message.contains("invalid value 'gene' for '--parquet_partition <COLUMN>'")
+                && message.contains("[possible values: chrom]"),
+            "{message}"
+        );
+        for argv in [
+            &["vep", "--tab", "--parquet_partition", "chrom"][..],
+            &["vep", "--parquet_partition", "chrom"][..],
+            &["vep", "--vcf", "--parquet_partition", "chrom"][..],
+        ] {
+            assert_eq!(
+                refusal(argv),
+                "ERROR: [output] --parquet_partition applies to --output_format parquet",
+                "{argv:?}"
+            );
+        }
+        let c = config(&[
+            "vep",
+            "--output_format",
+            "parquet",
+            "--parquet_partition",
+            "chrom",
+            "-o",
+            "x.parquet",
+        ]);
+        assert_eq!(c.parquet_partition.as_deref(), Some("chrom"));
+        assert_eq!(
+            config(&["vep", "--output_format", "parquet", "-o", "x.parquet"]).parquet_partition,
+            None
+        );
     }
 
     /// `%VALID` holds `gzip` and `bgzip` for `--compress_output` (Config.pm:603) and
@@ -2308,6 +3629,39 @@ mod tests {
             refusal(&["vep", "--refseq", "--merged"]),
             "ERROR: [cli] Can't use --refseq and --merged together"
         );
+    }
+
+    /// `--all_refseq` (`Config.pm:98`) is accepted beside `--refseq` and beside
+    /// `--merged`, the caches whose RefSeq clause it switches off
+    /// (`AnnotationType/Transcript.pm:237`), and alone, where Ensembl VEP accepts
+    /// it too and the clause never runs; `%INCOMPATIBLE` (`Config.pm:615-631`)
+    /// names no pair with it.
+    #[test]
+    fn all_refseq_is_accepted_beside_refseq_and_merged() {
+        use crate::transcript_index::TranscriptSet;
+
+        let refseq = config(&["vep", "--refseq", "--all_refseq"]);
+        assert!(refseq.refseq && refseq.all_refseq);
+        let merged = config(&["vep", "--merged", "--all_refseq"]);
+        assert!(merged.merged && merged.all_refseq);
+        let alone = config(&["vep", "--all_refseq"]);
+        assert!(alone.all_refseq && !alone.refseq && !alone.merged);
+        assert_eq!(
+            TranscriptSet::from_config(&alone),
+            TranscriptSet {
+                all_refseq: true,
+                ..TranscriptSet::default()
+            }
+        );
+        assert!(TranscriptSet::from_config(&alone).accepts_model(
+            "LOC100419737",
+            "21",
+            None,
+            false,
+            false
+        ));
+        assert!(!config(&["vep"]).all_refseq);
+        assert!(FlagState::implied_by("all_refseq").is_empty());
     }
 
     /// `--most_severe` refuses every flag of its `%INCOMPATIBLE` list
@@ -2604,19 +3958,245 @@ mod tests {
         assert_eq!(state.check(false).unwrap_err(), message);
     }
 
+    /// A `--convert` value Perl reads as false, `0` or the empty value, leaves
+    /// the flag inactive (Config.pm:902-906), so the deprecation check passes it
+    /// (:977) and the run proceeds; any other value is refused, `00` included.
+    #[test]
+    fn convert_with_a_false_value_proceeds() {
+        for argv in [
+            &["vep", "--convert", "0"][..],
+            &["vep", "--convert", ""][..],
+            &["vep", "--convert=0"][..],
+            &["vep", "--convert="][..],
+        ] {
+            assert!(Config::from_argv(argv).is_ok(), "{argv:?}");
+        }
+        assert_eq!(
+            error_table_entry("convert").unwrap().help(),
+            "Refused with an error unless its value is 0 or empty: --convert has been deprecated"
+        );
+        for value in ["vcf", "00", "1"] {
+            assert_eq!(
+                refusal(&["vep", "--convert", value]),
+                "ERROR: [cli] --convert has been deprecated",
+                "{value}"
+            );
+        }
+    }
+
     /// `custom` is read from the state after the option sets, which the `gff`,
-    /// `gtf`, `bigwig`, `phyloP` and `phastCons` sets append to (Config.pm:531-563).
+    /// `gtf`, `bigwig`, `phyloP` and `phastCons` sets append to (Config.pm:531-564);
+    /// `gff` and `gtf` are refused before the sets run, so `bigwig` stands in.
     #[test]
     fn custom_follows_the_state_the_option_sets_append_to() {
         let mut parsed = parse_command_line(["vep", "--custom", "x.bed,X,bed"]).unwrap();
-        parsed.state.set("gff", "a.gff");
+        parsed.state.set("bigwig", "a.bw");
         let c = Config::from_parsed(parsed).unwrap();
-        assert_eq!(c.custom, ["x.bed,X,bed", "file=a.gff,format=gff"]);
+        assert_eq!(c.custom, ["x.bed,X,bed", "a.bw,,bigwig,exact"]);
         assert_eq!(
             config(&["vep", "--custom", "y.bed,Y,bed"]).custom,
             ["y.bed,Y,bed"]
         );
         assert!(config(&["vep"]).custom.is_empty());
+    }
+
+    /// `--custom_multi_allelic` needs a `--custom` source (`%REQUIRES`,
+    /// Config.pm:611; the refusal text Config.pm:972), and is read with one.
+    #[test]
+    fn custom_multi_allelic_requires_custom() {
+        assert_eq!(
+            refusal(&["vep", "--custom_multi_allelic"]),
+            "ERROR: [cli] You must set --custom to use --custom_multi_allelic"
+        );
+        let c = config(&[
+            "vep",
+            "--custom",
+            "x.vcf.gz,X,vcf",
+            "--custom_multi_allelic",
+        ]);
+        assert!(c.custom_multi_allelic);
+        assert!(!config(&["vep", "--custom", "x.vcf.gz,X,vcf"]).custom_multi_allelic);
+    }
+
+    /// `--custom_suppress_filter` is a switch Ensembl VEP declares without a
+    /// requirement (Config.pm:268).
+    #[test]
+    fn custom_suppress_filter_is_accepted() {
+        assert!(config(&["vep", "--custom_suppress_filter"]).custom_suppress_filter);
+        assert!(!config(&["vep"]).custom_suppress_filter);
+    }
+
+    /// `--bigwig <file>` appends the positional source `<file>,,bigwig,exact`
+    /// (`Config.pm:545-550`), whose short name is the file's last path segment
+    /// (`File.pm:154-157`), after the command line's own `--custom` sources.
+    #[test]
+    fn bigwig_shortcut_appends_a_positional_custom_source() {
+        assert_eq!(
+            config(&["vep", "--bigwig", "x.bw"]).custom,
+            ["x.bw,,bigwig,exact"]
+        );
+        let spec = vep_builtins::custom::parse_custom("x.bw,,bigwig,exact").unwrap();
+        assert_eq!(spec.short_name, "x.bw");
+        assert_eq!(spec.match_type, vep_builtins::custom::MatchType::Exact);
+        assert_eq!(
+            config(&["vep", "--custom", "a.bed,A,bed", "--bigwig", "/d/x.bw"]).custom,
+            ["a.bed,A,bed", "/d/x.bw,,bigwig,exact"]
+        );
+    }
+
+    /// Each `--phyloP <N>` appends one bigWig source under the local tree's layout
+    /// (`Config.pm:552-557`, one per instance, `:829-835`), its short name spelt
+    /// `phyloP<N>way`: Ensembl VEP's set spells it `phlyoP<N>way`
+    /// (`Config.pm:555`), a misspelling whose column vep-rs does not print.
+    #[test]
+    fn phylop_expands_one_bigwig_source_per_instance_with_the_corrected_short_name() {
+        let c = config(&[
+            "vep",
+            "--phyloP",
+            "100",
+            "--phyloP",
+            "20",
+            "--ucsc_assembly",
+            "hg38",
+            "--ucsc_data_root",
+            "/m/",
+        ]);
+        assert_eq!(
+            c.custom,
+            [
+                "/m/hg38/phyloP100way/hg38.phyloP100way.bw,phyloP100way,bigwig,exact",
+                "/m/hg38/phyloP20way/hg38.phyloP20way.bw,phyloP20way,bigwig,exact",
+            ]
+        );
+        assert!(!c.custom.iter().any(|source| source.contains("phlyoP")));
+    }
+
+    /// `--phyloP` without `--ucsc_assembly` fails with Ensembl VEP's text
+    /// (`Config.pm:609, 972`), before the root is looked at.
+    #[test]
+    fn phylop_without_ucsc_assembly_fails_with_vep_text() {
+        assert_eq!(
+            refusal(&["vep", "--phyloP", "100"]),
+            "ERROR: [cli] You must set --ucsc_assembly to use --phyloP"
+        );
+        assert_eq!(
+            refusal(&["vep", "--phastCons", "100", "--ucsc_data_root", "/m/"]),
+            "ERROR: [cli] You must set --ucsc_assembly to use --phastCons"
+        );
+    }
+
+    /// Each `--phastCons <N>` appends one bigWig source under the local tree's
+    /// layout (`Config.pm:559-564`), its short name `phastCons<N>way` as
+    /// Ensembl VEP spells it.
+    #[test]
+    fn phastcons_expands_one_bigwig_source_per_instance() {
+        let c = config(&[
+            "vep",
+            "--phastCons",
+            "100",
+            "--phastCons",
+            "30",
+            "--ucsc_assembly",
+            "hg19",
+            "--ucsc_data_root",
+            "/m/",
+        ]);
+        assert_eq!(
+            c.custom,
+            [
+                "/m/hg19/phastCons100way/hg19.phastCons100way.bw,phastCons100way,bigwig,exact",
+                "/m/hg19/phastCons30way/hg19.phastCons30way.bw,phastCons30way,bigwig,exact",
+            ]
+        );
+    }
+
+    /// `--ucsc_assembly` stands in both path segments of a shortcut's file, the
+    /// directory and the file name (`Config.pm:555, 562`); any name is accepted
+    /// (`Config.pm:596-604` lists no values for it).
+    #[test]
+    fn ucsc_assembly_is_substituted_into_both_path_segments() {
+        let c = config(&[
+            "vep",
+            "--phyloP",
+            "7",
+            "--phastCons",
+            "7",
+            "--ucsc_assembly",
+            "mm39",
+            "--ucsc_data_root",
+            "/mirror/",
+        ]);
+        assert_eq!(
+            c.custom,
+            [
+                "/mirror/mm39/phyloP7way/mm39.phyloP7way.bw,phyloP7way,bigwig,exact",
+                "/mirror/mm39/phastCons7way/mm39.phastCons7way.bw,phastCons7way,bigwig,exact",
+            ]
+        );
+    }
+
+    /// The default root is Ensembl VEP's remote one (`Config.pm:314`), which a
+    /// shortcut refuses with the local tree's layout and the `--custom` form of the
+    /// same source; without a shortcut the default is inert, and an explicit
+    /// remote root is refused the same way.
+    #[test]
+    fn ucsc_data_root_default_is_refused_with_a_local_mirror_message() {
+        let message = "ERROR: [custom] --ucsc_data_root must name a local directory laid out as \
+                       <root>/<assembly>/phyloP<N>way/<assembly>.phyloP<N>way.bw; the same \
+                       source is --custom file=<local>.bw,format=bigwig,type=exact";
+        assert_eq!(
+            refusal(&["vep", "--phyloP", "100", "--ucsc_assembly", "hg38"]),
+            message
+        );
+        assert_eq!(
+            refusal(&[
+                "vep",
+                "--phastCons",
+                "100",
+                "--ucsc_assembly",
+                "hg38",
+                "--ucsc_data_root",
+                "ftp://mirror.example.org/goldenpath/"
+            ]),
+            message
+        );
+        assert!(config(&["vep"]).custom.is_empty());
+        assert!(config(&["vep", "--ucsc_data_root", "http://example.org/"])
+            .custom
+            .is_empty());
+    }
+
+    /// A local `--ucsc_data_root` is joined to the assembly as given
+    /// (`Config.pm:555`: `%ucsc_data_root%%ucsc_assembly%`, no separator), so
+    /// the directory is named with its trailing slash.
+    #[test]
+    fn ucsc_data_root_local_directory_builds_the_bigwig_path() {
+        let c = config(&[
+            "vep",
+            "--phyloP",
+            "100",
+            "--ucsc_assembly",
+            "hg38",
+            "--ucsc_data_root",
+            "/data/ucsc/",
+        ]);
+        assert_eq!(
+            c.custom,
+            ["/data/ucsc/hg38/phyloP100way/hg38.phyloP100way.bw,phyloP100way,bigwig,exact"]
+        );
+        assert_eq!(
+            config(&[
+                "vep",
+                "--phyloP",
+                "100",
+                "--ucsc_assembly",
+                "hg38",
+                "--ucsc_data_root",
+                "mirror"
+            ])
+            .custom,
+            ["mirrorhg38/phyloP100way/hg38.phyloP100way.bw,phyloP100way,bigwig,exact"]
+        );
     }
 
     /// `transcript_filter` is read from the state after the option sets, which
@@ -2665,6 +4245,26 @@ mod tests {
             assert_eq!(config(&["vep", "-o", spelling]).output_file, "STDOUT");
         }
         assert_eq!(config(&["vep"]).output_file, "variant_effect_output.txt");
+    }
+
+    /// Ensembl VEP 116.2 reads `-i` as standard input when its value is `STDIN`
+    /// in any letter case (`uc($file) eq 'STDIN'`, Parser.pm:235) and keeps the
+    /// parameter as given, so `-i stdin` prints `Input file<TAB>stdin` in the
+    /// statistics report (Stats.pm:652) and `stdin` in the skipped-variants
+    /// file's heading (BaseRunner.pm:371-372); the default is `STDIN`
+    /// (Config.pm:301).
+    #[test]
+    fn input_file_keeps_the_stdin_spelling_given() {
+        for spelling in ["stdin", "Stdin", "STDIN"] {
+            let config = config(&["vep", "-i", spelling]);
+            assert_eq!(config.input_file, spelling);
+            assert!(config.reads_stdin(), "{spelling}");
+        }
+        assert_eq!(config(&["vep"]).input_file, "STDIN");
+        assert!(config(&["vep"]).reads_stdin());
+        let named = config(&["vep", "-i", "in.vcf"]);
+        assert_eq!(named.input_file, "in.vcf");
+        assert!(!named.reads_stdin());
     }
 
     /// `--grch37` sets the assembly, over an explicit `--assembly`.
@@ -2873,15 +4473,26 @@ mod tests {
             "cli",
             "input",
             "output",
+            "parquet",
             "cache",
             "fasta",
             "filter",
             "check_svs",
+            "custom",
             "config",
             "run",
         ] {
             assert!(names.contains(component), "{component}");
         }
+    }
+
+    /// `--no_check_variants_order` is a flag of its own, outside the table of
+    /// flags accepted without effect, and reaches the configuration as given.
+    #[test]
+    fn no_check_variants_order_reaches_the_config() {
+        assert!(error_table_entry("no_check_variants_order").is_none());
+        assert!(!config(&["vep"]).no_check_variants_order);
+        assert!(config(&["vep", "--no_check_variants_order"]).no_check_variants_order);
     }
 
     /// `--shift_hgvs 0` sets `shift_3prime` to 0 whatever the command line passes
@@ -2921,6 +4532,49 @@ mod tests {
             "ERROR: [cli] Can't use --shift_hgvs and --shift_genomic together"
         );
         assert!(Config::from_argv(["vep", "--shift_hgvs", "0", "--shift_genomic", "0"]).is_ok());
+    }
+
+    /// `shift_3prime=i` and `shift_genomic=i` (Config.pm:231-232) are read for
+    /// truth alone (AnnotationType/Transcript.pm:162, OutputFactory.pm:1349), on
+    /// the number Getopt::Long stores: any integer but 0 is on, and a spelling
+    /// of zero is off and not active for the pair `--shift_hgvs` refuses
+    /// (Config.pm:630).
+    #[test]
+    fn shift_3prime_and_shift_genomic_are_on_for_any_integer_but_zero() {
+        for value in [
+            "1",
+            "2",
+            "10",
+            "-1",
+            "+1",
+            "01",
+            "1_0",
+            "9999999999999999999999",
+        ] {
+            let c = config(&["vep", "--shift_3prime", value, "--shift_genomic", value]);
+            assert!(c.shift_3prime && c.shift_genomic, "{value}");
+            for flag in ["--shift_3prime", "--shift_genomic"] {
+                assert_eq!(
+                    refusal(&["vep", "--shift_hgvs", "1", flag, value]),
+                    format!("ERROR: [cli] Can't use --shift_hgvs and {flag} together"),
+                    "{flag} {value}"
+                );
+            }
+        }
+        for value in ["0", "00", "-0", "+0", "0_0"] {
+            let c = config(&["vep", "--shift_3prime", value, "--shift_genomic", value]);
+            assert!(!c.shift_3prime && !c.shift_genomic, "{value}");
+            let with_shift_hgvs = [
+                "vep",
+                "--shift_hgvs",
+                "1",
+                "--shift_3prime",
+                value,
+                "--shift_genomic",
+                value,
+            ];
+            assert!(Config::from_argv(with_shift_hgvs).is_ok(), "{value}");
+        }
     }
 
     /// `--ga4gh_vrs` with `--vcf` is the pair Ensembl VEP refuses (Config.pm:629,
@@ -2973,34 +4627,156 @@ mod tests {
         assert_eq!(CliError::from_run(&refused), "ERROR: [output] no");
     }
 
-    /// The plugins directory is `--dir_plugins`, else `<dir>/Plugins`
+    /// The plugins directory value is `--dir_plugins`, else `<dir>/Plugins`
     /// (Runner.pm:907, whose `||` passes an empty string and `0` over as
-    /// Perl-false), a leading `~` expanded as `glob` expands it (`:908`).
+    /// Perl-false), a leading `~` expanded as `glob` expands it (`:908`); a value
+    /// with no metacharacter is its one match whether or not it exists.
     #[test]
     fn dir_plugins_defaults_to_dir_slash_plugins() {
         let home = std::env::var("HOME").unwrap();
-        assert_eq!(config(&["vep"]).dir_plugins, format!("{home}/.vep/Plugins"));
+        let matches = |argv: &[&str]| -> Vec<String> {
+            let dirs = config(argv).dir_plugins;
+            let mut all = dirs.not_found;
+            all.extend(dirs.dirs);
+            all
+        };
+        assert_eq!(matches(&["vep"]), [format!("{home}/.vep/Plugins")]);
         assert_eq!(
-            config(&["vep", "--dir", "/data/vep"]).dir_plugins,
-            "/data/vep/Plugins"
+            matches(&["vep", "--dir", "/data/vep"]),
+            ["/data/vep/Plugins"]
         );
         assert_eq!(
-            config(&["vep", "--dir", "/data/vep", "--dir_plugins", "/p"]).dir_plugins,
-            "/p"
+            matches(&["vep", "--dir", "/data/vep", "--dir_plugins", "/p"]),
+            ["/p"]
         );
         for value in ["", "0"] {
             assert_eq!(
-                config(&["vep", "--dir", "/data/vep", "--dir_plugins", value]).dir_plugins,
-                "/data/vep/Plugins",
+                matches(&["vep", "--dir", "/data/vep", "--dir_plugins", value]),
+                ["/data/vep/Plugins"],
                 "{value:?}"
             );
         }
         assert_eq!(
-            config(&["vep", "--dir_plugins", "~/plugins"]).dir_plugins,
-            format!("{home}/plugins")
+            matches(&["vep", "--dir_plugins", "~/plugins"]),
+            [format!("{home}/plugins")]
+        );
+        assert_eq!(
+            config(&["vep", "--dir_plugins", "~/plugins"])
+                .dir_plugins
+                .pattern,
+            "~/plugins"
         );
         assert!(!config(&["vep"]).safe);
         assert!(config(&["vep", "--safe"]).safe);
+    }
+
+    /// `--dir_plugins` is expanded as `glob` expands it (Runner.pm:908): over a
+    /// tree of `p1/`, `p2/` and `f.txt`, `<tmp>/*` matches all three; the two
+    /// directories are searched last match first, the order `unshift @INC` over
+    /// the matches leaves (`:921`), and the file is the one match to warn about
+    /// (`:911-916`). A pattern matching nothing names no directory and the
+    /// `Failed to load plugin` line falls back to the value as given; a value
+    /// naming one missing directory is reported as that directory.
+    #[test]
+    fn dir_plugins_glob_expands_to_every_directory_match() {
+        let tmp = tempfile::tempdir().unwrap();
+        for name in ["p1", "p2"] {
+            std::fs::create_dir(tmp.path().join(name)).unwrap();
+        }
+        std::fs::write(tmp.path().join("f.txt"), "").unwrap();
+        let root = tmp.path().to_str().unwrap();
+        let dirs = config(&["vep", "--dir_plugins", &format!("{root}/*")]).dir_plugins;
+        assert_eq!(dirs.dirs, [format!("{root}/p2"), format!("{root}/p1")]);
+        assert_eq!(dirs.not_found, [format!("{root}/f.txt")]);
+        assert_eq!(dirs.pattern, format!("{root}/*"));
+        assert_eq!(dirs.searched(), format!("{root}/p2, {root}/p1"));
+
+        let none = config(&["vep", "--dir_plugins", &format!("{root}/zz*")]).dir_plugins;
+        assert_eq!(
+            none,
+            PluginDirs {
+                pattern: format!("{root}/zz*"),
+                ..PluginDirs::default()
+            }
+        );
+        assert_eq!(none.searched(), format!("{root}/zz*"));
+
+        let missing = PluginDirs::expand("/no/such/dir");
+        assert_eq!(missing.not_found, ["/no/such/dir"]);
+        assert!(missing.dirs.is_empty());
+        assert_eq!(missing.searched(), "/no/such/dir");
+    }
+
+    const DYLIB_EXT: &str = if cfg!(target_os = "macos") {
+        "dylib"
+    } else {
+        "so"
+    };
+
+    /// The profile's `examples/` directory when the `echo_plugin` and
+    /// `echo_all_rows_plugin` example dylibs have been built there, which a
+    /// `cargo test` selection including `vep-plugin` does.
+    fn example_plugins_dir() -> Option<std::path::PathBuf> {
+        let exe = std::env::current_exe().unwrap();
+        let examples = exe.parent().unwrap().parent().unwrap().join("examples");
+        let built = ["echo_plugin", "echo_all_rows_plugin"]
+            .iter()
+            .all(|name| examples.join(format!("lib{name}.{DYLIB_EXT}")).is_file());
+        if built {
+            return Some(examples);
+        }
+        assert!(
+            std::env::var_os("CI").is_none(),
+            "example dylibs not found under {}",
+            examples.display()
+        );
+        eprintln!(
+            "Skipping: example dylibs not found under {}",
+            examples.display()
+        );
+        None
+    }
+
+    /// Two plugins directories each holding a `libecho_plugin` library: the one
+    /// in the match that sorts last loads, since `unshift @INC` over the matches
+    /// in order (Runner.pm:921) searches that directory first, and a brace group
+    /// orders its members as written. The two example libraries stand in for two
+    /// versions of one plugin: `echo_plugin` reports version `0.2.0`,
+    /// `echo_all_rows_plugin` `0.1.0`.
+    #[test]
+    fn dir_plugins_search_order_is_last_match_first() {
+        let Some(examples) = example_plugins_dir() else {
+            return;
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_str().unwrap();
+        for (dir, example) in [("p1", "echo_all_rows_plugin"), ("p2", "echo_plugin")] {
+            std::fs::create_dir(tmp.path().join(dir)).unwrap();
+            std::fs::copy(
+                examples.join(format!("lib{example}.{DYLIB_EXT}")),
+                tmp.path()
+                    .join(dir)
+                    .join(format!("libecho_plugin.{DYLIB_EXT}")),
+            )
+            .unwrap();
+        }
+        let version_under = |pattern: &str| -> String {
+            let dirs = PluginDirs::expand(&format!("{root}/{pattern}"));
+            let loaded = crate::annotator::load_plugins(
+                &["echo_plugin".to_string()],
+                &dirs,
+                true,
+                None,
+                None,
+                vep_builtins::traits::RunContext::default(),
+            )
+            .unwrap();
+            loaded.dylib.plugins()[0].version().to_string()
+        };
+        assert_eq!(version_under("*"), "0.2.0");
+        assert_eq!(version_under("{p2,p1}"), "0.1.0");
+        assert_eq!(version_under("{p1,p2}"), "0.2.0");
+        assert_eq!(version_under("p1"), "0.1.0");
     }
 
     /// The warnings file is `--warning_file`, else `<output_file>_warnings.txt`
@@ -3125,5 +4901,22 @@ mod tests {
             FlagState::implied_by("individual_zyg"),
             ["allow_non_variant"]
         );
+    }
+
+    /// `Runner.pm:787-790`: the HTML report is on unless `--stats_text` alone
+    /// names a report; `--stats_html` keeps it on beside `--stats_text`, and
+    /// `--no_stats` is read separately (Runner.pm:144 tests it first).
+    #[test]
+    fn stats_html_is_on_unless_stats_text_alone_names_a_report() {
+        let default = config(&["vep"]);
+        assert!(default.stats_html && !default.stats_text && !default.no_stats);
+        assert!(config(&["vep", "--stats_html"]).stats_html);
+        let text = config(&["vep", "--stats_text"]);
+        assert!(text.stats_text && !text.stats_html);
+        let both = config(&["vep", "--stats_text", "--stats_html"]);
+        assert!(both.stats_text && both.stats_html);
+        let silent = config(&["vep", "--no_stats"]);
+        assert!(silent.no_stats && silent.stats_html);
+        assert!(config(&["vep", "--stats_file", "s.html"]).stats_html);
     }
 }

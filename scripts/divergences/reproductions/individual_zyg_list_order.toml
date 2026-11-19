@@ -1,0 +1,31 @@
+entry = "individual_zyg_list_order"
+page = "docs/divergences/individual-zyg-order.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "observed"
+input_class_basis = "2 · 280 of 373 records with sample columns · 4 flag sets, 2 corpora"
+notes = "Ensembl VEP's ZYG list follows the key order of a hash of the eight sample names under the fixed seed; vep-rs follows the header's column order."
+
+[input]
+format = "vcf"
+samples = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"]
+text = """
+21	14221174	21:14221174:T:G	T	G	.	.	.	GT	0|0	1|0	1|1	0|1	0|0	1|0	0|1	1|0
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-individual-zyg/json_cache"
+
+[run]
+flags = ["--individual_zyg", "all"]
+
+[compare]
+kind = "field"
+field = "ZYG"
+where = { record = "21:14221174:T:G", feature = "ENST00000400577" }
+
+[expected]
+ensembl_vep = ["S7:HET,S4:HET,S2:HET,S3:HOM,S8:HET,S6:HET,S5:HOMREF,S1:HOMREF"]
+vep_rs = ["S1:HOMREF,S2:HET,S3:HOM,S4:HET,S5:HOMREF,S6:HET,S7:HET,S8:HET"]

@@ -218,7 +218,8 @@
  },
  "variant_classes": {
   "deletion": 19,
-  "insertion": 127,
+  "insertion": 94,
+  "mnv_or_complex": 33,
   "snv": 85,
   "symbolic_Alu_insertion": 17,
   "symbolic_deletion": 11,

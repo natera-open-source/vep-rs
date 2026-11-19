@@ -7,13 +7,32 @@ parts that fail CI or review when missed.
 ## Where the truth lives
 
 - **Spec**: Ensembl VEP's Perl source, read from the pinned image
-  `ensemblorg/ensembl-vep:release_116.2` (Step 2 of the close-parity-row skill gives the paths).
+  `ensemblorg/ensembl-vep:release_116.2` (step 2 of the close-parity-row skill gives the paths).
   Cite what you match as `Module.pm:line`, in the test or comment that depends on it.
-- **Backlog**: `tests/parity/matrix.tsv`, one row per Ensembl VEP flag, feature, plugin and cache
-  field; [tests/parity/README.md](tests/parity/README.md) defines the columns. To close a row, follow
-  [.claude/skills/close-parity-row/SKILL.md](.claude/skills/close-parity-row/SKILL.md).
+- **Matrix**: `tests/parity/matrix.tsv`, one row per Ensembl VEP flag, feature, plugin and cache
+  field; [tests/parity/README.md](tests/parity/README.md) defines the columns. Every row whose
+  target vep-rs ports has landed; the rows still `open` are the `excluded` ones, which never land.
+  New rows come from the maintainers, who open them when an Ensembl VEP release adds a parameter,
+  plugin or cache field; a contributor who finds an item without a row proposes it on an issue with
+  the parity-row form. [.claude/skills/close-parity-row/SKILL.md](.claude/skills/close-parity-row/SKILL.md)
+  is the recipe for such a row once the maintainers have opened it.
+- **Recipes**: the three kinds of change a pull request brings, each a recipe under
+  `.claude/skills/`: [fix-a-divergence](.claude/skills/fix-a-divergence/SKILL.md) for a row where the
+  engines disagree, [performance-change](.claude/skills/performance-change/SKILL.md) for a change
+  made for speed or memory, and [port-a-plugin](.claude/skills/port-a-plugin/SKILL.md) for an
+  Ensembl VEP plugin the support table lists as not ported.
+- **Divergences**: [docs/intended-divergences.md](docs/intended-divergences.md) indexes every
+  intended disagreement with Ensembl VEP, each with a page (or a section of its subject's page) and
+  a reproduction under `scripts/divergences/reproductions/`; `python3
+  scripts/divergences/reevaluate.py --check` holds the index and the reproductions to each other and
+  to the reference release. A disagreement outside the index is charged to vep-rs, whichever engine
+  is wrong.
+- **Plugin support**: the support table of [docs/plugins.md](docs/plugins.md), one row per Ensembl
+  VEP plugin with one of three statuses; `check_parity_matrix.py` holds it to the matrix's plugin
+  rows, so a port's status turns supported in the pull request that lands its row.
 - **Oracle**: the golden corpora under `tests/golden/` (Ensembl VEP's output, every column of every
-  format) and the concordance harness in `scripts/concordance/`.
+  format, for human on both assemblies and for four other species) and the concordance harness in
+  `scripts/concordance/`.
 
 ## Gotchas
 
@@ -29,10 +48,15 @@ parts that fail CI or review when missed.
   Co-Authored-By: No LLM
   ```
 
+  Any other `Co-Authored-By` line is a co-author's credit and declares nothing: the admission
+  check reads the name `No LLM`, or a name before an address whose mailbox is `noreply` or
+  `no-reply`, and a person's `<login>@users.noreply.github.com` is neither.
+
 - A new `.rs` file opens with the two-line license header, a blank line, then its `//!` module doc
   (`scripts/check_module_docs.sh` checks the blank line).
-- A flag added or changed in `crates/vep-cli/src/args.rs` gets its matrix row in the same change, and
-  the generated CLI reference is rewritten and committed:
+- A flag added or changed in `crates/vep-cli/src/args.rs` has its matrix row in the same change (a
+  flag of vep-rs's own gets a new row there; an Ensembl VEP flag lands the row the maintainers
+  opened), and the generated CLI reference is rewritten and committed:
   `VEP_UPDATE_CLI_REFERENCE=1 cargo test -p vep-cli --test cli_reference`.
 - A comment is one or two present-tense sentences stating a fact the code cannot, usually the Ensembl
   VEP behaviour matched, cited. It names nothing outside the code.
@@ -44,30 +68,43 @@ parts that fail CI or review when missed.
   and search its pages for the flag, field or shape: the entries are Ensembl VEP defects vep-rs
   deliberately does not reproduce and differences in what it writes or reads, and a change that
   makes vep-rs match one is refused. Cite the entry as the index's first column names it (the text
-  of its row's first cell, inner backticks dropped). Removing an entry needs the newer Ensembl VEP
-  behaviour stated in plain words, with the record that shows it. Fill the template's fourth
-  section, Intended divergences, truthfully (the first statement excludes the other two), and run
-  `python3 scripts/ci/admission.py --local --body-file <description>` on the saved description:
-  the admission check closes a pull request whose section is missing, unchecked, inconsistent, names
-  an entry the index lacks, or claims none while editing the index, a page it links or
-  `scripts/divergences/`.
+  of its row's first cell, inner backticks dropped) or by the path of its page; a change to the
+  index's own text or order cites `docs/intended-divergences.md` itself. Removing an entry needs the
+  newer Ensembl VEP behaviour stated in plain words, with the record that shows it. Fill the
+  template's fourth section, Intended divergences, truthfully (the first statement excludes the
+  other two), and run `python3 scripts/ci/admission.py --local --body-file <description>` on the
+  saved description: the admission check closes a pull request whose section is missing, unchecked,
+  inconsistent, names an entry the index lacks, cites the index itself while leaving it alone, or
+  claims none while editing the index, a page it links or the reproduction registry under
+  `scripts/divergences/reproductions/` (its README excepted).
 - A change that can alter annotation output runs `cargo test -p vep-cli --test golden --test
-  format_parity`. A consequence or plugin change also runs the concordance smoke (`just
-  concordance-smoke <perl_cache> <json_cache> <fasta>`), which needs Docker and an Ensembl VEP 116
-  cache; on a host without them, the pull request's Verification section says the smoke was not run
-  and why.
+  format_parity`, which compares every column of every format over the committed corpora; the
+  Parquet round trip reads the files back through the `parquet` crate, so no other tool is needed.
+  A consequence or plugin change also runs the concordance smoke (`just concordance-smoke
+  <perl_cache> <json_cache> <fasta>`), which needs Docker and an Ensembl VEP 116 cache; on a host
+  without them, the pull request's Verification section says the smoke was not run and why.
 - A test file under `scripts/` runs in CI only when `.github/workflows/ci.yml` lists it, with a floor
   on the tests it collects (pytest) or the `ok` lines it prints (bash). Adding or deleting a test
   moves that floor, and a new test file needs its line there: name the new count under Verification
   and a maintainer edits `ci.yml`, since a change to a workflow file from outside the maintainers
-  closes the pull request.
+  closes the pull request. The counts are measured, never estimated:
+
+  ```bash
+  python3 -m pytest --collect-only -q <file> | grep -cE '^scripts/.*::'   # a pytest file's floor
+  bash <test file> 2>&1 | grep -c '^  ok '                                  # a bash test file's floor
+  ```
+
+  A floor line reads `"<file> <count>"`; the one for this guide's own test is
+  `"scripts/docs/test_contributor_guide.py 16"`, and that test holds the commands, versions and
+  floors quoted on this page to what `ci.yml` states.
 - Before deleting or renaming a test, grep `tests/parity/matrix.tsv` for its name: a cell naming a
   test the tree lacks fails `check_parity_matrix.py`.
 - A docs edit runs `python3 scripts/docs/site_metrics.py --gate` and, after `mdbook build`,
   `python3 scripts/docs/check_site_links.py` (CI adds `--tree HEAD`, which reads the committed tree,
-  so run it that way after committing). A page over 4,000 words, a paragraph over 120, a sentence
+  so run it that way after committing). A page over 4,000 words (4,500 for
+  `docs/intended-divergences.md`), a paragraph over 120, a sentence
   over 45, a table over 4 columns, a code line over 80 characters, a broken relative link or a
-  repository link naming a missing path fails the Pages job. `CHANGELOG.md` and `CONTRIBUTING.md`
+  repository link naming a missing path fails the Pages job. So does a chapter title another page has, or an opening paragraph that begins with the same 160 characters as another page's. A page added to `docs/SUMMARY.md` has a title no other page has and opens with a paragraph of 80 to 160 characters that says what the page covers; the site shows that paragraph as the page's description in a search result. `CHANGELOG.md` and `CONTRIBUTING.md`
   are site pages exempt from the paragraph and sentence caps (`CHANGELOG.md` from the page cap too);
   of `README.md` only the sections the site includes are measured, inside the pages that include
   them.
@@ -76,6 +113,7 @@ parts that fail CI or review when missed.
   directory plus the file its manifest's `license-file` names, so the repository's `LICENSE` and
   `NOTICE` ship only as a copy in the crate or, for `LICENSE`, through `license-file`. A scratch
   `cargo install --path crates/vep-cli --root <dir>` shows which binaries a user gets.
+  A crate added to the workspace carries a `description` that names vep-rs and Ensembl VEP, with `keywords`, `categories`, `repository` and `homepage`; a crate with no library target also sets `documentation`, since docs.rs builds no page for it.
 
 ## Before pushing
 
@@ -84,17 +122,39 @@ quote the result in the pull request's Verification section. The MSRV job builds
 Rust 1.89 (`rust-version` in `Cargo.toml`); `rustup toolchain install 1.97.1 1.89` installs both.
 
 ```bash
-cargo fmt --all -- --check && cargo clippy --workspace -- -D warnings
+cargo fmt --all -- --check && cargo clippy --workspace --features vep-cli/bench -- -D warnings
 cargo test --workspace --locked --no-fail-fast
 python3 scripts/parity/check_parity_matrix.py && scripts/check_module_docs.sh
-cargo +1.89 build --workspace --locked
+cargo +1.89 build --workspace --locked --features vep-cli/bench
 ```
 
 CI builds and tests with `--locked`: a dependency change commits `Cargo.lock` in the same change. A
 dependency whose newer release declares a higher `rust-version` fails the MSRV job, so a bump is
-built on 1.89 first. `tools/vep-fields-compare` is its own Cargo root: a change there runs the test,
-clippy (with `--all-targets`) and fmt commands and the 1.89 build again with
-`--manifest-path tools/vep-fields-compare/Cargo.toml`, and `scripts/check_module_docs.sh tools`.
+built on 1.89 first. The clippy feature `vep-cli/bench` puts the `bench_plugins` binary, which
+builds only under that feature, under the lint. `tools/vep-fields-compare`,
+`tools/vep-outputs-compare`, `tools/vep-plugin-pairs` and `tools/vep-formats-remainder` are their
+own Cargo roots: a change under any of them runs the test, clippy (with `--all-targets`) and fmt
+commands and the 1.89 build again with `--manifest-path tools/<name>/Cargo.toml`, and
+`scripts/check_module_docs.sh tools`. The Advisory Reachability job checks the workspace's
+`Cargo.lock` with `scripts/check_advisory_reachability.sh`, which fails on an advisory reachable
+from the `vep` binary, and each tool root's whole lockfile with
+`cargo audit --deny warnings --file tools/<name>/Cargo.lock`, which fails on any advisory.
+
+The Python tests need `pip install pytest pyarrow==26.0.0 pyyaml`; run `python3 -m pytest -q <file>` for
+every `scripts/**/test_*.py` the change touches, and after `cargo test` run
+`python3 -m pytest -q scripts/adapters/test_parquet_to_vep_tab.py` when the Parquet writer or its
+reader changes, since its corpus round trips read the `vep` binary under `target/` and skip without
+one, where CI holds them to run. The hand-over tests of
+`scripts/concordance/test_compare_vep_formats.py` and one group of checks in
+`scripts/concordance/test_feature_oracle.sh` read the release build of
+`tools/vep-formats-remainder` and skip without it in the same way; build it with
+`cargo build --release --locked --manifest-path tools/vep-formats-remainder/Cargo.toml`. A bash
+test file under `scripts/concordance/`, `scripts/docker/`
+or `scripts/data/` runs as `bash <test file>` and exits 1 on any failing check. The floors are read
+from `ci.yml` itself: the Comparator Tests job holds each file of its `tests=(...)` list to the
+floor beside it before running them all, and the Harness Tests job holds each of its bash test files
+to the floor of its `check <test file> <floor>` line (the plugin data layout test file is held the
+same way inside the Comparator Tests job).
 
 A failure that reproduces on a clean checkout of `origin/main` is pre-existing. Name it under
 Verification with that reproduction, and leave it out of this change. A newer local toolchain adds
@@ -125,21 +185,27 @@ else.
 
 ## Scope
 
-- Before taking a row, a plugin or a performance item, ask on its issue whether a release branch
-  already carries it; in-flight maintainer work closes a duplicate with credit rather than merging
-  it.
-- One matrix row or one issue per branch, cut from `origin/main`. Rows that share one mechanism, one
-  message shape or one docs sentence (`gff` and `gtf`; the unported plugins) are a **family** and land
-  together in one branch.
+- A row for an Ensembl VEP item is opened by the maintainers, never by the pull request that lands
+  it: when an Ensembl VEP release adds a parameter, plugin or cache field, they open its row with
+  the target it gets; a contributor who finds such an item without a row proposes it on an issue
+  with the parity-row form, and closes the row only when it is open. A flag vep-rs adds beyond
+  Ensembl VEP's gets its row in the change that declares it.
+- Before taking a divergence, a plugin or a performance item, ask on its issue whether a release
+  branch already carries it; in-flight maintainer work closes a duplicate with credit rather than
+  merging it.
+- One issue per branch, cut from `origin/main`: one divergence entry, one plugin, one performance
+  change. Items that share one mechanism, one message shape or one docs sentence (`gff` and `gtf`; two
+  plugins of one data layout) are a **family** and land together in one branch.
 - A pull request is squash-merged: its body is written at merge from the commit messages, so wording
   fixes to commits need no force-push.
 - A row's `target` is the maintainers' call. When the Perl source or the code shows the target is
   wrong, or another row contradicts it, stop and report it as a **target decision**, with the
   evidence, and keep the row as it is.
 - Parallel branches collide on `tests/parity/matrix.tsv`, `CHANGELOG.md`,
-  `crates/vep-cli/src/args.rs`, `crates/vep-cli/src/config.rs`, `docs/cli-reference.md` and
-  `docs/cli/`. Rebase onto `origin/main` before the first push; once the pull request exists, merge
-  `origin/main` in instead. Regenerate the CLI reference after either.
+  `crates/vep-cli/src/args.rs`, `crates/vep-cli/src/config.rs`, `docs/cli-reference.md`,
+  `docs/cli/`, `docs/intended-divergences.md` and the support table of `docs/plugins.md`. Rebase onto
+  `origin/main` before the first push; once the pull request exists, merge `origin/main` in instead.
+  Regenerate the CLI reference after either.
 - Releases and dependency bumps stay with the maintainers: the version in `Cargo.toml`, tags,
   crates.io publishing, every workflow under `.github/workflows/`, and a bump in `Cargo.lock` that
   no change of yours needs.

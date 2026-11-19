@@ -1,0 +1,44 @@
+entry = "gwas_sstate_index_failure"
+page = "docs/divergences/gwas-sstate-index-failure.md"
+verified_against = "116.2"
+image = "ensemblorg/ensembl-vep@sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da"
+input_class = "unobserved"
+input_class_basis = "well-formed under the GWAS plugin's header, which says the plugin can process the harmonised version of the summary statistics file and states no rule for an empty cell; not seen in the measured datasets"
+notes = "Ensembl VEP's plugin filters and sorts the file counting blank-separated fields, so the empty first cell shifts its sort onto the position as text (14482906 before 9053097); tabix then refuses the copy and the plugin is dropped with `Failed to instantiate plugin GWAS: Failed to create index` in the warnings file. With the first cell filled both engines write vep-rs's rows."
+# A ten-column harmonised file under the committed file's name, two rows with an empty `hm_variant_id` cell and positions
+# of seven and eight digits, in ascending order. Ensembl VEP's plugin writes its filtered and sorted copies beside the file
+# and its processed copy under --dir, so both lie in the stage.
+prepare = [
+  'mkdir -p "$STAGE/vepdir"',
+  'printf "hm_variant_id\thm_rsid\thm_chrom\thm_pos\thm_other_allele\thm_effect_allele\thm_beta\thm_odds_ratio\tp_value\tci_upper\n\trs552964654\t21\t9053097\tG\tC\tNA\tNA\t0.5\tNA\n\trs2822690\t21\t14482906\tC\tT\tNA\tNA\t0.641\tNA\n" > "$STAGE/17463246-GCST000028-EFO_0001360.h.tsv"',
+]
+
+[input]
+format = "vcf"
+text = """
+21	9053097	rs552964654	G	C	.	.	.
+21	14482906	rs2822690	C	T	.	.	.
+"""
+
+[cache]
+species = "homo_sapiens"
+assembly = "GRCh38"
+json_cache = "tests/golden/116/GRCh38-plugin-gwas/json_cache"
+
+[run]
+flags = ["--dir", "{stage}/vepdir", "--plugin", "GWAS,type=sstate,file={stage}/17463246-GCST000028-EFO_0001360.h.tsv"]
+
+[compare]
+kind = "rows"
+where = { record = ["rs552964654", "rs2822690"], feature = ["ENST00000623201", "ENST00000285670"] }
+columns = ["Location", "Allele", "Feature", "GWAS_p_value", "GWAS_risk_allele", "GWAS_study"]
+
+[expected]
+ensembl_vep = [
+  "21:9053097 | C | ENST00000623201 | - | - | -",
+  "21:14482906 | T | ENST00000285670 | - | - | -",
+]
+vep_rs = [
+  "21:9053097 | C | ENST00000623201 | 0.5 | C | GCST000028",
+  "21:14482906 | T | ENST00000285670 | 0.641 | T | GCST000028",
+]

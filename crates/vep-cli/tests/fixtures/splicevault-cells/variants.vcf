@@ -1,0 +1,10 @@
+##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+21	13618457	empty_events	T	C	.	.	.
+21	13629903	comma_in_part	A	AT	.	.	.
+21	13630940	empty_twelfth_of_thirteen	G	T	.	.	.
+21	13630943	short_row	T	C	.	.	.
+21	13631108	scored	G	A	.	.	.
+21	18294269	empty_cell	C	A	.	.	.
+21	18297830	padded_cells	C	G	.	.	.
+21	18315257	empty_event_part	C	A	.	.	.
