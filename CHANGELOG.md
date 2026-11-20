@@ -7,10 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Documentation, test corpora and comparison tools
+  - The Benchmarks page tables each real-data plugin's wall time on genome-wide ClinVar for Ensembl VEP 116.2 and vep-rs 0.6.0, per architecture, written from a committed record. (#117)
+
 ### Changed
 
+- Documentation, test corpora and comparison tools
+  - The installation, limitations and workflow-managers pages state the Bioconda package `vep-rs`, its install line and that the channel's version can trail a release. (#117)
+  - The installation page's Windows row names the container image under Docker before the Linux archive under WSL2; neither is tested on Windows. (#117)
+  - The contributor guide counts two forms of the model declaration, a model's line and the line for a change written without one, as the admission check reads them. (#117)
+  - The Benchmarks page names the two fastVEP records measured without `--exclude-readthrough --exclude-artifact`, and a saved link to its 0.5.0 section anchor reaches the section. (#117)
 - Dependencies and tooling
   - The Bioconda recipe `bioconda/vep-rs` names 0.6.0 and drops its `duckdb-cli` run requirement: 0.6.0 writes Parquet without the `duckdb` program. (#116)
+
+### Fixed
+
+- Documentation, test corpora and comparison tools
+  - The cache, prediction, plugin-data and plugin-writing pages, the README's Crates table and two crate READMEs state what the code does: FASTA refusals, `contig_order`, `.bgz` stores, JSON keys, `Runner::run`'s order. (#117)
+  - Doc comments in eight crates state what the code beside them does, `PluginRegistry::plugins`, `LazyTranscriptIndexes` and `EffectsConfig::loftee_context` among them. (#117)
+  - The divergence index states the rate of `revel_other_reference_amino_acid_rows` by output rows, as its page counts it. (#117)
 
 ## [0.6.0] - 2026-11-19
 
@@ -247,7 +264,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The `cache` error component's meaning names a regulatory shard that cannot be read and a regulatory chromosome directory holding files but no shard. (#115)
   - Run statistics are counted into one accumulator per pool thread for the whole run, the VCF parser builds a record's variants from its chopped alleles' buffers and one shared copy of its strings, each intron's splice windows are evaluated once per allele, and the cache loader keeps each SIFT and PolyPhen matrix gzip-compressed until its first lookup. (#115)
 - Plugins
-  - AlphaMissense writes `am_class` and `am_pathogenicity` on the variant's missense transcript rows whose reference and alternate amino acids match its record's, and on no other row. (#78)
+  - AlphaMissense writes `am_class` and `am_pathogenicity` on the variant's missense transcript rows whose reference and alternate amino acids match its record's, and on no other row. (#78, #115, #103)
   - LoFTEE prints `LoF_info` numbers as Ensembl VEP's plugin does, reads an insertion's CDS end as its lower coordinate, and keeps a call without an exon number high confidence. (#115)
   - `LoFTEE` refuses `run_splice_predictions=1`, which asks for the splice-prediction layer vep-rs does not implement, instead of warning and continuing. (#115)
   - `LoFTEE` refuses a `conservation_file` naming a database, which asks for the PhyloCSF items vep-rs does not compute, instead of accepting and ignoring it. (#115)
