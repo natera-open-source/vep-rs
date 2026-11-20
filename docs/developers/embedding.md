@@ -13,9 +13,9 @@ annotator.
 
 ## Adding the crates
 
-A maintainer publishes the workspace's crates to crates.io after each release
-is tagged, each under the release's version, so a release's version appears
-there shortly after its release page. A program adds `vep-cli` from crates.io
+The release workflow publishes the workspace's crates to crates.io when a
+maintainer publishes a release page, each under the release's version, so a
+release's version appears there minutes after its page. A program adds `vep-cli` from crates.io
 at a published version, or as a git dependency pinned to a release's tag, the
 form for a release crates.io does not carry:
 

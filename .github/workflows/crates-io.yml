@@ -1,0 +1,114 @@
+name: crates.io
+
+# Publishes the workspace's crates to crates.io when a maintainer publishes a
+# release, after reading the draft release.yml created. No token is stored: the
+# job runs in the `crates-io` environment and exchanges its OIDC identity for a
+# short-lived crates.io token, which each crate's Trusted Publishing settings
+# accept from this workflow file in that environment alone. A prerelease is not
+# published. `workflow_dispatch`, run from the release's tag, publishes the
+# crates a failed run left out: a crate whose version crates.io already carries
+# is skipped, since a version can never be uploaded twice.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crates-io-${{ github.event.release.tag_name || github.ref_name }}
+
+env:
+  RUST_TOOLCHAIN: 1.97.1
+  # Dependency order: each crate after every sibling it depends on. The job
+  # fails when this list and the workspace's publishable members differ.
+  CRATES: >-
+    vep-core vep-fasta vep-io vep-plugin vep-effects vep-builtins vep-cli
+    vep-cache-builder vep-cache-converter
+
+jobs:
+  # Every crate is packaged and built from its packaged sources here, in a job
+  # that cannot request an OIDC token, so no build script or proc macro of a
+  # dependency runs where a crates.io token can be minted.
+  verify:
+    name: Check and verify the crates
+    if: >-
+      (github.event_name == 'release' && !github.event.release.prerelease) ||
+      (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Check the tag, the workspace version and the crate list
+        id: meta
+        env:
+          TAG: ${{ github.event.release.tag_name || github.ref_name }}
+        run: |
+          version="$(sed -nE 's/^version = "([^"]+)"$/\1/p' Cargo.toml | head -1)"
+          if [ "$TAG" != "v$version" ]; then
+            echo "ERROR: [crates-io] tag $TAG does not name the workspace version $version." >&2
+            exit 1
+          fi
+          members="$(cargo metadata --no-deps --locked --format-version 1 |
+            jq -r '.packages[] | select(.publish != []) | .name' | sort | tr '\n' ' ')"
+          listed="$(printf '%s\n' $CRATES | sort | tr '\n' ' ')"
+          if [ "$members" != "$listed" ]; then
+            echo "ERROR: [crates-io] CRATES lists $listed; the workspace publishes $members." >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Package and verify every crate
+        run: cargo package --workspace --locked
+
+  # Holds the token and compiles nothing: `cargo publish --no-verify` packages
+  # and uploads each crate without building it.
+  publish:
+    name: Publish the crates
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+        id: auth
+
+      - name: Publish the crates crates.io does not carry
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          for crate in $CRATES; do
+            status="$(curl -sS -o /dev/null -w '%{http_code}' \
+              -A 'natera-open-source/vep-rs release workflow' \
+              "https://crates.io/api/v1/crates/$crate/$VERSION")"
+            case "$status" in
+              200) echo "$crate $VERSION is on crates.io; skipped." ;;
+              404) cargo publish -p "$crate" --locked --no-verify ;;
+              *)
+                echo "ERROR: [crates-io] crates.io answered $status for $crate $VERSION." >&2
+                exit 1
+                ;;
+            esac
+          done

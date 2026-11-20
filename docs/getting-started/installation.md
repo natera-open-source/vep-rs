@@ -21,7 +21,7 @@ The same build writes `target/release/vep-cache-builder`, which installs a relea
 
 ### From crates.io
 
-A maintainer publishes the workspace's crates to crates.io after each release is tagged, from 0.6.0 on, each under the release's version, so a release's version appears there shortly after its release page. `vep-cli` is the crate of the `vep` command, and `cargo install` then builds that release's `vep` from source with Rust 1.89+:
+The workspace's crates are on crates.io from 0.6.0 on, each under the release's version: the release workflow publishes them when a maintainer publishes the release page, so a version appears there minutes after its page. `vep-cli` is the crate of the `vep` command, and `cargo install` then builds that release's `vep` from source with Rust 1.89+:
 
 ```bash
 cargo install vep-cli --locked
