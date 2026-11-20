@@ -304,8 +304,8 @@ fn fasta_download_and_indexing_subset_is_documented() {
              recompressed to bgzip and indexed by the builder",
             "the shape of Ensembl's `dna_index/` files and of the file `vep-cache-builder \
              --auto` places in the cache directory",
-            "`vep` builds no index (Ensembl VEP builds one); the builder writes both for a \
-             `dna/` file it installs",
+            "An index the file lacks is written beside it as `samtools faidx` writes it, as \
+             Ensembl VEP writes it",
         ],
     );
     assert_states(

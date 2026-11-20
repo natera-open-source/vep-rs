@@ -246,7 +246,7 @@ vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
 
 ## Reference FASTA
 
-`--fasta` takes a plain FASTA with its `samtools faidx` `.fai`, or a `bgzip`-compressed FASTA with the `.fai` and `.gzi` `samtools faidx` writes for it, the shape of Ensembl's `dna_index/` files and of the file `vep-cache-builder --auto` places in the cache directory. `vep` builds no index (Ensembl VEP builds one); the builder writes both for a `dna/` file it installs. Three files are refused at open: a gzip file that is not BGZF, whose `.fai` offsets need the whole file inflated; a `.gzi` that does not match the file's blocks, recompressed and not re-indexed; an `.fai` naming more bases than the file holds. So is a BGZF file holding a malformed block.
+`--fasta` takes a plain FASTA with its `.fai`, or a `bgzip`-compressed FASTA with its `.fai` and `.gzi`, the shape of Ensembl's `dna_index/` files and of the file `vep-cache-builder --auto` places in the cache directory. An index the file lacks is written beside it as `samtools faidx` writes it, as Ensembl VEP writes it. Three files are refused at open: a gzip file that is not BGZF, whose `.fai` offsets need the whole file inflated; a `.gzi` that does not match the file's blocks, recompressed and not re-indexed; an `.fai` naming more bases than the file holds. So is a BGZF file holding a malformed block.
 
 | Condition | Line printed |
 | --- | --- |

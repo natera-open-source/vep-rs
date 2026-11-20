@@ -347,7 +347,7 @@ pub struct Args {
     #[arg(help_heading = "Cache / Offline", long = "show_cache_info")]
     pub show_cache_info: bool,
 
-    /// FASTA file for reference sequence lookup: plain with its .fai, or bgzipped with the .fai and .gzi that samtools faidx writes; a gzip file that is not BGZF is refused and no index is built. A directory stands for every indexed .fa and .fa.gz in it, read together. Without the flag, the first indexed .fa or .fa.gz by name in the cache directory is used
+    /// FASTA file for reference sequence lookup: plain with its .fai, or bgzipped with the .fai and .gzi that samtools faidx writes, each written beside the file when it is missing; a gzip file that is not BGZF is refused. A directory stands for every indexed .fa and .fa.gz in it, read together. Without the flag, the first indexed .fa or .fa.gz by name in the cache directory is used
     #[arg(help_heading = "Cache / Offline", long, visible_alias = "fa")]
     pub fasta: Option<String>,
 
