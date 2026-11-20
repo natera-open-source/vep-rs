@@ -277,12 +277,29 @@ def test_the_run_requirements_are_those_of_the_published_release(
         1,
         f"ERROR: [bioconda] run requirements name duckdb-cli >=1.3.2, which {recipe} does not run\n",
     )
+    # Each block holds a run requirement in a shape `listed` reads no entry from.
+    unread_key = "run requirements are not written as one `  run:` block list under requirements"
+    unread_entry = "run requirements hold {}, which is no `    - item` line"
+    for block, error in (
+        ("  run: [duckdb-cli]\n", unread_key),
+        ("  run:  # programs\n    - duckdb-cli\n", unread_key),
+        ('  "run":\n    - duckdb-cli\n', unread_key),
+        ("{% if linux %}\n  run:\n    - duckdb-cli\n{% endif %}\n", unread_key),
+        ("  run:\n      - duckdb-cli\n", unread_entry.format("- duckdb-cli")),
+        ("  run:\n  - duckdb-cli\n", unread_entry.format("- duckdb-cli")),
+        ("  run:\n    [duckdb-cli]\n", unread_entry.format("[duckdb-cli]")),
+    ):
+        unread = meta.replace(host, host + block)
+        assert check_recipe.listed(check_recipe.section(unread, "requirements"), "run") == []
+        assert check_recipe.recipe_errors(unread, build, version) == [error]
     # A release that starts another program records it, and its recipe lists that program alone.
     monkeypatch.setattr(check_recipe, "PUBLISHED_RUN", ("duckdb-cli >=1.3.2",))
     lack = ["run requirements lack duckdb-cli >=1.3.2"]
     assert check_recipe.recipe_errors(meta, build, version) == lack
     assert check_recipe.recipe_errors(commented, build, version) == lack
     assert check_recipe.recipe_errors(requiring("- duckdb-cli >=1.3.2"), build, version) == []
+    above_host = meta.replace(host, "  run:\n    - duckdb-cli >=1.3.2\n" + host)
+    assert check_recipe.recipe_errors(above_host, build, version) == []
     assert check_recipe.recipe_errors(requiring("- duckdb-cli >=1.3.2", "- samtools"), build, version) == [
         f"run requirements name samtools, which {recipe} does not run"
     ]

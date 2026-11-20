@@ -44,6 +44,8 @@ TARGET_FEATURE_RE = re.compile(r"(target[-_]feature)=([^\s\"']+)")
 CPU_SET_RE = re.compile(r"(?<![\w$-])cpu=[\"']?([^\s;\"']*)")
 ESAC_RE = re.compile(r"(?<![\w-])esac(?![\w-])")
 CARGO_BUILD_RE = re.compile(r"(?<![\w-])cargo\s+build(?![\w-])")
+RUN_KEY_RE = re.compile(r"""\s*["']?run["']?\s*:""")
+REQUIREMENTS_KEY_RE = re.compile(r"  [^\s#-]")
 
 # The newest published release: its version, the sha256 its SHA256SUMS states for
 # vep-rs-<version>.tar.gz, and what its binaries run. 0.6.0 writes Parquet without
@@ -191,6 +193,18 @@ def recipe_errors(meta: str, build: str, version: str) -> list[str]:
     for item in run:
         if item not in PUBLISHED_RUN:
             errors.append(f"run requirements name {item}, which {PUBLISHED_VERSION} does not run")
+    # `listed` reads one `  run:` line of the requirements and the `    - item` lines under it;
+    # a run key or entry in any other shape is a requirement the two loops above never see.
+    lines = requirements.splitlines()
+    keys = [line for line in meta.splitlines() if RUN_KEY_RE.match(line)]
+    if keys and (keys != ["  run:"] or "  run:" not in lines):
+        errors.append("run requirements are not written as one `  run:` block list under requirements")
+    elif keys:
+        for line in lines[lines.index("  run:") + 1 :]:
+            if REQUIREMENTS_KEY_RE.match(line):
+                break
+            if line.strip() and not line.lstrip().startswith("#") and not line.startswith("    - "):
+                errors.append(f"run requirements hold {line.strip()}, which is no `    - item` line")
     tests = section(meta, "test")
     for command in (
         "    - vep --version",
