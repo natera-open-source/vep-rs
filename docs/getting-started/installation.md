@@ -1,6 +1,6 @@
 # Installation
 
-Install vep-rs in one of three ways: a pre-built `vep` binary for Linux or macOS, a build from source, or the container image.
+Install vep-rs in one of four ways: a pre-built `vep` binary for Linux or macOS, a build from source, the container image, or the Bioconda package.
 
 ## Pre-built binaries
 
@@ -94,11 +94,19 @@ apptainer exec --bind /shared/vep-cache:/cache:ro --bind "$PWD/results:/out" \
 
 ## Bioconda
 
+The Bioconda channel carries vep-rs as the package `vep-rs`, built for Linux and macOS on x86_64 and arm64. It installs `vep`, `vep-cache-builder` and `vep-cache-converter`:
+
+```bash
+conda install -c conda-forge -c bioconda vep-rs
+```
+
+The channel builds a release from its own copy of the recipe, `recipes/vep-rs` in [bioconda-recipes](https://github.com/bioconda/bioconda-recipes), once that copy names the release, so the version it serves can trail the newest release. `conda search -c bioconda vep-rs` lists the versions the channel holds.
+
 The repository holds a Bioconda recipe, [`bioconda/vep-rs`](../../bioconda/vep-rs/meta.yaml). It builds `vep`, `vep-cache-builder` and `vep-cache-converter` from the source tarball of the published release its `version` names (`vep-rs-X.Y.Z.tar.gz`, the `git archive` the release workflow cuts) with `cargo build --release --locked`.
 
 Linux x86_64 compiles for `x86-64-v2` and Linux aarch64 for a generic CPU, the floors of the generic release archives. `.cargo/config.toml` would otherwise compile for `x86-64-v3` and Neoverse V1, which abort with an illegal-instruction fault below those floors. On Linux the build links conda-forge OpenSSL, the same library the release binaries link.
 
-The recipe is not a channel package: [What vep-rs does not do](what-vep-rs-does-not-do.md#bioconda) says how vep-rs is installed.
+[What vep-rs does not do](what-vep-rs-does-not-do.md#bioconda) says what a pipeline that installs Ensembl VEP from Bioconda changes.
 
 ## Operating systems and architectures
 
@@ -111,7 +119,7 @@ vep-rs runs where a release archive or the container image runs. Every archive h
 | macOS on Apple silicon | `aarch64-apple-darwin` | macOS 11 or later |
 | macOS on Intel | `x86_64-apple-darwin` (`x86-64-v3`) | an Intel Mac with AVX2 (every Intel Mac macOS 26 supports) |
 | Container image | `ghcr.io/natera-open-source/vep-rs` on linux/amd64 and linux/arm64 | Docker, Podman, Singularity or Apptainer |
-| Windows | none | the Linux x86_64 archive under WSL2; not tested |
+| Windows | none | the container image under Docker, or the Linux x86_64 archive under WSL2; neither is tested on Windows |
 | FreeBSD, Linux with musl | none | not built |
 
 There is no Homebrew formula: macOS users install from the release archive or build from source. The two macOS archives are not timed by the release measurement, so no page states their speed.

@@ -2338,7 +2338,9 @@ fn number_word(n: usize) -> &'static str {
 /// `fasta`: the three refusals at open the page's sentence counts each have a
 /// table row, the `.gzi` one included (`checked_gzi` in `vep-fasta`, whose
 /// `FastaError::GziMismatch` prints `BGZF index {gzi} does not describe {fasta}
-/// ({reason}): index the file again with samtools faidx`).
+/// ({reason}): index the file again with samtools faidx`), and so has the
+/// malformed block the page names after them (`FastaError::MalformedBgzfBlock`,
+/// `malformed BGZF block at offset {offset} in {path}`).
 #[test]
 fn fasta_open_refusals_are_each_tabulated() {
     assert_page_states(
@@ -2347,6 +2349,7 @@ fn fasta_open_refusals_are_each_tabulated() {
             "Three files are refused at open: a gzip file that is not BGZF, whose `.fai` offsets \
              need the whole file inflated; a `.gzi` that does not match the file's blocks, \
              recompressed and not re-indexed; an `.fai` naming more bases than the file holds",
+            "So is a BGZF file holding a malformed block.",
             "| A gzip file that is not BGZF | `ERROR: [fasta] <file> is gzip but not BGZF: \
              recompress with bgzip and index with samtools faidx` |",
             "| A `.gzi` that does not describe the file's blocks | `ERROR: [fasta] BGZF index \
@@ -2354,6 +2357,9 @@ fn fasta_open_refusals_are_each_tabulated() {
              with samtools faidx` |",
             "| An `.fai` naming bases past the file's end | `ERROR: [fasta] FASTA index names <n> \
              bases beyond the end of <file>` |",
+            "| A BGZF block declaring more than 65,536 uncompressed bytes, the most a block holds | \
+             `ERROR: [fasta] malformed BGZF block at offset <n> in <file>`, `<n>` the block's byte \
+             offset in the file |",
         ],
     );
 }
@@ -3308,7 +3314,8 @@ fn os_and_architecture_table_is_documented() {
              Intel Mac macOS 26 supports) |",
             "| Container image | `ghcr.io/natera-open-source/vep-rs` on linux/amd64 and linux/arm64 | \
              Docker, Podman, Singularity or Apptainer |",
-            "| Windows | none | the Linux x86_64 archive under WSL2; not tested |",
+            "| Windows | none | the container image under Docker, or the Linux x86_64 archive under \
+             WSL2; neither is tested on Windows |",
             "| FreeBSD, Linux with musl | none | not built |",
             "There is no Homebrew formula: macOS users install from the release archive or build from \
              source.",
@@ -3450,7 +3457,7 @@ fn workflow_manager_mapping_is_documented() {
             "A cache built with `vep-cache-builder --auto` into the rule's cache directory is \
              therefore found as the wrapper expects",
             "The Perl modules the `bio/vep/plugins` rule downloads into `--dir_plugins` are not loaded",
-            "vep-rs has no Bioconda package",
+            "vep-rs is the Bioconda package `vep-rs`",
         ],
     );
 }
@@ -3471,26 +3478,32 @@ fn plugin_data_download_exclusion_is_documented() {
     );
 }
 
-/// `bioconda-distribution`: the limitations page states that there is no
-/// Bioconda package, how vep-rs is installed, and what a conda-based pipeline
-/// runs instead.
+/// `bioconda-distribution`: the limitations page states that the Bioconda
+/// package's version can trail the newest release, the forms every release is
+/// published in, and what a pipeline that installs Ensembl VEP from Bioconda
+/// changes.
 #[test]
 fn bioconda_status_is_documented() {
     assert_page_states(
         "getting-started/what-vep-rs-does-not-do.md",
         &[
-            "There is no Bioconda package: vep-rs is installed from a pre-built binary on the \
-             [Releases](https://github.com/natera-open-source/vep-rs/releases) page, a build from \
-             source or the container image, as [Installation](installation.md) describes.",
-            "A pipeline that installs Ensembl VEP from Bioconda runs vep-rs from the container \
-             image or the release archive instead ([Workflow managers](workflow-managers.md)).",
+            "The Bioconda channel carries vep-rs as the package `vep-rs`, and the version it serves \
+             can trail the newest release: the channel builds a release once its own copy of the \
+             recipe names it ([Installation](installation.md#bioconda)).",
+            "Every release is published as pre-built binaries on the \
+             [Releases](https://github.com/natera-open-source/vep-rs/releases) page, as source and \
+             as the container image ([Installation](installation.md)).",
+            "A pipeline that installs Ensembl VEP from Bioconda does not get vep-rs by that package: \
+             its environment names `vep-rs` in place of `ensembl-vep`, or it runs vep-rs from the \
+             container image or the release archive ([Workflow managers](workflow-managers.md)).",
         ],
     );
 }
 
-/// `bioconda-distribution`: the installation and limitations pages state what the
-/// repository's Bioconda recipe builds and that it is not a channel package, and
-/// the home page names the recipe among what the installation page covers.
+/// `bioconda-distribution`: the installation page states the channel's package,
+/// its install line and why its version can trail a release; it and the
+/// limitations page state what the repository's Bioconda recipe builds, and the
+/// home page names the recipe among what the installation page covers.
 #[test]
 fn bioconda_recipe_is_documented() {
     assert_page_states(
@@ -3500,17 +3513,19 @@ fn bioconda_recipe_is_documented() {
              [`bioconda/vep-rs`](../../bioconda/vep-rs/meta.yaml).",
             "It builds `vep`, `vep-cache-builder` and `vep-cache-converter` from the source \
              tarball of the published release its `version` names",
-            "The recipe is not a channel package: \
-             [What vep-rs does not do](what-vep-rs-does-not-do.md#bioconda) says how vep-rs is \
-             installed.",
+            "The Bioconda channel carries vep-rs as the package `vep-rs`, built for Linux and macOS \
+             on x86_64 and arm64.",
+            "conda install -c conda-forge -c bioconda vep-rs",
+            "The channel builds a release from its own copy of the recipe, `recipes/vep-rs` in \
+             [bioconda-recipes](https://github.com/bioconda/bioconda-recipes), once that copy names \
+             the release, so the version it serves can trail the newest release.",
         ],
     );
     assert_page_states(
         "getting-started/what-vep-rs-does-not-do.md",
         &[
             "The repository holds a Bioconda recipe, which builds the binaries from a published \
-             release's source tarball and is not a channel package \
-             ([Installation](installation.md#bioconda)).",
+             release's source tarball ([Installation](installation.md#bioconda)).",
         ],
     );
     assert_page_states(

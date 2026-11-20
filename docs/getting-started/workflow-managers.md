@@ -57,7 +57,7 @@ The wrapper reads the species, release and assembly from the cache directory's l
 
 A `--plugin` name among the built-in plugins ([Plugins](../plugins.md)) runs built in with the data file the rule names. The Perl modules the `bio/vep/plugins` rule downloads into `--dir_plugins` are not loaded, so a name that is neither built in nor a shared library there is refused under the wrapper's `--safe`.
 
-The wrapper runs in a conda environment holding Ensembl VEP; vep-rs has no Bioconda package ([What vep-rs does not do](what-vep-rs-does-not-do.md#bioconda)), so the rule runs with the `vep` binary on `PATH`, or in the vep-rs container, in place of that environment.
+The wrapper runs in a conda environment holding Ensembl VEP, which does not hold vep-rs: vep-rs is the Bioconda package `vep-rs` ([What vep-rs does not do](what-vep-rs-does-not-do.md#bioconda)). The rule therefore runs with the `vep` binary on `PATH`, from an environment that names that package or from a release archive, or in the vep-rs container, in place of that environment.
 
 ## Where next
 
