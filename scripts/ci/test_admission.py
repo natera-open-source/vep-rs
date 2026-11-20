@@ -869,8 +869,9 @@ def test_a_trailer_without_a_value_does_not_take_the_next_line_for_one():
 
 @RELEASE_TREE
 def test_the_pages_that_print_the_declaration_s_forms_print_the_ones_the_parser_reads():
-    """Two root pages print the three forms: the model's line and `No LLM` declare, the form with
-    placeholders names nothing, and each page says how an account's address is read."""
+    """Two root pages print the declaration's two forms on three lines: the model's line and
+    `No LLM` declare, the line with placeholders names nothing, and each page says how an account's
+    address is read."""
     printed = {}
     for page in sorted(ROOT.glob("*.md")):
         text = page.read_text(encoding="utf-8")
@@ -881,7 +882,7 @@ def test_the_pages_that_print_the_declaration_s_forms_print_the_ones_the_parser_
     for name, (forms, text) in printed.items():
         declared = [adm.declared_models([commit("1" * 40, f"Subject\n\n{form}\n")]) for form in forms]
         assert [len(names) for names in declared] == [1, 0, 1] and declared[2] == ["No LLM"], name
-        assert "users.noreply.github.com" in text, name
+        assert adm.ACCOUNT_DOMAIN in text, name
 
 
 @pytest.mark.parametrize("person", PERSON_LINES, ids=PERSON_IDS)

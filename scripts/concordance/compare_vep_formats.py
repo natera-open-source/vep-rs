@@ -9661,7 +9661,7 @@ def terms_impact(terms: Collection[str]) -> str | None:
 
 
 def terms_write_field(name: str, terms: Collection[str]) -> bool | None:
-    """Whether a row of these terms lets the plugin that writes the field ``name`` run, or
+    """Whether a row of these terms permits the plugin that writes the field ``name`` to run, or
     ``None`` for a field no term decides."""
     if field_named(name, DOWNSTREAM_FIELDS):
         return FRAMESHIFT_TERM in terms and not any("splice" in t for t in terms)
@@ -9695,7 +9695,7 @@ def term_pair_following_cell(e: Entry, a: Entry, name: str, ev: str, av: str) ->
     """Whether the differing values ``ev`` and ``av`` of the field ``name`` on the reference
     entry ``e`` and the candidate entry ``a`` of one key are the ones the two entries'
     Consequence sets give: the IMPACT of each set, a Downstream, NMD or LOFTEE field present
-    exactly where the set lets the plugin run, or an HGVSp that is a frameshift's notation
+    exactly where the set permits the plugin to run, or an HGVSp that is a frameshift's notation
     exactly on the side without ``stop_retained_variant``."""
     expected_terms = set(consequence_set(e.consequence).split(","))
     actual_terms = set(consequence_set(a.consequence).split(","))

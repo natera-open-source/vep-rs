@@ -30,7 +30,7 @@ Shapes:
                 the events column carries the `Top<rank>:<type>;<impact>;<percent>;<frame>`
                 groups joined by `|`, with a percent above one thousand written with a space
                 as its thousands separator; index `tabix -s 1 -b 2 -e 2`
-    cadd_snv    the CADD v1.7 SNV file: a first line `##CADD <assembly>-v1.7 layout: ...`
+    cadd_snv    the synthetic CADD SNV file: a first line `##CADD <assembly>-v1.7 layout: ...`
                 that names the build (`--assembly`) and says the scores are fabricated,
                 the `#Chrom Pos Ref Alt RawScore
                 PHRED` header, one row per alternate base at every single-nucleotide site,
@@ -38,12 +38,12 @@ Shapes:
                 both ends are trimmed (the plugin trims both sides before it compares, so a
                 record such as `ACG/ATG` is scored by the `C/T` row one base along);
                 index `tabix -s 1 -b 2 -e 2`
-    cadd_indel  the CADD v1.7 indel file: the same first line and header; one row per
+    cadd_indel  the synthetic CADD indel file: the same first line and header; one row per
                 insertion or deletion as the VCF writes it (the anchor base kept),
                 beside a decoy row at the same anchor one base
                 longer than the allele; a substitution of several bases gets no row;
                 index `tabix -s 1 -b 2 -e 2`
-    cadd_sv     the CADD-SV v1.1 file: a first line `## CADD-SV GRCh38 layout: ...` that says the scores are fabricated, and
+    cadd_sv     the synthetic CADD-SV file: a first line `## CADD-SV GRCh38 layout: ...` that says the scores are fabricated, and
                 a seven-column header (`#Chrom Start End Type
                 Name CADD-SV_PHRED-score CADD-SV_Raw-score`); one row per `<DEL>`, `<INS>`
                 or `<DUP>` record with `Start` the VCF position (the fixture's

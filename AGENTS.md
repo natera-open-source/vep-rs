@@ -38,9 +38,10 @@ parts that fail CI or review when missed.
 
 - Sign every commit: `git commit -s`. The DCO check fails a pull request with an unsigned commit.
 - Declare the model that wrote the change: one commit carries a trailer beside its sign-off, in
-  one of the three forms below, and the squash body carries both trailers onto `main`. The first
-  form is the line a coding tool appends by default; the last is for a change written without a
-  model.
+  one of the two forms below, and the squash body carries both trailers onto `main`. The first
+  form names the model: the first line is the one a coding tool appends by default and the
+  second is its pattern for any vendor's model. The second form, the last line, is for a change
+  written without a model.
 
   ```text
   Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
