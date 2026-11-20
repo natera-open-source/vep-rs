@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Caches, reference FASTA and the cache tools
-  - `--fasta` given a FASTA without its `.fai`, or a `bgzip` FASTA without its `.gzi`, writes them beside it as Ensembl VEP does, where the run was refused.
+  - `--fasta` given a FASTA without its `.fai`, or a `bgzip` FASTA without its `.gzi`, writes them beside it as Ensembl VEP does, where the run was refused. (#119)
 - Documentation, test corpora and comparison tools
   - The cache, prediction, plugin-data, plugin-writing and output pages, the README's Crates table and six crate READMEs state what the code does: FASTA refusals, `contig_order`, `.bgz` stores, per-gene row order. (#117)
   - Doc comments in eight crates state what the code beside them does, `PluginRegistry::plugins`, `LazyTranscriptIndexes` and `EffectsConfig::loftee_context` among them. (#117)
