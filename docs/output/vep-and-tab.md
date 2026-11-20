@@ -176,7 +176,7 @@ Every formatter follows Ensembl VEP's rules, cited to their Perl sources in the 
 
 A record's rows come by feature kind: transcript, then regulatory-feature, then motif-feature rows. Each kind is feature-major, by Ensembl VEP's key (a transcript's stable id, `_` and database id; a regulatory feature's stable id; a motif's database id), and allele-minor, by ALT order. A `--regulatory_gff` motif has no database id and takes its stable id ([the motif row order class](../divergences/regulatory-gff-motif-rows.md#1-two-motif-rows-of-one-record-in-the-order-of-a-read-counter)). Intergenic rows come last, one per allele overlapping no transcript. A record's rows are contiguous in the default and tab formats; the VCF output folds them into one line, the JSON into one object.
 
-A structural variant's regulatory-feature and motif-feature rows come as their source lists them. That is file order from `--regulatory_gff`, read or baked, and the cache's order from a converted cache ([Regulatory and motif features](../regulatory.md)).
+A structural variant's regulatory-feature and motif-feature rows come as their source lists them. That is file order from `--regulatory_gff`, read or baked, and the cache's order from a converted cache. `--per_gene` and `--pick_allele_gene` write the regulatory-feature and motif-feature rows ahead of the transcript rows they keep ([Regulatory and motif features](../regulatory.md)).
 
 ### Uploaded_variation
 

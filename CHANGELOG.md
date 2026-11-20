@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Documentation, test corpora and comparison tools
-  - The cache, prediction, plugin-data and plugin-writing pages, the README's Crates table and two crate READMEs state what the code does: FASTA refusals, `contig_order`, `.bgz` stores, JSON keys, `Runner::run`'s order. (#117)
+  - The cache, prediction, plugin-data, plugin-writing and output pages, the README's Crates table and six crate READMEs state what the code does: FASTA refusals, `contig_order`, `.bgz` stores, per-gene row order. (#117)
   - Doc comments in eight crates state what the code beside them does, `PluginRegistry::plugins`, `LazyTranscriptIndexes` and `EffectsConfig::loftee_context` among them. (#117)
   - The divergence index states the rate of `revel_other_reference_amino_acid_rows` by output rows, as its page counts it. (#117)
 

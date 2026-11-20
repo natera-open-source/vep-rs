@@ -145,5 +145,5 @@ are in [CONTRIBUTING.md](../../CONTRIBUTING.md).
 - [vep-cli](../vep-cli/README.md): the binary that selects the transcripts, calls this crate once per transcript and formats the rows.
 - [docs/output-formats.md](../../docs/output-formats.md): how the terms, the display columns and the `IMPACT`, `DISTANCE`, `EXON` and `INTRON` fields appear in each output format.
 - [docs/intended-divergences.md](../../docs/intended-divergences.md): every case where this crate's terms differ from Ensembl VEP's, each traced to the mechanism in Ensembl VEP's source.
-- [docs/plugins.md](../../docs/plugins.md): the LoFTEE consequence filter that reads the exon and intron model this crate's rows carry.
+- [docs/plugins.md](../../docs/plugins.md): the LoFTEE consequence filter, which reads the exon and intron model `vep-cli` attaches to this crate's rows.
 - [Root README](../../README.md): what vep-rs is, the measured concordance and the quick start.

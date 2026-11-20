@@ -35,7 +35,9 @@ overlapped no transcript. A structural variant's regulatory and motif rows take
 `TranscriptConsequence::structural_feature_order` instead: the loader's met rank
 in `id_rank` (the order the source lists the features: the `--regulatory_gff`
 files' record order, or a converted cache's listing order), then the start and
-the stable id.
+the stable id. A record that `--per_gene` or `--pick_allele_gene` reduced
+(`InputVariant::per_gene_pick`) lists its transcript rows after its regulatory
+and motif rows.
 `fields::write_field_value` answers every column name from the row as bytes
 (`fields::field_value` collects them into a `String`), a plugin's value first
 where the plugin wrote the name, the table's otherwise. Under `--minimal` the

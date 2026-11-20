@@ -113,14 +113,14 @@ annotates both kinds.
 `TabixAnnotator` issues one tabix query per merged region rather than one per
 variant:
 
-```
+```text
 per variant:
-  tabix_seek(chr, pos)            # one seek per variant
+  tabix query(chr, pos)           # one index lookup per variant
 
 per buffer (TabixAnnotator):
-  sort the buffer's variants by position
+  sort the buffer's regions by start within each chromosome
   merge overlapping regions (bridging gaps of up to 1000 bp)
-  tabix_seek per merged region    # one seek per merged region
+  tabix query per merged region   # one index lookup per merged region
   index the records by position
   for each variant:
     in-memory range lookup        # no I/O

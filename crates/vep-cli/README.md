@@ -6,7 +6,7 @@ Predictor (VEP) command line, and the `vep_cli` library behind it. The crate's t
 lists it as a dependency, and a program that embeds annotation holds its `Annotator` across
 many batches. It reads variants in Variant Call Format (VCF) or VEP's other input formats,
 annotates them against a JSON transcript cache, and writes VEP's default, tab, VCF, JSON or
-Parquet output through the `vep-io` formatters.
+Parquet output from the `vep-io` field table.
 
 ```bash
 cargo install vep-cli --locked
