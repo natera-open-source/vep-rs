@@ -5897,6 +5897,76 @@ fn the_var_synonyms_notice_prints_before_a_cache_or_filter_refusal() {
 /// are done, and the output written meanwhile is not taken for the file's
 /// annotation. Both fixtures are the committed FASTA with the block whose
 /// sequence most of the corpus's variants read (entry 544 ends it) altered.
+/// A `--fasta` given without its indexes is indexed beside itself, as Ensembl
+/// VEP's reader indexes it (`Variation/Utils/FastaSequence.pm:323-358`, through
+/// `Bio::DB::HTS::Faidx`): the bgzipped corpus FASTA gets the `.fai` and `.gzi`
+/// `samtools faidx` wrote for it, its plain form a `.fai`, and either run
+/// writes the HGVS output of the run on the indexed corpus FASTA.
+#[test]
+fn a_fasta_without_its_indexes_is_indexed_beside_itself() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = hgvs_corpus_fasta();
+    let indexed_out = dir.path().join("indexed.txt");
+    let indexed = run_with(
+        &hgvs_corpus_args(),
+        &["--hgvs", "--quiet", "--fasta", source.to_str().unwrap()],
+        &indexed_out,
+    );
+    assert!(indexed.status.success(), "{}", text(&indexed.stderr));
+    // The header names the run's time and its FASTA; the rows follow it.
+    let rows = |path: &Path| -> String {
+        std::fs::read_to_string(path)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.starts_with("##"))
+            .map(|line| format!("{line}\n"))
+            .collect()
+    };
+    let expected = rows(&indexed_out);
+    assert!(expected.lines().count() > 1, "{expected}");
+
+    let bgzf = dir.path().join("bgzf.fa.gz");
+    std::fs::copy(&source, &bgzf).unwrap();
+    let mut plain_bases = Vec::new();
+    flate2::read::MultiGzDecoder::new(std::fs::File::open(&source).unwrap())
+        .read_to_end(&mut plain_bases)
+        .unwrap();
+    let plain = dir.path().join("plain.fa");
+    std::fs::write(&plain, plain_bases).unwrap();
+
+    for (fasta, indexes) in [(&bgzf, &["fai", "gzi"][..]), (&plain, &["fai"][..])] {
+        let out = dir.path().join("out.txt");
+        let run = run_with(
+            &hgvs_corpus_args(),
+            &["--hgvs", "--quiet", "--fasta", fasta.to_str().unwrap()],
+            &out,
+        );
+        assert!(
+            run.status.success(),
+            "{}: {}",
+            fasta.display(),
+            text(&run.stderr)
+        );
+        assert!(run.stderr.is_empty(), "{}", text(&run.stderr));
+        assert_eq!(rows(&out), expected, "{}", fasta.display());
+        for extension in indexes {
+            assert!(
+                Path::new(&format!("{}.{extension}", fasta.display())).is_file(),
+                "{}.{extension}",
+                fasta.display()
+            );
+        }
+        assert!(!Path::new(&format!("{}.vep.lock", fasta.display())).exists());
+    }
+    for extension in ["fai", "gzi"] {
+        assert_eq!(
+            std::fs::read(format!("{}.{extension}", bgzf.display())).unwrap(),
+            std::fs::read(format!("{}.{extension}", source.display())).unwrap(),
+            "{extension}"
+        );
+    }
+}
+
 #[test]
 fn misdescribed_block_fails_the_run() {
     let dir = tempfile::tempdir().unwrap();

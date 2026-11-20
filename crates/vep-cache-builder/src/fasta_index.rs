@@ -2,18 +2,21 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 //! The genome FASTA a cache directory carries: a BGZF-compressed `.fa.gz` with
-//! the `.fai` and `.gzi` indexes `vep` reads it through, written here from a
-//! gzip or BGZF source without `bgzip` or `samtools`.
+//! the `.fai` and `.gzi` indexes `vep` reads it through, written from a gzip or
+//! BGZF source without `bgzip` or `samtools`.
 
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
+use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::Path;
+#[cfg(test)]
+use std::path::PathBuf;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use tracing::info;
 
 /// The path of an index beside `fasta`: `<fasta>.<suffix>`.
-pub fn index_path(fasta: &Path, suffix: &str) -> PathBuf {
+#[cfg(test)]
+fn index_path(fasta: &Path, suffix: &str) -> PathBuf {
     let mut name = fasta.as_os_str().to_owned();
     name.push(".");
     name.push(suffix);
@@ -41,8 +44,8 @@ pub fn install_fasta(source: &Path, target: &Path) -> Result<()> {
         recompress_to_bgzf(source, target)?;
     }
     info!("Indexing {}", target.display());
-    write_fai(target)?;
-    write_gzi(target)?;
+    vep_fasta::index::write_fai(target)?;
+    vep_fasta::index::write_gzi(target)?;
     vep_fasta::IndexedFasta::from_path(target)
         .with_context(|| format!("The indexed FASTA {} does not open", target.display()))?;
     Ok(())
@@ -61,10 +64,6 @@ pub fn is_bgzf(path: &Path) -> Result<bool> {
     }
     Ok(block_size(&header).is_some())
 }
-
-/// The smallest BGZF block: an 18-byte header, the two bytes of an empty
-/// deflate stream and the 8-byte trailer, the length of the EOF marker block.
-const MIN_BLOCK_SIZE: usize = 28;
 
 /// The gzip member header fields of BGZF: identification `1f 8b`, deflate, the
 /// FEXTRA flag and a six-byte extra field whose `BC` subfield holds the block's
@@ -98,79 +97,6 @@ fn recompress_to_bgzf(source: &Path, target: &Path) -> Result<()> {
         .with_context(|| format!("Failed to finish {}", target.display()))?
         .flush()
         .with_context(|| format!("Failed to write {}", target.display()))?;
-    Ok(())
-}
-
-/// Writes `<fasta>.fai`, the `samtools faidx` index of the BGZF FASTA at
-/// `fasta`, each record's offset counted in the inflated stream.
-fn write_fai(fasta: &Path) -> Result<()> {
-    let file = File::open(fasta).with_context(|| format!("Failed to open {}", fasta.display()))?;
-    let reader = noodles::bgzf::io::Reader::new(BufReader::new(file));
-    let mut indexer = noodles::fasta::io::Indexer::new(reader);
-    let mut records = Vec::new();
-    while let Some(record) = indexer
-        .index_record()
-        .with_context(|| format!("Failed to index {}", fasta.display()))?
-    {
-        records.push(record);
-    }
-    let index = noodles::fasta::fai::Index::from(records);
-    let fai = index_path(fasta, "fai");
-    let mut writer = noodles::fasta::fai::io::Writer::new(BufWriter::new(
-        File::create(&fai).with_context(|| format!("Failed to create {}", fai.display()))?,
-    ));
-    writer
-        .write_index(&index)
-        .with_context(|| format!("Failed to write {}", fai.display()))?;
-    writer.into_inner().flush()?;
-    Ok(())
-}
-
-/// Writes `<fasta>.gzi`, the `bgzip` index of the BGZF file at `fasta`: the
-/// compressed and inflated offsets of every non-empty block after the first,
-/// read from the block headers and trailers without inflating the data.
-fn write_gzi(fasta: &Path) -> Result<()> {
-    let mut file =
-        File::open(fasta).with_context(|| format!("Failed to open {}", fasta.display()))?;
-    let length = file.metadata()?.len();
-    let mut entries = Vec::new();
-    let (mut compressed, mut inflated) = (0u64, 0u64);
-    let mut header = [0u8; 18];
-    while compressed < length {
-        file.seek(SeekFrom::Start(compressed))?;
-        file.read_exact(&mut header)
-            .with_context(|| format!("{}: truncated block header", fasta.display()))?;
-        let Some(size) = block_size(&header) else {
-            bail!(
-                "{} is gzip but not BGZF at offset {compressed}",
-                fasta.display()
-            );
-        };
-        if size < MIN_BLOCK_SIZE {
-            bail!(
-                "{} states a {size}-byte block at offset {compressed}, shorter than the {MIN_BLOCK_SIZE}-byte minimum of BGZF",
-                fasta.display()
-            );
-        }
-        let size = size as u64;
-        let mut trailer = [0u8; 4];
-        file.seek(SeekFrom::Start(compressed + size - 4))?;
-        file.read_exact(&mut trailer).with_context(|| {
-            format!(
-                "{}: truncated block at offset {compressed}",
-                fasta.display()
-            )
-        })?;
-        let data_len = u64::from(u32::from_le_bytes(trailer));
-        if data_len > 0 && compressed > 0 {
-            entries.push((compressed, inflated));
-        }
-        compressed += size;
-        inflated += data_len;
-    }
-    let gzi = index_path(fasta, "gzi");
-    noodles::bgzf::gzi::fs::write(&gzi, &noodles::bgzf::gzi::Index::from(entries))
-        .with_context(|| format!("Failed to write {}", gzi.display()))?;
     Ok(())
 }
 
@@ -296,7 +222,9 @@ mod tests {
             std::fs::write(&crafted, header).unwrap();
             assert!(is_bgzf(&crafted).unwrap());
 
-            let error = write_gzi(&crafted).unwrap_err().to_string();
+            let error = vep_fasta::index::write_gzi(&crafted)
+                .unwrap_err()
+                .to_string();
             assert!(
                 error.contains(&format!("{}-byte block at offset 0", bsize + 1))
                     && error.contains("28-byte minimum"),

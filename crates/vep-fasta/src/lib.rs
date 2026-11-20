@@ -40,6 +40,8 @@ use std::{
     },
 };
 
+pub mod index;
+
 use memmap2::Mmap;
 use noodles::bgzf;
 use thiserror::Error;
@@ -104,6 +106,16 @@ pub enum FastaError {
 
     #[error("invalid VEP_FASTA_STORAGE={0:?}: expected 'mmap' or 'memory'")]
     InvalidStorageMode(String),
+
+    /// Ensembl VEP's text for a lock file it cannot write beside a FASTA it
+    /// indexes (`Utils/FastaSequence.pm:334`).
+    #[error("Could not write to FASTA lock file {0}")]
+    LockFile(String),
+
+    /// A FASTA whose `.fai` cannot be written: its sequence lines differ in
+    /// length, or a BGZF block of it cannot be read.
+    #[error("failed to index {path}: {reason}")]
+    Unindexable { path: String, reason: String },
 }
 
 /// The [`FastaError::Io`] for a failed `action` on `path`.
