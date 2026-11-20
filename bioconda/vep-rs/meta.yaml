@@ -1,5 +1,5 @@
 {% set name = "vep-rs" %}
-{% set version = "0.5.0" %}
+{% set version = "0.6.0" %}
 
 package:
   name: {{ name }}
@@ -8,7 +8,7 @@ package:
 source:
   # git archive from the release workflow. GitHub's tag archive is not byte-stable.
   url: https://github.com/natera-open-source/vep-rs/releases/download/v{{ version }}/vep-rs-{{ version }}.tar.gz
-  sha256: 3ac0ab1e9af04691fa0ed1c19b6a1512180755fc383f4e2fcbfd800b6530926b
+  sha256: 027100a1775048f3881964cfd1f404c5d63e32264a61ce57621a613c9f9d8b2f
 
 build:
   number: 0
@@ -24,12 +24,6 @@ requirements:
     - pkg-config  # [linux]
   host:
     - openssl  # [linux]
-  run:
-    # --output_format parquet in the release this recipe names runs the duckdb
-    # program and refuses one below 1.3.2: check_duckdb in
-    # crates/vep-cli/src/runner.rs of the source tarball. A release whose
-    # runner.rs has no check_duckdb needs no such line.
-    - duckdb-cli >=1.3.2
 
 test:
   commands:

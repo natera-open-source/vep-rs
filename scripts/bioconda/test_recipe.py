@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 SCRIPT = HERE / "check_recipe.py"
@@ -246,17 +248,43 @@ def test_the_notice_is_a_license_file() -> None:
     assert check_recipe.recipe_errors(dropped, build, version) == ["license_file lacks NOTICE"]
 
 
-def test_the_run_requirements_are_those_of_the_published_release() -> None:
+def test_the_run_requirements_are_those_of_the_published_release(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     meta, build, version = shipped()
-    line = "    - duckdb-cli >=1.3.2\n"
-    dropped = meta.replace(line, "")
-    assert dropped != meta
-    assert check_recipe.recipe_errors(dropped, build, version) == ["run requirements lack duckdb-cli >=1.3.2"]
-    commented = meta.replace(line, "    # - duckdb-cli >=1.3.2\n")
-    assert check_recipe.recipe_errors(commented, build, version) == ["run requirements lack duckdb-cli >=1.3.2"]
-    extra = meta.replace(line, line + "    - samtools\n")
-    assert check_recipe.recipe_errors(extra, build, version) == [
-        f"run requirements name samtools, which {recipe_version(meta)} does not run"
+    recipe = recipe_version(meta)
+    host = "  host:\n    - openssl  # [linux]\n"
+    assert meta.count(host) == 1
+
+    def requiring(*entries: str) -> str:
+        """The shipped recipe with these lines as a `run:` list under its requirements."""
+        return meta.replace(host, host + "  run:\n" + "".join(f"    {entry}\n" for entry in entries))
+
+    # The published release starts no other program, so a recipe that requires one is refused.
+    assert check_recipe.listed(check_recipe.section(meta, "requirements"), "run") == []
+    for item in ("duckdb-cli >=1.3.2", "duckdb-cli", "samtools"):
+        assert check_recipe.recipe_errors(requiring(f"- {item}"), build, version) == [
+            f"run requirements name {item}, which {recipe} does not run"
+        ]
+    commented = requiring("# - duckdb-cli >=1.3.2")
+    assert check_recipe.recipe_errors(commented, build, version) == []
+    root = scratch_tree(tmp_path, version)
+    (root / "bioconda" / "vep-rs" / "meta.yaml").write_text(requiring("- duckdb-cli >=1.3.2"), encoding="utf-8")
+    out = subprocess.run(
+        [sys.executable, str(SCRIPT), "--root", str(root)], check=False, capture_output=True, text=True
+    )
+    assert (out.returncode, out.stderr) == (
+        1,
+        f"ERROR: [bioconda] run requirements name duckdb-cli >=1.3.2, which {recipe} does not run\n",
+    )
+    # A release that starts another program records it, and its recipe lists that program alone.
+    monkeypatch.setattr(check_recipe, "PUBLISHED_RUN", ("duckdb-cli >=1.3.2",))
+    lack = ["run requirements lack duckdb-cli >=1.3.2"]
+    assert check_recipe.recipe_errors(meta, build, version) == lack
+    assert check_recipe.recipe_errors(commented, build, version) == lack
+    assert check_recipe.recipe_errors(requiring("- duckdb-cli >=1.3.2"), build, version) == []
+    assert check_recipe.recipe_errors(requiring("- duckdb-cli >=1.3.2", "- samtools"), build, version) == [
+        f"run requirements name samtools, which {recipe} does not run"
     ]
 
 

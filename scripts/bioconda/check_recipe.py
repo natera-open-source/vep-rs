@@ -46,12 +46,12 @@ ESAC_RE = re.compile(r"(?<![\w-])esac(?![\w-])")
 CARGO_BUILD_RE = re.compile(r"(?<![\w-])cargo\s+build(?![\w-])")
 
 # The newest published release: its version, the sha256 its SHA256SUMS states for
-# vep-rs-<version>.tar.gz, and what its binaries run. 0.5.0 writes Parquet through
-# the duckdb program and refuses one below 1.3.2 (check_duckdb in
-# crates/vep-cli/src/runner.rs of that tarball).
-PUBLISHED_VERSION = "0.5.0"
-PUBLISHED_SHA256 = "3ac0ab1e9af04691fa0ed1c19b6a1512180755fc383f4e2fcbfd800b6530926b"
-PUBLISHED_RUN = ("duckdb-cli >=1.3.2",)
+# vep-rs-<version>.tar.gz, and what its binaries run. 0.6.0 writes Parquet without
+# the duckdb program (crates/vep-cli/src/runner.rs of that tarball has no
+# check_duckdb), and its three binaries start no other program.
+PUBLISHED_VERSION = "0.6.0"
+PUBLISHED_SHA256 = "027100a1775048f3881964cfd1f404c5d63e32264a61ce57621a613c9f9d8b2f"
+PUBLISHED_RUN: tuple[str, ...] = ()
 
 
 def fail_lines(errors: list[str]) -> None:
