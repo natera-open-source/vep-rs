@@ -589,7 +589,7 @@ def test_menu_title_is_demoted_and_a_title_repeating_the_book_name_collapses(mon
     assert f'<p class="menu-title">vep-rs {RELEASE}</p>' in index
     assert "<h1 class=" not in index
     assert f"<title>vep-rs: {postbuild.HOME_TAGLINE}</title>" in index
-    assert "<title>Setup - vep-rs</title>" in (site / "guide" / "setup.html").read_text(encoding="utf-8")
+    assert "<title>Setup - vep-rs documentation</title>" in (site / "guide" / "setup.html").read_text(encoding="utf-8")
     assert "<title>Not found - vep-rs</title>" in (site / "404.html").read_text(encoding="utf-8")
 
 
@@ -690,8 +690,9 @@ def test_page_heads_line_counts_the_pages_a_reader_lands_on(monkeypatch, capsys,
 
 def third_page_finding(monkeypatch, capsys, tmp_path, title, prose, counts, finding):
     """Holds the post-build step, on each channel, to its finding over the fixture site plus `guide/other.html`:
-    a warning and exit status 0 on the release, a failure on the preview."""
-    for channel, name in ((None, "vep-rs"), ("main", "vep-rs main")):
+    a warning and exit status 0 on the release, a failure on the preview. `{name}` in `finding` is what a short
+    title ends with on the channel."""
+    for channel, name in ((None, "vep-rs documentation"), ("main", "vep-rs main")):
         book = name if channel else f"vep-rs {RELEASE}"
         site, source = built_site(tmp_path / (channel or "release"), book=book)
         (site / "guide" / "other.html").write_text(page_html(title, f"<p>{prose}</p>", book), encoding="utf-8")
@@ -747,6 +748,188 @@ def test_a_sitemap_that_does_not_list_as_many_pages_as_a_reader_lands_on_fails(m
     assert postbuild.check_page_heads(str(site), reader_pages, "main") == []
 
 
+ENDING, ENDING_LONG = " - vep-rs", " - vep-rs documentation"
+HOME_PAGE_TITLE = "vep-rs: fast Ensembl VEP (Variant Effect Predictor) in Rust"
+CUT_A = "Co-located variants, frequencies and known structural variants"
+CUT_B = "Co-located variants, frequencies and known structural rearrangements"
+CUT_TITLE = "Co-located variants, frequencies and known structural\u2026"
+TITLES_LINE = 'page titles: {} pages, {} end " - vep-rs", {} end " - vep-rs documentation", {} without an ending, {} cut, {} outside 25 to 60 characters\n'
+
+
+@pytest.mark.parametrize(
+    ("heading", "title", "form"),
+    [
+        ("Quick start", "Quick start" + ENDING_LONG, "lengthened"),
+        ("x" * 15, "x" * 15 + ENDING_LONG, "lengthened"),
+        ("x" * 16, "x" * 16 + ENDING, "kept"),
+        ("x" * 51, "x" * 51 + ENDING, "kept"),
+        ("x" * 52, "x" * 52, "bare"),
+        ("x" * 60, "x" * 60, "bare"),
+        ("x" * 61, "x" * 59 + "\u2026", "cut"),
+    ],
+    ids=["20-with-the-ending", "24-with-the-ending", "25-with-the-ending", "60-with-the-ending", "61-with-the-ending", "60-alone", "61-alone"],
+)
+def test_a_title_takes_the_form_its_length_calls_for(heading, title, form):
+    assert postbuild.fitted_title(heading) == title
+    assert postbuild.title_form(title) == form
+    assert 25 <= len(title) <= 60
+
+
+@pytest.mark.parametrize(
+    ("heading", "title"),
+    [
+        (CUT_A, CUT_TITLE),
+        ("The fields a flag switches on in each output format, and the fields it leaves", "The fields a flag switches on in each output format\u2026"),
+        ("The warning file, the statistics report and the fields of a plugin's own file", "The warning file, the statistics report and the fields\u2026"),
+        ("x" * 21 + " of " + "y" * 50, "x" * 21 + " of\u2026"),
+        ("x" * 23 + ", " + "y" * 50, "x" * 23 + ",\u2026"),
+        ("ab cd " + "x" * 70, "ab cd " + "x" * 53 + "\u2026"),
+    ],
+    ids=["last-word-that-fits", "comma-and-a-small-word-dropped", "two-small-words-dropped", "small-word-kept-at-25", "comma-kept-at-25", "no-space-past-24"],
+)
+def test_a_heading_over_60_characters_is_cut_at_a_word_and_ends_in_an_ellipsis(heading, title):
+    assert len(heading) > 60
+    assert postbuild.fitted_title(heading) == title
+    assert postbuild.title_form(title) == "cut"
+    assert 25 <= len(title) <= 60
+
+
+def test_the_home_title_is_within_the_limits_and_the_fit_leaves_it():
+    assert f"{postbuild.BOOK_NAME}: {postbuild.HOME_TAGLINE}" == HOME_PAGE_TITLE
+    assert len(HOME_PAGE_TITLE) == 59 == len("vep-rs: ") + len(postbuild.HOME_TAGLINE)
+    page = f"<head>\n<title>{HOME_PAGE_TITLE}</title>\n</head>\n"
+    assert postbuild.fit_title(page) == page
+
+
+def chapter_html(name, n, book=f"vep-rs {RELEASE}"):
+    """A page as the theme writes it, the chapter name escaped before the book's in its title and whole in its
+    `og:title`, opening with a paragraph that `n` makes its own."""
+    escaped = postbuild.html.escape(name)
+    prose = f"Page {n} of the fixture site opens with a paragraph of its own, as long as a description must be."
+    meta = f'<meta property="og:title" content="{escaped}">\n'
+    return page_html(escaped, f"<p>{prose}</p>", book).replace("</head>", meta + "</head>")
+
+
+def add_chapters(site, names, book=f"vep-rs {RELEASE}"):
+    """Writes `guide/page<n>.html` for each chapter name; the pages' paths under the site."""
+    pages = [f"guide/page{n}.html" for n in range(len(names))]
+    for n, name in enumerate(names):
+        (site / pages[n]).write_text(chapter_html(name, n, book), encoding="utf-8")
+    return pages
+
+
+def title_of(site, page):
+    return re.search(r"<title>(.*)</title>", (site / page).read_text(encoding="utf-8"))[1]
+
+
+def test_the_release_fits_each_title_and_a_second_run_changes_no_byte(monkeypatch, capsys, tmp_path):
+    site, source = built_site(tmp_path)
+    kept, bare, cut = add_chapters(site, ["Setting up a cache", "x" * 52, CUT_A])
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    assert code == 0, out
+    assert {page: title_of(site, page) for page in ("index.html", "guide/setup.html", kept, bare, cut)} == {
+        "index.html": HOME_PAGE_TITLE,
+        "guide/setup.html": "Setup" + ENDING_LONG,
+        kept: "Setting up a cache" + ENDING,
+        bare: "x" * 52,
+        cut: CUT_TITLE,
+    }
+    assert f'<meta property="og:title" content="{CUT_A}">' in (site / cut).read_text(encoding="utf-8")
+    assert TITLES_LINE.format(5, 1, 1, 2, 1, 0) in out
+    finished = {path: path.read_bytes() for path in site.rglob("*") if path.is_file()}
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    assert code == 0, out
+    assert {path: path.read_bytes() for path in site.rglob("*") if path.is_file()} == finished
+    assert TITLES_LINE.format(5, 1, 1, 2, 1, 0) in out
+
+
+def test_the_preview_keeps_every_title_whole_and_prints_no_titles_line(monkeypatch, capsys, tmp_path):
+    site, source = built_site(tmp_path, book="vep-rs main")
+    names = ["A", "Setting up a cache", "x" * 52, CUT_A]
+    pages = add_chapters(site, names, "vep-rs main")
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source), "--channel", "main", base=BASE + "main/")
+    assert code == 0, out
+    assert "page titles:" not in out
+    assert [title_of(site, page) for page in pages] == [f"{name} - vep-rs main" for name in names]
+    assert title_of(site, "guide/setup.html") == "Setup - vep-rs main"
+
+
+def test_a_title_is_measured_unescaped_and_written_back_escaped(monkeypatch, capsys, tmp_path):
+    site, source = built_site(tmp_path)
+    kept, lengthened = add_chapters(site, ["R&D " + "x" * 47, "A <B> & C's"])
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    assert code == 0, out
+    assert title_of(site, kept) == "R&amp;D " + "x" * 47 + ENDING
+    assert title_of(site, lengthened) == "A &lt;B&gt; &amp; C's" + ENDING_LONG
+    assert TITLES_LINE.format(4, 1, 2, 1, 0, 0) in out
+
+
+def test_a_title_under_25_characters_fails_the_release_and_passes_the_preview(monkeypatch, capsys, tmp_path):
+    site, source = built_site(tmp_path / "release")
+    (page,) = add_chapters(site, ["A"])
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    assert code == 1
+    assert f"ERROR: [site_postbuild] {page}: title 'A - vep-rs documentation' is 24 characters, under 25\n" in out
+    assert TITLES_LINE.format(3, 0, 2, 1, 0, 1) in out
+    site, source = built_site(tmp_path / "main", book="vep-rs main")
+    add_chapters(site, ["A"], "vep-rs main")
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source), "--channel", "main", base=BASE + "main/")
+    assert code == 0, out
+
+
+def test_a_title_over_60_characters_fails_the_release(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(postbuild, "HOME_TAGLINE", postbuild.HOME_TAGLINE + ", every flag")
+    site, source = built_site(tmp_path)
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    assert code == 1
+    assert f"ERROR: [site_postbuild] index.html: title '{HOME_PAGE_TITLE}, every flag' is 71 characters, over 60\n" in out
+    assert TITLES_LINE.format(2, 0, 1, 1, 0, 1) in out
+
+
+def test_two_headings_cut_to_one_title_fail_the_release_and_pass_the_preview(monkeypatch, capsys, tmp_path):
+    site, source = built_site(tmp_path / "release")
+    first, second = add_chapters(site, [CUT_A, CUT_B])
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    assert code == 1
+    assert "page heads: 4 pages, 1 titles shared, 0 descriptions shared, 0 on the book's description\n" in out
+    assert f"ERROR: [site_postbuild] title {CUT_TITLE!r} is the fit of 2 headings: {first}, {second}\n" in out
+    assert "WARNING" not in out
+    site, source = built_site(tmp_path / "main", book="vep-rs main")
+    add_chapters(site, [CUT_A, CUT_B], "vep-rs main")
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source), "--channel", "main", base=BASE + "main/")
+    assert code == 0, out
+    assert "page heads: 4 pages, 0 titles shared, 0 descriptions shared, 0 on the book's description\n" in out
+
+
+def test_one_heading_cut_on_two_pages_is_a_warning_on_the_release(monkeypatch, capsys, tmp_path):
+    site, source = built_site(tmp_path)
+    first, second = add_chapters(site, [CUT_A, CUT_A])
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    assert code == 0, out
+    assert f"WARNING: [site_postbuild] title {CUT_TITLE!r} is on 2 pages: {first}, {second}\n" in out
+    assert "is the fit of" not in out
+
+
+def test_a_chapter_name_that_ends_in_the_release_tag_keeps_it_on_a_second_run(monkeypatch, capsys, tmp_path):
+    site, source = built_site(tmp_path)
+    kept, bare = add_chapters(site, [f"Upgrading to {RELEASE}", f"{'x' * 45} {RELEASE}"])
+    for _run in range(2):
+        code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+        assert code == 0, out
+        assert title_of(site, kept) == f"Upgrading to {RELEASE}" + ENDING
+        assert title_of(site, bare) == f"{'x' * 45} {RELEASE}"
+
+
+def test_a_home_chapter_of_another_name_is_titled_with_the_book_name_alone(monkeypatch, capsys, tmp_path):
+    site, source = built_site(tmp_path)
+    (site / "index.html").write_text(described_page("Overview", f"<p>{HOME_PROSE}</p>"), encoding="utf-8")
+    code, out = finish(monkeypatch, capsys, site, "--source", str(source))
+    assert code == 0, out
+    index = (site / "index.html").read_text(encoding="utf-8")
+    assert f"<title>{HOME_PAGE_TITLE}</title>" in index
+    assert f'<meta property="og:title" content="{HOME_PAGE_TITLE}">' in index
+
+
 FRAME = '<noscript>\n<iframe class="sidebar-iframe-outer" src="toc.html"></iframe>\n</noscript>'
 CHAPTERS = (
     '<ol class="chapter"><li><a href="index.html" target="_parent">vep-rs</a></li>'
@@ -783,6 +966,19 @@ def test_every_chapter_of_the_summary_has_a_title_of_its_own():
     names = [m[1] for m in map(SUMMARY_CHAPTER.search, lines) if m]
     assert names
     assert sorted({name for name in names if names.count(name) > 1}) == []
+
+
+def test_every_chapter_of_the_summary_keeps_a_title_of_its_own_within_the_limits_once_fitted():
+    """mdBook drops the backticks of inline code in a chapter name, so a title is fitted from the name without them."""
+    lines = (ROOT / "docs" / "SUMMARY.md").read_text(encoding="utf-8").splitlines()
+    chapters = [(m[2], m[1].replace("`", "")) for m in map(SUMMARY_CHAPTER.search, lines) if m]
+    titles = {}
+    for path, name in chapters:
+        title = HOME_PAGE_TITLE if path == "index.md" else postbuild.fitted_title(name)
+        titles.setdefault(title, []).append(name)
+    assert HOME_PAGE_TITLE in titles
+    assert {title: names for title, names in titles.items() if len(names) > 1} == {}
+    assert sorted(title for title in titles if not 25 <= len(title) <= 60) == []
 
 
 def test_the_readme_opening_the_book_description_and_the_home_title_name_the_same_things():
