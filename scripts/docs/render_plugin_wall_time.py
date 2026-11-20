@@ -5,9 +5,10 @@ The page, `docs/benchmarks/current-release.md`, holds the section between the li
 `<!-- plugin-wall-time: begin -->` and `<!-- plugin-wall-time: end -->`. This script writes everything
 between them and leaves the rest of the page as it is.
 
-Inputs. The README's `## Current release: vX.Y.Z` heading names the release. Its record is the one file
-of `docs/concordance-provenance/` that states `record: plugin-walltime` and that release. A tree without
-such a record gets an empty section.
+Inputs. The README's `## Current release: vX.Y.Z` heading names the release. The record is the file of
+`docs/concordance-provenance/` that states `record: plugin-walltime` and that release or, where the tree
+holds none of that release, the newest release before it that has one: the table's headers name the
+versions measured. A tree with no such record gets an empty section.
 
 The section. A heading, a paragraph that says what a row is, a table, a Method paragraph and a paragraph
 of notes that ends by naming the record. The table has one row per cell of the record, in the record's
@@ -20,7 +21,7 @@ it discarded before them. The notes say that Ensembl VEP wrote its statistics re
 in the record passes `--stats_text`, and carry the record's `loftee_note` where it has one.
 
 Refused, each as one `ERROR: [render_plugin_wall_time] ...` line: no heading or several, two records of
-the release, a page without the two marker lines in order, a record without a field the section reads, a
+one release, a record whose `release` is not `vX.Y.Z`, a page without the two marker lines in order, a record without a field the section reads, a
 cell without a run of an engine on an architecture, run counts the Method paragraph has no words for,
 and engines that differ in `--fork` or `--buffer_size`. The same tree gives the same bytes. Stdlib only.
 
@@ -47,6 +48,7 @@ PAGE = "docs/benchmarks/current-release.md"
 KIND = "plugin-walltime"
 BEGIN, END = "<!-- plugin-wall-time: begin -->", "<!-- plugin-wall-time: end -->"
 HEADING = re.compile(r"^## Current release: v(\d+\.\d+\.\d+)\s*$", re.MULTILINE)
+RELEASE = re.compile(r"v\d+\.\d+\.\d+")
 # The engines in column order, and the architectures as the page's other tables name them.
 ENGINES = ("ensembl-vep", "vep-rs")
 ARCH_LABELS = {"arm64": "ARM", "x86_64": "x86"}
@@ -72,19 +74,31 @@ def current_release(readme: Path) -> str:
     return found[0]
 
 
+def release_number(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("."))
+
+
 def release_record(repo: Path, version: str) -> tuple[str, dict] | None:
-    """The plugin wall-time record of the release as (file name, data), or None when the tree holds none."""
-    found = []
+    """The plugin wall-time record the page shows as (file name, data): the release's own, else that of the
+    newest release before it, or None when the tree holds neither."""
+    found: dict[tuple[int, ...], list[tuple[str, dict]]] = {}
     for path in sorted((repo / RECORDS).glob("*.json")):
         try:
             data = json.loads(path.read_text(encoding="utf-8"), parse_float=Decimal)
         except (OSError, ValueError):
             fail(f"{RECORDS}/{path.name} is not readable JSON")
-        if isinstance(data, dict) and data.get("record") == KIND and data.get("release") == f"v{version}":
-            found.append((path.name, data))
-    if len(found) > 1:
-        fail(f"{len(found)} files of {RECORDS} are the plugin wall-time record of v{version}: " + ", ".join(n for n, _ in found))
-    return found[0] if found else None
+        if not isinstance(data, dict) or data.get("record") != KIND:
+            continue
+        stated = data.get("release")
+        if not isinstance(stated, str) or not RELEASE.fullmatch(stated):
+            fail(f"{path.name}: `release` is not vX.Y.Z")
+        found.setdefault(release_number(stated[1:]), []).append((path.name, data))
+    for number, records in found.items():
+        if len(records) > 1:
+            fail(f"{len(records)} files of {RECORDS} are the plugin wall-time record of v{'.'.join(map(str, number))}: "
+                 + ", ".join(name for name, _ in records))
+    shown = [number for number in found if number <= release_number(version)]
+    return found[max(shown)][0] if shown else None
 
 
 def seconds(value: Decimal) -> str:
@@ -201,8 +215,9 @@ def section(name: str, record: dict) -> list[str]:
         verb = "reads" if len(hgvs_plugins) == 1 else "read"
         intro.append(f"{and_list(hgvs_plugins)}, which {verb} `--hgvs`, is added to the run under `--hgvs`.")
     intro.append(
-        f"The {len(plugins)} plugins are those the [Plugins](#plugins) tables score on {dataset}: a plugin whose data "
-        "cannot be redistributed is not timed, and neither is TranscriptAnnotator, which reads a table of the user's own."
+        f"The {len(plugins)} plugins timed are verified on real data, and the [Plugins](#plugins) tables score them on "
+        f"{dataset}: a plugin whose data cannot be redistributed is not timed, and neither is TranscriptAnnotator, which "
+        "reads a table of the user's own."
     )
 
     header = ["Plugin", "Assembly"] + [f"{titles[engine]}, {ARCH_LABELS[arch]} (s)" for arch in arch_ids for engine in ENGINES]
@@ -235,7 +250,7 @@ def section(name: str, record: dict) -> list[str]:
 
 
 def build(repo: Path) -> tuple[str, str]:
-    """The page as the script writes it, and the release it was written for."""
+    """The page as the script writes it, and the release its record states, the README's where it has none."""
     version = current_release(repo / "README.md")
     path = repo / PAGE
     if not path.is_file():
@@ -247,7 +262,7 @@ def build(repo: Path) -> tuple[str, str]:
     found = release_record(repo, version)
     body = section(*found) if found else []
     inner = [""] + body + [""] if body else []
-    return "\n".join(lines[: marks[0] + 1] + inner + lines[marks[1] :]), version
+    return "\n".join(lines[: marks[0] + 1] + inner + lines[marks[1] :]), found[1]["release"][1:] if found else version
 
 
 def main(argv: list[str] | None = None) -> None:

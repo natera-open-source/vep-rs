@@ -16,7 +16,7 @@ Two further records under `docs/concordance-provenance/`, their names ending `-n
 
 ## Wall time with each plugin
 
-Seconds for one annotation run of the genome-wide ClinVar dataset of each assembly: 4,388,172 variants on GRCh37 and 4,398,127 variants on GRCh38. A plugin's row is the run of the first row, `No plugin`, with that one plugin added. HGVSIntronOffset, which reads `--hgvs`, is added to the run under `--hgvs`. The 20 plugins are those the [Plugins](#plugins) tables score on ClinVar: a plugin whose data cannot be redistributed is not timed, and neither is TranscriptAnnotator, which reads a table of the user's own.
+Seconds for one annotation run of the genome-wide ClinVar dataset of each assembly: 4,388,172 variants on GRCh37 and 4,398,127 variants on GRCh38. A plugin's row is the run of the first row, `No plugin`, with that one plugin added. HGVSIntronOffset, which reads `--hgvs`, is added to the run under `--hgvs`. The 20 plugins timed are verified on real data, and the [Plugins](#plugins) tables score them on ClinVar: a plugin whose data cannot be redistributed is not timed, and neither is TranscriptAnnotator, which reads a table of the user's own.
 
 | Plugin | Assembly | Ensembl VEP 116.2, ARM (s) | vep-rs v0.6.0, ARM (s) | Ensembl VEP 116.2, x86 (s) | vep-rs v0.6.0, x86 (s) |
 | --- | --- | --- | --- | --- | --- |

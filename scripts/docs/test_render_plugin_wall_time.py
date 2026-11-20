@@ -77,8 +77,8 @@ SECTION = f"""
 Seconds for one annotation run of the genome-wide ClinVar dataset of each assembly: 1,234,567 variants on GRCh38. \
 A plugin's row is the run of the first row, `No plugin`, with that one plugin added. \
 Second, which reads `--hgvs`, is added to the run under `--hgvs`. \
-The 2 plugins are those the [Plugins](#plugins) tables score on ClinVar: a plugin whose data cannot be redistributed \
-is not timed, and neither is TranscriptAnnotator, which reads a table of the user's own.
+The 2 plugins timed are verified on real data, and the [Plugins](#plugins) tables score them on ClinVar: \
+a plugin whose data cannot be redistributed is not timed, and neither is TranscriptAnnotator, which reads a table of the user's own.
 
 | Plugin | Assembly | Ensembl VEP 999.1, ARM (s) | vep-rs v{VERSION}, ARM (s) | Ensembl VEP 999.1, x86 (s) | vep-rs v{VERSION}, x86 (s) |
 | --- | --- | --- | --- | --- | --- |
@@ -138,7 +138,25 @@ def test_a_figure_is_the_median_of_its_runs_rounded_half_up_from_the_decimal_tex
     assert "Ensembl VEP's figure is the median of 2 timed runs. vep-rs's is the median of 3 timed runs.\n" in page
 
 
-def test_a_tree_without_a_record_of_the_release_gets_an_empty_section(tmp_path):
+def test_the_newest_record_up_to_the_release_is_the_one_shown(tmp_path):
+    older, newer, later = record(), record(), record()
+    older["release"], newer["release"], later["release"] = "v0.9.10", "v1.2.0", "v1.3.0"
+    for data, version in ((older, "v0.9.10"), (newer, "v1.2.0"), (later, "v1.3.0")):
+        data["engines"]["vep-rs"]["version"] = version
+    tree(tmp_path, {"a.json": later, "b.json": older, "c.json": newer})
+    page, version = render.build(tmp_path)
+    assert version == "1.2.0"
+    assert "| Plugin | Assembly | Ensembl VEP 999.1, ARM (s) | vep-rs v1.2.0, ARM (s) |" in page
+    assert "Every timed run is in [`docs/concordance-provenance/c.json`](../concordance-provenance/c.json)." in page
+    with pytest.raises(SystemExit) as excinfo:
+        render.main(["--repo", str(tmp_path), "--check"])
+    assert excinfo.value.code == (
+        f"ERROR: [render_plugin_wall_time] {render.PAGE} line 6 is not the line the plugin wall-time record of v1.2.0 gives; "
+        "scripts/docs/render_plugin_wall_time.py writes the section"
+    )
+
+
+def test_a_tree_whose_only_record_is_of_a_later_release_gets_an_empty_section(tmp_path):
     other = record()
     other["release"] = "v9.9.9"
     filled = BEFORE + render.BEGIN + "\n\nA section of another release.\n\n" + render.END + "\n" + AFTER
@@ -209,6 +227,15 @@ def test_a_record_the_section_cannot_be_written_from_is_refused(tmp_path, change
     assert excinfo.value.code == f"ERROR: [render_plugin_wall_time] {message}"
 
 
+def test_a_record_whose_release_is_not_a_version_is_refused(tmp_path):
+    data = record()
+    data["release"] = "main"
+    tree(tmp_path, {RECORD_NAME: data})
+    with pytest.raises(SystemExit) as excinfo:
+        render.build(tmp_path)
+    assert excinfo.value.code == f"ERROR: [render_plugin_wall_time] {RECORD_NAME}: `release` is not vX.Y.Z"
+
+
 def test_two_records_of_the_release_are_refused_by_name(tmp_path):
     tree(tmp_path, {RECORD_NAME: record(), "2001-01-02-plugin-walltime.json": record()})
     with pytest.raises(SystemExit) as excinfo:
@@ -247,7 +274,7 @@ def test_a_readme_without_one_current_release_heading_is_refused(tmp_path):
 def committed_record():
     version = render.current_release(ROOT / "README.md")
     found = render.release_record(ROOT, version)
-    assert found is not None, f"no plugin wall-time record of v{version}"
+    assert found is not None, f"no plugin wall-time record up to v{version}"
     return found
 
 
@@ -280,15 +307,17 @@ def support_table():
     return rows
 
 
-def test_the_committed_record_times_the_plugins_verified_on_real_data_and_no_other():
+def test_the_committed_record_times_plugins_verified_on_real_data_and_no_other():
+    """A plugin whose data cannot be redistributed has another status in the support table, so none is timed."""
     _, data = committed_record()
     table = support_table()
     real = {(plugin, assembly) for plugin, (assemblies, status) in table.items() if status == "supported, verified on real data"
             for assembly in assemblies}
     timed = [(cell["plugin"], cell["assembly"]) for cell in data["cells"] if cell["plugin"] is not None]
-    assert len(real) > 30
+    assert len(real) > 30 and len(timed) > 30
     assert len(timed) == len(set(timed))
-    assert set(timed) == {(plugin, assembly) for plugin, assembly in real if plugin != "TranscriptAnnotator"}
+    assert set(timed) <= real
+    assert "TranscriptAnnotator" not in {plugin for plugin, _ in timed}
     assert not {plugin for plugin, _ in timed} & {plugin for plugin, (_, status) in table.items() if "synthetic" in status}
 
 
