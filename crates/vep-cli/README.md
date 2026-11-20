@@ -18,17 +18,21 @@ Documentation: https://natera-open-source.github.io/vep-rs/
 
 Follow one VCF record. `main.rs` parses the command line into `Args`; `Config::from_parsed`
 resolves the defaults and the fields `--everything` and `--vcf` imply; `Runner::run` opens the
-indexed FASTA (the reference genome's sequence file) when `--fasta` names one, refuses to
-overwrite an existing output without `--force_overwrite`, resolves the automatic `--fork` and
-`--decompression_threads` counts against the input's shape, builds a rayon thread pool of
-`--fork` workers, loads each `--plugin` argument as a built-in
+indexed FASTA (the reference genome's sequence file) when `--fasta` names one, `--fasta_dir`
+holds one for the species and assembly or, without `--no_fasta`, the cache directory holds
+one, enumerates the cache's `transcripts/<chr>/` shards into a `LazyTranscriptIndexes` that
+parses and indexes a chromosome when it is first warmed (below), opens the input, resolving
+the automatic `--decompression_threads` count against the input's shape and, under
+`--format id`, listing the cache's variation files the identifiers are resolved through, and
+refuses to overwrite an existing statistics report or output without `--force_overwrite`. It
+then resolves the automatic `--fork` count against the same shape, builds a rayon thread pool
+of `--fork` workers, loads each `--plugin` argument as a built-in
 from `vep-builtins` or, when no built-in claims the name, as a C-ABI (application binary
-interface) dynamic library through `vep-plugin`, enumerates the cache's `transcripts/<chr>/`
-shards into a `LazyTranscriptIndexes` that parses a chromosome the first time a variant asks
-for it, and opens the cache's variation files (`variations/<chr>/all_vars.gz`, one per
-chromosome and read through its index, or `<start>-<end>_var.gz` region files parsed whole)
-only when `--check_existing`, or a flag that implies it such as `--af` or `--pubmed`, needs
-them, or when `--format id` resolves its identifiers through them. Every annotation source,
+interface) dynamic library through `vep-plugin`, and lists the cache's variation files
+(`variations/<chr>/all_vars.gz`, one per chromosome and read through its index, or
+`<start>-<end>_var.gz` region files parsed whole, each opened on first use) for the co-located
+variants only when `--check_existing`, or a flag that implies it such as `--af` or `--pubmed`,
+needs them. Every annotation source,
 the regulatory features of `--regulatory` or `--regulatory_gff` among them, opens before the
 statistics report and the output file are created, so a refused source leaves neither file
 behind. The run then proceeds as a pipeline of stages that holds a bounded number of batches
@@ -59,9 +63,11 @@ nothing becomes `intergenic_variant`. Under `--regulatory`,
 `RegulatorySource::annotate_variant` then adds the variant's `RegulatoryFeature` and
 `MotifFeature` rows after its transcript rows, keeping the `intergenic_variant` row of an
 allele that overlaps no transcript. Built-in
-plugins see the whole batch in one `run_batch` call and dynamic-library plugins run per
-consequence whose feature type they declare (transcript rows unless the plugin exports
-`vep_plugin_feature_types`); `pick::apply_to_batch` applies the pick flags and summaries to each record's
+plugins see the whole batch in one `BuiltinRegistry::annotate_batch` call and dynamic-library
+plugins run per consequence whose feature type they declare (transcript rows unless the plugin
+exports `vep_plugin_feature_types`), a plugin that declares `Intergenic` also on the intergenic
+row of a variant that overlaps no transcript, whether or not the variant has regulatory or
+motif rows; `pick::apply_to_batch` applies the pick flags and summaries to each record's
 alleles together; `render_record` hands each record's alleles to the chosen `vep-io` formatter
 (the tab format's byte path, `render_tab_record`, included), or to
 `render_default_record` for VEP's default text format. Without plugins, `--custom` sources, a
@@ -122,11 +128,12 @@ order, after the skipped-record warnings of its batch.
 | `src/pick.rs`               | `FilterConfig`, `apply_to_record` and `apply_to_batch`: the record-level steps over an input record, the row filters of `src/row_filter.rs` first, then VEP's pick algorithm and summaries for `--pick`, `--per_gene`, `--pick_order`, `--most_severe`, `--summary` and the `--flag_pick` variants |
 | `src/row_filter.rs`         | `RowFilters` and `affects_cds`: the `--no_intergenic` and `--coding_only` row filters, applied to each input record before the pick family as Ensembl VEP applies them |
 | `src/filter_set.rs`         | `FilterSet`: Ensembl VEP's filter grammar (`field operator value` units joined by `and` and `or`, grouped by parentheses and inverted by `not`), compiled from `--transcript_filter` over the cache's transcript keys and evaluated on each overlapping transcript before its consequences are calculated |
+| `src/filter_regex.rs`       | `translate`: Perl's regular expression dialect, as Ensembl VEP reads a filter's pattern (`/$pattern/i`, `FilterSet.pm:714-715`), rewritten for the `regex` crate that `filter_set.rs` compiles it with; the pattern runs over the value's bytes under Perl's default rules, and over their Latin-1 reading once a `\p{}` or `\P{}` class, a `\x{}`, `\o{}` or octal escape above 255 or a `\N{U+}` escape puts it under Perl's Unicode rules, where a case-insensitive match compares full case folds, or a `u`, `a` or `aa` flag switches a group; a construct the crate lacks (a back-reference, look-around) is refused naming the pattern |
 | `src/filter_cli.rs`         | `vep filter`: Ensembl VEP's `filter_vep` over a VCF or tab output of `vep` or of Ensembl VEP, filtered line by line through the grammar of `filter_set.rs`, with `--only_matched`, `--soft_filter`, `--count`, `--list`, `--start`, `--limit` and `--test` as `filter_vep` reads them; an option is read after one dash or two, in any case, abbreviated to any prefix that names one option |
 | `src/filter_input.rs`       | The lines `vep filter` reads as `filter_vep` reads them: the header block of an annotated output, which names the fields a filter may read, the VCF or tab format of its data lines, and each line parsed into the record a filter is evaluated on |
 | `src/recode.rs`             | `vep recode`: a variant translated between its identifiers and notations as Ensembl VEP's `variant_recoder` translates it, from the cache alone; the tool is an annotation run under the recoder's fixed configuration, its JSON objects regrouped into one object per input line keyed by allele, each carrying the fields `--fields` names (`id`, `hgvsg`, `hgvsc`, `hgvsp` and `spdi` by default) and the ones `--vcf_string`, `--var_synonyms`, `--mane_select` and `--ga4gh_vrs` add |
 | `src/recode_cli.rs`         | The command line of `vep recode`: `variant_recoder`'s options less the ones that name an Ensembl database connection or a RefSeq alignment file, which are refused by name; an option is read after one dash or two, in any case, abbreviated to any prefix that names one option, and every error is one `ERROR: [<component>] <message>` line and exit 1 |
-| `src/dylib_plugins.rs`      | Loads the `--plugin` names no built-in claimed as C-ABI dynamic libraries and runs them over a batch, merging their JSON results into each consequence's `plugin_data`                                                        |
+| `src/dylib_plugins.rs`      | Loads the `--plugin` names no built-in claimed as C-ABI dynamic libraries and runs them over a batch, merging their JSON results into each consequence's `plugin_data`, or the variant's on an intergenic row |
 | `src/glob.rs`               | `expand`: the `--dir_plugins` value (else `<dir>/Plugins`) expanded as Ensembl VEP's `glob` expands its plugins directory (`File::Glob::bsd_glob` under the `glob` operator's default flags): a backslash quotes the byte after it, the first brace group splits the pattern into alternatives, and each alternative has its leading `~` replaced, is walked against the file system a segment at a time and has its matches sorted; the value is one pattern, spaces included |
 | `src/bin/bench_plugins.rs`  | The `bench_plugins` binary, built under the `bench` feature: times the phases of an annotation run with and without plugins and writes a JSON report                                                                         |
 
@@ -146,7 +153,7 @@ flags that shape a run; the full list, with every flag's parity note, is
 | Output    | `-o`/`--output_file` (default `variant_effect_output.txt`, `STDOUT` for standard output); `--output_format` vep, vcf, json, tab or parquet, with `--vcf`, `--json` and `--tab` as shorthands; `--force_overwrite`; `--no_headers`; `--vcf_info_field` (default `CSQ`) |
 | Cache     | `--dir_cache` (else `--dir`), `--species`, `--cache_version`, `--refseq` and `--merged` select the cache in Ensembl VEP's `<dir_cache>/<species>/<version>_<assembly>` layout; `--json_cache <dir>` (alias `--full_cache_dir`) names the directory itself; `--show_cache_info` prints its source versions (and, under `--regulatory_gff`, the first of its `file`, `emars` and `motifs` files as `regulatory_gff`); `--no_fasta` ignores a FASTA inside it; `--synonyms <file>` replaces the cache's `chr_synonyms.txt`, through which an input chromosome name reaches the cache's |
 | Reference | `--fasta`/`--fa`, an indexed FASTA; `--hgvs`, `--hgvsg` and `--shift_3prime 1`, which require it; `--assembly`, read by the assembly-sensitive plugins                                                                                                                              |
-| Runtime   | `--fork`/`--threads` (0 = every logical CPU up to 32, less the decompression threads on an inflate-bound indexed input); `--decompression_threads` (0 = up to 10, for BGZF input; `auto`, the default on an aarch64 host, reads an indexed BGZF input's record width); `--buffer_size` (default 5000 variants per batch); `--max_sv_size` (-1 lifts the limit) |
+| Runtime   | `--fork`/`--threads` (0 = every logical CPU up to 32; on an inflate-bound indexed input, the logical CPUs less the decompression threads, up to 32 and never fewer than half the capped CPU count); `--decompression_threads` (0 = up to 10, for BGZF input; `auto`, the default on an aarch64 host, reads an indexed BGZF input's record width); `--buffer_size` (default 5000 variants per batch); `--max_sv_size` (-1 lifts the limit) |
 | Fields    | `--everything` and the field flags it implies: `--symbol`, `--canonical`, `--mane`, `--hgvs`, `--sift`, `--polyphen`, `--numbers`, `--domains`, `--variant_class`, `--af`, `--af_1kg`, `--af_gnomade`, `--af_gnomadg`, `--max_af`, `--pubmed`, `--check_existing` and the rest |
 | Picking   | `--pick`, `--pick_allele`, `--per_gene`, `--pick_allele_gene`, `--most_severe`, `--summary`, `--flag_pick`, `--flag_pick_allele`, `--flag_pick_allele_gene`                                                                                                 |
 | Plugins   | `--plugin Name,key=value,...`, repeatable; `--dir_plugins`, where dynamic-library plugins are found; `--custom <file>,<name>,<format>,...`, repeatable, a tabix-indexed VCF, BED or GFF source, or a bigWig, read as Ensembl VEP reads it ([Custom annotation](../../docs/custom-annotation.md))                                                                                                                                                         |

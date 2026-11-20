@@ -307,15 +307,21 @@ a shared handle on its transcript and reads the transcript's values through
 accessors of the key's name, so the document is flat. These have no key:
 
 - the handle itself
+- `feature_id`, written as a regulatory or motif row's `transcript_id`
+- `feature_biotype`, written as a regulatory row's `biotype`
 - `picked`
 - `protein_id_display`
 - `sift_term`
 - `polyphen_term`
 - `protein_start`
+- `hgvs_offset_of_hgvsc_alone`
 - `hgvs_intron_offsets`
+- `transcript_assembly_mismatch`
+- `plugin_empty_strings`
 - `exon_ids`
 - `transcript_sequences`
 - `id_rank`
+- `motif_db_id`
 - `record_span_in_cds`
 
 Every field a plugin will find:
@@ -362,6 +368,8 @@ Every field a plugin will find:
 | `cds_length`                                       | The translateable sequence's length; present for a translated transcript                     |                                                    |
 | `source_cache`                                     | `"Ensembl"` or `"RefSeq"`; present for a merged cache's transcript                           | `"Ensembl"`                                        |
 | `bam_edit_status`                                  | `"ok"` or `"failed"`; present for a transcript of a BAM-edited cache whose model the alignment corrected or failed to | `"ok"`                                   |
+| `refseq_match`                                     | The transcript's `rseq_*` match codes, the `REFSEQ_MATCH` list; present for a transcript that carries them | `["rseq_mrna_match"]`                              |
+| `refseq_offset`                                    | On an `NM_` or `XM_` model, the length change of the bases its alignment inserted or deleted upstream of the allele, the `REFSEQ_OFFSET` value; present only when one was computed and is not 0 |                                 |
 | `feature_start`, `feature_end`                     | Genomic span of the feature, 1-based inclusive; both `0` when unknown                        |                                                    |
 | `plugin_data`                                      | The fields the built-in plugins have already written to this consequence; present only when non-empty. `SpliceVault_top_events` holds its events `\|`-separated, as Ensembl VEP's plugin splits the table's events column (`SpliceVault.pm` line 216), and the text formats join them with `,` or `&` | `{"REVEL": "0.931"}`                      |
 | `loftee_ctx`                                       | The exon/intron model; present when a built-in that reads it is loaded (LoFTEE, MaxEntScan, NMD, NearestExonJB on every row, UTRAnnotator on `5_prime_UTR_variant` rows) |                                                    |
@@ -378,8 +386,8 @@ coding region and the cache carries the sequence.
 
 The variant document is the serde derive of `InputVariant`
 (`crates/vep-core/src/variant.rs`), where a JSON key is the Rust field name. A
-field marked `#[serde(skip)]` (`raw_input_bytes`, `split_first_feature_rowless`,
-`reference_row_shift_allele`) never appears, and a field marked
+field marked `#[serde(skip)]` (`raw_input_bytes`, `split_first_feature_rowless`
+and `reference_row_shift_allele` among them) never appears, and a field marked
 `skip_serializing_if` is left out when it is `None`, empty or zero. In both
 documents every other absent optional value is `null`.
 
@@ -532,10 +540,11 @@ Plugins execute after consequence assignment:
 1. Input batch parsed
 2. Consequences calculated (parallel if `--fork > 1`)
 3. Co-located variants matched
-4. **`registry.run_batch(&mut variants)`**: every built-in plugin's `prefetch()`
-   runs in parallel across plugins, then each plugin's `annotate()` (or
-   `run_batch()`, for a plugin without `prefetch`) runs sequentially on the full
-   batch
+4. **`registry.annotate_batch(&mut variants, prefetch)`**: every built-in
+   plugin's `prefetch()` runs in parallel across plugins (before step 2 unless
+   it reads consequence rows), then each plugin's `annotate()` (or
+   `run_batch()`, for a plugin without `prefetch`) runs sequentially on the
+   full batch
 5. Shared libraries run on every row whose kind they listed, the intergenic
    rows included for a plugin that listed `Intergenic`
 6. The `--custom` sources match their records and add their fields

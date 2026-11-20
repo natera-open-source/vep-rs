@@ -7,10 +7,15 @@ that depends on it, resolves each `--plugin` name against [`vep-builtins`](../ve
 first and hands the names no built-in claims to this crate. Each loaded plugin returns one
 JavaScript Object Notation (JSON) object per consequence row of the feature types it declares
 (transcript rows alone without `vep_plugin_feature_types`), merged by `vep-cli` into that row's
-`plugin_data` fields.
+`plugin_data` fields; a plugin that declares `Intergenic` returns one as well for the
+intergenic row of a variant that overlaps no transcript, merged into the variant's
+`plugin_data`.
 
-The plugin support matrix, the data-file preparation steps and the guide to writing a plugin
-live in [docs/plugins.md](../../docs/plugins.md); this page describes the crate.
+The plugin support table is in [docs/plugins.md](../../docs/plugins.md), the data-file
+preparation steps are in [docs/plugins/data-files.md](../../docs/plugins/data-files.md) and
+the guide to writing a plugin is
+[docs/developers/writing-a-plugin.md](../../docs/developers/writing-a-plugin.md); this page
+describes the crate.
 
 ## How it works
 
@@ -171,7 +176,7 @@ must be on the path. The repository's standard commands (`cargo test --workspace
   `plugin_data`.
 - [`vep-builtins`](../vep-builtins/README.md): the compiled-in plugins the runner resolves
   before falling back to this crate.
-- [docs/plugins.md](../../docs/plugins.md): the plugin matrix.
+- [docs/plugins.md](../../docs/plugins.md): the plugin support table.
 - [docs/developers/writing-a-plugin.md](../../docs/developers/writing-a-plugin.md): the ABI
   signatures, the JSON field lists and the worked example.
 - [docs/cli/plugins.md](../../docs/cli/plugins.md): the `--plugin` and `--dir_plugins` flags.

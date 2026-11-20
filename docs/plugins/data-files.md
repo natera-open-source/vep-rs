@@ -51,8 +51,9 @@ convert-plugin-data`, with its `.vpdi` index beside it.
 The plugin reads its rows from the store instead of through tabix on two
 conditions:
 
-- the store is named after the data file with `.vpd` in place of `.gz` and sits
-  beside it (`whole_genome_SNVs.tsv.vpd` beside `whole_genome_SNVs.tsv.gz`)
+- the store is named after the data file with `.vpd` in place of `.gz` or
+  `.bgz` and sits beside it (`whole_genome_SNVs.tsv.vpd` beside
+  `whole_genome_SNVs.tsv.gz`)
 - the store was built from that file's content
 
 ### The layout flags of a store

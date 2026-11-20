@@ -54,8 +54,8 @@ The build fetches the matrices from:
 
 - the server `ensembldb.ensembl.org`, anonymous read-only
 - port 3306 for the GRCh38 databases and `--mysql-port 3337` for the GRCh37 ones
-- the database `homo_sapiens_variation_<release>_<assembly>`
-- the tables `translation_md5`, `protein_function_predictions` and `attrib`, keyed on the MD5 of the full peptide
+- the database `homo_sapiens_variation_<release>_<n>`, `<n>` being `38` for GRCh38 and `37` for GRCh37
+- the tables `translation_md5`, `protein_function_predictions`, `attrib` and `attrib_type`, keyed on the MD5 of the full peptide
 
 A matrix stays gzip-compressed as the cache stores it and is inflated at the first lookup against its transcript. So a run without `--sift` or `--polyphen` inflates none.
 

@@ -358,15 +358,15 @@ One row per crate under `crates/`, in directory order; each links the crate's ow
 
 | Crate | Purpose | Kind |
 | --- | --- | --- |
-| [vep-builtins](crates/vep-builtins/README.md) | The built-in plugins: the tabix annotation engine, allele matching and the clinical plugins such as LoFTEE | library |
+| [vep-builtins](crates/vep-builtins/README.md) | The built-in plugins and the `--custom` annotation sources: the tabix annotation engine, allele matching and the clinical plugins such as LoFTEE | library |
 | [vep-cache-builder](crates/vep-cache-builder/README.md) | Builds the JSON transcript cache from an Ensembl GFF3, protein FASTA and variation VCF release | binary |
 | [vep-cache-converter](crates/vep-cache-converter/README.md) | Copies a flat JSON transcript cache into the per-chromosome runtime layout, validating each region, and converts tabix plugin data to the binary annotation format | binary |
 | [vep-cli](crates/vep-cli/README.md) | The `vep` command line: argument parsing, the runner and the output pipeline | library and binary |
 | [vep-core](crates/vep-core/README.md) | The shared types: variants, transcripts, consequences and coordinates | library |
-| [vep-effects](crates/vep-effects/README.md) | The consequence-calculation engine, with HGVS and protein prediction | library |
+| [vep-effects](crates/vep-effects/README.md) | The consequence-calculation engine, with coordinate mapping, codon translation and HGVS notation | library |
 | [vep-fasta](crates/vep-fasta/README.md) | Indexed FASTA access for the reference genome | library |
 | [vep-io](crates/vep-io/README.md) | Input parsers (Ensembl default, HGVS, SPDI, region, variant identifier) with format detection, and the output writers (VEP, VCF, JSON, Tab, Parquet) | library |
-| [vep-plugin](crates/vep-plugin/README.md) | The plugin trait, the dynamic-library loader and the registry | library |
+| [vep-plugin](crates/vep-plugin/README.md) | The C ABI a plugin library exports, the dynamic-library loader and the registry | library |
 
 ## Contributing
 

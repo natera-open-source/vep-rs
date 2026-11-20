@@ -246,20 +246,24 @@ vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
 
 ## Reference FASTA
 
-`--fasta` takes a plain FASTA with its `samtools faidx` `.fai`, or a `bgzip`-compressed FASTA with the `.fai` and `.gzi` `samtools faidx` writes for it, the shape of Ensembl's `dna_index/` files and of the file `vep-cache-builder --auto` places in the cache directory. `vep` builds no index (Ensembl VEP builds one); the builder writes both for a `dna/` file it installs. Three files are refused at open: a gzip file that is not BGZF, whose `.fai` offsets need the whole file inflated; a `.gzi` that does not match the file's blocks, recompressed and not re-indexed; an `.fai` naming more bases than the file holds.
+`--fasta` takes a plain FASTA with its `samtools faidx` `.fai`, or a `bgzip`-compressed FASTA with the `.fai` and `.gzi` `samtools faidx` writes for it, the shape of Ensembl's `dna_index/` files and of the file `vep-cache-builder --auto` places in the cache directory. `vep` builds no index (Ensembl VEP builds one); the builder writes both for a `dna/` file it installs. Three files are refused at open: a gzip file that is not BGZF, whose `.fai` offsets need the whole file inflated; a `.gzi` that does not match the file's blocks, recompressed and not re-indexed; an `.fai` naming more bases than the file holds. So is a BGZF file holding a malformed block.
 
 | Condition | Line printed |
 | --- | --- |
 | A gzip file that is not BGZF | `ERROR: [fasta] <file> is gzip but not BGZF: recompress with bgzip and index with samtools faidx` |
 | A `.gzi` that does not describe the file's blocks | `ERROR: [fasta] BGZF index <file>.gzi does not describe <file> (<the first disagreement>): index the file again with samtools faidx` |
 | An `.fai` naming bases past the file's end | `ERROR: [fasta] FASTA index names <n> bases beyond the end of <file>` |
+| A BGZF block declaring more than 65,536 uncompressed bytes, the most a block holds | `ERROR: [fasta] malformed BGZF block at offset <n> in <file>`, `<n>` the block's byte offset in the file |
 | `--fasta 0` or `--fasta ''`, a value Ensembl VEP reads as the flag unset ([compatibility page](cli/compatibility.md#where-configpm-is-not-followed)) | `ERROR: [fasta] Specified FASTA file/directory <value> not found` |
 | `--hgvs` or `--hgvsg` with no FASTA in reach | `ERROR: [fasta] Cannot generate HGVS coordinates (--hgvs and --hgvsg) in offline mode without a FASTA file (see --fasta)` |
-| `--use_transcript_ref` without a FASTA | `ERROR: [fasta] Cannot use transcript reference sequences (--use_transcript_ref) without a FASTA file (see --fasta); you may wish to use --use_given_ref` |
+| `--check_ref` without a FASTA | `ERROR: [fasta] Cannot check reference sequences (--check_ref) without a FASTA file (see --fasta)` |
+| `--lookup_ref` without a FASTA | `ERROR: [fasta] Cannot look up reference sequences (--lookup_ref) without a FASTA file (see --fasta)` |
+| `--use_transcript_ref` without a FASTA, which it reads a non-coding transcript's cDNA from | `ERROR: [fasta] Cannot use transcript reference sequences (--use_transcript_ref) without a FASTA file (see --fasta); you may wish to use --use_given_ref` |
+| `--shift_3prime 1` without a FASTA, since the shift reads the reference | `ERROR: [fasta] Cannot shift variants (--shift_3prime 1) without a FASTA file (see --fasta)` |
 | `--everything` without a FASTA | `INFO: Disabling --hgvs; using --offline and no FASTA file found` |
 | `--fasta_dir` holding no compatible file | `WARNING: No compatible FASTA files found in <dir>` |
 
-The table's `ERROR:` lines exit 1; `--use_transcript_ref` needs the FASTA for a non-coding transcript's cDNA. `--everything` without a FASTA prints its INFO line on standard error (withheld under `--quiet`) and drops the HGVS notations it enabled, as in Ensembl VEP. An explicit `--hgvsg` beside it is refused after that line.
+The table's `ERROR:` lines exit 1. `--everything` without a FASTA prints its INFO line on standard error (withheld under `--quiet`) and drops the HGVS notations it enabled, as in Ensembl VEP. An explicit `--hgvsg` beside it is refused after that line.
 
 ### A `--fasta` directory
 
@@ -336,5 +340,5 @@ Beyond the table, a record is reached by its name with the prefix `chr` added or
 - `sift` and `polyphen`, markers written only for a tool whose matrices the cache holds. A converted cache keeps a marker only beside the tool's `source_versions` entry ([SIFT and PolyPhen predictions](cache-predictions.md)).
 - `source_versions`: on a native cache the core `meta` table's `assembly`, `gencode` and `genebuild`, or the GTF header's. The dbSNP, ClinVar, COSMIC and gnomAD versions an Ensembl cache's `info.txt` lists come from the variation database. The builder takes no version from it, so a native cache's headers print none.
 - `variation_cols` and `var_type tabix`, only when the cache holds variation files; `variation_cols` names their columns.
-- `contig_order`: the cache's chromosome directories as autosomes by number, then X, Y and MT, then every other contig by name.
+- `contig_order`: the chromosome directories: autosomes by number, X, Y, MT, then every other contig by name; a `--core-dumps` build lists the dumps' karyotype first, by rank.
 - `regulatory`, `regulatory_schema` and `cell_types`, only with a regulatory tree: shards under `regulatory/<chr>/` beside the table `regulatory/binding_matrices.json` ([Regulatory and motif features](regulatory.md)).
