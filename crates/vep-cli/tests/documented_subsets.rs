@@ -2571,8 +2571,8 @@ fn embedding_contract_is_documented() {
     assert_page_states(
         "developers/embedding.md",
         &[
-            "A maintainer publishes the workspace's crates to crates.io after each release is \
-             tagged",
+            "The release workflow publishes the workspace's crates to crates.io when a \
+             maintainer publishes a release page",
             "A program adds `vep-cli` from crates.io at a published version, or as a git \
              dependency pinned to a release's tag",
             "[dependencies.vep-cli] git = \"https://github.com/natera-open-source/vep-rs\" \
