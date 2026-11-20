@@ -7,9 +7,9 @@
 //! [`write_fai`] and [`write_gzi`] write one index each, byte for byte the
 //! files `samtools faidx` writes.
 
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use noodles::{bgzf, fasta};
 
@@ -51,7 +51,11 @@ pub fn index_if_missing(fasta: &Path) -> Result<(), FastaError> {
         .iter()
         .any(|extension| sibling(fasta, extension).exists());
     if !index_exists {
-        std::fs::write(&lock, "1\n")
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock)
+            .and_then(|mut file| file.write_all(b"1\n"))
             .map_err(|_| FastaError::LockFile(lock.display().to_string()))?;
     }
     tracing::debug!("Indexing {}", fasta.display());
@@ -88,12 +92,10 @@ pub fn write_fai(fasta: &Path) -> Result<(), FastaError> {
     }
     let index = fasta::fai::Index::from(records);
     let fai = sibling(fasta, "fai");
-    let file = File::create(&fai).map_err(io_error("failed to create FASTA index", &fai))?;
-    let mut writer = fasta::fai::io::Writer::new(BufWriter::new(file));
-    writer
-        .write_index(&index)
-        .and_then(|()| writer.get_mut().flush())
-        .map_err(io_error("failed to write FASTA index", &fai))
+    write_new(&fai, |file| {
+        fasta::fai::io::Writer::new(file).write_index(&index)
+    })
+    .map_err(io_error("failed to write FASTA index", &fai))
 }
 
 /// Writes `<fasta>.gzi`, the `bgzip` index of the BGZF file at `fasta`: the
@@ -139,8 +141,36 @@ pub fn write_gzi(fasta: &Path) -> Result<(), FastaError> {
         inflated += data_len;
     }
     let gzi = sibling(fasta, "gzi");
-    bgzf::gzi::fs::write(&gzi, &bgzf::gzi::Index::from(entries))
-        .map_err(io_error("failed to write BGZF index", &gzi))
+    let index = bgzf::gzi::Index::from(entries);
+    write_new(&gzi, |file| {
+        bgzf::gzi::io::Writer::new(file).write_index(&index)
+    })
+    .map_err(io_error("failed to write BGZF index", &gzi))
+}
+
+/// Writes `dst` through `write` into a file created new beside it, then
+/// renames that file over `dst`, so a link or a reader at `dst` never sees a
+/// partial index and no file outside the FASTA's directory is written through
+/// a link.
+fn write_new(
+    dst: &Path,
+    write: impl FnOnce(&mut BufWriter<File>) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    let temporary = PathBuf::from(format!("{}.{}.tmp", dst.display(), std::process::id()));
+    let result = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)
+        .and_then(|file| {
+            let mut writer = BufWriter::new(file);
+            write(&mut writer)?;
+            writer.flush()
+        })
+        .and_then(|()| std::fs::rename(&temporary, dst));
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
 }
 
 #[cfg(test)]
@@ -232,6 +262,26 @@ mod tests {
             std::fs::read_to_string(dir.path().join("ref.fa.fai")).unwrap(),
             "1\t5\t18\t10\t11\n"
         );
+    }
+
+    /// A link at the index's path is replaced by the index, and the file it
+    /// points to is never written.
+    #[cfg(unix)]
+    #[test]
+    fn a_link_at_the_index_path_is_replaced_not_followed() {
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        std::fs::write(&fa, PLAIN).unwrap();
+        let elsewhere = dir.path().join("elsewhere");
+        std::os::unix::fs::symlink(&elsewhere, dir.path().join("ref.fa.fai")).unwrap();
+        index_if_missing(&fa).unwrap();
+        assert!(!elsewhere.exists());
+        let fai = dir.path().join("ref.fa.fai");
+        assert!(!std::fs::symlink_metadata(&fai)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(std::fs::read_to_string(fai).unwrap(), PLAIN_FAI);
     }
 
     /// Where the lock file cannot be written, the run ends with Ensembl VEP's
