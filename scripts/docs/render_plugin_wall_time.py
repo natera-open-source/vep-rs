@@ -196,7 +196,7 @@ def section(name: str, record: dict) -> list[str]:
     cells = field(record, "cells", name)
     datasets = field(record, "datasets", name)
     assemblies = list(dict.fromkeys(field(cell, "assembly", "a cell") for cell in cells))
-    labels = {field(datasets[a], "label", name) for a in assemblies}
+    labels = {field(field(datasets, a, f"{name}, `datasets`"), "label", name) for a in assemblies}
     if len(labels) != 1:
         fail(f"{name}: the assemblies' datasets differ in `label`")
     plugins = list(dict.fromkeys(cell["plugin"] for cell in cells if field(cell, "plugin", "a cell") is not None))
@@ -220,6 +220,7 @@ def section(name: str, record: dict) -> list[str]:
         "reads a table of the user's own."
     )
 
+    classes = " or ".join(class_label(arch, name) for arch in arches)
     header = ["Plugin", "Assembly"] + [f"{titles[engine]}, {ARCH_LABELS[arch]} (s)" for arch in arch_ids for engine in ENGINES]
     table = ["| " + " | ".join(header) + " |", "| " + " | ".join("---" for _ in header) + " |"]
     for cell in cells:
@@ -227,7 +228,6 @@ def section(name: str, record: dict) -> list[str]:
         table.append("| " + " | ".join([row_label(cell), cell["assembly"]] + figures) + " |")
 
     fork, buffer_size = shared_option(engines, "--fork", name), shared_option(engines, "--buffer_size", name)
-    classes = " or ".join(class_label(arch, name) for arch in arches)
     method = [
         (
             f"**Method.** For a row and architecture both engines ran on one machine, {classes}, {vcpus.pop()} vCPU with "

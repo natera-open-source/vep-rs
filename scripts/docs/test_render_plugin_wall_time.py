@@ -202,6 +202,16 @@ def counts_differ_by_architecture(data):
     data["cells"][2]["runs"]["x86_64"]["vep-rs"]["wall_seconds"] = [1.0, 2.0]
 
 
+def no_dataset_of_the_assembly(data):
+    del data["datasets"]["GRCh38"]
+
+
+def an_architecture_without_a_label(data):
+    data["arches"][1]["arch"] = "riscv64"
+    for cell in data["cells"]:
+        cell["runs"]["riscv64"] = cell["runs"].pop("x86_64")
+
+
 @pytest.mark.parametrize(
     ("change", "message"),
     [
@@ -214,9 +224,11 @@ def counts_differ_by_architecture(data):
         (counts_differ_by_architecture, f"{RECORD_NAME}: vep-rs has different run counts on the architectures of First"),
         (set_runs(2, "vep-rs", [1.0, 2.0, 3.0]), f"{RECORD_NAME}: vep-rs's run counts [1, 3, 5] are not one count, or one count beside single runs"),
         (set_runs(1, "vep-rs", [4.0]), f"{RECORD_NAME}: vep-rs's rows without a plugin do not all hold 5 timed runs"),
+        (no_dataset_of_the_assembly, f"{RECORD_NAME}, `datasets` has no `GRCh38`"),
+        (an_architecture_without_a_label, f"{RECORD_NAME}: no label for the architecture riscv64"),
     ],
     ids=["no-cells", "no-arches", "no-run-of-an-engine", "no-timed-run", "a-run-that-is-text", "another-fork", "counts-by-architecture",
-         "three-run-counts", "a-bare-row-with-one-run"],
+         "three-run-counts", "a-bare-row-with-one-run", "no-dataset-of-the-assembly", "an-architecture-without-a-label"],
 )
 def test_a_record_the_section_cannot_be_written_from_is_refused(tmp_path, change, message):
     data = copy.deepcopy(record())
