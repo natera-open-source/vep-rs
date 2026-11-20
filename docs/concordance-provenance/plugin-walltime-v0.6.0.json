@@ -1,0 +1,1505 @@
+{
+ "record": "plugin-walltime",
+ "release": "v0.6.0",
+ "date": "2026-11-19",
+ "scope": "Wall time of one annotation run per plugin on the genome-wide ClinVar dataset of each assembly, Ensembl VEP and vep-rs on the same machine, beside a run without a plugin and the same run under --hgvs. The plugins are those the support table of docs/plugins.md marks verified on real data; a plugin whose data cannot be redistributed and TranscriptAnnotator, which reads a table of the user's own, are not timed.",
+ "arches": [
+  {
+   "arch": "arm64",
+   "instance_type": "c9gd.8xlarge",
+   "cpu": "AWS Graviton5",
+   "host_vcpu_count": 32,
+   "host_memory_gib": 64,
+   "local_nvme": true
+  },
+  {
+   "arch": "x86_64",
+   "instance_type": "c8id.8xlarge",
+   "cpu": "Intel x86_64",
+   "host_vcpu_count": 32,
+   "host_memory_gib": 64,
+   "local_nvme": true
+  }
+ ],
+ "datasets": {
+  "GRCh37": {
+   "label": "ClinVar",
+   "variants": 4388172
+  },
+  "GRCh38": {
+   "label": "ClinVar",
+   "variants": 4398127
+  }
+ },
+ "engines": {
+  "ensembl-vep": {
+   "name": "Ensembl VEP",
+   "version": "116.2",
+   "image": "ensemblorg/ensembl-vep:release_116.2",
+   "digest": "sha256:5c57abdc40b637cac198370b4c114777fa24de3336141fdf09d2b0c43cd4b8da",
+   "loftee_image_added": "libcurl3-gnutls=7.81.0-1ubuntu1.30,libhts3=1.13+ds-2build1,libhtscodecs2=1.1.1-3,samtools=1.13-4",
+   "arguments": "vep -i <input> -o <output> --offline --cache --dir_cache <cache> --cache_version 116 --species homo_sapiens --assembly <assembly> --format vcf --buffer_size 5000 --fork 16 --fasta <fasta> --no_headers --stats_text --quiet --force_overwrite <the row's arguments>",
+   "warm_state": "its inputs read once and a one-record run made before the timed run",
+   "discarded_full_runs": 0
+  },
+  "vep-rs": {
+   "name": "vep-rs",
+   "version": "v0.6.0",
+   "binary_sha256": {
+    "arm64": "6659ec5737bd8c39181507ae05a76a0078d55fd8ba3f3ddbd40e26ce23943f99",
+    "x86_64": "cc47d37b18677c872771e65fd08abe14d8b627f1638bc23b609787154ead714f"
+   },
+   "arguments": "vep -i <input> -o <output> --offline --json_cache <cache> --species homo_sapiens --assembly <assembly> --format vcf --fork 16 --buffer_size 5000 --no_stats --quiet --force_overwrite <the row's arguments> --fasta <fasta>",
+   "warm_state": "its inputs read once, a one-record run and one full run made and discarded before the timed runs",
+   "discarded_full_runs": 1
+  }
+ },
+ "methodology_note": "One machine per row and architecture, nothing else running on it, every input on its local NVMe instance store; the two engines ran one after the other. The timed span is the engine's process alone, stamped just before it starts and just after it exits, inside the container for Ensembl VEP. Each run's output was hashed and deleted before the next run. wall_seconds lists every timed run of the engine on the row and architecture in run order: one for Ensembl VEP; for vep-rs five on the rows without a plugin and on LoFTEE and one on every other row. The figure of a row is the median of its list. LoFTEE's rows load LoFTEE's module as --plugin LoF with stand-ins for the MaxEntScan files it bundles, and Ensembl VEP's run of them is on its image with the packages of loftee_image_added. A row's arguments name its files as scripts/concordance/plugin_gate_runs.toml does. output_rows is the count of data rows both engines wrote.",
+ "loftee_note": "Ensembl VEP ran LoFTEE's module with stand-ins for the MaxEntScan files it bundles, on its image with samtools added.",
+ "cells": [
+  {
+   "plugin": null,
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "",
+    "vep-rs": ""
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1047.51
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       1.967,
+       1.951,
+       1.959,
+       1.957,
+       1.957
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1034.356
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       2.962,
+       2.946,
+       2.987,
+       3.014,
+       2.946
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": null,
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "",
+    "vep-rs": ""
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4027.45
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       7.536,
+       7.432,
+       7.468,
+       7.516,
+       7.514
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3622.687
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       9.917,
+       9.834,
+       10.027,
+       10.058,
+       9.87
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": null,
+   "hgvs": true,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--hgvs",
+    "vep-rs": "--hgvs"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1161.917
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       6.168,
+       6.149,
+       6.162,
+       6.154,
+       6.164
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1271.858
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       9.388,
+       9.219,
+       9.371,
+       9.31,
+       9.4
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": null,
+   "hgvs": true,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--hgvs",
+    "vep-rs": "--hgvs"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4127.65
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       23.499,
+       23.483,
+       23.498,
+       23.476,
+       23.438
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4741.23
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       35.739,
+       35.848,
+       35.639,
+       35.708,
+       35.655
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "AlphaMissense",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin AlphaMissense,file={plugin_data}/grch37/alphamissense/alphamissense.tsv.gz",
+    "vep-rs": "--plugin AlphaMissense,file={plugin_data}/grch37/alphamissense/alphamissense.tsv.gz"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1086.38
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       41.464
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1197.077
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       53.889
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "AlphaMissense",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin AlphaMissense,file={plugin_data}/grch38/alphamissense/alphamissense.tsv.gz",
+    "vep-rs": "--plugin AlphaMissense,file={plugin_data}/grch38/alphamissense/alphamissense.tsv.gz"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4148.266
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       47.59
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3884.299
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       61.655
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "AncestralAllele",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin AncestralAllele,{plugin_data}/grch37/ancestral_allele/homo_sapiens_ancestor.fa.gz",
+    "vep-rs": "--plugin AncestralAllele,{plugin_data}/grch37/ancestral_allele/homo_sapiens_ancestor.fa.gz"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1198.213
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       6.156
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1122.799
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       8.54
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "AncestralAllele",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin AncestralAllele,{plugin_data}/grch38/ancestral_allele/homo_sapiens_ancestor.fa.gz",
+    "vep-rs": "--plugin AncestralAllele,{plugin_data}/grch38/ancestral_allele/homo_sapiens_ancestor.fa.gz"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3708.295
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       14.24
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3772.667
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       20.357
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "Blosum62",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin Blosum62",
+    "vep-rs": "--plugin Blosum62"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1108.458
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       5.205
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1111.925
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       7.465
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "Blosum62",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin Blosum62",
+    "vep-rs": "--plugin Blosum62"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4050.023
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       18.118
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3636.904
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       25.332
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "Conservation",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin Conservation,{plugin_data}/grch38/loftee/grch38/gerp_conservation_scores.homo_sapiens.GRCh38.bw",
+    "vep-rs": "--plugin Conservation,{plugin_data}/grch38/loftee/grch38/gerp_conservation_scores.homo_sapiens.GRCh38.bw"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       5698.719
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       15.755
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       6305.359
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       22.094
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "DosageSensitivity",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin DosageSensitivity,file={plugin_data}/assembly_agnostic/dosagesensitivity/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz",
+    "vep-rs": "--plugin DosageSensitivity,file={plugin_data}/assembly_agnostic/dosagesensitivity/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1094.55
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       8.784
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1125.379
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       11.401
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "DosageSensitivity",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin DosageSensitivity,file={plugin_data}/assembly_agnostic/dosagesensitivity/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz",
+    "vep-rs": "--plugin DosageSensitivity,file={plugin_data}/assembly_agnostic/dosagesensitivity/Collins_rCNV_2022.dosage_sensitivity_scores.tsv.gz"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4020.923
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       30.796
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3646.237
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       43.319
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "Downstream",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin Downstream",
+    "vep-rs": "--plugin Downstream"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1012.716
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       21.081
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1110.541
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       50.954
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "Downstream",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin Downstream",
+    "vep-rs": "--plugin Downstream"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3906.162
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       68.974
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3823.947
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       198.472
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "gnomADc",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin gnomADc,{plugin_data}/grch37/gnomadc/gnomad_coverage.tsv.gz",
+    "vep-rs": "--plugin gnomADc,{plugin_data}/grch37/gnomadc/gnomad_coverage.tsv.gz"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       2276.596
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       222.548
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       2201.987
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       241.078
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "gnomADc",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin gnomADc,{plugin_data}/grch38/gnomadc/gnomad_coverage.tsv.gz",
+    "vep-rs": "--plugin gnomADc,{plugin_data}/grch38/gnomadc/gnomad_coverage.tsv.gz"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4688.066
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       82.747
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4427.757
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       99.358
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "gnomADMt",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin gnomADMt,file={plugin_data}/assembly_agnostic/gnomadmt/gnomad.genomes.v3.1.sites.chrM.vcf.bgz",
+    "vep-rs": "--plugin gnomADMt,file={plugin_data}/assembly_agnostic/gnomadmt/gnomad.genomes.v3.1.sites.chrM.vcf.bgz"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3665.986
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       10.075
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3766.899
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       15.07
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "GWAS",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--dir {ensembl_vep_dir} --plugin GWAS,file={plugin_data}/assembly_agnostic/gwas/gwas_catalog_associations.tsv",
+    "vep-rs": "--plugin GWAS,file={plugin_data}/assembly_agnostic/gwas/gwas_catalog_associations.tsv"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4063.436
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       12.075
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3764.837
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       16.699
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "HGVSIntronOffset",
+   "hgvs": true,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--hgvs --plugin HGVSIntronOffset",
+    "vep-rs": "--hgvs --plugin HGVSIntronOffset"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1700.94
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       13.264
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1381.815
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       20.384
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "HGVSIntronOffset",
+   "hgvs": true,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--hgvs --plugin HGVSIntronOffset",
+    "vep-rs": "--hgvs --plugin HGVSIntronOffset"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4800.538
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       51.62
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4976.856
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       75.963
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "LOEUF",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin LOEUF,file={plugin_data}/grch37/loeuf/loeuf_dataset.tsv.gz,match_by=gene",
+    "vep-rs": "--plugin LOEUF,file={plugin_data}/grch37/loeuf/loeuf_dataset.tsv.gz,match_by=gene"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1782.909
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       192.238
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1548.064
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       204.829
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "LOEUF",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin LOEUF,file={plugin_data}/grch38/loeuf/loeuf_dataset_grch38.tsv.gz,match_by=gene",
+    "vep-rs": "--plugin LOEUF,file={plugin_data}/grch38/loeuf/loeuf_dataset_grch38.tsv.gz,match_by=gene"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4373.118
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       93.766
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4188.71
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       100.419
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "LoFTEE",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--dir_plugins {loftee} --plugin LoF,loftee_path:{loftee},human_ancestor_fa:{plugin_data}/grch38/loftee/grch38/human_ancestor.fa,gerp_bigwig:{plugin_data}/grch38/loftee/grch38/gerp_conservation_scores.homo_sapiens.GRCh38.bw",
+    "vep-rs": "--dir_plugins {loftee} --plugin LoF,loftee_path:{loftee},human_ancestor_fa:{plugin_data}/grch38/loftee/grch38/human_ancestor.fa,gerp_bigwig:{plugin_data}/grch38/loftee/grch38/gerp_conservation_scores.homo_sapiens.GRCh38.bw"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       10969.102
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       1086.022,
+       1085.123,
+       1089.921,
+       1087.497,
+       1089.081
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       7252.095
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       1265.824,
+       1265.815,
+       1258.712,
+       1250.024,
+       1268.707
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "LoFtool",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin LoFtool,{plugin_data}/assembly_agnostic/loftool/LoFtool_scores.txt",
+    "vep-rs": "--plugin LoFtool,{plugin_data}/assembly_agnostic/loftool/LoFtool_scores.txt"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1610.795
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       8.914
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1077.165
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       10.375
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "LoFtool",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin LoFtool,{plugin_data}/assembly_agnostic/loftool/LoFtool_scores.txt",
+    "vep-rs": "--plugin LoFtool,{plugin_data}/assembly_agnostic/loftool/LoFtool_scores.txt"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4028.744
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       31.401
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3620.391
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       36.58
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "NearestExonJB",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin NearestExonJB",
+    "vep-rs": "--plugin NearestExonJB"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1516.263
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       11.374
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1104.09
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       15.247
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "NearestExonJB",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin NearestExonJB",
+    "vep-rs": "--plugin NearestExonJB"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4093.395
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       42.641
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3644.92
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       59.503
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "NMD",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin NMD",
+    "vep-rs": "--plugin NMD"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1497.122
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       4.537
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1062.366
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       7.686
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "NMD",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin NMD",
+    "vep-rs": "--plugin NMD"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3987.929
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       16.149
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3682.047
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       24.629
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "OpenTargets",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin OpenTargets,file={plugin_data}/grch38/opentargets/open_targets_vep_full.tsv.gz",
+    "vep-rs": "--plugin OpenTargets,file={plugin_data}/grch38/opentargets/open_targets_vep_full.tsv.gz"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       4303.799
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       44.432
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3940.345
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       52.15
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "pLI",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin pLI,{plugin_data}/assembly_agnostic/pli/pLI_values.txt",
+    "vep-rs": "--plugin pLI,{plugin_data}/assembly_agnostic/pli/pLI_values.txt"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1633.738
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       9.2
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1074.19
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       12.619
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "pLI",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin pLI,{plugin_data}/assembly_agnostic/pli/pLI_values.txt",
+    "vep-rs": "--plugin pLI,{plugin_data}/assembly_agnostic/pli/pLI_values.txt"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3067.186
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       31.391
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3582.17
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       40.282
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "REVEL",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin REVEL,file={plugin_data}/grch37/revel/revel.tsv.gz",
+    "vep-rs": "--plugin REVEL,file={plugin_data}/grch37/revel/revel.tsv.gz"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1575.832
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       45.642
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1167.42
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       55.53
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "REVEL",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin REVEL,file={plugin_data}/grch38/revel/revel.tsv.gz",
+    "vep-rs": "--plugin REVEL,file={plugin_data}/grch38/revel/revel.tsv.gz"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3389.228
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       51.202
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3947.917
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       65.351
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "TSSDistance",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin TSSDistance",
+    "vep-rs": "--plugin TSSDistance"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1089.827
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       4.109
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1025.887
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       7.012
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "TSSDistance",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin TSSDistance",
+    "vep-rs": "--plugin TSSDistance"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3179.112
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       13.269
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3609.681
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       20.443
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "UTRAnnotator",
+   "hgvs": false,
+   "assembly": "GRCh37",
+   "arguments": {
+    "ensembl-vep": "--plugin UTRAnnotator,file={plugin_data}/grch37/utrannotator/uORF_5UTR_GRCh37_PUBLIC.txt",
+    "vep-rs": "--plugin UTRAnnotator,file={plugin_data}/grch37/utrannotator/uORF_5UTR_GRCh37_PUBLIC.txt"
+   },
+   "output_rows": 33483969,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1410.603
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       4.254
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       1267.13
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       6.492
+      ]
+     }
+    }
+   }
+  },
+  {
+   "plugin": "UTRAnnotator",
+   "hgvs": false,
+   "assembly": "GRCh38",
+   "arguments": {
+    "ensembl-vep": "--plugin UTRAnnotator,file={plugin_data}/grch38/utrannotator/uORF_5UTR_GRCh38_PUBLIC.txt",
+    "vep-rs": "--plugin UTRAnnotator,file={plugin_data}/grch38/utrannotator/uORF_5UTR_GRCh38_PUBLIC.txt"
+   },
+   "output_rows": 125572915,
+   "runs": {
+    "arm64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3725.085
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       13.619
+      ]
+     }
+    },
+    "x86_64": {
+     "ensembl-vep": {
+      "wall_seconds": [
+       3924.278
+      ]
+     },
+     "vep-rs": {
+      "wall_seconds": [
+       18.762
+      ]
+     }
+    }
+   }
+  }
+ ]
+}
