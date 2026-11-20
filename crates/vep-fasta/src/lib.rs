@@ -1747,8 +1747,8 @@ mod tests {
     /// offset, in both storage modes, whether it is the first block, which the
     /// index leaves implicit, or the last data block, whose length no index entry
     /// confirms; the refusal names the file, not the index. A last block declaring
-    /// exactly 65536 passes this check, and the mapped storage, which reads no
-    /// block at open, opens.
+    /// exactly 65536 passes this check, and the mapped storage, which inflates
+    /// no block at open, opens.
     #[test]
     fn bgzf_block_declaring_an_isize_over_the_limit_is_refused() {
         let dir = tempdir().unwrap();

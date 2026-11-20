@@ -8,10 +8,13 @@
 //! and writes annotated output. The stages run as the staged pipeline in the
 //! `pipeline` module; this module owns the setup and `annotate_batch`.
 //!
-//! Annotation of each batch is parallelised across the resolved `--fork` count
-//! (default: every logical CPU up to 32, fewer on an inflate-bound indexed
-//! input, where the decompression threads keep their CPUs; `--fork 1` runs
-//! serially) using rayon's `par_iter_mut`.
+//! Each batch is annotated on a rayon pool of the `--fork` count, which the run
+//! resolves against the host and the input's shape (default: every logical CPU
+//! up to 32; on an inflate-bound indexed input the CPUs the decompression
+//! threads leave, within the same cap and at least half that default;
+//! `--fork 1` runs serially). `annotate_batch` spreads a batch over the pool
+//! with rayon's `par_iter_mut`; the pipeline's tasks call `annotate_one` on the
+//! same pool.
 //!
 //! Perl citations name modules of ensembl-vep release/116 (`Bio/EnsEMBL/VEP/...`).
 
@@ -2066,9 +2069,11 @@ impl Runner {
             custom_run_options(&self.config),
         )?;
         // Indexed lazily per chromosome: the key set comes from a `read_dir`
-        // walk, so the Perl-parity presence predicates are complete immediately,
-        // while a chromosome's JSON parses only when a variant queries it, or
-        // when an HGVS transcript notation looks a transcript up by name.
+        // walk, so the Perl-parity presence predicates are complete immediately.
+        // A chromosome's JSON is parsed into its index by `prewarm` alone: as
+        // the reader reaches the chromosome or `--prewarm_ahead` names it from
+        // the input's index, as a batch naming it is warmed, or as an HGVS
+        // transcript notation resolves to a transcript on it.
         let transcripts = Arc::new(
             self.transcript_indexes(self.config.distance.0, self.config.distance.1)?
                 .with_reference(reference_fasta.clone()),

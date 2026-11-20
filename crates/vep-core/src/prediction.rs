@@ -26,7 +26,8 @@
 //!
 //! Prediction matrices come from Ensembl's variation database:
 //! - Public MySQL: `ensembldb.ensembl.org:3306` (anonymous, read-only)
-//! - Tables: `translation_md5`, `protein_function_predictions`, `attrib`
+//! - Tables: `translation_md5`, `protein_function_predictions`, `attrib`,
+//!   `attrib_type`
 //! - Keyed by MD5 hash of the protein sequence
 
 use std::io::Read;

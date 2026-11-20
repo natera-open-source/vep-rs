@@ -1097,7 +1097,9 @@ pub type Row<'a> = (&'a InputVariant, Option<&'a TranscriptConsequence>);
 
 /// The rows one input record produces, in VEP's order
 /// (`VariationFeature.pm:855-864`): the transcript rows, then the regulatory
-/// rows, then the motif rows, each kind feature-major (by stable id) and
+/// rows, then the motif rows, each kind feature-major (by the feature's key,
+/// [`TranscriptConsequence::ensembl_vep_key`]; a structural variant's
+/// regulatory and motif rows in the order their features were met) and
 /// allele-minor (the reference row of `--process_ref_homs` first, then ALT
 /// order) across every allele split from the record; then one intergenic row
 /// per allele that overlapped no transcript, including alleles with regulatory
@@ -1110,7 +1112,9 @@ pub type Row<'a> = (&'a InputVariant, Option<&'a TranscriptConsequence>);
 /// a motif's database id) prints every one of its rows of that kind first; the
 /// rejoin appends a later allele's intergenic alleles to the record's one
 /// intergenic variation (:2323-2338), so the intergenic rows keep ALT order
-/// whatever the prefixes.
+/// whatever the prefixes. A record a removing per-gene pick reduced
+/// ([`InputVariant::per_gene_pick`]) lists its transcript rows after its
+/// regulatory and motif rows.
 ///
 /// An allele whose chromosome had no transcripts at all (no `most_severe_consequence`
 /// and no summary row) produces no row, as VEP writes nothing for it.
@@ -1348,8 +1352,9 @@ pub fn write_terms(out: &mut Vec<u8>, terms: &[Consequence], vocabulary: Vocabul
 
 /// The value of one named field for one row, or an empty string when the field
 /// is absent on this row. `list_sep` joins list-valued fields (`,` in the default
-/// and tab formats, `&` inside a VCF CSQ entry). Field names not in the table are
-/// looked up in the row's plugin data.
+/// and tab formats, `&` inside a VCF CSQ entry). A value a plugin wrote for the
+/// row is the field's value whatever its name; a name the table lacks is read
+/// as a frequency column, then as a `--custom` key.
 ///
 /// The bytes [`write_field_value`] appends, collected: every format reads the
 /// one field table.
@@ -3463,8 +3468,9 @@ mod tests {
 
     /// The value of one named field for one row, or an empty string when the field
     /// is absent on this row. `list_sep` joins list-valued fields (`,` in the default
-    /// and tab formats, `&` inside a VCF CSQ entry). Field names not in the table are
-    /// looked up in the row's plugin data.
+    /// and tab formats, `&` inside a VCF CSQ entry). A value a plugin wrote for the
+    /// row is the field's value whatever its name; a name the table lacks is read
+    /// as a frequency column, then as a `--custom` key.
     ///
     /// A row carrying the record's [`InputVariant::summary_terms`] is Ensembl VEP's
     /// `summary_only` row (OutputFactory.pm:426-458): the record's hash with the

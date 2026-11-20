@@ -503,12 +503,13 @@ impl fmt::Display for ShardUnreadable {
 // alternate form would otherwise print it twice.
 impl std::error::Error for ShardUnreadable {}
 
-/// Per-chromosome transcript indexes, materialized on first query.
+/// Per-chromosome transcript indexes, each materialized by its first
+/// [`prewarm`](Self::prewarm).
 ///
 /// The cache directory is enumerated eagerly (a `read_dir` walk, no parsing), so
 /// the chromosome key set is known and complete from construction. Each
-/// chromosome's JSON is parsed and indexed only when [`get`](Self::get) first
-/// asks for it, then memoized.
+/// chromosome's JSON is parsed and indexed only when [`prewarm`](Self::prewarm)
+/// first names it, then memoized; [`get`](Self::get) never parses.
 ///
 /// **Why the split matters.** Loading every chromosome up front costs the same
 /// whether the input touches 1 chromosome or 25; a chr21-only input would parse

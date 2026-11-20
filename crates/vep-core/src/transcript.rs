@@ -852,7 +852,7 @@ pub struct ProteinFunctionPredictions {
 ///
 /// Stores a binary matrix encoding predictions for every possible amino acid
 /// substitution at every protein position. The format is defined by
-/// `ProteinFunctionPredictionMatrix.pm` in ensembl-variation release/115:
+/// `ProteinFunctionPredictionMatrix.pm` in ensembl-variation:
 ///
 /// - Gzip-compressed blob, held compressed and inflated on the first lookup
 /// - Header: 3 bytes `"VEP"`

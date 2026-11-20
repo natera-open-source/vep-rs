@@ -8,9 +8,9 @@
 //! `is_canonical` vs `canonical`). This module provides deserialization types
 //! that map the JSON format and converts them to the canonical Rust types.
 //!
-//! Perl citations name modules of ensembl-vep release/115 (`Bio/EnsEMBL/VEP/...`);
+//! Perl citations name modules of ensembl-vep (`Bio/EnsEMBL/VEP/...`);
 //! `VariationEffect.pm` is `Bio/EnsEMBL/Variation/Utils/VariationEffect.pm` in
-//! ensembl-variation release/115.
+//! ensembl-variation.
 
 use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap};

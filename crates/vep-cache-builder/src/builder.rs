@@ -40,7 +40,9 @@ pub struct BuildStats {
     pub transcript_count: usize,
     pub chromosome_count: usize,
     pub region_file_count: usize,
-    /// The chromosome directories written, in the order `info.json` lists them.
+    /// The chromosome directories written, in `info::contig_order`. `info.json`
+    /// lists them in `info::karyotype_order`: those the core dumps rank in a
+    /// karyotype first, by rank.
     pub chromosomes: Vec<String>,
     /// Transcripts written with a SIFT matrix.
     pub sift_matrices: usize,

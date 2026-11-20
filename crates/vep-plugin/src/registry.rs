@@ -65,7 +65,7 @@ impl PluginRegistry {
         self.plugins.is_empty()
     }
 
-    /// Returns an iterator over the loaded plugins.
+    /// Returns the loaded plugins as a slice, in load order.
     pub fn plugins(&self) -> &[LoadedPlugin] {
         &self.plugins
     }

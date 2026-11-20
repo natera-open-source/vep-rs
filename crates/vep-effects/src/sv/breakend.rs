@@ -4,9 +4,13 @@
 //! Breakend (BND / translocation) consequence calculation.
 //!
 //! Breakends represent chromosome-level rearrangements encoded in BND notation
-//! (bracket/dot syntax). They are point-like: one breakpoint per record. The
-//! mate breakpoint is on a different chromosome or distant position
-//! and is handled as a separate variant record.
+//! (bracket/dot syntax). They are point-like: `calculate` places one
+//! breakpoint, `variant.start`, against a transcript. A paired allele carries
+//! its mate breakpoint too (`mate_chr`, `mate_pos`), on the same chromosome or
+//! another: `calculate` reads it for `feature_truncation` and for whether the
+//! allele has a row on the transcript, and `calculate_paired_mate` builds the
+//! same allele's row on a transcript within the selection window of the mate
+//! coordinate.
 //!
 //! Consequence logic (mirrors Ensembl VEP `StructuralVariationOverlapAllele`):
 //!

@@ -12,7 +12,8 @@
 //! the direct lane converging on the `roundtrip` lane. It compares:
 //!
 //! - `format_variant_value`: the embedding hot path (direct Value).
-//! - `format_variant`: the CLI path, which serializes to a single JSON line.
+//! - `format_variant_to_string`: that value serialized to a single JSON line,
+//!   the two steps `format_variant` takes for the CLI path.
 //! - `roundtrip`: a synthesized worst-case that serializes the value to a
 //!   string and immediately parses it back.
 //!

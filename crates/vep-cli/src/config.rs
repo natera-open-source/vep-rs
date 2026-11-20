@@ -1489,10 +1489,10 @@ impl Config {
 /// rule stops at 10 rather than oversubscribing large hosts.
 pub const DECOMPRESSION_THREADS_AUTO_CAP: usize = 10;
 
-/// Auto-detect cap for `--fork=0`. One reader thread parses and hands out the
-/// batches, so the wall time stops falling past about 32 workers and rises on
-/// wider hosts, where the extra workers wait at the batch barrier and contend
-/// for the allocator. User-supplied values are not capped.
+/// Auto-detect cap for `--fork=0`. One reader thread turns the input into
+/// batches and hands them out, so the wall time stops falling past about 32
+/// workers and rises on wider hosts, where the extra workers wait at the batch
+/// barrier and contend for the allocator. User-supplied values are not capped.
 pub const FORK_AUTO_CAP: usize = 32;
 
 /// Resolve the --fork value. `0` means "auto": use the number of available

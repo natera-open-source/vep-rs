@@ -30,7 +30,9 @@ no-feature-types = []
 missing-free = []
 
 # The examples are plugins, so they are built as the dynamic libraries the loader
-# opens; `tests/echo_roundtrip.rs` loads them from the profile's `examples/` dir.
+# opens. `tests/echo_roundtrip.rs` loads `echo_plugin` and `echo_all_rows_plugin`
+# from the profile's `examples/` dir, and `crates/vep-cli/tests/dylib_plugins.rs`
+# runs the `vep` binary on all three from there.
 [[example]]
 name = "echo_plugin"
 crate-type = ["cdylib"]

@@ -4,9 +4,10 @@
 //! Batch-oriented tabix query engine.
 //!
 //! [`TabixAnnotator`] wraps `noodles::tabix` to provide region-batched queries:
-//! a buffer's variants are sorted by position, their intervals merged (bridging
-//! gaps of up to 1000 bp), and each merged region is read with one seek, so the
-//! per-variant lookups that follow are hash lookups rather than I/O.
+//! a batch's regions are sorted by start within each chromosome and merged
+//! (bridging gaps of up to 1000 bp), and each merged region is read through one
+//! index lookup, so the per-variant lookups that follow are in-memory range
+//! lookups rather than I/O.
 //!
 //! Perl citations name modules of Ensembl/VEP_plugins release/115.
 

@@ -21,8 +21,9 @@ pub enum IoError {
     Unsupported(String),
 
     /// A transcript cache an input names a record in but a lookup cannot read,
-    /// the cache's own refusal as the whole message; the run stops and prints
-    /// it under the `cache` component, since the input itself is sound.
+    /// the message the parser's text followed by the cache's own refusal; the
+    /// run stops and prints it under the `cache` component, since the input
+    /// itself is sound.
     #[error("{0}")]
     CacheUnreadable(String),
 

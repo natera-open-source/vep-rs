@@ -77,7 +77,8 @@ pub struct CacheInfo {
     pub source_versions: BTreeMap<String, String>,
     /// The cache's chromosome directories in the order the converter and the
     /// builder list them: autosomes by number, X, Y, MT, then every other
-    /// contig by name. Empty when the cache's metadata lacks the key.
+    /// contig by name; a `--core-dumps` build of the builder lists the dumps'
+    /// karyotype first, by rank. Empty when the cache's metadata lacks the key.
     pub contig_order: Vec<String>,
 }
 

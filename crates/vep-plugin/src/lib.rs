@@ -1,7 +1,8 @@
 // Copyright (c) 2026-present Natera, Inc.
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-//! Plugin trait definition, dylib loader, and registry for VEP.
+//! The C ABI a VEP plugin dylib exports, the dylib loader and the registry of
+//! loaded plugins, with [`VepPlugin`], the in-process plugin trait.
 //!
 //! Plugins are compiled as cdylib crates and loaded at runtime.
 //! The [`abi`] module defines the C FFI contract, [`loader`] handles dylib

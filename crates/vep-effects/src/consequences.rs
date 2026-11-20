@@ -55,23 +55,29 @@ pub struct EffectsConfig {
     /// `--shift_3prime`, which an embedder sets as it sets
     /// `enable_indel_3prime_shift`.
     pub hgvs: crate::hgvs::HgvsOptions,
-    /// The transcript consequences that carry a
-    /// [`LofteeContext`](vep_core::consequence::LofteeContext) from construction,
-    /// so the exon/intron model and genomic CDS bounds travel to the plugin
-    /// phase, where the transcript is out of scope.
+    /// The transcript consequences that are to carry a
+    /// [`LofteeContext`](vep_core::consequence::LofteeContext), so the
+    /// exon/intron model and genomic CDS bounds travel to the plugin phase,
+    /// where the transcript is out of scope. [`calculate_consequences`] does not
+    /// read the field: its caller tests each returned row
+    /// ([`LofteeContextRows::wants`]) and attaches the context while it holds
+    /// the transcript, as `vep-cli` does.
     ///
     /// [`LofteeContextRows::None`] by default: `TranscriptConsequence.loftee_ctx`
-    /// stays `None` and output is byte-identical to a non-plugin run. The
-    /// context clones the transcript's exon and intron lists per row, so a
-    /// plugin that reads one consequence class asks for those rows alone.
+    /// stays `None` and the row's serialization carries no such key. The
+    /// context clones the transcript's exon and intron lists per row, so
+    /// `vep-cli` names every row only for a loaded plugin that reads the model
+    /// on every row, and the rows of one term for a plugin that reads that
+    /// consequence class alone.
     pub loftee_context: LofteeContextRows,
-    /// The transcript consequences that carry the transcript's coding, 3' UTR
-    /// and protein sequences
-    /// ([`TranscriptSequences`](vep_core::consequence::TranscriptSequences))
-    /// from construction, for a plugin that translates a changed coding
-    /// sequence in the plugin phase. [`LofteeContextRows::None`] by default:
+    /// The transcript consequences that are to carry the transcript's coding,
+    /// 3' UTR and protein sequences
+    /// ([`TranscriptSequences`](vep_core::consequence::TranscriptSequences)),
+    /// for a plugin that translates a changed coding sequence in the plugin
+    /// phase; the caller attaches them as it attaches the context of
+    /// `loftee_context`. [`LofteeContextRows::None`] by default:
     /// `TranscriptConsequence.transcript_sequences` stays `None`. The sequences
-    /// are copied per row, so a plugin asks for the rows of its one term.
+    /// are copied per row, so `vep-cli` names the rows of the plugin's one term.
     pub context_sequences: LofteeContextRows,
     /// Compute HGVSc / HGVSp notations for each transcript consequence.
     ///

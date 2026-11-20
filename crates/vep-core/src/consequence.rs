@@ -5,9 +5,9 @@
 //!
 //! All 41 Sequence Ontology (SO) consequence terms used by VEP, with their
 //! exact ranks, impact classifications, and SO accessions matching the Perl
-//! implementation in `Bio::EnsEMBL::Variation::Utils::Constants` (ensembl-variation
-//! release/115). `OutputFactory.pm` is `Bio/EnsEMBL/VEP/OutputFactory.pm` in
-//! ensembl-vep release/115.
+//! implementation in `Bio::EnsEMBL::Variation::Utils::Constants`
+//! (ensembl-variation). `OutputFactory.pm` is
+//! `Bio/EnsEMBL/VEP/OutputFactory.pm` in ensembl-vep.
 
 use std::borrow::Cow;
 use std::fmt;
@@ -67,7 +67,7 @@ impl fmt::Display for Impact {
 /// Each variant represents a specific molecular consequence type, ordered by
 /// severity rank (lower rank = more severe). Ranks, impacts, and SO accessions
 /// exactly match `Bio::EnsEMBL::Variation::Utils::Constants` from Ensembl
-/// Variation release/115.
+/// Variation.
 ///
 /// See <https://www.ensembl.org/info/genome/variation/prediction/predicted_data.html>
 /// for the full consequence hierarchy.
@@ -455,9 +455,9 @@ impl Ord for Consequence {
     }
 }
 
-/// Transcript structural context required by consequence-filtering plugins
-/// (LoFTEE) that the summarized [`TranscriptConsequence`] fields do
-/// not expose.
+/// Transcript structural context for the built-in plugins that read the
+/// transcript model in the plugin phase (LoFTEE among them), which the
+/// summarized [`TranscriptConsequence`] fields do not expose.
 ///
 /// The per-consequence `exon`/`intron` fields are only `"n/total"` summary
 /// strings, and the per-transcript exon/intron coordinate model, genomic CDS
@@ -466,10 +466,11 @@ impl Ord for Consequence {
 /// out of scope). LoFTEE needs the full structure to compute SMALL_INTRON,
 /// NON_CAN_SPLICE, GC_TO_GT_DONOR, the GERP-weighted END_TRUNC distance, etc.
 ///
-/// This struct is attached to a [`TranscriptConsequence`] at construction time
-/// **only when a consequence-filtering plugin is active** (see
-/// `vep_effects::EffectsConfig`'s plugin gate). For all other runs the field is
-/// `None` and absent from the serialization.
+/// The code that builds a [`TranscriptConsequence`] attaches this struct while
+/// it holds the transcript, on the rows
+/// `vep_effects::EffectsConfig::loftee_context` names, which the `vep` binary
+/// chooses from the loaded plugins. On every other row the field is `None` and
+/// absent from the serialization.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LofteeContext {
     /// All exons of the transcript, in rank order.
@@ -500,8 +501,8 @@ pub struct LofteeContext {
 impl LofteeContext {
     /// Build the LoFTEE structural context from a source transcript.
     ///
-    /// Clones the exon list (cheap relative to the per-variant work, and only
-    /// done when a consequence-filtering plugin is active). When the
+    /// Clones the exon list (cheap relative to the per-variant work, and done
+    /// only for a row that is to carry the context). When the
     /// transcript's own intron list is empty, derives intron coordinates from
     /// the rank-sorted exons (the gaps between consecutive exons), matching
     /// LoFTEE's `transcript->get_all_Introns`.
@@ -733,9 +734,10 @@ pub struct TranscriptConsequence {
     /// variant overlap fields; both zero when unknown.
     pub feature_start: u64,
     pub feature_end: u64,
-    /// Transcript structural context for consequence-filtering plugins (LoFTEE).
-    /// Populated at consequence-construction time only when such a plugin is
-    /// active; `None` otherwise, and absent from the serialization unless set.
+    /// Transcript structural context for the built-in plugins that read the
+    /// transcript model (LoFTEE among them). Attached by the code that builds
+    /// the row, on the rows `vep_effects::EffectsConfig::loftee_context` names;
+    /// `None` otherwise, and absent from the serialization unless set.
     /// See [`LofteeContext`].
     pub loftee_ctx: Option<Box<LofteeContext>>,
     /// The transcript's exon stable ids in rank order, one per exon of
@@ -745,8 +747,9 @@ pub struct TranscriptConsequence {
     pub exon_ids: Option<Arc<[Arc<str>]>>,
     /// The transcript's coding, 3' UTR and protein sequences for the built-in
     /// plugins that translate a changed coding sequence (Downstream). Attached
-    /// at construction time to the rows `vep_effects::EffectsConfig`'s sequence
-    /// gate names, `None` on every other row. Never serialized.
+    /// by the code that builds the row, on the rows
+    /// `vep_effects::EffectsConfig::context_sequences` names, `None` on every
+    /// other row. Never serialized.
     pub transcript_sequences: Option<Box<TranscriptSequences>>,
     /// The motif fields of a `MotifFeature` row of a sequence variant
     /// (`MotifFeatureVariationAllele_to_output_hash`, OutputFactory.pm:1910-1942):

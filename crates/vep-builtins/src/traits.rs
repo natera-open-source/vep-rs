@@ -299,9 +299,9 @@ pub trait BuiltinPlugin: Send + Sync {
     /// Default is a no-op. The plugins that match records to transcripts by
     /// Ensembl stable id warn under either flag that the match may fail
     /// (REVEL.pm:144-146, AlphaMissense.pm:188-190, pLI.pm:187-189 and
-    /// SpliceVault.pm:129-131, each a bare `warn` printed here with
-    /// [`warn_on_stderr`]; dbNSFP.pm:617-619), since RefSeq ids never match an
-    /// Ensembl id.
+    /// SpliceVault.pm:129-131, each a bare `warn`, and dbNSFP.pm:617-619; all
+    /// five printed here with [`warn_on_stderr`]), since RefSeq ids never match
+    /// an Ensembl id.
     fn set_transcript_set(&mut self, _refseq: bool, _merged: bool) {}
 
     /// Inject the run's plugins directories, in search order (the last
