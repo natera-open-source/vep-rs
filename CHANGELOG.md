@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The installation page's Windows row names the container image under Docker before the Linux archive under WSL2; neither is tested on Windows. (#117)
   - The contributor guide counts two forms of the model declaration, a model's line and the line for a change written without one, as the admission check reads them. (#117)
   - The Benchmarks page names the two fastVEP records measured without `--exclude-readthrough --exclude-artifact`, and a saved link to its 0.5.0 section anchor reaches the section. (#117)
+  - Release-site page titles are fitted to 25 to 60 characters: a short title ends ` - vep-rs documentation`, a long one drops its ending or is cut at a word. (#120)
 - Dependencies and tooling
   - Publishing a release publishes the nine crates to crates.io from the workflow `crates-io.yml` by trusted publishing, with no stored token; a rerun skips the crates already published. (#118)
   - The Bioconda recipe `bioconda/vep-rs` names 0.6.0 and drops its `duckdb-cli` run requirement: 0.6.0 writes Parquet without the `duckdb` program. (#116)

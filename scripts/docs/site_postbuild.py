@@ -6,7 +6,7 @@ development preview of main under `main/`. On every page it rewrites the menu
 bar's `<h1 class="menu-title">` as a `<p>`, so the page's own heading is its
 one `h1`, and collapses a `<title>` whose chapter name repeats the book title.
 On the release channel it drops the release tag from every `<title>` and from
-`og:site_name`, so a title ends with the project's name alone; the preview
+`og:site_name`, so a title names the project without a version; the preview
 keeps `vep-rs main`.
 On every page except `print.html`, `toc.html`, `404.html` and the stub mdBook
 writes for a redirected path, it inserts `<link rel="canonical">` and `og:url`
@@ -16,10 +16,16 @@ search engine lists the release and not the preview. On those pages it also
 replaces the book-wide description metas with the page's first paragraph of
 prose, so each search result shows its own snippet, and on the home page it
 names what the project is in the title and, for a release, adds a schema.org
-SoftwareApplication JSON-LD record. In the home page's `<noscript>` block it
-puts the chapter list of `toc.html` where mdBook frames that file, so the page
-carries every chapter as a link without a script. It writes `versions.json`,
-which the header's channel switcher reads, and for a release `sitemap.xml`.
+SoftwareApplication JSON-LD record. On the release channel it fits the title
+of each of those pages to 25 to 60 characters: a title under 25 ends
+` - vep-rs documentation` in place of ` - vep-rs`, a title over 60 is the
+chapter name alone, and a name over 60 is cut at a word and ends in an
+ellipsis. The home page's title has no such ending and is left as it is, and
+`og:title` keeps every chapter name whole. In the home page's `<noscript>`
+block it puts the chapter list of `toc.html` where mdBook frames that file, so
+the page carries every chapter as a link without a script. It writes
+`versions.json`, which the header's channel switcher reads, and for a release
+`sitemap.xml`.
 
 When `VEP_RS_DOCS_README_HOME` is `1` the home page renders the README, so its
 edit link is pointed at `README.md`, and the benchmark chart is not held to the
@@ -29,12 +35,14 @@ Then three checks. Every page a reader lands on has a title and a description
 of its own: a title or a description two pages share, or a page left on the
 book's description, fails the preview and is a warning line on the release,
 whose pages come from a published tag; the release's sitemap lists every such
-page. Every redirect destination the built pages name must exist:
+page. On the release a title outside 25 to 60 characters fails, and so does a
+title that chapters of different names were fitted to. Every redirect
+destination the built pages name must exist:
 the page as a file and, when the destination carries one, the id on that page.
 The benchmark chart's `data-release` must equal the version in the README's
 `## Current release: vX.Y.Z` heading of the tree the site was built from
-(`--source`). Every step prints one line; any failure exits 1 after all of
-them have run.
+(`--source`). Every step prints one line, the page check a second one for the
+release's titles; any failure exits 1 after all of them have run.
 
 Usage::
 
@@ -79,9 +87,21 @@ CHAPTER_FRAME = re.compile(
 )
 HOME_TITLE = re.compile(r"<title>([^<]*)</title>")
 HOME_OG_TITLES = re.compile(r'(<meta (?:property="og:title"|name="twitter:title") content=")[^"]*(">)')
+OG_TITLE = re.compile(r'<meta property="og:title" content="([^"]*)">')
 # A search result shows the title and description; these say what the project is in the words people search.
 HOME_TAGLINE = "fast Ensembl VEP (Variant Effect Predictor) in Rust"
 DESCRIPTION_MIN, DESCRIPTION_MAX = 80, 160
+BOOK_NAME = "vep-rs"
+# The ending of a chapter's title on the release channel, and the ending of a title that is too short with it.
+TITLE_ENDING, TITLE_ENDING_LONG = f" - {BOOK_NAME}", f" - {BOOK_NAME} documentation"
+# The lengths in characters a title of the release channel is fitted to.
+TITLE_MIN, TITLE_MAX = 25, 60
+ELLIPSIS = "\u2026"
+# A title cut at a word does not end on an article, a conjunction or one of these prepositions.
+SMALL_WORDS = frozenset(
+    {"a", "an", "the", "and", "but", "nor", "or"}
+    | {"as", "at", "before", "by", "for", "from", "in", "into", "of", "on", "over", "to", "under", "with", "without"}
+)
 
 
 class Ids(html.parser.HTMLParser):
@@ -129,13 +149,89 @@ def collapse_title(m):
 
 
 def drop_release(text, release):
-    """The page's `<title>` and `og:site_name` without the release tag the release's book title ends with."""
+    """The page's `<title>` and `og:site_name` without the release tag the release's book title ends with.
+
+    The title loses the tag only after the book's name, so a chapter name that ends in the tag keeps it.
+    """
     tag = " " + release
 
     def bare(m):
         return m[1] + m[2].removesuffix(tag) + m[3]
 
-    return SITE_NAME.sub(bare, PAGE_TITLE.sub(bare, text, 1))
+    def bare_title(m):
+        title = m[2].removesuffix(tag)
+        return m[1] + (title if title == BOOK_NAME or title.endswith(TITLE_ENDING) else m[2]) + m[3]
+
+    return SITE_NAME.sub(bare, PAGE_TITLE.sub(bare_title, text, 1))
+
+
+def fitted_title(heading):
+    """The release channel's title for the chapter named `heading`.
+
+    The name with TITLE_ENDING where that is TITLE_MIN to TITLE_MAX characters, with TITLE_ENDING_LONG where it
+    is shorter, and the name alone where it is longer. A name that is itself over TITLE_MAX characters is cut
+    and ends in an ellipsis: at the last space that leaves a title of those lengths, less a trailing `,`, `;`
+    or `:` and trailing SMALL_WORDS while TITLE_MIN characters remain, or inside a word where it has no such
+    space. A name of one character gives a title one short of TITLE_MIN.
+    """
+    title = heading + TITLE_ENDING
+    if len(title) < TITLE_MIN:
+        return heading + TITLE_ENDING_LONG
+    if len(title) <= TITLE_MAX:
+        return title
+    if len(heading) <= TITLE_MAX:
+        return heading
+    room = TITLE_MAX - len(ELLIPSIS)
+    space = heading.rfind(" ", TITLE_MIN - len(ELLIPSIS), room + 1)
+    if space < 0:
+        return heading[:room] + ELLIPSIS
+    words = heading[:space]
+    while True:
+        last = words.rpartition(" ")[2]
+        if words[-1] in ",;: ":
+            shorter = words.rstrip(",;: ")
+        elif last != words and last.lower() in SMALL_WORDS:
+            shorter = words[: -len(last)].rstrip()
+        else:
+            break
+        if len(shorter) + len(ELLIPSIS) < TITLE_MIN:
+            break
+        words = shorter
+    return words + ELLIPSIS
+
+
+def title_form(title):
+    """Which form of `fitted_title` a title has, read from its ending: "kept", "lengthened", "cut" or "bare"."""
+    if title.endswith(TITLE_ENDING_LONG):
+        return "lengthened"
+    if title.endswith(TITLE_ENDING):
+        return "kept"
+    return "cut" if title.endswith(ELLIPSIS) else "bare"
+
+
+def fit_title(text):
+    """The page with its `<title>` fitted by `fitted_title`, the title measured unescaped.
+
+    A title that does not end in TITLE_ENDING is left as it is: the home page's, and a title a finished page
+    already carries in another form. A title the fit does not change keeps its bytes.
+    """
+    m = PAGE_TITLE.search(text)
+    title = html.unescape(m[2]) if m else ""
+    if not title.endswith(TITLE_ENDING):
+        return text
+    fitted = fitted_title(title.removesuffix(TITLE_ENDING))
+    if fitted == title:
+        return text
+    return text[: m.start(2)] + html.escape(fitted, quote=False) + text[m.end(2) :]
+
+
+def page_heading(text, title):
+    """The name a page's title was made from: the chapter name in its `og:title`, which the fit leaves whole,
+    else the title without its ending. The home page's `og:title` is its title."""
+    m = OG_TITLE.search(text)
+    if m:
+        return html.unescape(m[1])
+    return title.removesuffix(TITLE_ENDING_LONG).removesuffix(TITLE_ENDING)
 
 
 def page_description(text):
@@ -161,10 +257,14 @@ def describe_page(text):
 
 
 def title_home(text, release, channel, base):
-    """Names the project and what it is in the home page's title, and on the release adds its JSON-LD record."""
+    """Names the project and what it is in the home page's title, and on the release adds its JSON-LD record.
+
+    The title is the book's name and HOME_TAGLINE, without the chapter name a home chapter of another name
+    puts before the book's.
+    """
     m = HOME_TITLE.search(text)
     if m and HOME_TAGLINE not in m[1]:
-        title = f"{m[1]}: {HOME_TAGLINE}"
+        title = f"{m[1].rpartition(' - ')[2]}: {HOME_TAGLINE}"
         text = text.replace(m[0], f"<title>{html.escape(title, quote=False)}</title>", 1)
         text = HOME_OG_TITLES.sub(lambda t: t[1] + html.escape(title) + t[2], text)
     if not channel and "application/ld+json" not in text and "</head>" in text:
@@ -224,6 +324,8 @@ def finish_pages(site, pages, reader_pages, base, channel, readme_home, release)
                 text = title_home(text, release, channel, base)
                 if chapters:
                     text, listed = list_chapters(text, chapters)
+            if not channel:
+                text = fit_title(text)
             if 'rel="canonical"' in text:
                 present += 1
             elif "</head>" not in text:
@@ -291,21 +393,26 @@ def check_page_heads(site, reader_pages, channel):
 
     A title or a description two pages share, or a page left on the book's description, fails the preview,
     whose pages can still be changed; the release's pages come from a published tag, so each is a warning there.
+    The release's titles are fitted, and two outcomes of the fit fail there: one title for chapters of
+    different names, and a title outside TITLE_MIN to TITLE_MAX characters.
     """
-    titles, descriptions, on_book = {}, {}, []
+    titles, headings, descriptions, on_book = {}, {}, {}, []
     for page in sorted(reader_pages):
         text = read(os.path.join(site, page))
         m = PAGE_TITLE.search(text)
-        titles.setdefault(m[2] if m else "", []).append(page)
+        title = html.unescape(m[2]) if m else ""
+        titles.setdefault(title, []).append(page)
+        headings.setdefault(title, set()).add(page_heading(text, title))
         description = page_description(text)
         if description:
             descriptions.setdefault(description, []).append(page)
         else:
             on_book.append(page)
-    shared_titles = shared_heads("title", titles)
+    fitted_alike = {} if channel else {title: pages for title, pages in titles.items() if len(headings[title]) > 1}
+    shared_titles = shared_heads("title", {title: titles[title] for title in titles if title not in fitted_alike})
     shared_descriptions = shared_heads("description", descriptions)
     print(
-        f"page heads: {len(reader_pages)} pages, {len(shared_titles)} titles shared,"
+        f"page heads: {len(reader_pages)} pages, {len(shared_titles) + len(fitted_alike)} titles shared,"
         f" {len(shared_descriptions)} descriptions shared, {len(on_book)} on the book's description"
     )
     findings = shared_titles + shared_descriptions
@@ -317,11 +424,28 @@ def check_page_heads(site, reader_pages, channel):
         return findings
     for finding in findings:
         print(f"WARNING: [site_postbuild] {finding}")
+    failures = [
+        f"title {title!r} is the fit of {len(headings[title])} headings: {', '.join(pages)}"
+        for title, pages in fitted_alike.items()
+    ]
+    outside = []
+    for title, pages in titles.items():
+        if not TITLE_MIN <= len(title) <= TITLE_MAX:
+            limit = f"under {TITLE_MIN}" if len(title) < TITLE_MIN else f"over {TITLE_MAX}"
+            outside += [f"{page}: title {title!r} is {len(title)} characters, {limit}" for page in pages]
+    forms = [title_form(title) for title, pages in titles.items() for _ in pages]
+    kept, lengthened, bare, cut = (forms.count(form) for form in ("kept", "lengthened", "bare", "cut"))
+    print(
+        f'page titles: {len(reader_pages)} pages, {kept} end "{TITLE_ENDING}",'
+        f' {lengthened} end "{TITLE_ENDING_LONG}", {bare} without an ending, {cut} cut,'
+        f" {len(outside)} outside {TITLE_MIN} to {TITLE_MAX} characters"
+    )
+    failures += outside
     sitemap = os.path.join(site, "sitemap.xml")
     listed = read(sitemap).count("<loc>") if os.path.isfile(sitemap) else 0
     if listed != len(reader_pages):
-        return [f"sitemap.xml lists {listed} pages, a reader lands on {len(reader_pages)}"]
-    return []
+        failures.append(f"sitemap.xml lists {listed} pages, a reader lands on {len(reader_pages)}")
+    return failures
 
 
 def redirect_destinations(text):

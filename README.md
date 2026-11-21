@@ -348,7 +348,7 @@ The documentation site, https://natera-open-source.github.io/vep-rs/, describes 
 - **Getting started**: [Installation](docs/getting-started/installation.md), the transcript cache and [the move from Ensembl VEP](docs/getting-started/coming-from-ensembl-vep.md); [Examples](docs/examples.md), the common shapes of a run.
 - **Reference**: [every flag](docs/cli-reference.md), with the option rules, the flags refused or accepted without effect and the exit-status contract; [every output format](docs/output-formats.md); [every plugin](docs/plugins.md).
 - **Concordance with Ensembl VEP**: [the divergence classes](docs/intended-divergences.md) the adjusted F1 sets aside.
-- **Benchmarks**: the [Current release](#current-release-v060) figures above, also on the site's [Benchmarks](docs/benchmarks/current-release.md) page, beside [the paper's figures](docs/published-figures.md).
+- **Benchmarks**: the [Current release](#current-release-v060) figures above, also on the site's [Benchmarks](docs/benchmarks/current-release.md) page, and [wall time with each plugin](docs/benchmarks/current-release.md#wall-time-with-each-plugin), beside [the paper's figures](docs/published-figures.md).
 - **Developers**: [Writing a plugin](docs/developers/writing-a-plugin.md).
 - **Project**: [Citing vep-rs](docs/project/citing.md) and the [changelog](CHANGELOG.md).
 
