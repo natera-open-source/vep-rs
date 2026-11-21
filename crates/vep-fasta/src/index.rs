@@ -818,8 +818,8 @@ mod tests {
         );
     }
 
-    /// A layout no `.fai` describes is refused with the file, the line and the
-    /// rule it breaks named, as `samtools faidx` refuses it.
+    /// A layout no `.fai` describes is refused with the file named, and the line or
+    /// the sequence at fault where there is one, as `samtools faidx` refuses it.
     #[test]
     fn a_layout_no_index_describes_is_refused_with_its_line_named() {
         let (full, short) = (made_up(8), made_up(3));
@@ -1013,8 +1013,8 @@ mod tests {
         }
     }
 
-    /// A temporary file another run left beside the FASTA, under the name a
-    /// run of this process id took, is neither in the way of the index nor
+    /// A temporary file another run left beside the FASTA, its name ending in
+    /// this process's id and `.tmp`, is neither in the way of the index nor
     /// removed.
     #[test]
     fn a_temporary_file_of_another_run_is_neither_in_the_way_nor_removed() {
