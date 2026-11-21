@@ -23,7 +23,8 @@ use super::{encoding_of, io_error, sibling, Encoding, FastaError, BGZF_EOF_LEN};
 /// indexes beside the file (`:315-321`), and when none of `.fai`, `.index` and
 /// `.gzi` is there the lock is written for the time the indexes take
 /// (`:323-338`, `:356`). A directory, a gzip file that is not BGZF and a file
-/// with both its indexes are left as they are.
+/// with both its indexes are left as they are. A file that cannot be indexed
+/// is refused with no lock and no part of an index left beside it.
 pub fn index_if_missing(fasta: &Path) -> Result<(), FastaError> {
     if !fasta.is_file() {
         return Ok(());
@@ -60,16 +61,23 @@ pub fn index_if_missing(fasta: &Path) -> Result<(), FastaError> {
             .map_err(|_| FastaError::LockFile(lock.display().to_string()))?;
     }
     tracing::debug!("Indexing {}", fasta.display());
-    if write_gzi_too {
-        write_gzi(fasta)?;
-    }
-    if !fai.is_file() {
-        write_fai(fasta)?;
-    }
+    let written = (|| {
+        if write_gzi_too {
+            write_gzi(fasta)?;
+        }
+        if !fai.is_file() {
+            write_fai(fasta)?;
+        }
+        Ok(())
+    })();
     if !index_exists {
-        std::fs::remove_file(&lock).map_err(io_error("failed to remove FASTA lock file", &lock))?;
+        // An index is put in place whole or not at all, so the lock marks
+        // nothing once the writers have returned, whether or not they wrote.
+        let removed = std::fs::remove_file(&lock)
+            .map_err(io_error("failed to remove FASTA lock file", &lock));
+        return written.and(removed);
     }
-    Ok(())
+    written
 }
 
 /// Writes `<fasta>.fai`, the `samtools faidx` index of the plain or BGZF FASTA
@@ -822,6 +830,74 @@ mod tests {
             fasta.sequence("2", 1, 1_700),
             Some(two.to_ascii_uppercase())
         );
+    }
+
+    /// The names of the entries of `dir`, sorted.
+    fn names_in(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// What `vep` does with the file `--fasta` names: the indexes it lacks are
+    /// written, then it is opened.
+    fn opened(fa: &Path) -> Result<IndexedFasta, FastaError> {
+        index_if_missing(fa)?;
+        IndexedFasta::from_path(fa)
+    }
+
+    /// A FASTA that cannot be indexed is left with no lock file and no part of
+    /// an index beside it; a `.gzi` written whole before the `.fai` failed
+    /// stays, and a `.fai` put beside the file afterwards is read as it is.
+    #[test]
+    fn a_fasta_that_cannot_be_indexed_keeps_no_lock_beside_it() {
+        use crate::tests::bgzf_and_gzi;
+        let uneven = format!(">1\n{}\n{}\n{}\n", made_up(8), made_up(3), made_up(8));
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        std::fs::write(&fa, &uneven).unwrap();
+        index_if_missing(&fa).unwrap_err();
+        assert_eq!(names_in(dir.path()), ["ref.fa"]);
+        let by_hand = "1\t11\t3\t8\t9\n";
+        std::fs::write(dir.path().join("ref.fa.fai"), by_hand).unwrap();
+        let fasta = opened(&fa).unwrap();
+        assert_eq!(fasta.base("1", 11), Some(b'G'));
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("ref.fa.fai")).unwrap(),
+            by_hand
+        );
+        assert_eq!(names_in(dir.path()), ["ref.fa", "ref.fa.fai"]);
+
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa.gz");
+        std::fs::write(&fa, bgzf_and_gzi(uneven.as_bytes(), 16).0).unwrap();
+        index_if_missing(&fa).unwrap_err();
+        assert_eq!(names_in(dir.path()), ["ref.fa.gz", "ref.fa.gz.gzi"]);
+    }
+
+    /// An index that cannot be put in place takes its temporary file with it:
+    /// with a directory standing at the `.fai` path the run is refused and
+    /// nothing is left beside the FASTA but that directory.
+    #[test]
+    fn an_index_that_cannot_be_put_in_place_leaves_no_temporary_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        std::fs::write(&fa, PLAIN).unwrap();
+        std::fs::create_dir(dir.path().join("ref.fa.fai")).unwrap();
+        std::fs::write(dir.path().join("ref.fa.fai/kept"), "").unwrap();
+        let error = index_if_missing(&fa).unwrap_err().to_string();
+        assert!(
+            error.starts_with(&format!(
+                "failed to write FASTA index {}.fai: ",
+                fa.display()
+            )),
+            "{error}"
+        );
+        assert_eq!(names_in(dir.path()), ["ref.fa", "ref.fa.fai"]);
+        assert_eq!(names_in(&dir.path().join("ref.fa.fai")), ["kept"]);
     }
 
     /// A block stating a size shorter than the 28-byte minimum is refused with
