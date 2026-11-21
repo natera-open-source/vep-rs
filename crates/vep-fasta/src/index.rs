@@ -782,6 +782,48 @@ mod tests {
         }
     }
 
+    /// Two BGZF files joined end to end get the `.fai` and the `.gzi`
+    /// `samtools faidx` writes for the joined file, the end-of-file block of the
+    /// first file without an entry, and both sequences read through them.
+    #[test]
+    fn two_bgzf_files_joined_are_indexed_and_read() {
+        use crate::tests::{bases, bgzf_and_gzi, fasta_and_fai};
+        let dir = tempfile::tempdir().unwrap();
+        let (one, two) = (bases(21, 2_500), bases(22, 1_700));
+        let (first, _) = fasta_and_fai(&[("1", &one)]);
+        let (whole, fai) = fasta_and_fai(&[("1", &one), ("2", &two)]);
+        let (first_bgzf, first_gzi) = bgzf_and_gzi(&first, 1_000);
+        let (second_bgzf, second_gzi) = bgzf_and_gzi(&whole[first.len()..], 1_000);
+        let (joined_at, text_at) = (first_bgzf.len() as u64, first.len() as u64);
+        let mut pairs = first_gzi.as_ref().to_vec();
+        pairs.push((joined_at, text_at));
+        pairs.extend(
+            second_gzi
+                .as_ref()
+                .iter()
+                .map(|(compressed, text)| (joined_at + compressed, text_at + text)),
+        );
+        let mut gzi = (pairs.len() as u64).to_le_bytes().to_vec();
+        for (compressed, text) in pairs {
+            gzi.extend_from_slice(&compressed.to_le_bytes());
+            gzi.extend_from_slice(&text.to_le_bytes());
+        }
+        let fa = dir.path().join("ref.fa.gz");
+        std::fs::write(&fa, [first_bgzf, second_bgzf].concat()).unwrap();
+        index_if_missing(&fa).unwrap();
+        assert_eq!(std::fs::read(sibling(&fa, "gzi")).unwrap(), gzi);
+        assert_eq!(std::fs::read_to_string(sibling(&fa, "fai")).unwrap(), fai);
+        let fasta = IndexedFasta::from_path(&fa).unwrap();
+        assert_eq!(
+            fasta.sequence("1", 1, 2_500),
+            Some(one.to_ascii_uppercase())
+        );
+        assert_eq!(
+            fasta.sequence("2", 1, 1_700),
+            Some(two.to_ascii_uppercase())
+        );
+    }
+
     /// A block stating a size shorter than the 28-byte minimum is refused with
     /// its offset.
     #[test]

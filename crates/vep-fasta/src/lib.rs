@@ -370,7 +370,10 @@ enum BgzfRefusal {
 /// describes it, else why it does not: the file must start with a whole BGZF
 /// block, and every entry must start where the block before it ends, at the
 /// uncompressed offset that block's ISIZE brings the sequence to; the last block
-/// must end at the file's end or at its EOF block. Every block's header and
+/// must end at the file's end or at its EOF block. A block that holds no data
+/// has no entry, as `bgzip` and `samtools faidx` write the index: the EOF block
+/// of a BGZF file another was joined to stands between two entries, and more
+/// than one may end the file. Every block's header and
 /// ISIZE are read, one pass over the whole compressed file, so the index is the
 /// one `bgzip -r` would write for these bytes or it is refused, and a block
 /// whose ISIZE is over the format's limit is refused as its own fault, wherever
@@ -398,11 +401,23 @@ fn check_gzi(file: &File, len: u64, index: &[(u64, u64)]) -> Result<u64, BgzfRef
         }
         Ok((start.0 + block_len as u64, start.1 + block_isize))
     };
+    // The length of the whole BGZF block at `at` when it holds no data.
+    let empty_block = |at: u64| -> Option<u64> {
+        let block_len = bgzf_block_len(file, len, at)?;
+        (bgzf_block_isize(file, len, at, block_len)? == 0).then_some(block_len as u64)
+    };
     // The first block starts at (0, 0); the index leaves it implicit.
     let mut start = (0u64, 0u64);
     for &next in index {
         let end = block_end(start)?;
-        if next != end {
+        let mut reached = end;
+        while next != reached {
+            match empty_block(reached.0) {
+                Some(block_len) => reached.0 += block_len,
+                None => break,
+            }
+        }
+        if next != reached {
             return Err(BgzfRefusal::IndexMismatch(format!(
                 "the block at byte {} ends at byte {} with the sequence at {} bytes, the index says {} and {}",
                 start.0, end.0, end.1, next.0, next.1
@@ -410,7 +425,13 @@ fn check_gzi(file: &File, len: u64, index: &[(u64, u64)]) -> Result<u64, BgzfRef
         }
         start = next;
     }
-    let end = block_end(start)?;
+    let mut end = block_end(start)?;
+    while end.0 + (BGZF_EOF_LEN as u64) < len {
+        match empty_block(end.0) {
+            Some(block_len) => end.0 += block_len,
+            None => break,
+        }
+    }
     if end.0 == len {
         Ok(end.1)
     } else if end.0 + BGZF_EOF_LEN as u64 == len {
@@ -1365,7 +1386,7 @@ mod tests {
 
     /// A deterministic sequence of `len` bases over the four letters and N, in
     /// both cases so the upper-casing is exercised.
-    fn bases(seed: u64, len: usize) -> Vec<u8> {
+    pub(crate) fn bases(seed: u64, len: usize) -> Vec<u8> {
         let alphabet = b"ACGTacgtNn";
         let mut state = seed;
         (0..len)
@@ -1381,7 +1402,7 @@ mod tests {
     /// A FASTA of the given contigs at 60 bases per line, with the `.fai`
     /// `samtools faidx` writes for it (name, length, offset of the first base,
     /// bases per line, bytes per line).
-    fn fasta_and_fai(contigs: &[(&str, &[u8])]) -> (Vec<u8>, String) {
+    pub(crate) fn fasta_and_fai(contigs: &[(&str, &[u8])]) -> (Vec<u8>, String) {
         let mut fasta = Vec::new();
         let mut fai = String::new();
         for (name, seq) in contigs {
@@ -1398,7 +1419,7 @@ mod tests {
     /// `fasta` as BGZF in blocks of `block_bytes` uncompressed bytes, with the
     /// `.gzi` `bgzip -r` writes: one (compressed offset, uncompressed offset)
     /// pair per block after the first, the EOF block excluded.
-    fn bgzf_and_gzi(fasta: &[u8], block_bytes: usize) -> (Vec<u8>, bgzf::gzi::Index) {
+    pub(crate) fn bgzf_and_gzi(fasta: &[u8], block_bytes: usize) -> (Vec<u8>, bgzf::gzi::Index) {
         let mut writer = bgzf::io::Writer::new(Vec::new());
         let mut pairs = Vec::new();
         let mut uncompressed = 0u64;
@@ -1752,6 +1773,57 @@ mod tests {
         );
         let in_memory = IndexedFasta::from_path_in_memory(&gz).unwrap_err();
         assert_eq!(in_memory.to_string(), error.to_string());
+    }
+
+    /// Two BGZF files joined end to end read as one, in both storage modes,
+    /// through the `.gzi` `samtools faidx` writes for the joined file: it lists
+    /// every block that holds data but the first, so the end-of-file block of the
+    /// first file stands between two entries without one. A second end-of-file
+    /// block at the end of the file changes nothing, and an index that leaves
+    /// out a block that holds data is refused.
+    #[test]
+    fn bgzf_files_joined_end_to_end_read_as_one() {
+        let dir = tempdir().unwrap();
+        let (one, two) = (bases(11, 2_500), bases(12, 1_700));
+        let (first, _) = fasta_and_fai(&[("1", &one)]);
+        let (whole, fai) = fasta_and_fai(&[("1", &one), ("2", &two)]);
+        let (first_bgzf, first_gzi) = bgzf_and_gzi(&first, 1_000);
+        let (second_bgzf, second_gzi) = bgzf_and_gzi(&whole[first.len()..], 1_000);
+        let (joined_at, text_at) = (first_bgzf.len() as u64, first.len() as u64);
+        let mut pairs = first_gzi.as_ref().to_vec();
+        pairs.push((joined_at, text_at));
+        pairs.extend(
+            second_gzi
+                .as_ref()
+                .iter()
+                .map(|(compressed, text)| (joined_at + compressed, text_at + text)),
+        );
+        let joined = [first_bgzf.as_slice(), second_bgzf.as_slice()].concat();
+        let end_of_file = &second_bgzf[second_bgzf.len() - BGZF_EOF_LEN..];
+        let two_ends = [joined.as_slice(), end_of_file].concat();
+        let upper = |bases: &[u8]| bases.to_ascii_uppercase();
+        let path = dir.path().join("ref.fa.gz");
+        std::fs::write(dir.path().join("ref.fa.gz.fai"), &fai).unwrap();
+        let gzi_path = dir.path().join("ref.fa.gz.gzi");
+        for (layout, bytes) in [("joined", &joined), ("two end-of-file blocks", &two_ends)] {
+            std::fs::write(&path, bytes).unwrap();
+            bgzf::gzi::fs::write(&gzi_path, &bgzf::gzi::Index::from(pairs.clone())).unwrap();
+            for mode in [FastaStorageMode::Mmap, FastaStorageMode::Memory] {
+                let fasta = IndexedFasta::from_path_with_storage(&path, mode)
+                    .unwrap_or_else(|error| panic!("{layout}, {mode:?}: {error}"));
+                assert_eq!(fasta.sequence("1", 1, 2_500), Some(upper(&one)), "{layout}");
+                assert_eq!(fasta.sequence("2", 1, 1_700), Some(upper(&two)), "{layout}");
+                assert_eq!(fasta.base("2", 1), Some(two[0].to_ascii_uppercase()));
+            }
+            let mut one_left_out = pairs.clone();
+            one_left_out.remove(1);
+            bgzf::gzi::fs::write(&gzi_path, &bgzf::gzi::Index::from(one_left_out)).unwrap();
+            let error = IndexedFasta::from_path(&path).unwrap_err();
+            assert!(
+                matches!(error, FastaError::GziMismatch { .. }),
+                "{layout}: {error:?}"
+            );
+        }
     }
 
     /// A block whose trailer declares an ISIZE of 131072, over the most a BGZF
