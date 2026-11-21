@@ -7,11 +7,12 @@
 //! [`write_fai`] and [`write_gzi`] write one index each, byte for byte the
 //! files `samtools faidx` writes.
 
+use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::io::{BufRead, BufReader, BufWriter, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-use noodles::{bgzf, fasta};
+use noodles::bgzf;
 
 use super::{encoding_of, io_error, sibling, Encoding, FastaError, BGZF_EOF_LEN};
 
@@ -75,27 +76,246 @@ pub fn index_if_missing(fasta: &Path) -> Result<(), FastaError> {
 /// at `fasta`, a BGZF file's offsets counted in its inflated stream.
 pub fn write_fai(fasta: &Path) -> Result<(), FastaError> {
     let file = File::open(fasta).map_err(io_error("failed to open FASTA", fasta))?;
-    let reader: Box<dyn BufRead> = match encoding_of(fasta)? {
-        Encoding::Bgzf => Box::new(bgzf::io::Reader::new(BufReader::new(file))),
-        _ => Box::new(BufReader::new(file)),
-    };
-    let mut indexer = fasta::io::Indexer::new(reader);
-    let mut records = Vec::new();
-    while let Some(record) = indexer
-        .index_record()
-        .map_err(|e| FastaError::Unindexable {
-            path: fasta.display().to_string(),
-            reason: e.to_string(),
-        })?
-    {
-        records.push(record);
+    let file = BufReader::new(file);
+    let records = match encoding_of(fasta)? {
+        Encoding::Bgzf => fai_records(bgzf::io::Reader::new(file), fasta),
+        _ => fai_records(file, fasta),
     }
-    let index = fasta::fai::Index::from(records);
+    .map_err(|reason| FastaError::Unindexable {
+        path: fasta.display().to_string(),
+        reason,
+    })?;
     let fai = sibling(fasta, "fai");
     write_new(&fai, |file| {
-        fasta::fai::io::Writer::new(file).write_index(&index)
+        for record in &records {
+            file.write_all(&record.name)?;
+            writeln!(
+                file,
+                "\t{}\t{}\t{}\t{}",
+                record.bases, record.offset, record.line_bases, record.line_bytes
+            )?;
+        }
+        Ok(())
     })
     .map_err(io_error("failed to write FASTA index", &fai))
+}
+
+/// One record of a `.fai`: a sequence's name, its bases, the offset of its
+/// first base, and the bases and the bytes of its first line.
+#[derive(Default)]
+struct FaiLine {
+    name: Vec<u8>,
+    bases: u64,
+    offset: u64,
+    line_bases: u64,
+    line_bytes: u64,
+}
+
+/// The bytes of a FASTA, read one at a time or a line at a time, with the
+/// offset of the next byte in the uncompressed text.
+struct FastaBytes<R> {
+    reader: R,
+    offset: u64,
+}
+
+impl<R: BufRead> FastaBytes<R> {
+    /// The bytes the reader holds, filled when it holds none; empty at the end
+    /// of the text.
+    fn buffered(&mut self) -> std::io::Result<&[u8]> {
+        loop {
+            match self.reader.fill_buf() {
+                Ok(_) => break,
+                Err(error) if error.kind() == ErrorKind::Interrupted => {}
+                Err(error) => return Err(error),
+            }
+        }
+        self.reader.fill_buf()
+    }
+
+    /// The next byte, `None` at the end of the text.
+    fn next(&mut self) -> std::io::Result<Option<u8>> {
+        let byte = self.buffered()?.first().copied();
+        if byte.is_some() {
+            self.reader.consume(1);
+            self.offset += 1;
+        }
+        Ok(byte)
+    }
+
+    /// Reads through the next line feed, or to the end of the text: how many
+    /// bytes stand before the line feed, and how many of them are printing
+    /// characters.
+    fn rest_of_line(&mut self) -> std::io::Result<(u64, u64)> {
+        let (mut bytes, mut printing) = (0, 0);
+        loop {
+            let buffered = self.buffered()?;
+            if buffered.is_empty() {
+                return Ok((bytes, printing));
+            }
+            let line_feed = buffered.iter().position(|&byte| byte == b'\n');
+            let line = &buffered[..line_feed.unwrap_or(buffered.len())];
+            bytes += line.len() as u64;
+            printing += line.iter().filter(|byte| byte.is_ascii_graphic()).count() as u64;
+            let read = line.len() + usize::from(line_feed.is_some());
+            self.reader.consume(read);
+            self.offset += read as u64;
+            if line_feed.is_some() {
+                return Ok((bytes, printing));
+            }
+        }
+    }
+}
+
+/// The `.fai` records of the FASTA text in `reader`, counted as htslib's
+/// `fai_build_core` (`faidx.c`) counts them, so the index is the one
+/// `samtools faidx` writes: a sequence's bases are its printing characters, a
+/// line's bytes every byte through its line feed, and a last line without one
+/// counts as if it had it; a name ends at its first white space, and white
+/// space between the header mark and the name is passed over; blank lines may
+/// follow a sequence; a header with no sequence line before another header
+/// gets no record, and a name given again keeps its first record. The reason
+/// is returned for a layout no index describes: a line longer than the first
+/// of its sequence, text after a blank or a shorter line, text before the
+/// first header, or a last header with no sequence line.
+fn fai_records<R: BufRead>(reader: R, fasta: &Path) -> Result<Vec<FaiLine>, String> {
+    enum At {
+        /// Before the first header, or after a blank line or a line shorter
+        /// than the first of its sequence: a header or a blank line is due.
+        Between,
+        /// Behind a header mark.
+        Name,
+        /// At the start of a line of the sequence, or of the next header.
+        Sequence,
+    }
+    const ONE_WIDTH: &str = "wrap every line of a sequence but its last to one width";
+    let unread = |error: std::io::Error| error.to_string();
+    let named = |record: &FaiLine| String::from_utf8_lossy(&record.name).into_owned();
+    let mut bytes = FastaBytes { reader, offset: 0 };
+    let mut records: Vec<FaiLine> = Vec::new();
+    let mut names: HashSet<Vec<u8>> = HashSet::new();
+    let mut keep = |record: FaiLine| {
+        if names.insert(record.name.clone()) {
+            records.push(record);
+        } else {
+            tracing::warn!(
+                "{} names the sequence {} again at byte {}: its first sequence of that name is the one indexed",
+                fasta.display(),
+                String::from_utf8_lossy(&record.name),
+                record.offset
+            );
+        }
+    };
+    let mut at = At::Between;
+    let mut line = 1u64;
+    let mut record = FaiLine::default();
+    let (mut opened, mut has_sequence) = (false, false);
+    while let Some(byte) = bytes.next().map_err(unread)? {
+        match at {
+            At::Between => match byte {
+                b'>' => {
+                    opened = true;
+                    at = At::Name;
+                }
+                b'\n' => line += 1,
+                b'\r' => {
+                    if bytes.next().map_err(unread)? != Some(b'\n') {
+                        return Err(format!(
+                            "line {line} holds a carriage return that no line feed follows"
+                        ));
+                    }
+                    line += 1;
+                }
+                _ if opened => {
+                    return Err(format!(
+                        "line {line} follows a blank line or a line shorter than the first of sequence {}, where only a header line may stand: {ONE_WIDTH}",
+                        named(&record)
+                    ));
+                }
+                _ => {
+                    return Err(format!(
+                        "line {line} is not a header line: a FASTA opens each sequence with `>` and its name"
+                    ));
+                }
+            },
+            At::Name => {
+                if has_sequence {
+                    keep(std::mem::take(&mut record));
+                    has_sequence = false;
+                }
+                record = FaiLine::default();
+                let mut next = Some(byte);
+                while let Some(byte) = next {
+                    if !is_space(byte) {
+                        record.name.push(byte);
+                    } else if !record.name.is_empty() || byte == b'\n' {
+                        break;
+                    }
+                    next = bytes.next().map_err(unread)?;
+                }
+                match next {
+                    None => {
+                        return Err(format!(
+                            "sequence {}, the last of the file, has no sequence line",
+                            named(&record)
+                        ));
+                    }
+                    Some(b'\n') => {}
+                    Some(_) => {
+                        bytes.rest_of_line().map_err(unread)?;
+                    }
+                }
+                record.offset = bytes.offset;
+                at = At::Sequence;
+                line += 1;
+            }
+            At::Sequence => {
+                if byte == b'\n' {
+                    at = At::Between;
+                    line += 1;
+                    continue;
+                }
+                if byte == b'>' {
+                    at = At::Name;
+                    continue;
+                }
+                has_sequence = true;
+                let (rest, printing) = bytes.rest_of_line().map_err(unread)?;
+                let line_bytes = rest + 2;
+                let line_bases = printing + u64::from(byte.is_ascii_graphic());
+                record.bases += line_bases;
+                if record.line_bytes == 0 {
+                    record.line_bytes = line_bytes;
+                    record.line_bases = line_bases;
+                } else if line_bytes < record.line_bytes {
+                    at = At::Between;
+                } else if line_bytes > record.line_bytes {
+                    return Err(format!(
+                        "line {line} of sequence {} is longer than its first line: {ONE_WIDTH}",
+                        named(&record)
+                    ));
+                }
+                line += 1;
+            }
+        }
+    }
+    if !has_sequence {
+        return Err(if opened {
+            format!(
+                "sequence {}, the last of the file, has no sequence line",
+                named(&record)
+            )
+        } else {
+            "the file holds no sequence".to_string()
+        });
+    }
+    keep(record);
+    Ok(records)
+}
+
+/// Whether `byte` is white space as C's `isspace` has it in its default
+/// locale, the test htslib ends a sequence name on.
+fn is_space(byte: u8) -> bool {
+    byte == b' ' || (b'\t'..=b'\r').contains(&byte)
 }
 
 /// Writes `<fasta>.gzi`, the `bgzip` index of the BGZF file at `fasta`: the
@@ -321,6 +541,245 @@ mod tests {
             error.starts_with(&format!("failed to index {}: ", fa.display())),
             "{error}"
         );
+    }
+
+    /// `count` bases of a made-up four-base unit, repeated.
+    fn made_up(count: usize) -> String {
+        "ACGT".chars().cycle().take(count).collect()
+    }
+
+    /// The `.fai` written for a plain FASTA holding `text`.
+    fn fai_of(text: &str) -> Result<String, FastaError> {
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        std::fs::write(&fa, text).unwrap();
+        index_if_missing(&fa)?;
+        Ok(std::fs::read_to_string(dir.path().join("ref.fa.fai")).unwrap())
+    }
+
+    /// White space before a line end is no base: a sequence's length and its
+    /// bases per line count printing characters, its bytes per line every byte,
+    /// as `samtools faidx` writes them, and each base reads as the file holds it.
+    #[test]
+    fn white_space_ending_a_sequence_line_is_not_counted_as_a_base() {
+        let (full, short) = (made_up(8), made_up(5));
+        for pad in [" ", "\t"] {
+            let every_line = format!(">21\n{}", format!("{full}{pad}\n").repeat(3));
+            assert_eq!(
+                fai_of(&every_line).unwrap(),
+                "21\t24\t4\t8\t10\n",
+                "{pad:?} ends every line"
+            );
+            let first_record =
+                format!(">decoy\n{full}\n{full}\n{short}{pad}\n>21\n{full}\n{full}\n");
+            assert_eq!(
+                fai_of(&first_record).unwrap(),
+                "decoy\t21\t7\t8\t9\n21\t16\t36\t8\t9\n",
+                "{pad:?} ends the last line of the first record"
+            );
+            let only_record = format!(">21\n{full}\n{full}\n{short}{pad}\n");
+            assert_eq!(
+                fai_of(&only_record).unwrap(),
+                "21\t21\t4\t8\t9\n",
+                "{pad:?} ends the last line of the only record"
+            );
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        std::fs::write(&fa, format!(">21\n{}", format!("{full} \n").repeat(3))).unwrap();
+        index_if_missing(&fa).unwrap();
+        let fasta = IndexedFasta::from_path(&fa).unwrap();
+        for (at, base) in made_up(24).bytes().enumerate() {
+            assert_eq!(
+                fasta.base("21", at as u64 + 1),
+                Some(base),
+                "base {}",
+                at + 1
+            );
+        }
+    }
+
+    /// A name a FASTA gives two sequences is indexed once, under the first, as
+    /// `samtools faidx` indexes it, and the file reads through that index.
+    #[test]
+    fn a_name_given_twice_is_indexed_under_its_first_sequence() {
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        let text = format!(
+            ">21\n{}\n>MT\n{}\n>21\n{}\n",
+            made_up(8),
+            made_up(4),
+            "T".repeat(6)
+        );
+        std::fs::write(&fa, text).unwrap();
+        index_if_missing(&fa).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("ref.fa.fai")).unwrap(),
+            "21\t8\t4\t8\t9\nMT\t4\t17\t4\t5\n"
+        );
+        let fasta = IndexedFasta::from_path(&fa).unwrap();
+        assert_eq!(fasta.sequence("21", 1, 8), Some(made_up(8).into_bytes()));
+        assert_eq!(fasta.sequence_length("21"), Some(8));
+    }
+
+    /// Blank lines after a sequence, a header with no sequence line before
+    /// another header and white space after the header mark are indexed as
+    /// `samtools faidx` indexes them.
+    #[test]
+    fn blank_lines_an_empty_sequence_and_a_spaced_header_are_indexed() {
+        let (full, short, other) = (made_up(8), made_up(3), made_up(4));
+        let layouts = [
+            (
+                "a blank line after a short last line",
+                format!(">1\n{full}\n{full}\n{short}\n\n>2\n{other}\n"),
+                "1\t19\t3\t8\t9\n2\t4\t29\t4\t5\n",
+            ),
+            (
+                "two blank lines between two sequences",
+                format!(">1\n{full}\n{full}\n\n\n>2\n{other}\n"),
+                "1\t16\t3\t8\t9\n2\t4\t26\t4\t5\n",
+            ),
+            (
+                "two blank lines at the end of the file",
+                format!(">1\n{full}\n{full}\n\n\n"),
+                "1\t16\t3\t8\t9\n",
+            ),
+            (
+                "a blank first line",
+                format!("\n>1\n{full}\n{full}\n"),
+                "1\t16\t4\t8\t9\n",
+            ),
+            (
+                "a header with no sequence line before another header",
+                format!(">1\n{full}\n>empty\n>2\n{other}\n"),
+                "1\t8\t3\t8\t9\n2\t4\t22\t4\t5\n",
+            ),
+            (
+                "a space after the header mark",
+                format!("> 1 made up\n{full}\n{short}\n"),
+                "1\t11\t12\t8\t9\n",
+            ),
+        ];
+        for (layout, text, fai) in layouts {
+            let dir = tempfile::tempdir().unwrap();
+            let fa = dir.path().join("ref.fa");
+            std::fs::write(&fa, &text).unwrap();
+            index_if_missing(&fa).unwrap_or_else(|error| panic!("{layout}: {error}"));
+            assert_eq!(
+                std::fs::read_to_string(dir.path().join("ref.fa.fai")).unwrap(),
+                fai,
+                "{layout}"
+            );
+            let fasta = IndexedFasta::from_path(&fa).unwrap();
+            assert_eq!(fasta.base("1", 8), Some(b'T'), "{layout}");
+        }
+    }
+
+    /// A sequence of one line that the file ends without a line end has the
+    /// bytes per line of a whole line, its bases and one, as `samtools faidx`
+    /// writes it.
+    #[test]
+    fn one_line_without_a_line_end_has_the_bytes_of_a_whole_line() {
+        assert_eq!(
+            fai_of(&format!(">1\n{}", made_up(8))).unwrap(),
+            "1\t8\t3\t8\t9\n"
+        );
+        assert_eq!(
+            fai_of(&format!(">1\n{} ", made_up(8))).unwrap(),
+            "1\t8\t3\t8\t10\n"
+        );
+    }
+
+    /// Windows line ends, a name followed by a description, a last line
+    /// without its line end and a lone header mark ending the file are indexed
+    /// as `samtools faidx` indexes them.
+    #[test]
+    fn windows_line_ends_and_a_last_line_without_its_end_are_indexed() {
+        let (full, short, other) = (made_up(8), made_up(3), made_up(4));
+        let windows = format!(">1 x\r\n{full}\r\n{full}\r\n{short}\r\n\r\n>2\r\n{other}\r\n");
+        assert_eq!(
+            fai_of(&windows).unwrap(),
+            "1\t19\t6\t8\t10\n2\t4\t37\t4\t6\n"
+        );
+        assert_eq!(
+            fai_of(&format!(">a b c\n{other}\n>x\ty\n{other}\n")).unwrap(),
+            "a\t4\t7\t4\t5\nx\t4\t17\t4\t5\n"
+        );
+        assert_eq!(
+            fai_of(&format!(">1\n{full}\n{short}")).unwrap(),
+            "1\t11\t3\t8\t9\n"
+        );
+        assert_eq!(
+            fai_of(&format!(">1\n{full}\n>")).unwrap(),
+            "1\t8\t3\t8\t9\n"
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        std::fs::write(&fa, windows).unwrap();
+        index_if_missing(&fa).unwrap();
+        let fasta = IndexedFasta::from_path(&fa).unwrap();
+        assert_eq!(
+            fasta.sequence("1", 7, 10),
+            Some(made_up(19).as_bytes()[6..10].to_vec())
+        );
+    }
+
+    /// A layout no `.fai` describes is refused with the file, the line and the
+    /// rule it breaks named, as `samtools faidx` refuses it.
+    #[test]
+    fn a_layout_no_index_describes_is_refused_with_its_line_named() {
+        let (full, short) = (made_up(8), made_up(3));
+        let one_width = "wrap every line of a sequence but its last to one width";
+        let layouts = [
+            (
+                format!(">21\n{full}\n{full} \n{full}\n"),
+                format!("line 3 of sequence 21 is longer than its first line: {one_width}"),
+            ),
+            (
+                format!(">1\n{short}\n{full}\n"),
+                format!("line 3 of sequence 1 is longer than its first line: {one_width}"),
+            ),
+            (
+                format!(">1\n{full}\n{short}\n{full}\n"),
+                format!(
+                    "line 4 follows a blank line or a line shorter than the first of sequence 1, where only a header line may stand: {one_width}"
+                ),
+            ),
+            (
+                format!(">1\n\n{full}\n"),
+                format!(
+                    "line 3 follows a blank line or a line shorter than the first of sequence 1, where only a header line may stand: {one_width}"
+                ),
+            ),
+            (
+                format!("{full}\n>1\n{full}\n"),
+                "line 1 is not a header line: a FASTA opens each sequence with `>` and its name"
+                    .to_string(),
+            ),
+            (
+                format!(">1\n{full}\n>2\n"),
+                "sequence 2, the last of the file, has no sequence line".to_string(),
+            ),
+            (
+                ">1".to_string(),
+                "sequence 1, the last of the file, has no sequence line".to_string(),
+            ),
+            (String::new(), "the file holds no sequence".to_string()),
+            (
+                format!(">1\n{full}\n{short}\n\r{short}\n"),
+                "line 4 holds a carriage return that no line feed follows".to_string(),
+            ),
+        ];
+        for (text, reason) in layouts {
+            let dir = tempfile::tempdir().unwrap();
+            let fa = dir.path().join("ref.fa");
+            std::fs::write(&fa, &text).unwrap();
+            assert_eq!(
+                index_if_missing(&fa).unwrap_err().to_string(),
+                format!("failed to index {}: {reason}", fa.display()),
+                "{text:?}"
+            );
+        }
     }
 
     /// A block stating a size shorter than the 28-byte minimum is refused with
