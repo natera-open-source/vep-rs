@@ -63,7 +63,7 @@ Every flag in the table below parses and changes nothing. The table is the error
 | `--phased` | Ensembl VEP marks the genotypes as phased and nothing reads the mark | Config.pm:146; Parser/VCF.pm:107, 654, 734 set phased on the variant and nothing reads it |
 | `--sereal` | the cache's serialiser is read from its own metadata | Config.pm:249; CacheDir.pm:147 takes the serialiser from the cache's info file |
 | `--solr` | Ensembl VEP declares it and writes no Solr output | Config.pm:215, read by no module |
-| `--tmpdir` | no module of Ensembl VEP reads it, and vep-rs writes no temporary file | Config.pm:259 (tmpdir=s), default /tmp at :304, read by no module |
+| `--tmpdir` | no module of Ensembl VEP reads it, and it places no file vep-rs writes | Config.pm:259 (tmpdir=s), default /tmp at :304, read by no module |
 | `--offline` | vep-rs always runs offline and never contacts a database | Config.pm:245; the option set at :464-469 switches on `--cache` and off `--database` |
 
 ## Where `Config.pm` is not followed

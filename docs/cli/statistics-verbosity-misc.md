@@ -27,5 +27,5 @@ These flags cover the statistics report written beside the output, the logging l
 | `--allow_non_variant` | bool | false | Keep a VCF record whose first ALT is `.` (a reference-only call): the VCF output carries its line with any earlier CSQ removed unless `--keep_csq`, the JSON output writes its object with no consequence, and the default and tab outputs write no row for it; under `--individual` a copy whose genotype names a later ALT of the record is annotated as that allele |
 | `--mirna` | bool | false | Add the miRNA column: the secondary-structure elements of a miRNA transcript the variant overlaps, as the SO terms miRNA\_stem and miRNA\_loop (a native cache carries the structure only when built with `--core-dumps`) |
 | `--lrg` | bool | false | Refused with an error: `--lrg` is not supported: LRG mapping needs the Ensembl core database (Ensembl VEP: Cannot map to LRGs in offline mode) |
-| `--tmpdir` | String | none | Accepted without effect: no module of Ensembl VEP reads it, and vep-rs writes no temporary file |
+| `--tmpdir` | String | none | Accepted without effect: no module of Ensembl VEP reads it, and it places no file vep-rs writes |
 

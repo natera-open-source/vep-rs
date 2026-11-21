@@ -352,7 +352,7 @@ pub const ERROR_TABLE: &[ErrorTableEntry] = &[
     ),
     noop(
         "tmpdir",
-        "no module of Ensembl VEP reads it, and vep-rs writes no temporary file",
+        "no module of Ensembl VEP reads it, and it places no file vep-rs writes",
         "Config.pm:259 (tmpdir=s), default /tmp at :304, read by no module",
     ),
     noop(
