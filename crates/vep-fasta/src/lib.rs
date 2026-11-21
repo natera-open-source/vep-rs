@@ -395,8 +395,8 @@ enum BgzfRefusal {
 /// uncompressed offset that block's ISIZE brings the sequence to; the last block
 /// must end at the file's end or at its EOF block. A block that holds no data
 /// has no entry, as `bgzip` and `samtools faidx` write the index: the EOF block
-/// of a BGZF file another was joined to stands between two entries, and more
-/// than one may end the file. Every block's header and
+/// of a BGZF file another was joined to stands between two entries, more than
+/// one may end the file, and one may open it. Every block's header and
 /// ISIZE are read, one pass over the whole compressed file, so the index is the
 /// one `bgzip -r` would write for these bytes or it is refused, and a block
 /// whose ISIZE is over the format's limit is refused as its own fault, wherever
@@ -429,8 +429,15 @@ fn check_gzi(file: &File, len: u64, index: &[(u64, u64)]) -> Result<u64, BgzfRef
         let block_len = bgzf_block_len(file, len, at)?;
         (bgzf_block_isize(file, len, at, block_len)? == 0).then_some(block_len as u64)
     };
-    // The first block starts at (0, 0); the index leaves it implicit.
+    // The first block that holds data starts the sequence, at byte 0 unless
+    // blocks holding none precede it; the index leaves it implicit.
     let mut start = (0u64, 0u64);
+    while let Some(block_len) = empty_block(start.0) {
+        if start.0 + block_len >= len {
+            break;
+        }
+        start.0 += block_len;
+    }
     for &next in index {
         let end = block_end(start)?;
         let mut reached = end;
@@ -1845,6 +1852,40 @@ mod tests {
             assert!(
                 matches!(error, FastaError::GziMismatch { .. }),
                 "{layout}: {error:?}"
+            );
+        }
+    }
+
+    /// A BGZF file whose first block holds no data reads, in both storage
+    /// modes, through the `.gzi` `samtools faidx` writes for it, which leaves
+    /// out the first block that holds data as it does in any file.
+    #[test]
+    fn a_bgzf_file_opening_with_an_empty_block_reads_as_any_other() {
+        let dir = tempdir().unwrap();
+        let one = bases(13, 2_500);
+        let (text, fai) = fasta_and_fai(&[("1", &one)]);
+        let (compressed, gzi) = bgzf_and_gzi(&text, 1_000);
+        let empty = &compressed[compressed.len() - BGZF_EOF_LEN..];
+        let pairs: Vec<(u64, u64)> = gzi
+            .as_ref()
+            .iter()
+            .map(|(block, at)| (block + BGZF_EOF_LEN as u64, *at))
+            .collect();
+        let path = dir.path().join("ref.fa.gz");
+        std::fs::write(&path, [empty, compressed.as_slice()].concat()).unwrap();
+        std::fs::write(dir.path().join("ref.fa.gz.fai"), &fai).unwrap();
+        bgzf::gzi::fs::write(
+            dir.path().join("ref.fa.gz.gzi"),
+            &bgzf::gzi::Index::from(pairs),
+        )
+        .unwrap();
+        for mode in [FastaStorageMode::Mmap, FastaStorageMode::Memory] {
+            let fasta = IndexedFasta::from_path_with_storage(&path, mode)
+                .unwrap_or_else(|error| panic!("{mode:?}: {error}"));
+            assert_eq!(
+                fasta.sequence("1", 1, 2_500),
+                Some(one.to_ascii_uppercase()),
+                "{mode:?}"
             );
         }
     }

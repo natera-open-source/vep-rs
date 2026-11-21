@@ -379,8 +379,9 @@ fn is_space(byte: u8) -> bool {
 }
 
 /// Writes `<fasta>.gzi`, the `bgzip` index of the BGZF file at `fasta`: the
-/// compressed and inflated offsets of every non-empty block after the first,
-/// read from the block headers and trailers without inflating the data.
+/// compressed and inflated offsets of every block that holds data but the
+/// first of them, read from the block headers and trailers without inflating
+/// the data.
 pub fn write_gzi(fasta: &Path) -> Result<(), FastaError> {
     let unindexable = |reason: String| FastaError::Unindexable {
         path: fasta.display().to_string(),
@@ -393,6 +394,7 @@ pub fn write_gzi(fasta: &Path) -> Result<(), FastaError> {
         .len();
     let mut entries = Vec::new();
     let (mut compressed, mut inflated) = (0u64, 0u64);
+    let mut first_data_block_seen = false;
     let mut header = [0u8; super::BGZF_HEADER_LEN];
     while compressed < length {
         file.seek(SeekFrom::Start(compressed))
@@ -414,8 +416,11 @@ pub fn write_gzi(fasta: &Path) -> Result<(), FastaError> {
             .and_then(|_| file.read_exact(&mut trailer))
             .map_err(|_| unindexable(format!("truncated block at offset {compressed}")))?;
         let data_len = u64::from(u32::from_le_bytes(trailer));
-        if data_len > 0 && compressed > 0 {
-            entries.push((compressed, inflated));
+        if data_len > 0 {
+            if first_data_block_seen {
+                entries.push((compressed, inflated));
+            }
+            first_data_block_seen = true;
         }
         compressed += size;
         inflated += data_len;
@@ -1232,6 +1237,34 @@ mod tests {
             assert!(matches!(error, FastaError::NotBgzf(_)), "{error:?}");
             assert_eq!(names_in(dir.path()), ["ref.fa.gz"]);
         }
+    }
+
+    /// A BGZF file whose first block holds no data gets the `.gzi` `samtools
+    /// faidx` writes for it, which leaves out the first block that holds data,
+    /// and reads through it.
+    #[test]
+    fn a_first_bgzf_block_that_holds_no_data_is_stepped_over() {
+        use crate::tests::{bases, bgzf_and_gzi, fasta_and_fai};
+        let dir = tempfile::tempdir().unwrap();
+        let one = bases(44, 2_500);
+        let (text, fai) = fasta_and_fai(&[("1", &one)]);
+        let (compressed, gzi) = bgzf_and_gzi(&text, 1_000);
+        let empty = &compressed[compressed.len() - BGZF_EOF_LEN..];
+        let mut expected = (gzi.as_ref().len() as u64).to_le_bytes().to_vec();
+        for (block, at) in gzi.as_ref() {
+            expected.extend_from_slice(&(block + BGZF_EOF_LEN as u64).to_le_bytes());
+            expected.extend_from_slice(&at.to_le_bytes());
+        }
+        let fa = dir.path().join("ref.fa.gz");
+        std::fs::write(&fa, [empty, compressed.as_slice()].concat()).unwrap();
+        index_if_missing(&fa).unwrap();
+        assert_eq!(std::fs::read(sibling(&fa, "gzi")).unwrap(), expected);
+        assert_eq!(std::fs::read_to_string(sibling(&fa, "fai")).unwrap(), fai);
+        let fasta = IndexedFasta::from_path(&fa).unwrap();
+        assert_eq!(
+            fasta.sequence("1", 1, 2_500),
+            Some(one.to_ascii_uppercase())
+        );
     }
 
     /// A block stating a size shorter than the 28-byte minimum is refused with
