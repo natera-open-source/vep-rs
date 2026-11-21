@@ -3,9 +3,9 @@
 
 //! The `.fai` and, for a BGZF file, the `.gzi` of a FASTA, written beside it:
 //! [`index_if_missing`] writes the ones a FASTA given without them lacks, as
-//! Ensembl VEP's reader does when it first opens such a file, and
-//! [`write_fai`] and [`write_gzi`] write one index each, byte for byte the
-//! files `samtools faidx` writes.
+//! Ensembl VEP's reader does when it first opens such a file, [`open_indexed`]
+//! opens the file once they are written, and [`write_fai`] and [`write_gzi`]
+//! write one index each, byte for byte the files `samtools faidx` writes.
 
 use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
@@ -41,7 +41,7 @@ const OPEN_ATTEMPTS: usize = 32;
 /// one left behind and removes the indexes beside it, as this run does with a
 /// lock it finds. An index that is gone at the open is therefore written
 /// again, a lock found by then left as the other run's, and the file opened
-/// again, up to [`OPEN_ATTEMPTS`] times: runs that meet on one FASTA wait for
+/// again, up to `OPEN_ATTEMPTS` times: runs that meet on one FASTA wait for
 /// no lock, and each ends with the file open or with the last open's refusal.
 pub fn open_indexed(fasta: &Path) -> Result<IndexedFasta, FastaError> {
     let mut attempt = 1;

@@ -2364,6 +2364,38 @@ fn fasta_open_refusals_are_each_tabulated() {
     );
 }
 
+/// `fasta`: what a run does beside a FASTA given without an index has a table
+/// row, and so has each refusal of that writing: the lock file that cannot be
+/// written (`write_lock` in `vep-fasta`, whose `FastaError::LockFile` prints
+/// Ensembl VEP's sentence, FastaSequence.pm:334, then the cause and the two
+/// ways on) and the file no index describes (`FastaError::Unindexable`,
+/// `failed to index {path}: {reason}`).
+#[test]
+fn fasta_index_writing_is_tabulated() {
+    assert_page_states(
+        "cache-setup.md",
+        &[
+            "| No `.fai`, or no `.gzi` beside a BGZF file | Writes the missing index into \
+             `<index>.<token>.tmp` and renames it into place, so no run reads part of an index; \
+             the directory must be writable |",
+            "| None of `<file>.fai`, `<file>.index` and `<file>.gzi` | Writes `<file>.vep.lock` \
+             before the indexes and removes it once they are written or the file is refused |",
+            "| A `<file>.vep.lock`, left by a run that did not finish | Removes `<file>.fai`, \
+             `<file>.index`, `<file>.gzi` and the lock, then writes the missing `.fai` and \
+             `.gzi`; what it cannot remove stays, and an index that stays is read |",
+            "| Other runs indexing the same file | Waits for none of them: each run writes whole \
+             indexes, and each reads the file |",
+            "| A lock file that cannot be written, as in a directory closed to the run | `ERROR: \
+             [fasta] Could not write to FASTA lock file <file>.vep.lock: <cause>; index the FASTA \
+             with samtools faidx, or link it into a directory the run can write` |",
+            "| A layout no `.fai` describes: a line longer than the first of its sequence, text \
+             after a blank or a shorter line, text before the first header, a last header with \
+             no sequence line | `ERROR: [fasta] failed to index <file>: <reason>`, the reason \
+             naming the line |",
+        ],
+    );
+}
+
 /// `spdi`: a record whose expanded reference allele ends in a character outside
 /// `ACGTN-` is annotated with no `SPDI` (`spdi_genomic` in `vep-core/src/spdi.rs`
 /// returns `None` for it), where Ensembl VEP 116.2's `spdi_genomic` throws
