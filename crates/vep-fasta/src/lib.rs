@@ -941,8 +941,10 @@ impl IndexedFasta {
     /// Returns `None` if the contig does not exist or any position is out of bounds.
     ///
     /// Resolves the FAI record once for the contig and reads the bytes from the
-    /// first base to the last in one span, dropping the line terminators inside
-    /// it; a span whose base count disagrees with the index is `None`. A span on
+    /// first base to the last in one span, dropping every byte inside it that
+    /// is not a printing character, the line ends and any white space before
+    /// them, as `samtools faidx` counts a base (htslib `faidx.c:257`); a span
+    /// whose base count disagrees with the index is `None`. A span on
     /// `Y` overlapping a pseudoautosomal region of the armed assembly
     /// ([`Self::set_assembly`]) is read as Ensembl VEP reads it
     /// (`FastaSequence.pm:548-594`): the bases before the region from `Y`, the
@@ -1006,7 +1008,7 @@ impl IndexedFasta {
         let raw = self.bytes(rec, first, raw_len)?;
         let len = usize::try_from(end - start + 1).ok()?;
         let mut seq = Vec::with_capacity(len);
-        let bases = raw.iter().filter(|b| **b != b'\n' && **b != b'\r');
+        let bases = raw.iter().filter(|b| b.is_ascii_graphic());
         match case {
             Case::Upper => seq.extend(bases.map(u8::to_ascii_uppercase)),
             Case::AsWritten => seq.extend(bases),
@@ -1887,6 +1889,56 @@ mod tests {
                 Some(one.to_ascii_uppercase()),
                 "{mode:?}"
             );
+        }
+    }
+
+    /// A span across a line end reads its bases alone when white space stands
+    /// between a line's last base and its line end, in both storage modes and
+    /// in either case: the `.fai` `samtools faidx` writes for such a file
+    /// counts a line's bases apart from its bytes, and a byte that is no
+    /// printing character is no base.
+    #[test]
+    fn span_across_a_line_ending_in_white_space_reads_its_bases() {
+        let dir = tempdir().unwrap();
+        let seq = bases(21, 50);
+        for (name, pad) in [("space", " "), ("tab", "\t"), ("several", " \t\r")] {
+            let mut fasta = b">21\n".to_vec();
+            for line in seq.chunks(8) {
+                fasta.extend_from_slice(line);
+                fasta.extend_from_slice(pad.as_bytes());
+                fasta.push(b'\n');
+            }
+            let path = dir.path().join(format!("{name}.fa"));
+            std::fs::write(&path, &fasta).unwrap();
+            std::fs::write(
+                dir.path().join(format!("{name}.fa.fai")),
+                format!("21\t50\t4\t8\t{}\n", 8 + pad.len() + 1),
+            )
+            .unwrap();
+            for mode in [FastaStorageMode::Mmap, FastaStorageMode::Memory] {
+                let opened = IndexedFasta::from_path_with_storage(&path, mode).unwrap();
+                let state = format!("{name}, {mode:?}");
+                assert_eq!(
+                    opened.sequence("21", 1, 50),
+                    Some(seq.to_ascii_uppercase()),
+                    "{state}"
+                );
+                assert_eq!(
+                    opened.sequence_as_written("21", 8, 17),
+                    Some(seq[7..17].to_vec()),
+                    "{state}"
+                );
+                assert_eq!(
+                    opened.sequence("21", 3, 6),
+                    Some(seq[2..6].to_ascii_uppercase()),
+                    "{state}"
+                );
+                assert_eq!(
+                    opened.base("21", 9),
+                    Some(seq[8].to_ascii_uppercase()),
+                    "{state}"
+                );
+            }
         }
     }
 

@@ -651,7 +651,8 @@ mod tests {
 
     /// White space before a line end is no base: a sequence's length and its
     /// bases per line count printing characters, its bytes per line every byte,
-    /// as `samtools faidx` writes them, and each base reads as the file holds it.
+    /// as `samtools faidx` writes them, and each base reads as the file holds
+    /// it, alone and in a span across the line ends.
     #[test]
     fn white_space_ending_a_sequence_line_is_not_counted_as_a_base() {
         let (full, short) = (made_up(8), made_up(5));
@@ -689,6 +690,7 @@ mod tests {
                 at + 1
             );
         }
+        assert_eq!(fasta.sequence("21", 1, 24), Some(made_up(24).into_bytes()));
     }
 
     /// A name a FASTA gives two sequences is indexed once, under the first, as
