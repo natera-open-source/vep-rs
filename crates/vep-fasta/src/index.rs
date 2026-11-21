@@ -9,8 +9,10 @@
 
 use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
+use std::hash::{BuildHasher, RandomState};
 use std::io::{BufRead, BufReader, BufWriter, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use noodles::bgzf;
 
@@ -377,26 +379,46 @@ pub fn write_gzi(fasta: &Path) -> Result<(), FastaError> {
 /// Writes `dst` through `write` into a file created new beside it, then
 /// renames that file over `dst`, so a link or a reader at `dst` never sees a
 /// partial index and no file outside the FASTA's directory is written through
-/// a link.
+/// a link. The file created is removed when the write or the rename fails.
 fn write_new(
     dst: &Path,
     write: impl FnOnce(&mut BufWriter<File>) -> std::io::Result<()>,
 ) -> std::io::Result<()> {
-    let temporary = PathBuf::from(format!("{}.{}.tmp", dst.display(), std::process::id()));
-    let result = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temporary)
-        .and_then(|file| {
-            let mut writer = BufWriter::new(file);
-            write(&mut writer)?;
-            writer.flush()
-        })
-        .and_then(|()| std::fs::rename(&temporary, dst));
+    let (temporary, file) = create_beside(dst)?;
+    let mut writer = BufWriter::new(file);
+    let result = write(&mut writer)
+        .and_then(|()| writer.flush())
+        .and_then(|()| {
+            drop(writer);
+            std::fs::rename(&temporary, dst)
+        });
     if result.is_err() {
         let _ = std::fs::remove_file(&temporary);
     }
     result
+}
+
+/// A file created new beside `dst`, as `<dst>.<token>.tmp`. The token is
+/// drawn anew for every call from the process's randomly keyed hasher, so two
+/// runs share no name, on one host or on two that share the directory; a name
+/// that is taken all the same is passed over for the next, and the file it
+/// names is left as it is.
+fn create_beside(dst: &Path) -> std::io::Result<(PathBuf, File)> {
+    static CALLS: AtomicU64 = AtomicU64::new(0);
+    loop {
+        let call = (std::process::id(), CALLS.fetch_add(1, Ordering::Relaxed));
+        let token = RandomState::new().hash_one(call);
+        let temporary = PathBuf::from(format!("{}.{token:016x}.tmp", dst.display()));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+        {
+            Ok(file) => return Ok((temporary, file)),
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -930,6 +952,31 @@ mod tests {
             assert_eq!(fasta.sequence("MT", 8, 10), Some(b"GCC".to_vec()), "{name}");
             assert_eq!(after, before, "{name}");
         }
+    }
+
+    /// A temporary file another run left beside the FASTA, under the name a
+    /// run of this process id took, is neither in the way of the index nor
+    /// removed.
+    #[test]
+    fn a_temporary_file_of_another_run_is_neither_in_the_way_nor_removed() {
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        std::fs::write(&fa, PLAIN).unwrap();
+        let left = format!("ref.fa.fai.{}.tmp", std::process::id());
+        std::fs::write(dir.path().join(&left), "another run's").unwrap();
+        index_if_missing(&fa).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("ref.fa.fai")).unwrap(),
+            PLAIN_FAI
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join(&left)).unwrap(),
+            "another run's"
+        );
+        assert_eq!(
+            names_in(dir.path()),
+            ["ref.fa", "ref.fa.fai", left.as_str()]
+        );
     }
 
     /// A block stating a size shorter than the 28-byte minimum is refused with
