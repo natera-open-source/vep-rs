@@ -1090,6 +1090,150 @@ mod tests {
         }
     }
 
+    /// A FASTA that is a link into a directory the run cannot write is
+    /// indexed beside the link, where Ensembl VEP writes its lock and its
+    /// index (`FastaSequence.pm:313`): nothing is written beside the file the
+    /// link names.
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_fasta_is_indexed_beside_its_link() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let (store, work) = (dir.path().join("store"), dir.path().join("work"));
+        std::fs::create_dir(&store).unwrap();
+        std::fs::create_dir(&work).unwrap();
+        std::fs::write(store.join("ref.fa"), PLAIN).unwrap();
+        std::os::unix::fs::symlink(store.join("ref.fa"), work.join("ref.fa")).unwrap();
+        std::fs::set_permissions(&store, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let opened = open_indexed(&work.join("ref.fa"));
+        let (in_store, in_work) = (names_in(&store), names_in(&work));
+        std::fs::set_permissions(&store, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(opened.unwrap().sequence("MT", 8, 10), Some(b"GCC".to_vec()));
+        assert_eq!(in_store, ["ref.fa"]);
+        assert_eq!(in_work, ["ref.fa", "ref.fa.fai"]);
+        assert_eq!(
+            std::fs::read_to_string(work.join("ref.fa.fai")).unwrap(),
+            PLAIN_FAI
+        );
+    }
+
+    /// A BGZF FASTA with one of its two indexes gets the other, and the one
+    /// it has is the file that was there, not written again: with its `.fai`
+    /// alone the `.gzi` is written, with its `.gzi` alone the `.fai`.
+    #[cfg(unix)]
+    #[test]
+    fn a_bgzf_fasta_with_one_index_gets_the_other_and_keeps_the_one_it_has() {
+        use crate::tests::{bases, bgzf_and_gzi, fasta_and_fai};
+        use std::os::unix::fs::MetadataExt;
+        let (text, fai) = fasta_and_fai(&[("1", &bases(41, 2_500)), ("2", &bases(42, 700))]);
+        let (compressed, gzi) = bgzf_and_gzi(&text, 1_000);
+        for kept in ["fai", "gzi"] {
+            let dir = tempfile::tempdir().unwrap();
+            let fa = dir.path().join("ref.fa.gz");
+            std::fs::write(&fa, &compressed).unwrap();
+            match kept {
+                "fai" => std::fs::write(sibling(&fa, "fai"), &fai).unwrap(),
+                _ => bgzf::gzi::fs::write(sibling(&fa, "gzi"), &gzi).unwrap(),
+            }
+            let stamp = |path: &Path| {
+                let file = std::fs::metadata(path).unwrap();
+                (file.ino(), file.mtime(), file.mtime_nsec())
+            };
+            let before = stamp(&sibling(&fa, kept));
+            index_if_missing(&fa).unwrap();
+            assert_eq!(stamp(&sibling(&fa, kept)), before, "{kept} kept");
+            assert_eq!(
+                std::fs::read_to_string(sibling(&fa, "fai")).unwrap(),
+                fai,
+                "{kept} kept"
+            );
+            assert_eq!(
+                bgzf::gzi::fs::read(sibling(&fa, "gzi")).unwrap().as_ref(),
+                gzi.as_ref(),
+                "{kept} kept"
+            );
+            assert_eq!(
+                names_in(dir.path()),
+                ["ref.fa.gz", "ref.fa.gz.fai", "ref.fa.gz.gzi"]
+            );
+            IndexedFasta::from_path(&fa).unwrap();
+        }
+    }
+
+    /// A lock file left beside a BGZF FASTA removes both its indexes, and
+    /// both are written again.
+    #[test]
+    fn a_lock_file_left_beside_a_bgzf_fasta_has_both_indexes_written_again() {
+        use crate::tests::{bases, bgzf_and_gzi, fasta_and_fai};
+        let (text, fai) = fasta_and_fai(&[("1", &bases(43, 2_500))]);
+        let (compressed, gzi) = bgzf_and_gzi(&text, 1_000);
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa.gz");
+        std::fs::write(&fa, compressed).unwrap();
+        std::fs::write(sibling(&fa, "fai"), "1\t5\t3\t60\t61\n").unwrap();
+        bgzf::gzi::fs::write(sibling(&fa, "gzi"), &bgzf::gzi::Index::default()).unwrap();
+        std::fs::write(sibling(&fa, "vep.lock"), "1\n").unwrap();
+        index_if_missing(&fa).unwrap();
+        assert_eq!(std::fs::read_to_string(sibling(&fa, "fai")).unwrap(), fai);
+        assert_eq!(
+            bgzf::gzi::fs::read(sibling(&fa, "gzi")).unwrap().as_ref(),
+            gzi.as_ref()
+        );
+        assert_eq!(
+            names_in(dir.path()),
+            ["ref.fa.gz", "ref.fa.gz.fai", "ref.fa.gz.gzi"]
+        );
+    }
+
+    /// A `<fasta>.index`, the index of Ensembl VEP's other FASTA reader, is
+    /// kept beside the `.fai` written for the file, and a lock file found
+    /// beside the FASTA removes it with the other indexes
+    /// (`FastaSequence.pm:315-321`); it is not written again.
+    #[test]
+    fn an_index_of_another_reader_is_kept_and_removed_with_a_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let fa = dir.path().join("ref.fa");
+        std::fs::write(&fa, PLAIN).unwrap();
+        std::fs::write(dir.path().join("ref.fa.index"), "another reader's").unwrap();
+        index_if_missing(&fa).unwrap();
+        assert_eq!(
+            names_in(dir.path()),
+            ["ref.fa", "ref.fa.fai", "ref.fa.index"]
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("ref.fa.index")).unwrap(),
+            "another reader's"
+        );
+        std::fs::write(dir.path().join("ref.fa.vep.lock"), "1\n").unwrap();
+        index_if_missing(&fa).unwrap();
+        assert_eq!(names_in(dir.path()), ["ref.fa", "ref.fa.fai"]);
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("ref.fa.fai")).unwrap(),
+            PLAIN_FAI
+        );
+    }
+
+    /// A gzip file that is not BGZF is not indexed: nothing is written beside
+    /// it, and the open refuses it as gzip, with or without an extra field in
+    /// its header.
+    #[test]
+    fn a_gzip_file_that_is_not_bgzf_is_left_without_an_index() {
+        use crate::tests::{gzip_with_extra, plain_gzip};
+        for bytes in [
+            plain_gzip(PLAIN),
+            gzip_with_extra(PLAIN, &[b'X', b'Y', 2, 0, 0, 0]),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let fa = dir.path().join("ref.fa.gz");
+            std::fs::write(&fa, bytes).unwrap();
+            index_if_missing(&fa).unwrap();
+            assert_eq!(names_in(dir.path()), ["ref.fa.gz"]);
+            let error = open_indexed(&fa).unwrap_err();
+            assert!(matches!(error, FastaError::NotBgzf(_)), "{error:?}");
+            assert_eq!(names_in(dir.path()), ["ref.fa.gz"]);
+        }
+    }
+
     /// A block stating a size shorter than the 28-byte minimum is refused with
     /// its offset.
     #[test]

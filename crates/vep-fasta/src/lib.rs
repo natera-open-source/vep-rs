@@ -1459,7 +1459,7 @@ mod tests {
 
     /// A plain gzip member of `data`: the ten-byte header without FEXTRA, one
     /// stored deflate block, the CRC-32 and the size.
-    fn plain_gzip(data: &[u8]) -> Vec<u8> {
+    pub(crate) fn plain_gzip(data: &[u8]) -> Vec<u8> {
         assert!(data.len() < 65536, "one stored block holds the test data");
         let mut out = vec![0x1f, 0x8b, 0x08, 0x00, 0, 0, 0, 0, 0x00, 0xff];
         out.push(0x01);
@@ -1484,7 +1484,7 @@ mod tests {
 
     /// [`plain_gzip`] of `data` with FLG.FEXTRA set and `extra` as the extra
     /// field, XLEN written before it.
-    fn gzip_with_extra(data: &[u8], extra: &[u8]) -> Vec<u8> {
+    pub(crate) fn gzip_with_extra(data: &[u8], extra: &[u8]) -> Vec<u8> {
         let mut out = plain_gzip(data);
         out[3] |= 0x04;
         let mut field = (extra.len() as u16).to_le_bytes().to_vec();

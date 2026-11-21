@@ -5890,13 +5890,6 @@ fn the_var_synonyms_notice_prints_before_a_cache_or_filter_refusal() {
     );
 }
 
-/// A `.gzi` that misstates one block's length is refused at open; a damaged
-/// block, whose ISIZE field and the index agree while its payload inflates to
-/// another length, opens but makes every read of that block "no reference", so
-/// the run reports it once and exits 1 under the fasta component once its reads
-/// are done, and the output written meanwhile is not taken for the file's
-/// annotation. Both fixtures are the committed FASTA with the block whose
-/// sequence most of the corpus's variants read (entry 544 ends it) altered.
 /// A `--fasta` given without its indexes is indexed beside itself, as Ensembl
 /// VEP's reader indexes it (`Variation/Utils/FastaSequence.pm:323-358`, through
 /// `Bio::DB::HTS::Faidx`): the bgzipped corpus FASTA gets the `.fai` and `.gzi`
@@ -5967,6 +5960,96 @@ fn a_fasta_without_its_indexes_is_indexed_beside_itself() {
     }
 }
 
+/// The file `--fasta_dir` picks is indexed beside itself as the file `--fasta`
+/// names is: the bgzipped corpus FASTA under a name that carries the species
+/// and the assembly, given without its indexes, gets the `.fai` and `.gzi`
+/// `samtools faidx` wrote for it, no lock file is left, and the run writes the
+/// HGVS output of the run on the indexed corpus FASTA.
+#[test]
+fn the_file_fasta_dir_picks_is_indexed_beside_itself() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = hgvs_corpus_fasta();
+    let indexed_out = dir.path().join("indexed.txt");
+    let indexed = run_with(
+        &hgvs_corpus_args(),
+        &["--hgvs", "--quiet", "--fasta", source.to_str().unwrap()],
+        &indexed_out,
+    );
+    assert!(indexed.status.success(), "{}", text(&indexed.stderr));
+    let expected = std::fs::read_to_string(&indexed_out).unwrap();
+    assert!(data_lines(&expected).len() > 1, "{expected}");
+
+    let fasta_dir = dir.path().join("fasta_dir");
+    std::fs::create_dir(&fasta_dir).unwrap();
+    let picked = fasta_dir.join("Homo_sapiens.GRCh37.dna.chromosome.21.fa.gz");
+    std::fs::copy(&source, &picked).unwrap();
+    let out = dir.path().join("out.txt");
+    let run = run_with(
+        &hgvs_corpus_args(),
+        &[
+            "--hgvs",
+            "--quiet",
+            "--fasta_dir",
+            fasta_dir.to_str().unwrap(),
+        ],
+        &out,
+    );
+    assert!(run.status.success(), "{}", text(&run.stderr));
+    assert!(run.stderr.is_empty(), "{}", text(&run.stderr));
+    let actual = std::fs::read_to_string(&out).unwrap();
+    assert_eq!(data_lines(&actual), data_lines(&expected));
+    for extension in ["fai", "gzi"] {
+        assert_eq!(
+            std::fs::read(format!("{}.{extension}", picked.display())).unwrap(),
+            std::fs::read(format!("{}.{extension}", source.display())).unwrap(),
+            "{extension}"
+        );
+    }
+    assert!(!Path::new(&format!("{}.vep.lock", picked.display())).exists());
+}
+
+/// A `--fasta` without its index in a directory the run cannot write ends the
+/// run with one line under the fasta component: Ensembl VEP's sentence for
+/// the lock file it cannot write (`Variation/Utils/FastaSequence.pm:334`),
+/// then the cause and the two ways on.
+#[cfg(unix)]
+#[test]
+fn a_fasta_whose_lock_file_cannot_be_written_ends_the_run_with_one_line() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let closed = dir.path().join("closed");
+    std::fs::create_dir(&closed).unwrap();
+    let fasta = closed.join("made_up.fa");
+    std::fs::write(&fasta, ">21\nACGTACGT\n").unwrap();
+    std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o555)).unwrap();
+    // Root writes into the directory anyway, and the state cannot be made.
+    let unwritable = std::fs::write(closed.join("probe"), "").is_err();
+    let run = run_with(
+        &hgvs_corpus_args(),
+        &["--hgvs", "--quiet", "--fasta", fasta.to_str().unwrap()],
+        &dir.path().join("out.txt"),
+    );
+    std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o755)).unwrap();
+    if !unwritable {
+        return;
+    }
+    assert_eq!(run.status.code(), Some(1), "{}", text(&run.stderr));
+    assert_eq!(
+        text(&run.stderr),
+        format!(
+            "ERROR: [fasta] Could not write to FASTA lock file {}.vep.lock: Permission denied (os error 13); index the FASTA with samtools faidx, or link it into a directory the run can write\n",
+            fasta.display()
+        )
+    );
+}
+
+/// A `.gzi` that misstates one block's length is refused at open; a damaged
+/// block, whose ISIZE field and the index agree while its payload inflates to
+/// another length, opens but makes every read of that block "no reference", so
+/// the run reports it once and exits 1 under the fasta component once its reads
+/// are done, and the output written meanwhile is not taken for the file's
+/// annotation. Both fixtures are the committed FASTA with the block whose
+/// sequence most of the corpus's variants read (entry 544 ends it) altered.
 #[test]
 fn misdescribed_block_fails_the_run() {
     let dir = tempfile::tempdir().unwrap();
