@@ -259,7 +259,7 @@ vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
 | Refused while an index is written | Line printed |
 | --- | --- |
 | A lock file that cannot be written, as in a directory closed to the run | `ERROR: [fasta] Could not write to FASTA lock file <file>.vep.lock: <cause>; index the FASTA with samtools faidx, or link it into a directory the run can write` |
-| A layout no `.fai` describes: a line longer than the first of its sequence, text after a blank or a shorter line, text before the first header, a last header with no sequence line | `ERROR: [fasta] failed to index <file>: <reason>`, the reason naming the line |
+| A layout no `.fai` describes: a line longer than the first of its sequence, text after a blank or a shorter line, text before the first header, a last header with no sequence line | `ERROR: [fasta] failed to index <file>: <reason>`, the reason naming the line or the sequence |
 | A BGZF block cut short, shorter than 28 bytes or not BGZF | `ERROR: [fasta] failed to index <file>: <reason>` |
 | An index that cannot be put in place, as a `.gzi` in a directory closed to the run | `ERROR: [fasta] failed to write BGZF index <file>.gzi: <cause>`, or `failed to write FASTA index <file>.fai: <cause>` |
 

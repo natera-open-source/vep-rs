@@ -2391,7 +2391,7 @@ fn fasta_index_writing_is_tabulated() {
             "| A layout no `.fai` describes: a line longer than the first of its sequence, text \
              after a blank or a shorter line, text before the first header, a last header with \
              no sequence line | `ERROR: [fasta] failed to index <file>: <reason>`, the reason \
-             naming the line |",
+             naming the line or the sequence |",
         ],
     );
 }
