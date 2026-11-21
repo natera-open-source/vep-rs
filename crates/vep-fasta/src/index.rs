@@ -312,6 +312,11 @@ fn fai_records<R: BufRead>(reader: R, fasta: &Path) -> Result<Vec<FaiLine>, Stri
                     }
                     next = bytes.next().map_err(unread)?;
                 }
+                // htslib holds the name as a C string (`faidx.c:100`), so the
+                // name ends before the first NUL byte in it.
+                if let Some(nul) = record.name.iter().position(|&byte| byte == 0) {
+                    record.name.truncate(nul);
+                }
                 match next {
                     None => {
                         return Err(format!(
@@ -1287,5 +1292,25 @@ mod tests {
                 "{error}"
             );
         }
+    }
+
+    /// A name holding a NUL byte is indexed up to that byte, as `samtools
+    /// faidx` indexes it: a name that opens with the byte is the empty name,
+    /// and two names equal up to the byte are one name given twice.
+    #[test]
+    fn a_name_ends_before_a_nul_byte() {
+        let (full, other) = (made_up(8), made_up(4));
+        assert_eq!(
+            fai_of(&format!(">a\0b desc\n{full}\n")).unwrap(),
+            "a\t8\t10\t8\t9\n"
+        );
+        assert_eq!(
+            fai_of(&format!(">\0ab\n{full}\n")).unwrap(),
+            "\t8\t5\t8\t9\n"
+        );
+        assert_eq!(
+            fai_of(&format!(">a\0b\n{full}\n>a\0c\n{other}\n>b\n{other}\n")).unwrap(),
+            "a\t8\t5\t8\t9\nb\t4\t27\t4\t5\n"
+        );
     }
 }
