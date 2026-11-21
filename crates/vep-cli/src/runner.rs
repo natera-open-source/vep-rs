@@ -980,9 +980,7 @@ pub(crate) fn open_fasta(
     }
     // A FASTA without its indexes is indexed beside itself before it is read
     // (Variation/Utils/FastaSequence.pm:308-358).
-    vep_fasta::index::index_if_missing(Path::new(&path))
-        .map_err(|e| CliError::new("fasta", e.to_string()))?;
-    let mut opened = vep_fasta::IndexedFasta::from_path(&path)
+    let mut opened = vep_fasta::index::open_indexed(Path::new(&path))
         .map_err(|e| CliError::new("fasta", e.to_string()))?;
     for file in opened.files() {
         info!("Using reference FASTA: {}", file.display());

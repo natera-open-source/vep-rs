@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use noodles::bgzf;
 
-use super::{encoding_of, io_error, sibling, Encoding, FastaError, BGZF_EOF_LEN};
+use super::{encoding_of, io_error, sibling, Encoding, FastaError, IndexedFasta, BGZF_EOF_LEN};
 
 /// Writes the indexes the FASTA file at `fasta` lacks, the `.fai` and, for a
 /// BGZF file, the `.gzi`, as Ensembl VEP's `_get_fasta_db`
@@ -28,11 +28,49 @@ use super::{encoding_of, io_error, sibling, Encoding, FastaError, BGZF_EOF_LEN};
 /// with both its indexes are left as they are. A file that cannot be indexed
 /// is refused with no lock and no part of an index left beside it.
 pub fn index_if_missing(fasta: &Path) -> Result<(), FastaError> {
+    write_missing(fasta, true)
+}
+
+/// How many times [`open_indexed`] writes the missing indexes and opens the
+/// file before the open's refusal stands.
+const OPEN_ATTEMPTS: usize = 32;
+
+/// Opens the FASTA at `fasta` once [`index_if_missing`] has written the
+/// indexes it lacks, as `vep` opens the file `--fasta` names. A run that
+/// starts on the same file while this one indexes takes this run's lock for
+/// one left behind and removes the indexes beside it, as this run does with a
+/// lock it finds. An index that is gone at the open is therefore written
+/// again, a lock found by then left as the other run's, and the file opened
+/// again, up to [`OPEN_ATTEMPTS`] times: runs that meet on one FASTA wait for
+/// no lock, and each ends with the file open or with the last open's refusal.
+pub fn open_indexed(fasta: &Path) -> Result<IndexedFasta, FastaError> {
+    let mut attempt = 1;
+    loop {
+        write_missing(fasta, attempt == 1)?;
+        match IndexedFasta::from_path(fasta) {
+            Err(error) if attempt < OPEN_ATTEMPTS && index_is_gone(&error) => attempt += 1,
+            opened => return opened,
+        }
+    }
+}
+
+/// Whether `error` is the open's refusal of an index that is not there.
+fn index_is_gone(error: &FastaError) -> bool {
+    match error {
+        FastaError::MissingFai(_) | FastaError::MissingGzi(_) => true,
+        FastaError::Io { source, .. } => source.kind() == ErrorKind::NotFound,
+        _ => false,
+    }
+}
+
+/// [`index_if_missing`], with a lock found beside the FASTA taken for one left
+/// behind, which removes the indexes, only when `lock_is_left_behind`.
+fn write_missing(fasta: &Path, lock_is_left_behind: bool) -> Result<(), FastaError> {
     if !fasta.is_file() {
         return Ok(());
     }
     let lock = sibling(fasta, "vep.lock");
-    if lock.exists() {
+    if lock_is_left_behind && lock.exists() {
         // A removal that fails ends no run, as Ensembl VEP's `unlink` ends none
         // (`:319`): an index that stays is read, and one that is missing is
         // written or refused below.
@@ -54,12 +92,7 @@ pub fn index_if_missing(fasta: &Path) -> Result<(), FastaError> {
         .iter()
         .any(|extension| sibling(fasta, extension).exists());
     if !index_exists {
-        OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&lock)
-            .and_then(|mut file| file.write_all(b"1\n"))
-            .map_err(|_| FastaError::LockFile(lock.display().to_string()))?;
+        write_lock(&lock)?;
     }
     tracing::debug!("Indexing {}", fasta.display());
     let written = (|| {
@@ -78,6 +111,22 @@ pub fn index_if_missing(fasta: &Path) -> Result<(), FastaError> {
         let _ = std::fs::remove_file(&lock);
     }
     written
+}
+
+/// Writes the lock file `lock`, created new so that a link standing there is
+/// not written through. A lock that is there is another run's, written since
+/// this run looked for one, and is left as it is: Ensembl VEP writes over it
+/// (`:334`), and neither run waits for the other.
+fn write_lock(lock: &Path) -> Result<(), FastaError> {
+    let refused = || FastaError::LockFile(lock.display().to_string());
+    match OpenOptions::new().write(true).create_new(true).open(lock) {
+        Ok(mut file) => file.write_all(b"1\n").map_err(|_| {
+            let _ = std::fs::remove_file(lock);
+            refused()
+        }),
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => Ok(()),
+        Err(_) => Err(refused()),
+    }
 }
 
 /// Writes `<fasta>.fai`, the `samtools faidx` index of the plain or BGZF FASTA
@@ -424,7 +473,6 @@ fn create_beside(dst: &Path) -> std::io::Result<(PathBuf, File)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::IndexedFasta;
     use std::path::PathBuf;
 
     /// The GRCh37-hgvs corpus's reference, bgzipped, with the `.fai` and `.gzi`
@@ -862,13 +910,6 @@ mod tests {
         names
     }
 
-    /// What `vep` does with the file `--fasta` names: the indexes it lacks are
-    /// written, then it is opened.
-    fn opened(fa: &Path) -> Result<IndexedFasta, FastaError> {
-        index_if_missing(fa)?;
-        IndexedFasta::from_path(fa)
-    }
-
     /// A FASTA that cannot be indexed is left with no lock file and no part of
     /// an index beside it; a `.gzi` written whole before the `.fai` failed
     /// stays, and a `.fai` put beside the file afterwards is read as it is.
@@ -883,7 +924,7 @@ mod tests {
         assert_eq!(names_in(dir.path()), ["ref.fa"]);
         let by_hand = "1\t11\t3\t8\t9\n";
         std::fs::write(dir.path().join("ref.fa.fai"), by_hand).unwrap();
-        let fasta = opened(&fa).unwrap();
+        let fasta = open_indexed(&fa).unwrap();
         assert_eq!(fasta.base("1", 11), Some(b'G'));
         assert_eq!(
             std::fs::read_to_string(dir.path().join("ref.fa.fai")).unwrap(),
@@ -942,7 +983,7 @@ mod tests {
             std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
             // Root writes into the directory anyway, and the state cannot be made.
             let unwritable = std::fs::write(dir.path().join("probe"), "").is_err();
-            let result = opened(&fa);
+            let result = open_indexed(&fa);
             let after = names_in(dir.path());
             std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
             if !unwritable {
@@ -977,6 +1018,70 @@ mod tests {
             names_in(dir.path()),
             ["ref.fa", "ref.fa.fai", left.as_str()]
         );
+    }
+
+    /// Runs that open one FASTA without its indexes at the same moment all
+    /// read it, two or eight of them, plain or BGZF, with or without a lock
+    /// file and a wrong index left by a run that did not finish; when the last
+    /// has ended the indexes `samtools faidx` writes stand beside the file and
+    /// no lock file or temporary file is left.
+    #[test]
+    fn runs_that_index_one_fasta_at_once_all_read_it() {
+        use crate::tests::{bases, bgzf_and_gzi, fasta_and_fai};
+        use std::sync::{Arc, Barrier};
+        let (one, two) = (bases(31, 2_500), bases(32, 1_700));
+        let (text, fai) = fasta_and_fai(&[("1", &one), ("2", &two)]);
+        let (compressed, gzi) = bgzf_and_gzi(&text, 1_000);
+        let mut gzi_bytes = (gzi.as_ref().len() as u64).to_le_bytes().to_vec();
+        for (block, at) in gzi.as_ref() {
+            gzi_bytes.extend_from_slice(&block.to_le_bytes());
+            gzi_bytes.extend_from_slice(&at.to_le_bytes());
+        }
+        for (name, bytes) in [("ref.fa", &text), ("ref.fa.gz", &compressed)] {
+            for leftover_lock in [false, true] {
+                for width in [2, 8] {
+                    for round in 0..10 {
+                        let state =
+                            format!("{name}, lock {leftover_lock}, {width} runs, round {round}");
+                        let dir = tempfile::tempdir().unwrap();
+                        let fa = dir.path().join(name);
+                        std::fs::write(&fa, bytes).unwrap();
+                        if leftover_lock {
+                            std::fs::write(sibling(&fa, "fai"), "1\t5\t3\t60\t61\n").unwrap();
+                            std::fs::write(sibling(&fa, "vep.lock"), "1\n").unwrap();
+                        }
+                        let barrier = Arc::new(Barrier::new(width));
+                        let runs: Vec<_> = (0..width)
+                            .map(|_| {
+                                let (fa, barrier) = (fa.clone(), Arc::clone(&barrier));
+                                std::thread::spawn(move || {
+                                    barrier.wait();
+                                    open_indexed(&fa).map(|fasta| fasta.sequence("2", 1, 1_700))
+                                })
+                            })
+                            .collect();
+                        for run in runs {
+                            let read = run
+                                .join()
+                                .unwrap()
+                                .unwrap_or_else(|error| panic!("{state}: {error}"));
+                            assert_eq!(read, Some(two.to_ascii_uppercase()), "{state}");
+                        }
+                        assert_eq!(
+                            std::fs::read_to_string(sibling(&fa, "fai")).unwrap(),
+                            fai,
+                            "{state}"
+                        );
+                        let mut left = vec![name.to_string(), format!("{name}.fai")];
+                        if name.ends_with(".gz") {
+                            assert_eq!(std::fs::read(sibling(&fa, "gzi")).unwrap(), gzi_bytes);
+                            left.push(format!("{name}.gzi"));
+                        }
+                        assert_eq!(names_in(dir.path()), left, "{state}");
+                    }
+                }
+            }
+        }
     }
 
     /// A block stating a size shorter than the 28-byte minimum is refused with
