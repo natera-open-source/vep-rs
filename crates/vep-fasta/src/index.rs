@@ -31,12 +31,11 @@ pub fn index_if_missing(fasta: &Path) -> Result<(), FastaError> {
     }
     let lock = sibling(fasta, "vep.lock");
     if lock.exists() {
+        // A removal that fails ends no run, as Ensembl VEP's `unlink` ends none
+        // (`:319`): an index that stays is read, and one that is missing is
+        // written or refused below.
         for extension in ["fai", "index", "gzi", "vep.lock"] {
-            let path = sibling(fasta, extension);
-            if path.is_file() {
-                std::fs::remove_file(&path)
-                    .map_err(io_error("failed to remove FASTA index", &path))?;
-            }
+            let _ = std::fs::remove_file(sibling(fasta, extension));
         }
     }
     let encoding = encoding_of(fasta)?;
@@ -72,10 +71,9 @@ pub fn index_if_missing(fasta: &Path) -> Result<(), FastaError> {
     })();
     if !index_exists {
         // An index is put in place whole or not at all, so the lock marks
-        // nothing once the writers have returned, whether or not they wrote.
-        let removed = std::fs::remove_file(&lock)
-            .map_err(io_error("failed to remove FASTA lock file", &lock));
-        return written.and(removed);
+        // nothing once the writers have returned, whether or not they wrote;
+        // one that cannot be removed ends no run (`:356`).
+        let _ = std::fs::remove_file(&lock);
     }
     written
 }
@@ -898,6 +896,40 @@ mod tests {
         );
         assert_eq!(names_in(dir.path()), ["ref.fa", "ref.fa.fai"]);
         assert_eq!(names_in(&dir.path().join("ref.fa.fai")), ["kept"]);
+    }
+
+    /// A lock file left beside a FASTA and its indexes in a directory the run
+    /// cannot write ends no run: nothing can be removed, and the indexes that
+    /// are there are read, as Ensembl VEP reads them (`FastaSequence.pm:319`,
+    /// whose `unlink` fails without a word).
+    #[cfg(unix)]
+    #[test]
+    fn indexes_and_a_leftover_lock_in_an_unwritable_directory_are_read() {
+        use crate::tests::bgzf_and_gzi;
+        use std::os::unix::fs::PermissionsExt;
+        for (name, bytes) in [
+            ("ref.fa", PLAIN.to_vec()),
+            ("ref.fa.gz", bgzf_and_gzi(PLAIN, 20).0),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let fa = dir.path().join(name);
+            std::fs::write(&fa, bytes).unwrap();
+            index_if_missing(&fa).unwrap();
+            std::fs::write(sibling(&fa, "vep.lock"), "1\n").unwrap();
+            let before = names_in(dir.path());
+            std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+            // Root writes into the directory anyway, and the state cannot be made.
+            let unwritable = std::fs::write(dir.path().join("probe"), "").is_err();
+            let result = opened(&fa);
+            let after = names_in(dir.path());
+            std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+            if !unwritable {
+                continue;
+            }
+            let fasta = result.unwrap_or_else(|error| panic!("{name}: {error}"));
+            assert_eq!(fasta.sequence("MT", 8, 10), Some(b"GCC".to_vec()), "{name}");
+            assert_eq!(after, before, "{name}");
+        }
     }
 
     /// A block stating a size shorter than the 28-byte minimum is refused with
