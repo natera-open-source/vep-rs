@@ -108,9 +108,14 @@ pub enum FastaError {
     InvalidStorageMode(String),
 
     /// Ensembl VEP's text for a lock file it cannot write beside a FASTA it
-    /// indexes (`Utils/FastaSequence.pm:334`).
-    #[error("Could not write to FASTA lock file {0}")]
-    LockFile(String),
+    /// indexes (`Utils/FastaSequence.pm:334`), then why the write failed and
+    /// the two ways on: an index made beforehand, or a directory that can be
+    /// written, where a link to the FASTA is indexed beside the link.
+    #[error("Could not write to FASTA lock file {lock}: {source}; index the FASTA with samtools faidx, or link it into a directory the run can write")]
+    LockFile {
+        lock: String,
+        source: std::io::Error,
+    },
 
     /// A FASTA whose `.fai` cannot be written: its sequence lines differ in
     /// length, or a BGZF block of it cannot be read.

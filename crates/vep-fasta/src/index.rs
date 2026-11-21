@@ -118,14 +118,17 @@ fn write_missing(fasta: &Path, lock_is_left_behind: bool) -> Result<(), FastaErr
 /// this run looked for one, and is left as it is: Ensembl VEP writes over it
 /// (`:334`), and neither run waits for the other.
 fn write_lock(lock: &Path) -> Result<(), FastaError> {
-    let refused = || FastaError::LockFile(lock.display().to_string());
+    let refused = |source| FastaError::LockFile {
+        lock: lock.display().to_string(),
+        source,
+    };
     match OpenOptions::new().write(true).create_new(true).open(lock) {
-        Ok(mut file) => file.write_all(b"1\n").map_err(|_| {
+        Ok(mut file) => file.write_all(b"1\n").map_err(|error| {
             let _ = std::fs::remove_file(lock);
-            refused()
+            refused(error)
         }),
         Err(error) if error.kind() == ErrorKind::AlreadyExists => Ok(()),
-        Err(_) => Err(refused()),
+        Err(error) => Err(refused(error)),
     }
 }
 
@@ -581,7 +584,8 @@ mod tests {
     }
 
     /// Where the lock file cannot be written, the run ends with Ensembl VEP's
-    /// words (`FastaSequence.pm:334`).
+    /// words (`FastaSequence.pm:334`), then the cause and what to do about it,
+    /// and nothing is written beside the FASTA.
     #[cfg(unix)]
     #[test]
     fn an_unwritable_directory_is_refused_with_the_lock_file_named() {
@@ -590,19 +594,21 @@ mod tests {
         let fa = dir.path().join("ref.fa");
         std::fs::write(&fa, PLAIN).unwrap();
         std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+        // Root writes into the directory anyway, and the state cannot be made.
+        let unwritable = std::fs::write(dir.path().join("probe"), "").is_err();
         let result = index_if_missing(&fa);
         std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
-        if std::fs::write(dir.path().join("probe"), "").is_ok() {
-            // Running as root, which writes into the directory anyway.
+        if !unwritable {
             return;
         }
         assert_eq!(
             result.unwrap_err().to_string(),
             format!(
-                "Could not write to FASTA lock file {}",
+                "Could not write to FASTA lock file {}: Permission denied (os error 13); index the FASTA with samtools faidx, or link it into a directory the run can write",
                 dir.path().join("ref.fa.vep.lock").display()
             )
         );
+        assert_eq!(names_in(dir.path()), ["ref.fa"]);
     }
 
     /// A FASTA whose sequence lines differ in length cannot be indexed, and the
