@@ -47,7 +47,25 @@ use noodles::bgzf;
 use thiserror::Error;
 use vep_core::synonyms::ChromosomeSynonyms;
 
+/// A refusal of the reader or of the index writers; `vep` prints its text
+/// after `ERROR: [fasta] `. More refusals may be added, so a `match` on the
+/// type outside this crate needs a wildcard arm, and one without it does not
+/// build:
+///
+/// ```compile_fail
+/// use vep_fasta::FastaError::*;
+/// fn is_a_missing_file(error: &vep_fasta::FastaError) -> bool {
+///     match error {
+///         MissingFasta(_) | MissingFai(_) | MissingGzi(_) | NoIndexedFasta(_) => true,
+///         NotBgzf(_) | GziMismatch { .. } | MalformedBgzfBlock { .. } => false,
+///         DuplicateSequence { .. } | Io { .. } | InvalidFaiLine { .. } => false,
+///         IndexBeyondFile { .. } | InvalidStorageMode(_) => false,
+///         LockFile { .. } | Unindexable { .. } => false,
+///     }
+/// }
+/// ```
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum FastaError {
     /// Ensembl VEP's text for a `--fasta` path that is not there
     /// (`Utils/FastaSequence.pm:187`).
