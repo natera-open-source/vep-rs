@@ -26,13 +26,14 @@ use super::{encoding_of, io_error, sibling, Encoding, FastaError, IndexedFasta, 
 /// `.gzi` is there the lock is written for the time the indexes take
 /// (`:323-338`, `:356`). A directory, a gzip file that is not BGZF and a file
 /// with both its indexes are left as they are. A file that cannot be indexed
-/// is refused with no lock and no part of an index left beside it.
+/// is refused with no lock and no part of an index left beside it but what
+/// could not be removed or is another run's.
 pub fn index_if_missing(fasta: &Path) -> Result<(), FastaError> {
     write_missing(fasta, true)
 }
 
-/// How many times [`open_indexed`] writes the missing indexes and opens the
-/// file before the open's refusal stands.
+/// How many times at most [`open_indexed`] writes the missing indexes and
+/// opens the file before the open's refusal stands.
 const OPEN_ATTEMPTS: usize = 32;
 
 /// Opens the FASTA at `fasta` once [`index_if_missing`] has written the
@@ -40,9 +41,10 @@ const OPEN_ATTEMPTS: usize = 32;
 /// starts on the same file while this one indexes takes this run's lock for
 /// one left behind and removes the indexes beside it, as this run does with a
 /// lock it finds. An index that is gone at the open is therefore written
-/// again, a lock found by then left as the other run's, and the file opened
-/// again, up to `OPEN_ATTEMPTS` times: runs that meet on one FASTA wait for
-/// no lock, and each ends with the file open or with the last open's refusal.
+/// again, a lock found by then taken for the other run's, and the file
+/// opened again, up to `OPEN_ATTEMPTS` times in all: runs that meet on one
+/// FASTA wait for no lock, and each ends with the file open or with a
+/// refusal, that of the indexes' writing or that of the last open.
 pub fn open_indexed(fasta: &Path) -> Result<IndexedFasta, FastaError> {
     let mut attempt = 1;
     loop {
@@ -54,7 +56,8 @@ pub fn open_indexed(fasta: &Path) -> Result<IndexedFasta, FastaError> {
     }
 }
 
-/// Whether `error` is the open's refusal of an index that is not there.
+/// Whether `error` is the open's refusal of an index that is not there, or
+/// its failure to open, map or read a file it does not find.
 fn index_is_gone(error: &FastaError) -> bool {
     match error {
         FastaError::MissingFai(_) | FastaError::MissingGzi(_) => true,
@@ -72,8 +75,7 @@ fn write_missing(fasta: &Path, lock_is_left_behind: bool) -> Result<(), FastaErr
     let lock = sibling(fasta, "vep.lock");
     if lock_is_left_behind && lock.exists() {
         // A removal that fails ends no run, as Ensembl VEP's `unlink` ends none
-        // (`:319`): an index that stays is read, and one that is missing is
-        // written or refused below.
+        // (`:319`): an index that stays is not written again.
         for extension in ["fai", "index", "gzi", "vep.lock"] {
             let _ = std::fs::remove_file(sibling(fasta, extension));
         }
@@ -114,9 +116,9 @@ fn write_missing(fasta: &Path, lock_is_left_behind: bool) -> Result<(), FastaErr
 }
 
 /// Writes the lock file `lock`, created new so that a link standing there is
-/// not written through. A lock that is there is another run's, written since
-/// this run looked for one, and is left as it is: Ensembl VEP writes over it
-/// (`:334`), and neither run waits for the other.
+/// not written through. A lock that is there, as another run's may be, is
+/// left as it is: Ensembl VEP writes over it (`:334`), and neither run waits
+/// for the other.
 fn write_lock(lock: &Path) -> Result<(), FastaError> {
     let refused = |source| FastaError::LockFile {
         lock: lock.display().to_string(),
@@ -232,11 +234,13 @@ impl<R: BufRead> FastaBytes<R> {
 /// line's bytes every byte through its line feed, and a last line without one
 /// counts as if it had it; a name ends at its first white space, and white
 /// space between the header mark and the name is passed over; blank lines may
-/// follow a sequence; a header with no sequence line before another header
-/// gets no record, and a name given again keeps its first record. The reason
-/// is returned for a layout no index describes: a line longer than the first
-/// of its sequence, text after a blank or a shorter line, text before the
-/// first header, or a last header with no sequence line.
+/// follow a sequence, as may a lone header mark that ends the file; a header
+/// with no sequence line before another header gets no record, and a name
+/// given again keeps its first record. The reason is returned for a read that
+/// fails and for a layout no index describes: a line longer than the first of
+/// its sequence, text after a blank or a shorter line, text before the first
+/// header, a carriage return in either place that no line feed follows, a
+/// last header with no sequence line, or no header at all.
 fn fai_records<R: BufRead>(reader: R, fasta: &Path) -> Result<Vec<FaiLine>, String> {
     enum At {
         /// Before the first header, or after a blank line or a line shorter

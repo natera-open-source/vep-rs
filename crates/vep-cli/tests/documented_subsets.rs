@@ -2365,7 +2365,7 @@ fn fasta_open_refusals_are_each_tabulated() {
 }
 
 /// `fasta`: what a run does beside a FASTA given without an index has a table
-/// row, and so has each refusal of that writing: the lock file that cannot be
+/// row, and so have two refusals of that writing: the lock file that cannot be
 /// written (`write_lock` in `vep-fasta`, whose `FastaError::LockFile` prints
 /// Ensembl VEP's sentence, FastaSequence.pm:334, then the cause and the two
 /// ways on) and the file no index describes (`FastaError::Unindexable`,

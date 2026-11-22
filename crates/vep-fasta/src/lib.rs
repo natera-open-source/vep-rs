@@ -48,9 +48,9 @@ use thiserror::Error;
 use vep_core::synonyms::ChromosomeSynonyms;
 
 /// A refusal of the reader or of the index writers; `vep` prints its text
-/// after `ERROR: [fasta] `. More refusals may be added, so a `match` on the
-/// type outside this crate needs a wildcard arm, and one without it does not
-/// build:
+/// after `ERROR: [fasta] ` when it refuses the run's FASTA. More refusals may
+/// be added, so a `match` on the type outside this crate needs a wildcard
+/// arm, and one without it does not build:
 ///
 /// ```compile_fail
 /// use vep_fasta::FastaError::*;
