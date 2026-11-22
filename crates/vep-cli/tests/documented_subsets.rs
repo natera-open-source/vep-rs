@@ -2382,16 +2382,19 @@ fn fasta_index_writing_is_tabulated() {
              before the indexes and removes it once they are written or the file is refused |",
             "| A `<file>.vep.lock`, left by a run that did not finish | Removes `<file>.fai`, \
              `<file>.index`, `<file>.gzi` and the lock, then writes the missing `.fai` and \
-             `.gzi`; what it cannot remove stays, and an index that stays is read |",
+             `.gzi`; what it cannot remove stays, and a `.fai` that stays, or a BGZF file's \
+             `.gzi`, is read |",
             "| Other runs indexing the same file | Waits for none of them: each run writes whole \
-             indexes, and each reads the file |",
+             indexes, and each reads the file or ends with a refusal of its own |",
             "| A lock file that cannot be written, as in a directory closed to the run | `ERROR: \
              [fasta] Could not write to FASTA lock file <file>.vep.lock: <cause>; index the FASTA \
              with samtools faidx, or link it into a directory the run can write` |",
             "| A layout no `.fai` describes: a line longer than the first of its sequence, text \
-             after a blank or a shorter line, text before the first header, a last header with \
-             no sequence line | `ERROR: [fasta] failed to index <file>: <reason>`, the reason \
-             naming the line or the sequence |",
+             after a blank or a shorter line, text before the first header, a carriage return \
+             in either place that no line feed follows, a last header with no sequence line (a \
+             lone `>` that is the file's last byte may follow a sequence), no header at all | \
+             `ERROR: [fasta] failed to index <file>: <reason>`, the reason naming the line or \
+             the sequence where there is one |",
         ],
     );
 }

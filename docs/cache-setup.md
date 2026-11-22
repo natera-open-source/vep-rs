@@ -248,19 +248,19 @@ vep -i input.vcf -o output.txt --offline --json_cache /path/to/116_GRCh38
 
 `--fasta` takes a plain FASTA with its `.fai`, or a `bgzip`-compressed FASTA with its `.fai` and `.gzi`, the shape of Ensembl's `dna_index/` files and of the file `vep-cache-builder --auto` places in the cache directory. An index the file lacks is written beside it as `samtools faidx` writes it, as Ensembl VEP writes it. Three files are refused at open: a gzip file that is not BGZF, whose `.fai` offsets need the whole file inflated; a `.gzi` that does not match the file's blocks, recompressed and not re-indexed; an `.fai` naming more bases than the file holds. So is a BGZF file holding a malformed block.
 
-| Beside the file as a run starts | What the run does |
+| Beside the plain or BGZF file as a run starts | What the run does |
 | --- | --- |
 | Its `.fai`, and its `.gzi` when the file is BGZF | Reads them and writes nothing |
 | No `.fai`, or no `.gzi` beside a BGZF file | Writes the missing index into `<index>.<token>.tmp` and renames it into place, so no run reads part of an index; the directory must be writable |
 | None of `<file>.fai`, `<file>.index` and `<file>.gzi` | Writes `<file>.vep.lock` before the indexes and removes it once they are written or the file is refused |
-| A `<file>.vep.lock`, left by a run that did not finish | Removes `<file>.fai`, `<file>.index`, `<file>.gzi` and the lock, then writes the missing `.fai` and `.gzi`; what it cannot remove stays, and an index that stays is read |
-| Other runs indexing the same file | Waits for none of them: each run writes whole indexes, and each reads the file |
+| A `<file>.vep.lock`, left by a run that did not finish | Removes `<file>.fai`, `<file>.index`, `<file>.gzi` and the lock, then writes the missing `.fai` and `.gzi`; what it cannot remove stays, and a `.fai` that stays, or a BGZF file's `.gzi`, is read |
+| Other runs indexing the same file | Waits for none of them: each run writes whole indexes, and each reads the file or ends with a refusal of its own |
 
 | Refused while an index is written | Line printed |
 | --- | --- |
 | A lock file that cannot be written, as in a directory closed to the run | `ERROR: [fasta] Could not write to FASTA lock file <file>.vep.lock: <cause>; index the FASTA with samtools faidx, or link it into a directory the run can write` |
-| A layout no `.fai` describes: a line longer than the first of its sequence, text after a blank or a shorter line, text before the first header, a last header with no sequence line | `ERROR: [fasta] failed to index <file>: <reason>`, the reason naming the line or the sequence |
-| A BGZF block cut short, shorter than 28 bytes or not BGZF | `ERROR: [fasta] failed to index <file>: <reason>` |
+| A layout no `.fai` describes: a line longer than the first of its sequence, text after a blank or a shorter line, text before the first header, a carriage return in either place that no line feed follows, a last header with no sequence line (a lone `>` that is the file's last byte may follow a sequence), no header at all | `ERROR: [fasta] failed to index <file>: <reason>`, the reason naming the line or the sequence where there is one |
+| A BGZF block cut short, shorter than 28 bytes or not BGZF, with no `.gzi` beside the file | `ERROR: [fasta] failed to index <file>: <reason>` |
 | An index that cannot be put in place, as a `.gzi` in a directory closed to the run | `ERROR: [fasta] failed to write BGZF index <file>.gzi: <cause>`, or `failed to write FASTA index <file>.fai: <cause>` |
 
 | Condition | Line printed |
